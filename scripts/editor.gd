@@ -12,7 +12,9 @@ const COMMAND_ICONS := {
 	"import": preload("res://assets/icons/commands/import.png"),
 	"center": preload("res://assets/icons/commands/center.png"),
 	"test": preload("res://assets/icons/commands/test.png"),
-	"editor": preload("res://assets/icons/commands/editor.png")
+	"editor": preload("res://assets/icons/commands/editor.png"),
+	"undo": preload("res://assets/icons/commands/undo.png"),
+	"redo": preload("res://assets/icons/commands/redo.png")
 }
 const TOOLS := [
 	{"id": "hand", "label": "Рука", "hint": "Безопасно перемещать и масштабировать карту одним или двумя пальцами"},
@@ -50,6 +52,11 @@ var selected_tool: String = "hand"
 var is_play_mode: bool = false
 var _editor_camera_offset := Vector2.ZERO
 var _editor_camera_zoom: float = 1.0
+const HISTORY_LIMIT := 40
+var _undo_stack: Array[Dictionary] = []
+var _redo_stack: Array[Dictionary] = []
+var _undo_button: Button
+var _redo_button: Button
 
 var _canvas: DungeonCanvas
 var _name_input: LineEdit
@@ -112,6 +119,13 @@ func _build_interface() -> void:
 	toolbar.add_child(load_button)
 	_register_editor_control(load_button)
 
+	_undo_button = _button("Отменить", "Отменить действие (Ctrl+Z)", _undo_edit)
+	_set_command_icon(_undo_button, "undo")
+	toolbar.add_child(_undo_button)
+	_redo_button = _button("Повторить", "Повторить действие (Ctrl+Y / Ctrl+Shift+Z)", _redo_edit)
+	_set_command_icon(_redo_button, "redo")
+	toolbar.add_child(_redo_button)
+
 	toolbar.add_child(_separator())
 	var export_button := _button("Экспорт JSON", "Записать карту в произвольный JSON-файл", _show_export)
 	_set_command_icon(export_button, "export")
@@ -142,6 +156,7 @@ func _build_interface() -> void:
 	_canvas = DungeonCanvas.new()
 	_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_canvas.map_edited.connect(_on_canvas_edited)
+	_canvas.edit_action_committed.connect(_on_edit_action_committed)
 	_canvas.hover_changed.connect(_on_hover_changed)
 	_canvas.move_selection_changed.connect(_on_move_selection_changed)
 	_canvas.move_failed.connect(_on_move_failed)
@@ -416,6 +431,9 @@ func _set_map(new_map: DungeonMap) -> void:
 	is_play_mode = false
 	_name_input.text = map_data.display_name
 	_canvas.set_map(map_data)
+	_undo_stack.clear()
+	_redo_stack.clear()
+	_update_history_buttons()
 	_set_tool(selected_tool)
 	_refresh_stats()
 	_update_mode_ui()
@@ -485,6 +503,49 @@ func _on_name_changed(value: String) -> void:
 	if map_data != null:
 		map_data.display_name = value
 		_mark_dirty()
+
+
+func _on_edit_action_committed(before: Dictionary, after: Dictionary) -> void:
+	if is_play_mode or before == after:
+		return
+	_undo_stack.append({"before": before, "after": after})
+	if _undo_stack.size() > HISTORY_LIMIT:
+		_undo_stack.pop_front()
+	_redo_stack.clear()
+	_update_history_buttons()
+
+
+func _undo_edit() -> void:
+	if is_play_mode:
+		return
+	_canvas.finish_edit_stroke()
+	if _undo_stack.is_empty():
+		return
+	var action: Dictionary = _undo_stack.pop_back()
+	_canvas.restore_edit_state(action["before"])
+	_redo_stack.append(action)
+	_update_history_buttons()
+	_on_canvas_edited()
+	_set_status("Действие отменено")
+
+
+func _redo_edit() -> void:
+	if is_play_mode:
+		return
+	_canvas.finish_edit_stroke()
+	if _redo_stack.is_empty():
+		return
+	var action: Dictionary = _redo_stack.pop_back()
+	_canvas.restore_edit_state(action["after"])
+	_undo_stack.append(action)
+	_update_history_buttons()
+	_on_canvas_edited()
+	_set_status("Действие повторено")
+
+
+func _update_history_buttons() -> void:
+	_undo_button.disabled = is_play_mode or _undo_stack.is_empty()
+	_redo_button.disabled = is_play_mode or _redo_stack.is_empty()
 
 
 func _on_canvas_edited() -> void:
@@ -688,6 +749,7 @@ func _update_mode_ui() -> void:
 			(control as LineEdit).editable = not is_play_mode
 		control.modulate = Color(1, 1, 1, 0.60) if is_play_mode else Color(1, 1, 1, 1)
 	_set_tool(selected_tool)
+	_update_history_buttons()
 
 
 func _try_move_player(dx: int, dy: int) -> void:
@@ -722,9 +784,21 @@ func _input(event: InputEvent) -> void:
 					_try_move_player(1, 0)
 					get_viewport().set_input_as_handled()
 		else:
-			if event.keycode == KEY_ESCAPE and _canvas.has_move_selection():
+			var focused := get_viewport().gui_get_focus_owner()
+			if (focused is LineEdit or focused is TextEdit) and (event.ctrl_pressed or event.meta_pressed) and event.keycode in [KEY_Z, KEY_Y]:
+				return
+			if (event.ctrl_pressed or event.meta_pressed) and event.keycode == KEY_Z:
+				if event.shift_pressed:
+					_redo_edit()
+				else:
+					_undo_edit()
+				get_viewport().set_input_as_handled()
+			elif (event.ctrl_pressed or event.meta_pressed) and event.keycode == KEY_Y:
+				_redo_edit()
+				get_viewport().set_input_as_handled()
+			elif event.keycode == KEY_ESCAPE and _canvas.has_move_selection():
 				_canvas.cancel_move_selection()
 				get_viewport().set_input_as_handled()
-			elif event.keycode == KEY_S and event.ctrl_pressed:
+			elif event.keycode == KEY_S and (event.ctrl_pressed or event.meta_pressed):
 				_save_internal()
 				get_viewport().set_input_as_handled()

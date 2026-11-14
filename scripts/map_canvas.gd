@@ -7,6 +7,7 @@ signal map_edited
 signal hover_changed(cell: Vector2i)
 signal move_selection_changed(description: String)
 signal move_failed
+signal edit_action_committed(before: Dictionary, after: Dictionary)
 
 const TILE_SIZE := 48.0
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
@@ -39,6 +40,7 @@ var _cancelled_tap_cell := Vector2i(-1, -1)
 var _moving_kind: String = ""
 var _moving_id: String = ""
 var _moving_from := Vector2i(-1, -1)
+var _stroke_before: Dictionary = {}
 
 
 
@@ -50,19 +52,21 @@ func _ready() -> void:
 
 
 func set_map(value: DungeonMap) -> void:
+	_stroke_before.clear()
 	map_data = value
 	game_session = null
 	mode = "edit"
 	_hovered = Vector2i(-1, -1)
 	cancel_move_selection()
 	_reset_pointer_state()
-	call_deferred("fit_to_view")
+	call_deferred("_fit_after_layout")
 	queue_redraw()
 
 
 func set_selected_tool(kind: String) -> void:
 	if selected_tool == kind:
 		return
+	finish_edit_stroke()
 	cancel_move_selection()
 	selected_tool = kind
 	_last_tap_time = -10000
@@ -98,6 +102,15 @@ func set_game_session(value: GameSession) -> void:
 	else:
 		mode = "edit"
 	queue_redraw()
+
+
+# Дожидаемся размеров контейнера: при первой загрузке прежний deferred fit
+# иногда выполнялся до окончательной раскладки интерфейса.
+func _fit_after_layout() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if mode == "edit":
+		fit_to_view()
 
 
 func fit_to_view() -> void:
@@ -253,6 +266,36 @@ func _update_hover(point: Vector2) -> void:
 		queue_redraw()
 
 
+## Краткая история операций: запоминаем только содержимое карты, не камеру.
+func capture_edit_state() -> Dictionary:
+	return {"terrain": map_data.terrain.duplicate(true), "entities": map_data.entities.duplicate(true)}
+
+
+func restore_edit_state(state: Dictionary) -> void:
+	if mode != "edit" or map_data == null:
+		return
+	_stroke_before.clear()
+	cancel_move_selection()
+	map_data.terrain = state["terrain"].duplicate(true)
+	map_data.entities = state["entities"].duplicate(true)
+	queue_redraw()
+
+
+func _begin_edit_stroke() -> void:
+	if mode == "edit" and selected_tool != "hand" and map_data != null and _stroke_before.is_empty():
+		_stroke_before = capture_edit_state()
+
+
+func finish_edit_stroke() -> void:
+	if _stroke_before.is_empty():
+		return
+	var before := _stroke_before
+	_stroke_before = {}
+	var after := capture_edit_state()
+	if before != after:
+		edit_action_committed.emit(before, after)
+
+
 func has_move_selection() -> bool:
 	return not _moving_kind.is_empty()
 
@@ -296,7 +339,9 @@ func _hand_tap(point: Vector2, is_double: bool) -> void:
 			_cancelled_tap_cell = cell
 			cancel_move_selection()
 			return
+		var before := capture_edit_state()
 		if map_data.move_existing(_moving_kind, _moving_id, _moving_from, cell):
+			edit_action_committed.emit(before, capture_edit_state())
 			_cancelled_tap_time = now
 			_cancelled_tap_cell = cell
 			cancel_move_selection()
@@ -369,7 +414,10 @@ func _gui_input(event: InputEvent) -> void:
 			elif mode == "edit":
 				_painting = event.pressed
 				if event.pressed:
+					_begin_edit_stroke()
 					_edit_at(event.position, false)
+				else:
+					finish_edit_stroke()
 				accept_event()
 			elif mode == "play" and event.pressed:
 				grab_focus()
@@ -378,7 +426,10 @@ func _gui_input(event: InputEvent) -> void:
 			if selected_tool != "hand":
 				_erasing = event.pressed
 				if event.pressed:
+					_begin_edit_stroke()
 					_edit_at(event.position, true)
+				else:
+					finish_edit_stroke()
 			accept_event()
 	elif event is InputEventMouseMotion:
 		if event.device == InputEvent.DEVICE_ID_EMULATION:
@@ -400,6 +451,7 @@ func _gui_input(event: InputEvent) -> void:
 				_touch_invalid_tap = true
 			if mode == "edit" and selected_tool != "hand":
 				if _touch_positions.size() == 1 and not _touch_blocked:
+					_begin_edit_stroke()
 					_edit_at(event.position, false)
 				else:
 					_touch_blocked = true
@@ -411,6 +463,7 @@ func _gui_input(event: InputEvent) -> void:
 			if mode == "edit" and selected_tool == "hand" and tap_valid:
 				_remember_touch_tap(event.position)
 			if _touch_positions.is_empty():
+				finish_edit_stroke()
 				_touch_blocked = false
 				_touch_invalid_tap = false
 		_update_hover(event.position)

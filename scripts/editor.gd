@@ -7,6 +7,7 @@ const SIDEBAR_WIDTH := 264.0
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
 const GAME_NOTICE_SCENE: PackedScene = preload("res://scenes/game_notice.tscn")
 const CHEST_CONTENTS_SCENE: PackedScene = preload("res://scenes/chest_contents_popup.tscn")
+const BATTLE_VIEW_SCENE: PackedScene = preload("res://scenes/battle_view.tscn")
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
 	"save": preload("res://assets/icons/commands/save.png"),
@@ -61,7 +62,12 @@ var _redo_stack: Array[Dictionary] = []
 var _undo_button: Button
 var _redo_button: Button
 
+var _canvas_host: Control
 var _canvas: DungeonCanvas
+var _battle_view: BattleView
+var _combat_active: bool = false
+var _combat_camera_tween: Tween
+var _pre_combat_zoom: float = 1.0
 var _name_input: LineEdit
 var _last_log_message: String = ""
 var _stats_label: Label
@@ -176,6 +182,7 @@ func _build_interface() -> void:
 	var canvas_host := Control.new()
 	canvas_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	canvas_host.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_canvas_host = canvas_host
 	workspace.add_child(canvas_host)
 
 	_canvas = DungeonCanvas.new()
@@ -985,6 +992,7 @@ func _start_play_mode() -> void:
 
 
 func _stop_play_mode() -> void:
+	_abort_combat()
 	_game_notice.clear()
 	game_session = null
 	is_play_mode = false
@@ -1021,9 +1029,12 @@ func _show_game_event(message: String) -> void:
 
 
 func _try_move_player(dx: int, dy: int) -> void:
-	if not is_play_mode or game_session == null:
+	if not is_play_mode or game_session == null or _combat_active:
 		return
 	var moved := game_session.move_by(dx, dy)
+	if game_session.has_pending_encounter():
+		_start_combat()
+		return
 	if moved:
 		_canvas.center_on_cell(game_session.player_pos)
 	# Сундук меняет вид при открытии, даже если сам герой не сдвинулся.
@@ -1035,9 +1046,79 @@ func _try_move_player(dx: int, dy: int) -> void:
 		_show_game_event("Тут пройти нельзя.")
 
 
+## При встрече камера приближается к противнику, затем открывается
+## отдельная сцена боя поверх карты. Исследование остаётся в памяти.
+func _start_combat() -> void:
+	_combat_active = true
+	_dpad.visible = false
+	_hero_hud.visible = false
+	_game_notice.clear()
+	_pre_combat_zoom = _canvas.zoom
+	var original_offset: Vector2 = _canvas.camera_offset
+	var focus_zoom: float = minf(_pre_combat_zoom * 1.5, 3.5)
+	var target_center: Vector2 = (Vector2(game_session.encounter_target) + Vector2.ONE * 0.5) * DungeonCanvas.TILE_SIZE
+	var target_offset: Vector2 = _canvas.size * 0.5 - target_center * focus_zoom
+	_combat_camera_tween = create_tween()
+	_combat_camera_tween.tween_method(
+		_animate_combat_camera.bind(_pre_combat_zoom, focus_zoom, original_offset, target_offset),
+		0.0, 1.0, 0.28
+	).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_combat_camera_tween.finished.connect(_show_combat_view)
+
+
+func _animate_combat_camera(progress: float, from_zoom: float, to_zoom: float, from_offset: Vector2, to_offset: Vector2) -> void:
+	_canvas.zoom = lerpf(from_zoom, to_zoom, progress)
+	_canvas.camera_offset = from_offset.lerp(to_offset, progress)
+	_canvas.queue_redraw()
+
+
+func _show_combat_view() -> void:
+	if not _combat_active or game_session == null:
+		return
+	_battle_view = BATTLE_VIEW_SCENE.instantiate() as BattleView
+	_canvas_host.add_child(_battle_view)
+	_battle_view.battle_won.connect(_finish_combat)
+	_battle_view.begin(CombatSession.new(), game_session.hero)
+
+
+func _finish_combat() -> void:
+	if not _combat_active or game_session == null:
+		return
+	var moved: bool = game_session.win_pending_encounter()
+	if _battle_view != null:
+		_battle_view.queue_free()
+		_battle_view = null
+	_combat_active = false
+	_canvas.zoom = _pre_combat_zoom
+	_canvas.center_on_cell(game_session.player_pos)
+	_dpad.visible = true
+	_hero_hud.visible = true
+	_canvas.grab_focus()
+	_canvas.queue_redraw()
+	_refresh_stats()
+	if not game_session.last_event_message.is_empty():
+		_show_game_event(game_session.last_event_message)
+	elif not moved:
+		_set_status("Монстр побеждён, но клетка пока недоступна.")
+
+
+func _abort_combat() -> void:
+	if _combat_camera_tween != null and _combat_camera_tween.is_running():
+		_combat_camera_tween.kill()
+	_combat_camera_tween = null
+	if _battle_view != null:
+		_battle_view.queue_free()
+		_battle_view = null
+	_combat_active = false
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if is_play_mode:
+			if _combat_active:
+				if event.keycode in [KEY_ESCAPE, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_A, KEY_S, KEY_D]:
+					get_viewport().set_input_as_handled()
+				return
 			match event.keycode:
 				KEY_ESCAPE:
 					_stop_play_mode()

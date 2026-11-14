@@ -72,6 +72,55 @@ func _initialize() -> void:
 	var another_session := GameSession.start_for(loot_map)
 	assert(not another_session.is_chest_open(packed_chest))
 
+	# Контакт с монстром создаёт встречу, но карта остаётся неизменной.
+	var encounter_map := DungeonMap.create_blank(8, 8)
+	assert(encounter_map.place_entity("player_spawn", 2, 2))
+	assert(encounter_map.place_entity("monster", 3, 2))
+	assert(encounter_map.place_entity("key", 3, 2))
+	var monster: Dictionary = encounter_map.entities_at(3, 2)[0]
+	var encounter_map_before := JSON.stringify(encounter_map.to_dict())
+	var encounter := GameSession.start_for(encounter_map)
+	assert(encounter != null)
+	assert(not encounter.move_by(1, 0))
+	assert(encounter.has_pending_encounter())
+	assert(encounter.encounter_target == Vector2i(3, 2))
+	assert(encounter.player_pos == Vector2i(2, 2))
+	assert(encounter.steps == 0)
+	assert(encounter.keys == 0)
+	assert(not encounter.is_entity_removed(monster))
+	assert(not encounter.move_by(0, 1)) # Во время боя нельзя ходить.
+
+	var combat := CombatSession.new()
+	assert(combat.enemy_health == 1)
+	assert(combat.hero_punch() == 1)
+	assert(combat.is_victory)
+	assert(combat.enemy_health == 0)
+	assert(combat.hero_punch() == 0) # Победа выдаётся только однажды.
+	assert(encounter.win_pending_encounter())
+	assert(not encounter.has_pending_encounter())
+	assert(encounter.is_entity_removed(monster))
+	assert(encounter.player_pos == Vector2i(3, 2))
+	assert(encounter.steps == 1)
+	assert(encounter.keys == 1) # Можно собрать находку под монстром.
+	assert(JSON.stringify(encounter_map.to_dict()) == encounter_map_before)
+	assert(not encounter.win_pending_encounter())
+	var encounter_again := GameSession.start_for(encounter_map)
+	assert(not encounter_again.move_by(1, 0)) # Новый тест снова начинает бой.
+	assert(encounter_again.has_pending_encounter())
+
+	# Победа не позволяет пройти сквозь всё остальное: запертая дверь остаётся.
+	var guarded_door := DungeonMap.create_blank(8, 8)
+	assert(guarded_door.place_entity("player_spawn", 2, 2))
+	assert(guarded_door.place_entity("monster", 3, 2))
+	assert(guarded_door.place_entity("door", 3, 2))
+	var guarded := GameSession.start_for(guarded_door)
+	assert(not guarded.move_by(1, 0))
+	assert(not guarded.win_pending_encounter())
+	assert(guarded.player_pos == Vector2i(2, 2))
+	assert(not guarded.has_pending_encounter())
+	assert(guarded.last_event_message == "Дверь заперта. Нужен ключ.")
+	assert(guarded.move_by(0, 1))
+
 	# Существующая карта с полем reward продолжает работать.
 	var legacy_map := DungeonMap.from_dict(loot_map.to_dict())
 	var legacy_chest: Dictionary = legacy_map.entities_at(3, 2)[0]

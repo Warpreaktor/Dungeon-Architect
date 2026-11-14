@@ -14,6 +14,8 @@ var potions: int = 0
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
 var last_event_message: String = ""
+var encounter_monster_id: String = ""
+var encounter_target := Vector2i(-1, -1)
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
 
@@ -74,14 +76,39 @@ func _find_active_entity(cell: Vector2i, kind: String) -> Dictionary:
 	return {}
 
 
+func has_pending_encounter() -> bool:
+	return not encounter_monster_id.is_empty()
+
+
+## Победа снимает монстра только в сессии, затем повторяет вход в клетку
+## через обычные правила дверей, сундуков и находок.
+func win_pending_encounter() -> bool:
+	if not has_pending_encounter():
+		return false
+	var target := encounter_target
+	removed_entities[encounter_monster_id] = true
+	encounter_monster_id = ""
+	encounter_target = Vector2i(-1, -1)
+	return move_by(target.x - player_pos.x, target.y - player_pos.y)
+
+
 func can_enter(cell: Vector2i) -> bool:
 	return contains(cell.x, cell.y) and map_data.get_terrain(cell.x, cell.y) != "wall"
 
 
 func move_by(dx: int, dy: int) -> bool:
 	last_event_message = ""
+	if has_pending_encounter():
+		return false
 	var target := player_pos + Vector2i(dx, dy)
 	if not can_enter(target):
+		return false
+
+	# Встреча инициирует поединок. Монстр исчезнет только после победы.
+	var monster := _find_active_entity(target, "monster")
+	if not monster.is_empty():
+		encounter_monster_id = str(monster["id"])
+		encounter_target = target
 		return false
 
 	var chest := _find_active_entity(target, "chest")

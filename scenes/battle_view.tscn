@@ -1,0 +1,187 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/battle_view.gd" id="1_battle_script"]
+[ext_resource type="Theme" path="res://themes/hero_hud.tres" id="2_theme"]
+[ext_resource type="Texture2D" path="res://assets/stone_wall.png" id="3_wall"]
+[ext_resource type="Texture2D" path="res://assets/icons/player_spawn.png" id="4_hero"]
+[ext_resource type="Texture2D" path="res://assets/icons/monster.png" id="5_enemy"]
+
+[node name="BattleView" type="Control"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+script = ExtResource("1_battle_script")
+
+[node name="CryptWall" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+texture = ExtResource("3_wall")
+stretch_mode = 1
+
+[node name="Darken" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.035, 0.055, 0.083, 0.91)
+
+[node name="OuterMargin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="Main" type="VBoxContainer" parent="OuterMargin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 18
+
+[node name="Title" type="Label" parent="OuterMargin/Main"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
+theme_override_font_sizes/font_size = 25
+text = "СРАЖЕНИЕ  ·  КАТАКОМБЫ"
+horizontal_alignment = 1
+
+[node name="Battlefield" type="HBoxContainer" parent="OuterMargin/Main"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/separation = 18
+
+[node name="HeroCard" type="PanelContainer" parent="OuterMargin/Main/Battlefield"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+mouse_filter = 2
+theme = ExtResource("2_theme")
+
+[node name="HeroMargin" type="MarginContainer" parent="OuterMargin/Main/Battlefield/HeroCard"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="HeroColumn" type="VBoxContainer" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin"]
+layout_mode = 2
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="HeroPortrait" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
+custom_minimum_size = Vector2(90, 104)
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+texture = ExtResource("4_hero")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HeroName" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 20
+text = "Герой"
+horizontal_alignment = 1
+
+[node name="HeroHealth" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "20 / 20 HP"
+horizontal_alignment = 1
+
+[node name="EnemyCard" type="PanelContainer" parent="OuterMargin/Main/Battlefield"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+mouse_filter = 2
+theme = ExtResource("2_theme")
+
+[node name="EnemyMargin" type="MarginContainer" parent="OuterMargin/Main/Battlefield/EnemyCard"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="EnemyColumn" type="VBoxContainer" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin"]
+layout_mode = 2
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="EnemyPortrait" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 104)
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+texture = ExtResource("5_enemy")
+expand_mode = 1
+stretch_mode = 5
+pivot_offset = Vector2(45, 52)
+
+[node name="EnemyName" type="Label" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 20
+text = "Монстр"
+horizontal_alignment = 1
+
+[node name="EnemyHealth" type="Label" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+text = "1 / 1 HP"
+horizontal_alignment = 1
+
+[node name="BottomPanel" type="PanelContainer" parent="OuterMargin/Main"]
+layout_mode = 2
+mouse_filter = 2
+theme = ExtResource("2_theme")
+
+[node name="ActionsMargin" type="MarginContainer" parent="OuterMargin/Main/BottomPanel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 10
+
+[node name="Actions" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 14
+
+[node name="PunchButton" type="Button" parent="OuterMargin/Main/BottomPanel/ActionsMargin/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 54)
+layout_mode = 2
+focus_mode = 2
+text = "Удар кулаком  ·  1"
+
+[node name="ResultText" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_font_sizes/font_size = 18
+text = "Твой ход"
+horizontal_alignment = 1
+vertical_alignment = 1

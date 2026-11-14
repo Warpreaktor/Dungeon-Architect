@@ -422,8 +422,10 @@ func _gui_input(event: InputEvent) -> void:
 			elif mode == "play" and event.pressed:
 				grab_focus()
 				accept_event()
-		elif event.button_index == MOUSE_BUTTON_RIGHT and mode == "edit":
-			if selected_tool != "hand":
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			if mode == "play":
+				_panning = event.pressed
+			elif mode == "edit" and selected_tool != "hand":
 				_erasing = event.pressed
 				if event.pressed:
 					_begin_edit_stroke()
@@ -473,7 +475,7 @@ func _gui_input(event: InputEvent) -> void:
 			var old_point: Vector2 = _touch_positions[event.index]
 			var old_positions := _touch_positions.values()
 			_touch_positions[event.index] = event.position
-			if mode == "edit" and selected_tool == "hand":
+			if mode == "play" or (mode == "edit" and selected_tool == "hand"):
 				if _touch_positions.size() == 1:
 					camera_offset += event.position - old_point
 					queue_redraw()

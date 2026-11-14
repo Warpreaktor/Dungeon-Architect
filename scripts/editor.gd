@@ -4,6 +4,7 @@ extends Control
 ## Вся сцена собирается обычными Control-узлами, чтобы её можно было расширять.
 
 const SIDEBAR_WIDTH := 264.0
+const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
 	"save": preload("res://assets/icons/commands/save.png"),
@@ -94,8 +95,7 @@ var _size_preset: OptionButton
 var _width_input: SpinBox
 var _height_input: SpinBox
 var _dpad: Control
-var _hero_hud: PanelContainer
-var _hero_stats_label: Label
+var _hero_hud: HeroHUD
 var _load_dialog: ConfirmationDialog
 var _export_dialog: FileDialog
 var _import_dialog: FileDialog
@@ -183,15 +183,10 @@ func _build_interface() -> void:
 	canvas_host.add_child(_canvas)
 	_build_dpad(canvas_host)
 
-	# Игровые характеристики видны только в прохождении; редактору они не нужны.
-	_hero_hud = _panel(Color("#192c38"))
-	_hero_hud.position = Vector2(12, 12)
-	_hero_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Интерфейс героя — самостоятельная сцена, не часть логики редактора.
+	_hero_hud = HERO_HUD_SCENE.instantiate() as HeroHUD
 	_hero_hud.visible = false
 	canvas_host.add_child(_hero_hud)
-	_hero_stats_label = _label("", 14, Color("#f4dfb1"))
-	_hero_stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hero_hud.add_child(_hero_stats_label)
 
 	_sidebar_panel = _panel(Color("#202d39"))
 	_sidebar_panel.custom_minimum_size.x = SIDEBAR_WIDTH
@@ -242,7 +237,7 @@ func _build_interface() -> void:
 
 	sidebar.add_child(HSeparator.new())
 	sidebar.add_child(_label("УПРАВЛЕНИЕ", 14, Color("#e8c58a")))
-	var help := _label("Рука: перемещение одним или двумя пальцами, масштабирование двумя. Двойной тап по объекту — захват; тап по новой клетке — перенос; тап по исходной — отмена.\n\nКисть: пальцем/ЛКМ рисовать; ПКМ стирать.\n\nКолесо: масштаб. Средняя кнопка / Space+ЛКМ: перетаскивать карту на ПК.\n\nТест: стрелки/WASD — ходить; Esc — в редактор.", 12, Color("#a3b9c8"))
+	var help := _label("Рука: перемещение одним или двумя пальцами, масштабирование двумя. Двойной тап по объекту — захват; тап по новой клетке — перенос; тап по исходной — отмена.\n\nКисть: пальцем/ЛКМ рисовать; ПКМ стирать.\n\nКолесо: масштаб. Средняя кнопка / Space+ЛКМ: перетаскивать карту на ПК.\n\nТест: стрелки/WASD — ходить; ПКМ на ПК или палец на Android — перемещать карту; двумя пальцами — масштабировать. Esc — в редактор.", 12, Color("#a3b9c8"))
 	sidebar.add_child(help)
 
 	# Нижняя консоль полностью скрыта до раскрытия: только небольшая кнопка.
@@ -518,12 +513,9 @@ func _refresh_stats() -> void:
 
 
 func _update_hero_hud() -> void:
-	if _hero_stats_label == null or not is_play_mode or game_session == null or game_session.hero == null:
+	if not is_play_mode or game_session == null:
 		return
-	var hero: HeroState = game_session.hero
-	_hero_stats_label.text = "Здоровье: %d/%d    Атака: %d    Защита: %d    Золото: %d" % [
-		hero.health, hero.max_health, hero.attack, hero.defense, hero.gold
-	]
+	_hero_hud.set_hero(game_session.hero)
 
 
 func _set_tool(kind: String) -> void:

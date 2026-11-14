@@ -60,7 +60,7 @@ var _redo_button: Button
 
 var _canvas: DungeonCanvas
 var _name_input: LineEdit
-var _status_label: Label
+var _last_log_message: String = ""
 var _coords_label: Label
 var _stats_label: Label
 var _selection_label: Label
@@ -242,12 +242,13 @@ func _build_interface() -> void:
 	footer.add_child(footer_column)
 	var footer_row := HBoxContainer.new()
 	footer_column.add_child(footer_row)
-	_log_toggle = _button("Логи ▸", "Показать или скрыть журнал сообщений", _toggle_log_console)
+	_log_toggle = _button("▴", "Развернуть консоль сообщений", _toggle_log_console)
 	_log_toggle.focus_mode = Control.FOCUS_NONE
+	_log_toggle.custom_minimum_size = Vector2(36, 28)
 	footer_row.add_child(_log_toggle)
-	_status_label = _label("Готово", 12, Color("#c8d5dd"))
-	_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	footer_row.add_child(_status_label)
+	var footer_spacer := Control.new()
+	footer_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer_row.add_child(footer_spacer)
 	_coords_label = _label("x: —   y: —", 12, Color("#e8c58a"))
 	footer_row.add_child(_coords_label)
 	_log_console = RichTextLabel.new()
@@ -635,9 +636,9 @@ func _on_hover_changed(cell: Vector2i) -> void:
 
 
 func _set_status(message: String) -> void:
-	if _status_label.text == message:
+	if _last_log_message == message:
 		return
-	_status_label.text = message
+	_last_log_message = message
 	if _log_console != null:
 		_log_console.append_text("[%s] %s\n" % [Time.get_time_string_from_system(), message])
 
@@ -645,7 +646,8 @@ func _set_status(message: String) -> void:
 func _toggle_log_console() -> void:
 	_log_open = not _log_open
 	_log_console.visible = _log_open
-	_log_toggle.text = "Логи ▾" if _log_open else "Логи ▸"
+	_log_toggle.text = "▾" if _log_open else "▴"
+	_log_toggle.tooltip_text = "Свернуть консоль сообщений" if _log_open else "Развернуть консоль сообщений"
 
 
 func _request_new() -> void:

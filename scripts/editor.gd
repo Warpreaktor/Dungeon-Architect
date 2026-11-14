@@ -5,6 +5,7 @@ extends Control
 
 const SIDEBAR_WIDTH := 264.0
 const TOOLS := [
+	{"id": "hand", "label": "Рука", "hint": "Безопасно перемещать и масштабировать карту одним или двумя пальцами"},
 	{"id": "floor", "label": "Пол", "hint": "Убирает стену; поверхность становится проходимой"},
 	{"id": "wall", "label": "Стена", "hint": "Непроходимая клетка"},
 	{"id": "door", "label": "Дверь", "hint": "Дверь на клетке пола"},
@@ -18,6 +19,7 @@ const TOOLS := [
 	{"id": "erase", "label": "Ластик", "hint": "Удалить верхний объект или стену"}
 ]
 const TOOL_ICONS := {
+	"hand": preload("res://assets/icons/hand.png"),
 	"floor": preload("res://assets/icons/floor.png"),
 	"wall": preload("res://assets/icons/wall.png"),
 	"door": preload("res://assets/icons/door.png"),
@@ -34,7 +36,7 @@ const TOOL_ICONS := {
 var map_data: DungeonMap
 var game_session: GameSession
 var is_dirty: bool = false
-var selected_tool: String = "wall"
+var selected_tool: String = "hand"
 var is_play_mode: bool = false
 
 var _canvas: DungeonCanvas
@@ -168,7 +170,7 @@ func _build_interface() -> void:
 		_register_editor_control(button)
 
 	sidebar.add_child(HSeparator.new())
-	_selection_label = _label("Выбрано: Стена", 13, Color("#aec2d1"))
+	_selection_label = _label("Выбрано: Рука", 13, Color("#aec2d1"))
 	sidebar.add_child(_selection_label)
 	var grid_checkbox := CheckBox.new()
 	grid_checkbox.text = "Показывать сетку"
@@ -178,7 +180,7 @@ func _build_interface() -> void:
 
 	sidebar.add_child(HSeparator.new())
 	sidebar.add_child(_label("УПРАВЛЕНИЕ", 14, Color("#e8c58a")))
-	var help := _label("Редактор:\nЛКМ — рисовать\nПКМ — стирать\nКолесо — масштаб\nСредняя кнопка / Space+ЛКМ — двигать карту\n\nТест карты:\nСтрелки или WASD — ходить\nEsc — выйти в редактор\n\nТелефон: одним пальцем рисовать, двумя — двигать и масштабировать.", 12, Color("#a3b9c8"))
+	var help := _label("Рука: пальцем или ЛКМ двигать карту; двумя пальцами — масштабировать.\n\nКисть: пальцем или ЛКМ рисовать; ПКМ стирать.\n\nКолесо: масштаб.\nСредняя кнопка / Space+ЛКМ: перемещать карту на ПК.\n\nТест: стрелки или WASD — ходить; Esc — в редактор.", 12, Color("#a3b9c8"))
 	sidebar.add_child(help)
 
 	var footer := _panel(Color("#17232e"))
@@ -385,7 +387,7 @@ func _refresh_stats() -> void:
 
 func _set_tool(kind: String) -> void:
 	selected_tool = kind
-	_canvas.selected_tool = kind
+	_canvas.set_selected_tool(kind)
 	for key in _palette_buttons.keys():
 		var button: Button = _palette_buttons[key]
 		var active: bool = key == kind

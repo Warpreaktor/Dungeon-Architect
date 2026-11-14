@@ -23,6 +23,7 @@ var _painting: bool = false
 var _erasing: bool = false
 var _panning: bool = false
 var _touch_positions: Dictionary = {}
+var _touch_blocked: bool = false # После мультитача кисть ждёт отпускания всех пальцев.
 
 
 func _ready() -> void:
@@ -37,11 +38,33 @@ func set_map(value: DungeonMap) -> void:
 	game_session = null
 	mode = "edit"
 	_hovered = Vector2i(-1, -1)
+	_reset_pointer_state()
 	call_deferred("fit_to_view")
 	queue_redraw()
 
 
+func set_selected_tool(kind: String) -> void:
+	if selected_tool == kind:
+		return
+	selected_tool = kind
+	_painting = false
+	_erasing = false
+	_panning = false
+	# Переключение инструмента во время касания не начинает новый штрих.
+	_touch_blocked = not _touch_positions.is_empty()
+	queue_redraw()
+
+
+func _reset_pointer_state() -> void:
+	_painting = false
+	_erasing = false
+	_panning = false
+	_touch_positions.clear()
+	_touch_blocked = false
+
+
 func set_game_session(value: GameSession) -> void:
+	_reset_pointer_state()
 	game_session = value
 	if value != null:
 		map_data = value.map_data
@@ -103,7 +126,7 @@ func _draw() -> void:
 			var pos_y := float(y) * TILE_SIZE
 			draw_line(Vector2(float(min_x) * TILE_SIZE, pos_y), Vector2(float(max_x) * TILE_SIZE, pos_y), grid_color, 1.0 / zoom)
 
-	if mode == "edit" and map_data.contains(_hovered.x, _hovered.y):
+	if mode == "edit" and selected_tool != "hand" and map_data.contains(_hovered.x, _hovered.y):
 		var hovered_rect := Rect2(Vector2(_hovered) * TILE_SIZE, Vector2.ONE * TILE_SIZE)
 		draw_rect(hovered_rect, Color(0.34, 0.80, 1.0, 0.22))
 		draw_rect(hovered_rect, Color("#82d3fd"), false, 2.0 / zoom)
@@ -201,7 +224,7 @@ func _update_hover(point: Vector2) -> void:
 
 
 func _edit_at(point: Vector2, erase: bool) -> void:
-	if mode != "edit" or map_data == null:
+	if mode != "edit" or selected_tool == "hand" or map_data == null:
 		return
 	var cell := _screen_to_cell(point)
 	if not map_data.contains(cell.x, cell.y):
@@ -220,6 +243,10 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
+		# На Android одно касание может дополнительно приходить как мышь.
+		# Карту обрабатываем по нативным touch-событиям, а UI-кнопки не трогаем.
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			return
 		_update_hover(event.position)
 		if event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom_at(event.position, 1.12)
@@ -227,51 +254,75 @@ func _gui_input(event: InputEvent) -> void:
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom_at(event.position, 1.0 / 1.12)
 			accept_event()
-		elif event.button_index == MOUSE_BUTTON_MIDDLE or (event.button_index == MOUSE_BUTTON_LEFT and (_panning or Input.is_key_pressed(KEY_SPACE))):
+		elif event.button_index == MOUSE_BUTTON_MIDDLE:
 			_panning = event.pressed
 			accept_event()
-		elif mode == "edit" and event.button_index == MOUSE_BUTTON_LEFT:
-			_painting = event.pressed
-			if event.pressed:
-				_edit_at(event.position, false)
-			accept_event()
-		elif mode == "edit" and event.button_index == MOUSE_BUTTON_RIGHT:
-			_erasing = event.pressed
-			if event.pressed:
-				_edit_at(event.position, true)
-			accept_event()
-		elif mode == "play" and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			grab_focus()
+		elif event.button_index == MOUSE_BUTTON_LEFT:
+			if mode == "edit" and (selected_tool == "hand" or _panning or Input.is_key_pressed(KEY_SPACE)):
+				_panning = event.pressed
+				_painting = false
+				accept_event()
+			elif mode == "edit":
+				_painting = event.pressed
+				if event.pressed:
+					_edit_at(event.position, false)
+				accept_event()
+			elif mode == "play" and event.pressed:
+				grab_focus()
+				accept_event()
+		elif event.button_index == MOUSE_BUTTON_RIGHT and mode == "edit":
+			if selected_tool != "hand":
+				_erasing = event.pressed
+				if event.pressed:
+					_edit_at(event.position, true)
 			accept_event()
 	elif event is InputEventMouseMotion:
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			return
 		if _panning:
 			camera_offset += event.relative
 			queue_redraw()
-		elif mode == "edit" and (_painting or _erasing):
+		elif mode == "edit" and selected_tool != "hand" and (_painting or _erasing):
 			_edit_at(event.position, _erasing)
 		_update_hover(event.position)
 	elif event is InputEventScreenTouch:
 		if event.pressed:
 			_touch_positions[event.index] = event.position
-			if mode == "edit" and _touch_positions.size() == 1:
-				_edit_at(event.position, false)
+			if mode == "edit" and selected_tool != "hand":
+				if _touch_positions.size() == 1 and not _touch_blocked:
+					_edit_at(event.position, false)
+				else:
+						# При нескольких пальцах кисть не рисует до конца жеста.
+						_touch_blocked = true
 		else:
 			_touch_positions.erase(event.index)
+			if _touch_positions.is_empty():
+				_touch_blocked = false
 		_update_hover(event.position)
 		accept_event()
 	elif event is InputEventScreenDrag:
 		if _touch_positions.has(event.index):
+			var old_point: Vector2 = _touch_positions[event.index]
 			var old_positions := _touch_positions.values()
 			_touch_positions[event.index] = event.position
-			if mode == "edit" and _touch_positions.size() == 1:
+			if mode == "edit" and selected_tool == "hand":
+				if _touch_positions.size() == 1:
+					camera_offset += event.position - old_point
+					queue_redraw()
+				elif _touch_positions.size() >= 2:
+					var new_positions := _touch_positions.values()
+					var old_a: Vector2 = old_positions[0]
+					var old_b: Vector2 = old_positions[1]
+					var new_a: Vector2 = new_positions[0]
+					var new_b: Vector2 = new_positions[1]
+					var old_center := (old_a + old_b) * 0.5
+					var new_center := (new_a + new_b) * 0.5
+					var old_distance := old_a.distance_to(old_b)
+					if old_distance > 20.0:
+						zoom_at(old_center, new_a.distance_to(new_b) / old_distance)
+					camera_offset += new_center - old_center
+					queue_redraw()
+			elif mode == "edit" and not _touch_blocked and _touch_positions.size() == 1:
 				_edit_at(event.position, false)
-			elif _touch_positions.size() >= 2:
-				var new_positions := _touch_positions.values()
-				var old_distance: float = (old_positions[0] as Vector2).distance_to(old_positions[1] as Vector2)
-				var new_distance: float = (new_positions[0] as Vector2).distance_to(new_positions[1] as Vector2)
-				var midpoint: Vector2 = ((new_positions[0] as Vector2) + (new_positions[1] as Vector2)) * 0.5
-				if old_distance > 20.0:
-					zoom_at(midpoint, new_distance / old_distance)
-				camera_offset += event.relative * 0.5
-				queue_redraw()
+		_update_hover(event.position)
 		accept_event()

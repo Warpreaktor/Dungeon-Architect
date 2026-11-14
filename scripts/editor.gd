@@ -70,6 +70,26 @@ var _editor_controls: Array[Control] = []
 var _play_button: Button
 var _load_paths: Array[String] = []
 var _load_list: ItemList
+var _preview_textures: Array[Texture2D] = []
+var _rename_dialog: ConfirmationDialog
+var _rename_input: LineEdit
+var _delete_dialog: ConfirmationDialog
+var _delete_path: String = ""
+var _unsaved_dialog: ConfirmationDialog
+var _pending_action: Callable
+var _log_console: RichTextLabel
+var _log_toggle: Button
+var _log_open: bool = false
+const PREVIEW_WIDTH := 176
+const PREVIEW_HEIGHT := 116
+const PREVIEW_FLOOR: Texture2D = preload("res://assets/stone_floor.png")
+const PREVIEW_WALL: Texture2D = preload("res://assets/stone_wall.png")
+const PREVIEW_COLORS := {
+    "door": Color("#c58a49"), "chest": Color("#edc06c"),
+    "monster": Color("#e65d73"), "key": Color("#ffe8a3"),
+    "potion": Color("#b89bff"), "stairs_down": Color("#5bd2e7"),
+    "trigger": Color("#ce90e5"), "player_spawn": Color("#70f2aa")
+}
 var _new_dialog: ConfirmationDialog
 var _size_preset: OptionButton
 var _width_input: SpinBox
@@ -217,13 +237,25 @@ func _build_interface() -> void:
 
 	var footer := _panel(Color("#17232e"))
 	root_column.add_child(footer)
+	var footer_column := VBoxContainer.new()
+	footer_column.add_theme_constant_override("separation", 4)
+	footer.add_child(footer_column)
 	var footer_row := HBoxContainer.new()
-	footer.add_child(footer_row)
+	footer_column.add_child(footer_row)
+	_log_toggle = _button("Логи ▸", "Показать или скрыть журнал сообщений", _toggle_log_console)
+	_log_toggle.focus_mode = Control.FOCUS_NONE
+	footer_row.add_child(_log_toggle)
 	_status_label = _label("Готово", 12, Color("#c8d5dd"))
 	_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	footer_row.add_child(_status_label)
 	_coords_label = _label("x: —   y: —", 12, Color("#e8c58a"))
 	footer_row.add_child(_coords_label)
+	_log_console = RichTextLabel.new()
+	_log_console.custom_minimum_size.y = 145
+	_log_console.scroll_following = true
+	_log_console.selection_enabled = true
+	_log_console.visible = false
+	footer_column.add_child(_log_console)
 
 
 func _tool_grid() -> GridContainer:
@@ -283,10 +315,45 @@ func _create_dialogs() -> void:
 	_load_dialog.ok_button_text = "Загрузить"
 	_load_dialog.confirmed.connect(_load_selected)
 	add_child(_load_dialog)
+	var library_layout := VBoxContainer.new()
+	library_layout.custom_minimum_size = Vector2(620, 370)
+	_load_dialog.add_child(library_layout)
 	_load_list = ItemList.new()
-	_load_list.custom_minimum_size = Vector2(470, 260)
+	_load_list.custom_minimum_size = Vector2(620, 300)
+	_load_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_load_list.icon_mode = ItemList.ICON_MODE_TOP
+	_load_list.fixed_icon_size = Vector2i(PREVIEW_WIDTH, PREVIEW_HEIGHT)
+	_load_list.max_columns = 3
+	_load_list.same_column_width = true
 	_load_list.item_activated.connect(_load_activated)
-	_load_dialog.add_child(_load_list)
+	library_layout.add_child(_load_list)
+	var library_actions := HBoxContainer.new()
+	library_layout.add_child(library_actions)
+	library_actions.add_child(_button("Переименовать", "Изменить название выбранной карты", _request_rename))
+	library_actions.add_child(_button("Копировать", "Создать отдельную копию карты", _duplicate_selected))
+	library_actions.add_child(_button("Удалить", "Удалить выбранную карту после подтверждения", _request_delete))
+
+	_rename_dialog = ConfirmationDialog.new()
+	_rename_dialog.title = "Переименование карты"
+	_rename_dialog.ok_button_text = "Переименовать"
+	_rename_dialog.confirmed.connect(_rename_selected)
+	add_child(_rename_dialog)
+	_rename_input = LineEdit.new()
+	_rename_input.custom_minimum_size.x = 350
+	_rename_dialog.add_child(_rename_input)
+
+	_delete_dialog = ConfirmationDialog.new()
+	_delete_dialog.title = "Удаление карты"
+	_delete_dialog.ok_button_text = "Удалить"
+	_delete_dialog.confirmed.connect(_delete_selected)
+	add_child(_delete_dialog)
+
+	_unsaved_dialog = ConfirmationDialog.new()
+	_unsaved_dialog.title = "Несохранённая карта"
+	_unsaved_dialog.dialog_text = "Изменения карты не сохранены. Продолжить без сохранения?"
+	_unsaved_dialog.ok_button_text = "Продолжить"
+	_unsaved_dialog.confirmed.connect(_run_pending_action)
+	add_child(_unsaved_dialog)
 
 	_export_dialog = FileDialog.new()
 	_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -568,7 +635,17 @@ func _on_hover_changed(cell: Vector2i) -> void:
 
 
 func _set_status(message: String) -> void:
+	if _status_label.text == message:
+		return
 	_status_label.text = message
+	if _log_console != null:
+		_log_console.append_text("[%s] %s\n" % [Time.get_time_string_from_system(), message])
+
+
+func _toggle_log_console() -> void:
+	_log_open = not _log_open
+	_log_console.visible = _log_open
+	_log_toggle.text = "Логи ▾" if _log_open else "Логи ▸"
 
 
 func _request_new() -> void:
@@ -620,34 +697,97 @@ func _save_internal() -> void:
 func _show_load() -> void:
 	if is_play_mode:
 		return
-	if not _ensure_maps_dir():
-		_set_status("Не удалось открыть папку карт")
-		return
-	_load_paths.clear()
-	_load_list.clear()
-	var folder := DirAccess.open(_maps_dir())
-	if folder == null:
-		_set_status("Папка карт не найдена")
-		return
-	var files := folder.get_files()
-	files.sort()
-	for file_name in files:
-		if not file_name.ends_with(".json"):
-			continue
-		var path := _maps_dir().path_join(file_name)
-		var label := file_name.get_basename()
-		var file := FileAccess.open(path, FileAccess.READ)
-		if file != null:
-			var data: Variant = JSON.parse_string(file.get_as_text())
-			if typeof(data) == TYPE_DICTIONARY:
-				label = str(data.get("name", label)) + "    [" + file_name + "]"
-		_load_paths.append(path)
-		_load_list.add_item(label)
+	_refresh_library()
 	if _load_paths.is_empty():
 		_set_status("Библиотека пуста. Сначала сохрани карту.")
 		return
-	_load_list.select(0)
-	_load_dialog.popup_centered(Vector2i(520, 350))
+	_load_dialog.popup_centered(Vector2i(720, 530))
+
+
+func _refresh_library() -> void:
+	_load_paths.clear()
+	_load_list.clear()
+	_preview_textures.clear()
+	if not _ensure_maps_dir():
+		_set_status("Не удалось открыть папку карт")
+		return
+	var folder := DirAccess.open(_maps_dir())
+	if folder == null:
+		return
+	var files := folder.get_files()
+	files.sort()
+	for filename in files:
+		if not filename.ends_with(".json"):
+			continue
+		var path := _maps_dir().path_join(filename)
+		var data := _read_map(path)
+		if data == null:
+			continue
+		var title := "%s\n%d × %d" % [data.display_name, data.width, data.height]
+		var thumbnail := _make_preview(data)
+		_preview_textures.append(thumbnail)
+		_load_list.add_item(title, thumbnail)
+		var idx := _load_list.item_count - 1
+		_load_list.set_item_tooltip(idx, "%s\n%s" % [data.display_name, filename])
+		_load_paths.append(path)
+	if not _load_paths.is_empty():
+		_load_list.select(0)
+
+
+func _make_preview(data: DungeonMap) -> ImageTexture:
+	# Миниатюра строится из сохранённой карты и не требует отдельного PNG.
+	var img := Image.create(PREVIEW_WIDTH, PREVIEW_HEIGHT, false, Image.FORMAT_RGBA8)
+	img.fill(Color("#101820"))
+	var cell_size := minf(float(PREVIEW_WIDTH - 12) / float(data.width), float(PREVIEW_HEIGHT - 12) / float(data.height))
+	var drawn_width := float(data.width) * cell_size
+	var drawn_height := float(data.height) * cell_size
+	var left := (float(PREVIEW_WIDTH) - drawn_width) * 0.5
+	var top := (float(PREVIEW_HEIGHT) - drawn_height) * 0.5
+	var floor_image := PREVIEW_FLOOR.get_image()
+	var wall_image := PREVIEW_WALL.get_image()
+	var x_start := maxi(0, floori(left))
+	var y_start := maxi(0, floori(top))
+	var x_end := mini(PREVIEW_WIDTH, ceili(left + drawn_width))
+	var y_end := mini(PREVIEW_HEIGHT, ceili(top + drawn_height))
+	for py in range(y_start, y_end):
+		for px in range(x_start, x_end):
+			var world_x := (float(px) - left) / cell_size
+			var world_y := (float(py) - top) / cell_size
+			var cx := floori(world_x)
+			var cy := floori(world_y)
+			if not data.contains(cx, cy):
+				continue
+			var source := wall_image if data.get_terrain(cx, cy) == "wall" else floor_image
+			var sx := clampi(floori(fposmod(world_x, 1.0) * float(source.get_width())), 0, source.get_width() - 1)
+			var sy := clampi(floori(fposmod(world_y, 1.0) * float(source.get_height())), 0, source.get_height() - 1)
+			img.set_pixel(px, py, source.get_pixel(sx, sy))
+	for entity in data.entities:
+		var kind := str(entity.get("type", ""))
+		if not PREVIEW_COLORS.has(kind):
+			continue
+		var center_x := roundi(left + (float(entity["x"]) + 0.5) * cell_size)
+		var center_y := roundi(top + (float(entity["y"]) + 0.5) * cell_size)
+		var dot_radius := clampi(roundi(cell_size * 0.23), 1, 4)
+		var dot := Rect2i(center_x - dot_radius, center_y - dot_radius, dot_radius * 2 + 1, dot_radius * 2 + 1)
+		img.fill_rect(dot.intersection(Rect2i(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT)), PREVIEW_COLORS[kind])
+	return ImageTexture.create_from_image(img)
+
+
+func _read_map(path: String) -> DungeonMap:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return null
+	return DungeonMap.from_dict(JSON.parse_string(file.get_as_text()))
+
+
+func _selected_library_path() -> String:
+	var selection := _load_list.get_selected_items()
+	if selection.is_empty():
+		return ""
+	var idx: int = selection[0]
+	if idx < 0 or idx >= _load_paths.size():
+		return ""
+	return _load_paths[idx]
 
 
 func _load_activated(index: int) -> void:
@@ -657,28 +797,115 @@ func _load_activated(index: int) -> void:
 
 
 func _load_selected() -> void:
-	var items := _load_list.get_selected_items()
-	if items.is_empty():
+	var path := _selected_library_path()
+	if not path.is_empty():
+		_load_from_path(path)
+
+
+func _confirm_if_dirty(action: Callable) -> void:
+	if not is_dirty:
+		action.call()
 		return
-	var index: int = items[0]
-	if index >= 0 and index < _load_paths.size():
-		_load_from_path(_load_paths[index])
+	_pending_action = action
+	_unsaved_dialog.popup_centered()
+
+
+func _run_pending_action() -> void:
+	if _pending_action.is_valid():
+		_pending_action.call()
+	_pending_action = Callable()
 
 
 func _load_from_path(path: String) -> void:
 	if is_play_mode:
 		return
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		_set_status("Не удалось прочитать: " + path)
-		return
-	var data: Variant = JSON.parse_string(file.get_as_text())
-	var loaded_map := DungeonMap.from_dict(data)
+	_confirm_if_dirty(_load_from_path_confirmed.bind(path))
+
+
+func _load_from_path_confirmed(path: String) -> void:
+	var loaded_map := _read_map(path)
 	if loaded_map == null:
-		_set_status("Ошибка: неверный формат карты (нужен schema_version = 1)")
+		_set_status("Ошибка чтения карты: " + path)
 		return
 	_set_map(loaded_map)
 	_set_status("Загружено: " + path)
+
+
+func _request_rename() -> void:
+	var path := _selected_library_path()
+	if path.is_empty():
+		return
+	var saved := _read_map(path)
+	if saved == null:
+		_set_status("Не удалось прочитать выбранную карту")
+		return
+	_rename_input.text = saved.display_name
+	_rename_dialog.popup_centered()
+
+
+func _rename_selected() -> void:
+	var path := _selected_library_path()
+	var new_name := _rename_input.text.strip_edges()
+	if path.is_empty() or new_name.is_empty():
+		_set_status("Название карты не может быть пустым")
+		return
+	var saved := _read_map(path)
+	if saved == null:
+		return
+	saved.display_name = new_name
+	if _write_saved_map(saved, path):
+		if saved.map_id == map_data.map_id:
+			map_data.display_name = new_name
+			_name_input.text = new_name
+		_set_status("Карта переименована: " + new_name)
+		_refresh_library()
+
+
+func _duplicate_selected() -> void:
+	var path := _selected_library_path()
+	if path.is_empty():
+		return
+	var original := _read_map(path)
+	if original == null:
+		return
+	var copy := DungeonMap.from_dict(original.to_dict())
+	copy.map_id = DungeonMap.create_blank().map_id
+	copy.display_name = original.display_name + " (копия)"
+	if _write_saved_map(copy, _maps_dir().path_join(copy.map_id + ".json")):
+		_set_status("Создана копия: " + copy.display_name)
+		_refresh_library()
+
+
+func _request_delete() -> void:
+	_delete_path = _selected_library_path()
+	if _delete_path.is_empty():
+		return
+	_delete_dialog.dialog_text = "Удалить карту %s? Это действие нельзя отменить." % _load_list.get_item_text(_load_list.get_selected_items()[0]).replace("\n", " ")
+	_delete_dialog.popup_centered()
+
+
+func _delete_selected() -> void:
+	if _delete_path.is_empty():
+		return
+	var err := DirAccess.remove_absolute(ProjectSettings.globalize_path(_delete_path))
+	if err == OK:
+		_set_status("Карта удалена из библиотеки")
+		_refresh_library()
+		if _load_paths.is_empty():
+			_load_dialog.hide()
+	else:
+		_set_status("Не удалось удалить файл: %s" % err)
+	_delete_path = ""
+
+
+func _write_saved_map(saved: DungeonMap, path: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		_set_status("Ошибка записи карты: " + str(FileAccess.get_open_error()))
+		return false
+	file.store_string(JSON.stringify(saved.to_dict(), "\t"))
+	file.close()
+	return true
 
 
 func _show_export() -> void:

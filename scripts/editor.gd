@@ -4,6 +4,8 @@ extends Control
 ## Вся сцена собирается обычными Control-узлами, чтобы её можно было расширять.
 
 const SIDEBAR_WIDTH := 264.0
+const TEST_ICON = preload("res://assets/icons/test_mode.png")
+const EDITOR_ICON = preload("res://assets/icons/editor_mode.png")
 const TOOLS := [
 	{"id": "hand", "label": "Рука", "hint": "Безопасно перемещать и масштабировать карту одним или двумя пальцами"},
 	{"id": "floor", "label": "Пол", "hint": "Убирает стену; поверхность становится проходимой"},
@@ -38,6 +40,8 @@ var game_session: GameSession
 var is_dirty: bool = false
 var selected_tool: String = "hand"
 var is_play_mode: bool = false
+var _editor_camera_offset := Vector2.ZERO
+var _editor_camera_zoom: float = 1.0
 
 var _canvas: DungeonCanvas
 var _name_input: LineEdit
@@ -104,7 +108,10 @@ func _build_interface() -> void:
 	_register_editor_control(import_button)
 	toolbar.add_child(_separator())
 	toolbar.add_child(_button("Вписать", "Показать всю карту", _fit_map))
-	_play_button = _button("Играть", "Запустить тестовое прохождение по текущей карте", _toggle_play_mode)
+	_play_button = _button("Тест", "Проверить текущую карту без сохранения игрового прогресса", _toggle_play_mode)
+	_play_button.icon = TEST_ICON
+	_play_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_play_button.expand_icon = false
 	toolbar.add_child(_play_button)
 	_mode_label = _label("РЕЖИМ: редактор", 13, Color("#a9c4d5"))
 	_mode_label.custom_minimum_size.x = 180
@@ -625,6 +632,9 @@ func _start_play_mode() -> void:
 	if session == null:
 		_set_status("Нельзя начать тест: поставь на карте точку старта героя.")
 		return
+	## Камера редактора не принадлежит временной тестовой сессии.
+	_editor_camera_offset = _canvas.camera_offset
+	_editor_camera_zoom = _canvas.zoom
 	game_session = session
 	is_play_mode = true
 	_canvas.set_game_session(session)
@@ -632,13 +642,16 @@ func _start_play_mode() -> void:
 	_canvas.grab_focus()
 	_update_mode_ui()
 	_refresh_stats()
-	_set_status("Тест карты запущен • Ходи стрелками или WASD • Esc — вернуться в редактор")
+	_set_status("Тест карты: прогресс временный • Стрелки/WASD • Esc — в редактор")
 
 
 func _stop_play_mode() -> void:
 	game_session = null
 	is_play_mode = false
 	_canvas.set_game_session(null)
+	_canvas.zoom = _editor_camera_zoom
+	_canvas.camera_offset = _editor_camera_offset
+	_canvas.queue_redraw()
 	_update_mode_ui()
 	_refresh_stats()
 	_set_status("Возврат в редактор. Карта не изменена.")
@@ -646,7 +659,9 @@ func _stop_play_mode() -> void:
 
 func _update_mode_ui() -> void:
 	_mode_label.text = "РЕЖИМ: тест" if is_play_mode else "РЕЖИМ: редактор"
-	_play_button.text = "В редактор" if is_play_mode else "Играть"
+	_play_button.text = "Редактор" if is_play_mode else "Тест"
+	_play_button.icon = EDITOR_ICON if is_play_mode else TEST_ICON
+	_play_button.tooltip_text = "Выйти из теста и вернуться к редактированию" if is_play_mode else "Проверить текущую карту без сохранения игрового прогресса"
 	_dpad.visible = is_play_mode
 	for control in _editor_controls:
 		if control is BaseButton:

@@ -11,6 +11,7 @@ var _chest_id: String = ""
 @onready var _gold_check: CheckBox = %GoldCheck
 @onready var _gold_amount: SpinBox = %GoldAmount
 @onready var _sword_check: CheckBox = %SwordCheck
+@onready var _shield_check: CheckBox = %ShieldCheck
 
 
 func _ready() -> void:
@@ -25,6 +26,7 @@ func configure(chest_id: String, contents: Array[String], gold_amount: int = 5) 
 	_potion_check.set_pressed_no_signal("potion" in contents)
 	_gold_check.set_pressed_no_signal("gold" in contents)
 	_sword_check.set_pressed_no_signal("sword" in contents)
+	_shield_check.set_pressed_no_signal("shield" in contents)
 	_gold_amount.value = gold_amount
 	_on_gold_toggled("gold" in contents)
 
@@ -44,5 +46,7 @@ func _save() -> void:
 		contents.append("gold")
 	if _sword_check.button_pressed:
 		contents.append("sword")
+	if _shield_check.button_pressed:
+		contents.append("shield")
 	contents_changed.emit(_chest_id, contents, int(_gold_amount.value))
 	hide()

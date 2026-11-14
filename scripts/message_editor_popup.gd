@@ -18,10 +18,18 @@ func _ready() -> void:
 	_delete_button.pressed.connect(_remove)
 
 
-func configure(cell: Vector2i, text: String, on_door: bool) -> void:
+func configure(cell: Vector2i, text: String, target_kind: String) -> void:
 	_cell = cell
 	_input.text = text
-	_hint.text = "Покажется после открытия двери." if on_door else "Покажется, когда герой войдёт в клетку."
+	match target_kind:
+		"monster":
+			_hint.text = "Покажется перед началом боя с монстром."
+		"door":
+			_hint.text = "Покажется после открытия двери."
+		"chest":
+			_hint.text = "Покажется вместе с наградой после открытия сундука."
+		_:
+			_hint.text = "Покажется, когда герой войдёт в клетку."
 	_delete_button.disabled = text.strip_edges().is_empty()
 
 

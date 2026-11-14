@@ -7,7 +7,7 @@ extends RefCounted
 const FORMAT_VERSION := 1
 const MAX_SIZE := 256
 const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "gold", "trigger", "player_spawn", "message"]
-const CHEST_REWARDS := ["key", "potion", "gold", "sword"]
+const CHEST_REWARDS := ["key", "potion", "gold", "sword", "shield"]
 
 var map_id: String = ""
 var display_name: String = "Безымянное подземелье"
@@ -164,12 +164,19 @@ func set_message_at(x: int, y: int, text: String) -> bool:
 			return false
 		entities.erase(existing)
 		return true
-	var door_id := ""
-	for entity in entities_at(x, y):
-		if str(entity.get("type", "")) == "door":
-			door_id = str(entity.get("id", ""))
+	# Послание прикрепляется к событию клетки, а не заменяет объект.
+	# Монстр имеет приоритет: игрок должен прочитать реплику до боя.
+	var activation := "enter"
+	var target_id := ""
+	for kind in ["monster", "door", "chest"]:
+		for entity in entities_at(x, y):
+			if str(entity.get("type", "")) == kind:
+				activation = {"monster": "monster_encounter", "door": "door_open", "chest": "chest_open"}[kind]
+				target_id = str(entity.get("id", ""))
+				break
+		if not target_id.is_empty():
 			break
-	var data := {"text": clean_text, "activation": "door_open" if not door_id.is_empty() else "enter", "target_entity_id": door_id}
+	var data := {"text": clean_text, "activation": activation, "target_entity_id": target_id}
 	if not existing.is_empty():
 		if existing.get("properties", {}) == data:
 			return false
@@ -206,13 +213,15 @@ func move_existing(kind: String, entity_id: String, source: Vector2i, target: Ve
 	for entry in entities_at(target.x, target.y):
 		if str(entry["type"]) == kind:
 			return false
-	# Сообщение, прикреплённое к двери, перемещается вместе с ней.
+	# Послание, привязанное к двери, монстру или сундуку, перемещается вместе с объектом.
 	var bound_message: Dictionary = {}
-	if kind == "door":
+	if kind in ["door", "monster", "chest"]:
 		var source_message := message_at(source.x, source.y)
 		if not source_message.is_empty():
 			var message_properties: Dictionary = source_message.get("properties", {})
-			if str(message_properties.get("target_entity_id", "")) == entity_id:
+			var assigned_id := str(message_properties.get("target_entity_id", ""))
+			var legacy_message := assigned_id.is_empty() and str(message_properties.get("activation", "enter")) == "enter" and kind in ["monster", "chest"]
+			if assigned_id == entity_id or legacy_message:
 				if not message_at(target.x, target.y).is_empty():
 					return false
 				bound_message = source_message

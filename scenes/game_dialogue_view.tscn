@@ -60,6 +60,7 @@ layout_mode = 2
 theme_override_constants/separation = 16
 
 [node name="Eyebrow" type="Label" parent="Center/Card/Margins/Content"]
+unique_name_in_owner = true
 layout_mode = 2
 text = "ПОСЛАНИЕ"
 horizontal_alignment = 1
@@ -81,6 +82,30 @@ selection_enabled = true
 text = "Впереди простирается древний лабиринт..."
 theme_override_colors/default_color = Color(0.94, 0.91, 0.83, 1)
 theme_override_font_sizes/normal_font_size = 19
+
+[node name="LootSection" type="VBoxContainer" parent="Center/Card/Margins/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+theme_override_constants/separation = 9
+
+[node name="LootHeader" type="Label" parent="Center/Card/Margins/Content/LootSection"]
+layout_mode = 2
+text = "ВЫ НАШЛИ"
+theme_override_colors/font_color = Color(0.89, 0.69, 0.39, 1)
+theme_override_font_sizes/font_size = 15
+
+[node name="LootScroll" type="ScrollContainer" parent="Center/Card/Margins/Content/LootSection"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 80)
+horizontal_scroll_mode = 0
+
+[node name="LootRows" type="VBoxContainer" parent="Center/Card/Margins/Content/LootSection/LootScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
 
 [node name="Actions" type="HBoxContainer" parent="Center/Card/Margins/Content"]
 layout_mode = 2

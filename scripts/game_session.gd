@@ -132,23 +132,25 @@ func take_message_events() -> Array[Dictionary]:
 	return result
 
 
-func _activate_message_at(cell: Vector2i, activation: String, door_id: String = "") -> void:
+func _activate_message_at(cell: Vector2i, activation: String, target_id: String = "", loot: Array[Dictionary] = []) -> void:
 	var message := map_data.message_at(cell.x, cell.y)
-	if message.is_empty():
-		return
-	var message_id := str(message.get("id", ""))
-	if shown_messages.has(message_id):
-		return
-	var properties: Dictionary = message.get("properties", {})
-	if str(properties.get("activation", "enter")) != activation:
-		return
-	if activation == "door_open" and str(properties.get("target_entity_id", "")) != door_id:
-		return
-	var text := str(properties.get("text", "")).strip_edges()
-	if text.is_empty():
-		return
-	shown_messages[message_id] = true
-	_message_events.append({"text": text, "activation": activation})
+	var authored_text := ""
+	if not message.is_empty():
+		var message_id := str(message.get("id", ""))
+		if not shown_messages.has(message_id):
+			var properties: Dictionary = message.get("properties", {})
+			var stored_activation := str(properties.get("activation", "enter"))
+			var stored_target := str(properties.get("target_entity_id", ""))
+			var matches := stored_activation == activation and (activation == "enter" or stored_target == target_id)
+			# Совместимость: послания на монстрах и сундуках старых карт были привязаны к входу.
+			if not matches and stored_activation == "enter" and activation in ["monster_encounter", "chest_open"]:
+				matches = true
+			if matches:
+				authored_text = str(properties.get("text", "")).strip_edges()
+				if not authored_text.is_empty():
+					shown_messages[message_id] = true
+	if not authored_text.is_empty() or not loot.is_empty():
+		_message_events.append({"text": authored_text, "activation": activation, "loot": loot.duplicate(true)})
 
 
 func can_enter(cell: Vector2i) -> bool:
@@ -169,6 +171,7 @@ func move_by(dx: int, dy: int) -> bool:
 	if not monster.is_empty():
 		encounter_monster_id = str(monster["id"])
 		encounter_target = target
+		_activate_message_at(target, "monster_encounter", encounter_monster_id)
 		return false
 
 	var chest := _find_active_entity(target, "chest")
@@ -205,19 +208,16 @@ func move_by(dx: int, dy: int) -> bool:
 func _open_chest(chest: Dictionary) -> void:
 	opened_chests[str(chest["id"])] = true
 	var contents: Array[String] = DungeonMap.chest_contents(chest)
-	var reward_names: PackedStringArray = []
+	var rewards: Array[Dictionary] = []
 	for item_id in contents:
 		var item := ItemCatalog.get_item(item_id)
 		if item == null:
 			continue
 		var quantity: int = DungeonMap.chest_gold_amount(chest) if item_id == "gold" else item.default_quantity
 		_receive_item(item_id, quantity)
-		if item.category == ItemDefinition.Category.CURRENCY:
-			reward_names.append("%d монет" % quantity)
-		else:
-			reward_names.append(item.display_name.to_lower())
-	if not reward_names.is_empty():
-		last_event_message = "В сундуке: %s." % ", ".join(reward_names)
+		rewards.append({"item_id": item_id, "quantity": quantity})
+	# Авторское послание и найденные сокровища показываются в ОДНОМ окне.
+	_activate_message_at(Vector2i(int(chest["x"]), int(chest["y"])), "chest_open", str(chest["id"]), rewards)
 
 
 ## Общая логика подбора. Описание предмета — Resource, состояние находок — GameSession.
@@ -231,6 +231,8 @@ func _receive_item(item_id: String, quantity: int) -> void:
 		carried_items[item_id] = int(carried_items.get(item_id, 0)) + quantity
 		if item.item_id == "sword":
 			hero.equip_weapon(item)
+		elif item.item_id == "shield":
+			hero.equip_shield(item)
 		keys = int(carried_items.get("key", 0))
 		potions = int(carried_items.get("potion", 0))
 

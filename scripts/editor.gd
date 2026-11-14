@@ -81,7 +81,7 @@ var _chest_popup: ChestContentsPopup
 var _trigger_popup: TriggerPropertiesPopup
 var _message_popup: MessageEditorPopup
 var _game_dialogue: GameDialogueView
-var _pending_game_messages: Array[String] = []
+var _pending_game_messages: Array[Dictionary] = []
 var _editor_controls: Array[Control] = []
 var _play_button: Button
 var _load_paths: Array[String] = []
@@ -575,12 +575,15 @@ func _on_message_cell_tapped(cell: Vector2i) -> void:
 	_canvas.finish_edit_stroke()
 	var existing := map_data.message_at(cell.x, cell.y)
 	var properties: Dictionary = existing.get("properties", {})
-	var has_door := false
-	for entity in map_data.entities_at(cell.x, cell.y):
-		if str(entity.get("type", "")) == "door":
-			has_door = true
+	var target_kind := ""
+	for kind in ["monster", "door", "chest"]:
+		for entity in map_data.entities_at(cell.x, cell.y):
+			if str(entity.get("type", "")) == kind:
+				target_kind = kind
+				break
+		if not target_kind.is_empty():
 			break
-	_message_popup.configure(cell, str(properties.get("text", "")), has_door)
+	_message_popup.configure(cell, str(properties.get("text", "")), target_kind)
 	_message_popup.popup_centered_clamped(Vector2i(540, 390), 0.9)
 
 
@@ -627,7 +630,7 @@ func _on_chest_tapped(chest_id: String) -> void:
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":
 			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity))
-			_chest_popup.popup_centered_clamped(Vector2i(420, 440), 0.9)
+			_chest_popup.popup_centered_clamped(Vector2i(420, 490), 0.9)
 			return
 
 
@@ -1123,20 +1126,22 @@ func _collect_game_messages() -> void:
 	if game_session == null:
 		return
 	for event in game_session.take_message_events():
-		_pending_game_messages.append(str(event.get("text", "")))
+		_pending_game_messages.append(event)
 	_show_next_game_message()
 
 
 func _show_next_game_message() -> void:
 	if _game_dialogue.visible or _pending_game_messages.is_empty():
 		return
-	var text: String = _pending_game_messages.pop_front()
-	_game_dialogue.show_dialog(text)
+	var event: Dictionary = _pending_game_messages.pop_front()
+	_game_dialogue.show_event(event)
 
 
 func _on_game_dialogue_closed() -> void:
 	if not _pending_game_messages.is_empty():
 		_show_next_game_message()
+	elif is_play_mode and game_session != null and game_session.has_pending_encounter():
+		_start_combat()
 	elif game_session != null and game_session.is_completed:
 		_show_victory_view()
 	elif is_play_mode:
@@ -1162,7 +1167,9 @@ func _try_move_player(dx: int, dy: int) -> void:
 		return
 	var moved := game_session.move_by(dx, dy)
 	if game_session.has_pending_encounter():
-		_start_combat()
+		_collect_game_messages()
+		if not _game_dialogue.visible:
+			_start_combat()
 		return
 	if moved:
 		_canvas.center_on_cell(game_session.player_pos)

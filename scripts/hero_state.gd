@@ -14,6 +14,7 @@ var attack: int = START_ATTACK
 var defense: int = START_DEFENSE
 var gold: int = 0
 var equipped_weapon_id: String = ""
+var equipped_shield_id: String = ""
 
 
 func equip_weapon(item: ItemDefinition) -> void:
@@ -21,3 +22,17 @@ func equip_weapon(item: ItemDefinition) -> void:
 		return
 	equipped_weapon_id = item.item_id
 	attack = START_ATTACK + item.attack_bonus
+
+
+func equip_shield(item: ItemDefinition) -> void:
+	if item == null or item.category != ItemDefinition.Category.EQUIPMENT:
+		return
+	equipped_shield_id = item.item_id
+	defense = START_DEFENSE + item.defense_bonus
+
+
+## Возвращает реально полученный урон; поглощение не уводит его ниже нуля.
+func take_damage(incoming: int) -> int:
+	var taken := maxi(incoming - defense, 0)
+	health = maxi(health - taken, 0)
+	return taken

@@ -7,7 +7,8 @@ const DEFINITIONS := {
 	"key": preload("res://items/key.tres"),
 	"potion": preload("res://items/potion.tres"),
 	"gold": preload("res://items/gold.tres"),
-	"sword": preload("res://items/sword.tres")
+	"sword": preload("res://items/sword.tres"),
+	"shield": preload("res://items/shield.tres")
 }
 
 

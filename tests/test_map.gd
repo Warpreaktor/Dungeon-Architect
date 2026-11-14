@@ -345,6 +345,75 @@ func _initialize() -> void:
 	# Сняли золото с сундука: размер денежной награды не влияет на остальные предметы.
 	assert(equip_map.set_chest_contents(equip_chest_id, ["sword"]))
 	assert(DungeonMap.chest_contents(equip_chest) == ["sword"])
+	# DA-2.03.3: послание на монстре показывается перед боем, а не после победы.
+	var monster_story_map := DungeonMap.create_blank(8, 8)
+	assert(monster_story_map.place_entity("player_spawn", 2, 2))
+	assert(monster_story_map.place_entity("monster", 3, 2))
+	assert(monster_story_map.set_message_at(3, 2, "Страж проснулся!"))
+	assert(monster_story_map.message_at(3, 2)["properties"]["activation"] == "monster_encounter")
+	var monster_story_json := JSON.stringify(monster_story_map.to_dict())
+	var monster_story_session := GameSession.start_for(monster_story_map)
+	assert(not monster_story_session.move_by(1, 0))
+	assert(monster_story_session.has_pending_encounter())
+	var encounter_dialogue := monster_story_session.take_message_events()
+	assert(encounter_dialogue.size() == 1 and encounter_dialogue[0]["text"] == "Страж проснулся!")
+	assert(monster_story_session.win_pending_encounter())
+	assert(monster_story_session.take_message_events().is_empty())
+	assert(JSON.stringify(monster_story_map.to_dict()) == monster_story_json)
+	# Старые сообщения типа enter на клетке монстра тоже показываем до боя.
+	monster_story_map.message_at(3, 2)["properties"]["activation"] = "enter"
+	monster_story_map.message_at(3, 2)["properties"]["target_entity_id"] = ""
+	var old_story_session := GameSession.start_for(monster_story_map)
+	assert(not old_story_session.move_by(1, 0))
+	assert(old_story_session.take_message_events().size() == 1)
+	# Послание у монстра можно переносить вместе с ним.
+	var story_monster_id := str(monster_story_map.entities_at(3, 2)[0]["id"])
+	assert(monster_story_map.move_existing("monster", story_monster_id, Vector2i(3, 2), Vector2i(4, 2)))
+	assert(monster_story_map.message_at(3, 2).is_empty())
+	assert(not monster_story_map.message_at(4, 2).is_empty())
+
+	# Сундук показывает авторскую реплику и всю добычу в ОДНОМ событии.
+	var decorated_chest_map := DungeonMap.create_blank(8, 8)
+	assert(decorated_chest_map.place_entity("player_spawn", 2, 2))
+	assert(decorated_chest_map.place_entity("chest", 3, 2))
+	var decorated_chest: Dictionary = decorated_chest_map.entities_at(3, 2)[0]
+	var decorated_chest_id := str(decorated_chest["id"])
+	assert(decorated_chest_map.set_chest_contents(decorated_chest_id, ["key", "potion", "gold", "sword", "shield"], 42))
+	assert(decorated_chest_map.set_message_at(3, 2, "Найден тайник!"))
+	assert(decorated_chest_map.message_at(3, 2)["properties"]["activation"] == "chest_open")
+	var decorated_json := JSON.stringify(decorated_chest_map.to_dict())
+	var decorated_session := GameSession.start_for(decorated_chest_map)
+	assert(not decorated_session.move_by(1, 0))
+	var treasure_events := decorated_session.take_message_events()
+	assert(treasure_events.size() == 1)
+	assert(treasure_events[0]["text"] == "Найден тайник!")
+	var treasure_loot: Array = treasure_events[0]["loot"]
+	assert(treasure_loot.size() == 5)
+	assert(treasure_loot[2]["item_id"] == "gold" and treasure_loot[2]["quantity"] == 42)
+	assert(decorated_session.hero.gold == 42)
+	assert(decorated_session.hero.attack == 2)
+	assert(decorated_session.hero.defense == 1)
+	assert(decorated_session.hero.equipped_shield_id == "shield")
+	assert(decorated_session.hero.take_damage(2) == 1)
+	assert(decorated_session.hero.health == 19)
+	assert(decorated_session.move_by(1, 0))
+	assert(decorated_session.take_message_events().is_empty())
+	assert(JSON.stringify(decorated_chest_map.to_dict()) == decorated_json)
+	var decorated_again := GameSession.start_for(decorated_chest_map)
+	assert(decorated_again.hero.defense == 0 and decorated_again.hero.gold == 0)
+	# Без авторской реплики сундук всё равно показывает найденные предметы.
+	assert(decorated_chest_map.set_message_at(3, 2, ""))
+	var loot_only_session := GameSession.start_for(decorated_chest_map)
+	assert(not loot_only_session.move_by(1, 0))
+	var loot_only_events := loot_only_session.take_message_events()
+	assert(loot_only_events.size() == 1)
+	assert(str(loot_only_events[0]["text"]).is_empty() and loot_only_events[0]["loot"].size() == 5)
+	# Новое сообщение движется вместе с сундуком.
+	assert(decorated_chest_map.set_message_at(3, 2, "Переносимый текст"))
+	assert(decorated_chest_map.move_existing("chest", decorated_chest_id, Vector2i(3, 2), Vector2i(4, 2)))
+	assert(decorated_chest_map.message_at(3, 2).is_empty())
+	assert(decorated_chest_map.message_at(4, 2)["properties"]["target_entity_id"] == decorated_chest_id)
+
 	# Совместимость: старые карты с находками непосредственно на полу продолжают работать.
 	assert(gold_map_loaded.entities_at(3, 2).size() == 1)
 	print("DungeonMap smoke tests: OK")

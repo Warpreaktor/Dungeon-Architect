@@ -96,6 +96,7 @@ theme_override_font_sizes/font_size = 16
 text = "3"
 
 [node name="DefenseIcon" type="TextureRect" parent="Content/StatsRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(22, 22)
 layout_mode = 2
 mouse_filter = 2

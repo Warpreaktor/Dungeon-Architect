@@ -6,7 +6,7 @@ extends RefCounted
 
 const FORMAT_VERSION := 1
 const MAX_SIZE := 256
-const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "trigger", "player_spawn"]
+const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "trigger", "player_spawn", "message"]
 
 var map_id: String = ""
 var display_name: String = "Безымянное подземелье"
@@ -75,6 +75,8 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		properties = {"target_map_id": "", "target_x": 0, "target_y": 0}
 	elif kind == "trigger":
 		properties = {"event_id": ""}
+	elif kind == "message":
+		properties = {"text": "", "activation": "enter", "target_entity_id": ""}
 	entities.append({
 		"id": "ent_%08x" % randi(),
 		"type": kind,
@@ -133,6 +135,41 @@ func set_trigger_event_id(trigger_id: String, event_id: String) -> bool:
 	return false
 
 
+## Сообщение существует отдельно от объектов клетки, но может быть связано с дверью.
+func message_at(x: int, y: int) -> Dictionary:
+	for entity in entities_at(x, y):
+		if str(entity.get("type", "")) == "message":
+			return entity
+	return {}
+
+
+func set_message_at(x: int, y: int, text: String) -> bool:
+	if not contains(x, y) or get_terrain(x, y) == "wall":
+		return false
+	var existing := message_at(x, y)
+	var clean_text := text.strip_edges()
+	if clean_text.is_empty():
+		if existing.is_empty():
+			return false
+		entities.erase(existing)
+		return true
+	var door_id := ""
+	for entity in entities_at(x, y):
+		if str(entity.get("type", "")) == "door":
+			door_id = str(entity.get("id", ""))
+			break
+	var data := {"text": clean_text, "activation": "door_open" if not door_id.is_empty() else "enter", "target_entity_id": door_id}
+	if not existing.is_empty():
+		if existing.get("properties", {}) == data:
+			return false
+		existing["properties"] = data
+		return true
+	if not place_entity("message", x, y):
+		return false
+	message_at(x, y)["properties"] = data
+	return true
+
+
 ## Атомарный перенос: проверяем цель до изменения исходной клетки.
 ## kind == "wall" переносит стену; остальные kind — существующую сущность.
 func move_existing(kind: String, entity_id: String, source: Vector2i, target: Vector2i) -> bool:
@@ -158,8 +195,21 @@ func move_existing(kind: String, entity_id: String, source: Vector2i, target: Ve
 	for entry in entities_at(target.x, target.y):
 		if str(entry["type"]) == kind:
 			return false
+	# Сообщение, прикреплённое к двери, перемещается вместе с ней.
+	var bound_message: Dictionary = {}
+	if kind == "door":
+		var source_message := message_at(source.x, source.y)
+		if not source_message.is_empty():
+			var message_properties: Dictionary = source_message.get("properties", {})
+			if str(message_properties.get("target_entity_id", "")) == entity_id:
+				if not message_at(target.x, target.y).is_empty():
+					return false
+				bound_message = source_message
 	moving["x"] = target.x
 	moving["y"] = target.y
+	if not bound_message.is_empty():
+		bound_message["x"] = target.x
+		bound_message["y"] = target.y
 	return true
 
 

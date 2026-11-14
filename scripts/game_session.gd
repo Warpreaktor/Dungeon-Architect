@@ -15,6 +15,8 @@ var is_completed: bool = false # Выход достигнут в текущем
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
 var activated_triggers: Dictionary = {} # ID сработавших триггеров; обнуляется с новой сессией.
+var shown_messages: Dictionary = {} # Авторские сообщения показываются один раз за прохождение.
+var _message_events: Array[Dictionary] = []
 var _trigger_events: Array[Dictionary] = [] # События последнего хода для игрового контроллера.
 var last_event_message: String = ""
 var encounter_monster_id: String = ""
@@ -37,6 +39,7 @@ static func start_for(map_ref: DungeonMap) -> GameSession:
 	session._refresh_visibility()
 	session._collect_pickups_at(spawn)
 	session._activate_triggers_at(spawn)
+	session._activate_message_at(spawn, "enter")
 	return session
 
 
@@ -121,6 +124,32 @@ func _activate_triggers_at(cell: Vector2i) -> void:
 		})
 
 
+## Авторские события потребляются контроллером интерфейса, состояние карты не меняется.
+func take_message_events() -> Array[Dictionary]:
+	var result: Array[Dictionary] = _message_events.duplicate(true)
+	_message_events.clear()
+	return result
+
+
+func _activate_message_at(cell: Vector2i, activation: String, door_id: String = "") -> void:
+	var message := map_data.message_at(cell.x, cell.y)
+	if message.is_empty():
+		return
+	var message_id := str(message.get("id", ""))
+	if shown_messages.has(message_id):
+		return
+	var properties: Dictionary = message.get("properties", {})
+	if str(properties.get("activation", "enter")) != activation:
+		return
+	if activation == "door_open" and str(properties.get("target_entity_id", "")) != door_id:
+		return
+	var text := str(properties.get("text", "")).strip_edges()
+	if text.is_empty():
+		return
+	shown_messages[message_id] = true
+	_message_events.append({"text": text, "activation": activation})
+
+
 func can_enter(cell: Vector2i) -> bool:
 	return contains(cell.x, cell.y) and map_data.get_terrain(cell.x, cell.y) != "wall"
 
@@ -147,18 +176,24 @@ func move_by(dx: int, dy: int) -> bool:
 		return false # Открытие занимает попытку шага, герой остаётся рядом.
 
 	var door := _find_active_entity(target, "door")
+	var opened_door_id := ""
 	if not door.is_empty():
 		if keys <= 0:
 			last_event_message = "Дверь заперта. Нужен ключ."
 			return false
 		keys -= 1
-		removed_entities[str(door["id"])] = true
+		opened_door_id = str(door["id"])
+		removed_entities[opened_door_id] = true
 		last_event_message = "Ключ использован. Дверь открыта!"
 
 	player_pos = target
 	steps += 1
 	_collect_pickups_at(target)
 	_activate_triggers_at(target)
+	if not opened_door_id.is_empty():
+		_activate_message_at(target, "door_open", opened_door_id)
+	else:
+		_activate_message_at(target, "enter")
 	_refresh_visibility()
 	# Пока лестница завершает приключение. Позже здесь появится переход на другую карту.
 	if not _find_active_entity(target, "stairs_down").is_empty():

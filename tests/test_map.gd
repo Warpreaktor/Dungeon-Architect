@@ -189,6 +189,52 @@ func _initialize() -> void:
 	assert(trigger_again.move_by(1, 0))
 	assert(trigger_again.take_trigger_events().size() == 1)
 
+	# Авторские сообщения: вход на клетку, старт и привязка к двери.
+	var story_map := DungeonMap.create_blank(8, 8)
+	assert(story_map.place_entity("player_spawn", 2, 2))
+	assert(story_map.set_message_at(2, 2, "  Начало пути  "))
+	assert(story_map.set_message_at(3, 2, "Берегись темноты!"))
+	assert(story_map.place_entity("door", 4, 2))
+	assert(story_map.set_message_at(4, 2, "Ты пробудил древнее проклятие."))
+	assert(story_map.place_entity("key", 2, 3))
+	var door_message := story_map.message_at(4, 2)
+	assert(door_message["properties"]["activation"] == "door_open")
+	var saved_story := JSON.stringify(story_map.to_dict())
+	var story_restored := DungeonMap.from_dict(JSON.parse_string(saved_story))
+	assert(story_restored != null)
+	var story := GameSession.start_for(story_restored)
+	var read := story.take_message_events()
+	assert(read.size() == 1 and read[0]["text"] == "Начало пути")
+	assert(story.take_message_events().is_empty())
+	assert(story.move_by(1, 0))
+	read = story.take_message_events()
+	assert(read.size() == 1 and read[0]["text"] == "Берегись темноты!")
+	assert(not story.move_by(1, 0)) # Дверь заперта, преждевременного сообщения нет.
+	assert(story.take_message_events().is_empty())
+	assert(story.move_by(-1, 0) and story.move_by(0, 1)) # Подбираем ключ.
+	assert(story.move_by(1, 0) and story.move_by(1, 0))
+	assert(story.move_by(0, -1)) # Дверь открывается только после подбора ключа.
+	assert(story.keys == 0)
+	read = story.take_message_events()
+	assert(read.size() == 1 and read[0]["text"] == "Ты пробудил древнее проклятие.")
+	assert(story.move_by(-1, 0) and story.move_by(1, 0))
+	assert(story.take_message_events().is_empty())
+	assert(JSON.stringify(story_restored.to_dict()) == saved_story)
+	var story_again := GameSession.start_for(story_restored)
+	assert(story_again.take_message_events().size() == 1)
+	var message_id := str(story_restored.message_at(3, 2)["id"])
+	assert(story_restored.set_message_at(3, 2, "Новая надпись"))
+	assert(str(story_restored.message_at(3, 2)["id"]) == message_id)
+	assert(not story_restored.set_message_at(3, 2, "Новая надпись"))
+	assert(story_restored.set_message_at(3, 2, ""))
+	assert(story_restored.message_at(3, 2).is_empty())
+	# Перенос двери забирает прикреплённый текст с собой.
+	var door_to_move := story_restored.entities_at(4, 2)[0]
+	var door_id: String = str(door_to_move["id"])
+	assert(story_restored.move_existing("door", door_id, Vector2i(4, 2), Vector2i(4, 3)))
+	assert(story_restored.message_at(4, 2).is_empty())
+	assert(story_restored.message_at(4, 3)["properties"]["target_entity_id"] == door_id)
+
 	# Существующая карта с полем reward продолжает работать.
 	var legacy_map := DungeonMap.from_dict(loot_map.to_dict())
 	var legacy_chest: Dictionary = legacy_map.entities_at(3, 2)[0]

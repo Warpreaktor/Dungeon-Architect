@@ -10,6 +10,8 @@ const CHEST_CONTENTS_SCENE: PackedScene = preload("res://scenes/chest_contents_p
 const TRIGGER_PROPERTIES_SCENE: PackedScene = preload("res://scenes/trigger_properties_popup.tscn")
 const BATTLE_VIEW_SCENE: PackedScene = preload("res://scenes/battle_view.tscn")
 const VICTORY_VIEW_SCENE: PackedScene = preload("res://scenes/victory_view.tscn")
+const MESSAGE_EDITOR_SCENE: PackedScene = preload("res://scenes/message_editor_popup.tscn")
+const GAME_DIALOGUE_SCENE: PackedScene = preload("res://scenes/game_dialogue_view.tscn")
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
 	"save": preload("res://assets/icons/commands/save.png"),
@@ -33,6 +35,7 @@ const TOOLS := [
 	{"id": "potion", "label": "Зелье", "hint": "Подбираемый предмет"},
 	{"id": "stairs_down", "label": "Спуск", "hint": "Выход из подземелья (позже станет переходом на другую карту)"},
 	{"id": "trigger", "label": "Триггер", "hint": "Невидимое в игре событие"},
+	{"id": "message", "label": "Послание", "hint": "Авторский текст при входе в клетку или открытии двери"},
 	{"id": "player_spawn", "label": "Старт героя", "hint": "Единственная стартовая позиция"},
 	{"id": "erase", "label": "Ластик", "hint": "Удалить верхний объект или стену"}
 ]
@@ -47,6 +50,7 @@ const TOOL_ICONS := {
 	"potion": preload("res://assets/icons/potion.png"),
 	"stairs_down": preload("res://assets/icons/stairs_down.png"),
 	"trigger": preload("res://assets/icons/trigger.png"),
+	"message": preload("res://assets/icons/message.png"),
 	"player_spawn": preload("res://assets/icons/player_spawn.png"),
 	"erase": preload("res://assets/icons/erase.png")
 }
@@ -79,6 +83,9 @@ var _sidebar_panel: PanelContainer
 var _palette_buttons: Dictionary = {}
 var _chest_popup: ChestContentsPopup
 var _trigger_popup: TriggerPropertiesPopup
+var _message_popup: MessageEditorPopup
+var _game_dialogue: GameDialogueView
+var _pending_game_messages: Array[String] = []
 var _editor_controls: Array[Control] = []
 var _play_button: Button
 var _load_paths: Array[String] = []
@@ -101,7 +108,8 @@ const PREVIEW_COLORS := {
     "door": Color("#c58a49"), "chest": Color("#edc06c"),
     "monster": Color("#e65d73"), "key": Color("#ffe8a3"),
     "potion": Color("#b89bff"), "stairs_down": Color("#5bd2e7"),
-    "trigger": Color("#ce90e5"), "player_spawn": Color("#70f2aa")
+    "trigger": Color("#ce90e5"), "player_spawn": Color("#70f2aa"),
+    "message": Color("#ffdd93")
 }
 var _new_dialog: ConfirmationDialog
 var _size_preset: OptionButton
@@ -196,6 +204,7 @@ func _build_interface() -> void:
 	_canvas.move_selection_changed.connect(_on_move_selection_changed)
 	_canvas.move_failed.connect(_on_move_failed)
 	_canvas.configurable_entity_tapped.connect(_on_configurable_entity_tapped)
+	_canvas.message_cell_tapped.connect(_on_message_cell_tapped)
 	canvas_host.add_child(_canvas)
 	_build_dpad(canvas_host)
 
@@ -206,6 +215,9 @@ func _build_interface() -> void:
 	_game_notice = GAME_NOTICE_SCENE.instantiate() as GameNotice
 	_game_notice.visible = false
 	canvas_host.add_child(_game_notice)
+	_game_dialogue = GAME_DIALOGUE_SCENE.instantiate() as GameDialogueView
+	_game_dialogue.closed.connect(_on_game_dialogue_closed)
+	add_child(_game_dialogue)
 
 	_sidebar_panel = _panel(Color("#202d39"))
 	_sidebar_panel.custom_minimum_size.x = SIDEBAR_WIDTH
@@ -302,6 +314,10 @@ func _create_dialogs() -> void:
 	_trigger_popup = TRIGGER_PROPERTIES_SCENE.instantiate() as TriggerPropertiesPopup
 	_trigger_popup.event_id_changed.connect(_on_trigger_event_id_changed)
 	add_child(_trigger_popup)
+	_message_popup = MESSAGE_EDITOR_SCENE.instantiate() as MessageEditorPopup
+	_message_popup.saved.connect(_on_message_saved)
+	_message_popup.removed.connect(_on_message_removed)
+	add_child(_message_popup)
 
 	_new_dialog = ConfirmationDialog.new()
 	_new_dialog.title = "Новая карта"
@@ -550,6 +566,40 @@ func _on_configurable_entity_tapped(kind: String, entity_id: String) -> void:
 			_on_chest_tapped(entity_id)
 		"trigger":
 			_on_trigger_tapped(entity_id)
+		"message":
+			for entity in map_data.entities:
+				if str(entity.get("id", "")) == entity_id and str(entity.get("type", "")) == "message":
+					_on_message_cell_tapped(Vector2i(int(entity["x"]), int(entity["y"])))
+					return
+
+
+func _on_message_cell_tapped(cell: Vector2i) -> void:
+	if is_play_mode or map_data == null:
+		return
+	_canvas.finish_edit_stroke()
+	var existing := map_data.message_at(cell.x, cell.y)
+	var properties: Dictionary = existing.get("properties", {})
+	var has_door := false
+	for entity in map_data.entities_at(cell.x, cell.y):
+		if str(entity.get("type", "")) == "door":
+			has_door = true
+			break
+	_message_popup.configure(cell, str(properties.get("text", "")), has_door)
+	_message_popup.popup_centered_clamped(Vector2i(540, 390), 0.9)
+
+
+func _on_message_saved(cell: Vector2i, text: String) -> void:
+	if is_play_mode:
+		return
+	var before := _canvas.capture_edit_state()
+	if map_data.set_message_at(cell.x, cell.y, text):
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
+		_on_canvas_edited()
+		_canvas.queue_redraw()
+
+
+func _on_message_removed(cell: Vector2i) -> void:
+	_on_message_saved(cell, "")
 
 
 func _on_trigger_tapped(trigger_id: String) -> void:
@@ -1017,6 +1067,7 @@ func _start_play_mode() -> void:
 	_editor_camera_offset = _canvas.camera_offset
 	_editor_camera_zoom = _canvas.zoom
 	game_session = session
+	_pending_game_messages.clear()
 	is_play_mode = true
 	_canvas.set_game_session(session)
 	_canvas.center_on_cell(session.player_pos)
@@ -1025,14 +1076,17 @@ func _start_play_mode() -> void:
 	_refresh_stats()
 	_set_status("Тест карты: прогресс временный • Стрелки/WASD • Esc — в редактор")
 	if not session.last_event_message.is_empty():
-		_show_game_event(session.last_event_message)
+		_set_status(session.last_event_message)
 	_log_trigger_events()
+	_collect_game_messages()
 
 
 func _stop_play_mode() -> void:
 	_remove_victory_view()
 	_abort_combat()
 	_game_notice.clear()
+	_game_dialogue.dismiss()
+	_pending_game_messages.clear()
 	game_session = null
 	is_play_mode = false
 	_canvas.set_game_session(null)
@@ -1063,12 +1117,38 @@ func _update_mode_ui() -> void:
 
 
 func _show_game_event(message: String) -> void:
-	_game_notice.show_message(message)
+	# Очевидные действия попадают лишь в технический лог.
 	_set_status(message)
+	if message.begins_with("Дверь заперта"):
+		_game_notice.show_message("Нужен ключ")
+
+
+func _collect_game_messages() -> void:
+	if game_session == null:
+		return
+	for event in game_session.take_message_events():
+		_pending_game_messages.append(str(event.get("text", "")))
+	_show_next_game_message()
+
+
+func _show_next_game_message() -> void:
+	if _game_dialogue.visible or _pending_game_messages.is_empty():
+		return
+	var text: String = _pending_game_messages.pop_front()
+	_game_dialogue.show_dialog(text)
+
+
+func _on_game_dialogue_closed() -> void:
+	if not _pending_game_messages.is_empty():
+		_show_next_game_message()
+	elif game_session != null and game_session.is_completed:
+		_show_victory_view()
+	elif is_play_mode:
+		_canvas.grab_focus()
 
 
 ## Триггеры пока отправляют события только в консоль разработчика.
-## Авторские сообщения поверх игры появятся отдельно в DA-2.02.7.
+## Авторские сообщения выводятся отдельно, только по указанию автора.
 func _log_trigger_events() -> void:
 	if game_session == null:
 		return
@@ -1082,7 +1162,7 @@ func _log_trigger_events() -> void:
 
 
 func _try_move_player(dx: int, dy: int) -> void:
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible:
 		return
 	var moved := game_session.move_by(dx, dy)
 	if game_session.has_pending_encounter():
@@ -1094,13 +1174,14 @@ func _try_move_player(dx: int, dy: int) -> void:
 	_canvas.queue_redraw()
 	_refresh_stats()
 	_log_trigger_events()
+	_collect_game_messages()
+	if _game_dialogue.visible:
+		return
 	if game_session.is_completed:
 		_show_victory_view()
 		return
 	if not game_session.last_event_message.is_empty():
 		_show_game_event(game_session.last_event_message)
-	elif not moved:
-		_show_game_event("Тут пройти нельзя.")
 
 
 ## При встрече камера приближается к противнику, затем открывается
@@ -1154,6 +1235,9 @@ func _finish_combat() -> void:
 	_canvas.queue_redraw()
 	_refresh_stats()
 	_log_trigger_events()
+	_collect_game_messages()
+	if _game_dialogue.visible:
+		return
 	if game_session.is_completed:
 		_show_victory_view()
 		return
@@ -1166,7 +1250,7 @@ func _finish_combat() -> void:
 ## Финальный экран не уничтожает карту и сессию, а лишь блокирует исследование.
 ## Позже эту же сцену можно будет использовать как экран завершения этажа.
 func _show_victory_view() -> void:
-	if not is_play_mode or game_session == null or _victory_view != null:
+	if not is_play_mode or game_session == null or _victory_view != null or _game_dialogue.visible:
 		return
 	_dpad.visible = false
 	_hero_hud.visible = false
@@ -1203,6 +1287,11 @@ func _abort_combat() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if is_play_mode:
+			if _game_dialogue.visible:
+				if event.keycode in [KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER]:
+					_game_dialogue.dismiss_by_player()
+				get_viewport().set_input_as_handled()
+				return
 			if _victory_view != null:
 				if event.keycode == KEY_ESCAPE:
 					_stop_play_mode()

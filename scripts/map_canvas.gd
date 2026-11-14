@@ -9,6 +9,7 @@ signal move_selection_changed(description: String)
 signal move_failed
 signal edit_action_committed(before: Dictionary, after: Dictionary)
 signal configurable_entity_tapped(kind: String, entity_id: String)
+signal message_cell_tapped(cell: Vector2i)
 
 const TILE_SIZE := 48.0
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
@@ -206,7 +207,7 @@ func _draw_cell(x: int, y: int) -> void:
 		if mode == "play" and game_session != null and game_session.is_entity_removed(entity):
 			continue
 		var kind := str(entity["type"])
-		if mode == "play" and kind in ["player_spawn", "trigger"]:
+		if mode == "play" and kind in ["player_spawn", "trigger", "message"]:
 			continue
 		var origin := Vector2(x, y) * TILE_SIZE
 		if kind == "chest" and (DungeonMap.chest_contents(entity).is_empty() or (mode == "play" and game_session != null and game_session.is_chest_open(entity))):
@@ -270,6 +271,11 @@ func _draw_entity(kind: String, origin: Vector2) -> void:
 			draw_rect(Rect2(origin + Vector2(13, 18), Vector2(22, 22)), Color("#94c9cc"))
 			draw_rect(Rect2(origin + Vector2(15, 24), Vector2(18, 14)), Color("#8a64d1"))
 			draw_rect(Rect2(origin + Vector2(18, 10), Vector2(12, 4)), Color("#d8bf89"))
+		"message":
+			# Маркер заметен в редакторе, но не перекрывает дверь и предметы.
+			draw_rect(Rect2(origin + Vector2(29, 3), Vector2(16, 13)), Color("#ffdd93"))
+			draw_rect(Rect2(origin + Vector2(31, 5), Vector2(12, 9)), Color("#47352b"))
+			draw_colored_polygon(PackedVector2Array([origin + Vector2(32, 16), origin + Vector2(36, 16), origin + Vector2(32, 20)]), Color("#ffdd93"))
 		"trigger":
 			draw_circle(center, 16.0, Color("#c8a4f2"), false, 2.5)
 			draw_circle(center, 7.0, Color("#a47acf"), false, 2.0)
@@ -344,7 +350,12 @@ func _select_at(cell: Vector2i) -> void:
 	var entities := map_data.entities_at(cell.x, cell.y)
 	_moving_from = cell
 	if not entities.is_empty():
+		# Двойной тап по двери с посланием должен переносить дверь, а не маркер.
 		var selected: Dictionary = entities.back()
+		for i in range(entities.size() - 1, -1, -1):
+			if str(entities[i].get("type", "")) != "message":
+				selected = entities[i]
+				break
 		_moving_kind = str(selected["type"])
 		_moving_id = str(selected["id"])
 	elif map_data.get_terrain(cell.x, cell.y) == "wall":
@@ -384,7 +395,7 @@ func _hand_tap(point: Vector2, is_double: bool) -> void:
 		_select_at(cell)
 
 
-## Контекстные свойства только для уже созданных сундуков и триггеров.
+## Контекстные свойства для сундуков, триггеров и авторских сообщений.
 ## В режиме «Рука» выбираем верхний на клетке редактируемый объект.
 func _configurable_at(cell: Vector2i) -> Dictionary:
 	if map_data == null or not map_data.contains(cell.x, cell.y):
@@ -393,7 +404,7 @@ func _configurable_at(cell: Vector2i) -> Dictionary:
 	for i in range(entities.size() - 1, -1, -1):
 		var entity: Dictionary = entities[i]
 		var kind := str(entity.get("type", ""))
-		if kind in ["chest", "trigger"] and (selected_tool == "hand" or kind == selected_tool):
+		if kind in ["chest", "trigger", "message"] and (selected_tool == "hand" or kind == selected_tool):
 			return entity
 	return {}
 
@@ -431,8 +442,16 @@ func _remember_touch_tap(point: Vector2) -> void:
 	_last_tap_cell = cell
 
 
+func _request_message_at(point: Vector2) -> void:
+	if mode != "edit" or selected_tool != "message" or map_data == null:
+		return
+	var cell := _screen_to_cell(point)
+	if map_data.contains(cell.x, cell.y) and map_data.get_terrain(cell.x, cell.y) == "floor":
+		message_cell_tapped.emit(cell)
+
+
 func _edit_at(point: Vector2, erase: bool) -> void:
-	if mode != "edit" or selected_tool == "hand" or map_data == null:
+	if mode != "edit" or selected_tool in ["hand", "message"] or map_data == null:
 		return
 	var cell := _screen_to_cell(point)
 	if not map_data.contains(cell.x, cell.y):
@@ -467,7 +486,13 @@ func _gui_input(event: InputEvent) -> void:
 			_panning = event.pressed
 			accept_event()
 		elif event.button_index == MOUSE_BUTTON_LEFT:
-			if mode == "edit" and selected_tool == "hand":
+			if mode == "edit" and selected_tool == "message":
+				if event.pressed:
+					_mouse_down = event.position
+				elif event.position.distance_to(_mouse_down) < TAP_MOVE_LIMIT:
+					_request_message_at(event.position)
+				accept_event()
+			elif mode == "edit" and selected_tool == "hand":
 				if event.pressed:
 					_mouse_down = event.position
 					_mouse_dragged = false
@@ -531,7 +556,7 @@ func _gui_input(event: InputEvent) -> void:
 				_touch_invalid_tap = true
 				_settings_tool_pressed_id = ""
 				_cancel_pending_settings_tap()
-			if mode == "edit" and selected_tool != "hand":
+			if mode == "edit" and selected_tool not in ["hand", "message"]:
 				if _touch_positions.size() == 1 and not _touch_blocked:
 					_begin_edit_stroke()
 					_edit_at(event.position, false)
@@ -544,6 +569,8 @@ func _gui_input(event: InputEvent) -> void:
 			_touch_starts.erase(event.index)
 			if mode == "edit" and selected_tool == "hand" and tap_valid:
 				_remember_touch_tap(event.position)
+			if mode == "edit" and selected_tool == "message" and tap_valid and _touch_positions.is_empty():
+				_request_message_at(event.position)
 			if mode == "edit" and selected_tool in ["chest", "trigger"] and tap_valid and not _settings_tool_pressed_id.is_empty() and _touch_positions.is_empty():
 				configurable_entity_tapped.emit(selected_tool, _settings_tool_pressed_id)
 			if _touch_positions.is_empty():
@@ -578,7 +605,7 @@ func _gui_input(event: InputEvent) -> void:
 						zoom_at(old_center, new_a.distance_to(new_b) / old_distance)
 					camera_offset += new_center - old_center
 					queue_redraw()
-			elif mode == "edit" and not _touch_blocked and _touch_positions.size() == 1:
+			elif mode == "edit" and selected_tool != "message" and not _touch_blocked and _touch_positions.size() == 1:
 				_edit_at(event.position, false)
 		_update_hover(event.position)
 		accept_event()

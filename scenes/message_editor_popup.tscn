@@ -1,0 +1,84 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/message_editor_popup.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_message"]
+bg_color = Color(0.09, 0.14, 0.20, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.77, 0.59, 0.34, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_left = 10
+corner_radius_bottom_right = 10
+content_margin_left = 12.0
+content_margin_right = 12.0
+content_margin_top = 12.0
+content_margin_bottom = 12.0
+
+[sub_resource type="Theme" id="Theme_message"]
+PopupPanel/styles/panel = SubResource("StyleBoxFlat_message")
+
+[node name="MessageEditorPopup" type="PopupPanel"]
+size = Vector2i(520, 370)
+wrap_controls = false
+script = ExtResource("1_script")
+theme = SubResource("Theme_message")
+
+[node name="Margins" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Body" type="VBoxContainer" parent="Margins"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margins/Body"]
+layout_mode = 2
+text = "Послание для путешественника"
+theme_override_font_sizes/font_size = 21
+theme_override_colors/font_color = Color(0.96, 0.79, 0.52, 1)
+
+[node name="ActivationHint" type="Label" parent="Margins/Body"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Покажется, когда герой войдёт в клетку."
+autowrap_mode = 3
+
+[node name="MessageInput" type="TextEdit" parent="Margins/Body"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 160)
+size_flags_vertical = 1
+placeholder_text = "Напиши здесь текст, который увидит игрок..."
+wrap_mode = 1
+
+[node name="Actions" type="HBoxContainer" parent="Margins/Body"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 9
+
+[node name="DeleteButton" type="Button" parent="Margins/Body/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 44)
+text = "Удалить"
+
+[node name="CancelButton" type="Button" parent="Margins/Body/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(100, 44)
+text = "Отмена"
+
+[node name="SaveButton" type="Button" parent="Margins/Body/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(130, 44)
+text = "Сохранить"

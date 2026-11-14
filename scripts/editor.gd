@@ -6,6 +6,7 @@ extends Control
 const SIDEBAR_WIDTH := 264.0
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
 const GAME_NOTICE_SCENE: PackedScene = preload("res://scenes/game_notice.tscn")
+const CHEST_CONTENTS_SCENE: PackedScene = preload("res://scenes/chest_contents_popup.tscn")
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
 	"save": preload("res://assets/icons/commands/save.png"),
@@ -67,6 +68,7 @@ var _stats_label: Label
 var _selection_label: Label
 var _sidebar_panel: PanelContainer
 var _palette_buttons: Dictionary = {}
+var _chest_popup: ChestContentsPopup
 var _editor_controls: Array[Control] = []
 var _play_button: Button
 var _load_paths: Array[String] = []
@@ -182,6 +184,7 @@ func _build_interface() -> void:
 	_canvas.edit_action_committed.connect(_on_edit_action_committed)
 	_canvas.move_selection_changed.connect(_on_move_selection_changed)
 	_canvas.move_failed.connect(_on_move_failed)
+	_canvas.chest_tapped.connect(_on_chest_tapped)
 	canvas_host.add_child(_canvas)
 	_build_dpad(canvas_host)
 
@@ -282,6 +285,10 @@ func _add_tool_button(grid: GridContainer, tool: Dictionary) -> void:
 
 
 func _create_dialogs() -> void:
+	_chest_popup = CHEST_CONTENTS_SCENE.instantiate() as ChestContentsPopup
+	_chest_popup.contents_changed.connect(_on_chest_contents_changed)
+	add_child(_chest_popup)
+
 	_new_dialog = ConfirmationDialog.new()
 	_new_dialog.title = "Новая карта"
 	_new_dialog.dialog_text = "Размер новой карты. Несохранённые изменения будут потеряны."
@@ -521,6 +528,27 @@ func _update_hero_hud() -> void:
 	if not is_play_mode or game_session == null:
 		return
 	_hero_hud.set_hero(game_session.hero)
+
+
+func _on_chest_tapped(chest_id: String) -> void:
+	if is_play_mode:
+		return
+	_canvas.finish_edit_stroke()
+	for entity in map_data.entities:
+		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":
+			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity))
+			_chest_popup.popup_centered_clamped(Vector2i(370, 300), 0.9)
+			return
+
+
+func _on_chest_contents_changed(chest_id: String, contents: Array[String]) -> void:
+	if is_play_mode:
+		return
+	var before := _canvas.capture_edit_state()
+	if map_data.set_chest_contents(chest_id, contents):
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
+		_on_canvas_edited()
+		_canvas.queue_redraw()
 
 
 func _set_tool(kind: String) -> void:
@@ -998,8 +1026,9 @@ func _try_move_player(dx: int, dy: int) -> void:
 	var moved := game_session.move_by(dx, dy)
 	if moved:
 		_canvas.center_on_cell(game_session.player_pos)
-		_canvas.queue_redraw()
-		_refresh_stats()
+	# Сундук меняет вид при открытии, даже если сам герой не сдвинулся.
+	_canvas.queue_redraw()
+	_refresh_stats()
 	if not game_session.last_event_message.is_empty():
 		_show_game_event(game_session.last_event_message)
 	elif not moved:

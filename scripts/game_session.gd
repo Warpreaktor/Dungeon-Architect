@@ -12,6 +12,7 @@ var steps: int = 0
 var keys: int = 0
 var potions: int = 0
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
+var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
 var last_event_message: String = ""
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
@@ -62,6 +63,10 @@ func is_entity_removed(entity: Dictionary) -> bool:
 	return removed_entities.has(str(entity.get("id", "")))
 
 
+func is_chest_open(entity: Dictionary) -> bool:
+	return opened_chests.has(str(entity.get("id", "")))
+
+
 func _find_active_entity(cell: Vector2i, kind: String) -> Dictionary:
 	for entity in map_data.entities_at(cell.x, cell.y):
 		if str(entity["type"]) == kind and not is_entity_removed(entity):
@@ -79,6 +84,11 @@ func move_by(dx: int, dy: int) -> bool:
 	if not can_enter(target):
 		return false
 
+	var chest := _find_active_entity(target, "chest")
+	if not chest.is_empty() and not is_chest_open(chest) and not DungeonMap.chest_contents(chest).is_empty():
+		_open_chest(chest)
+		return false # Открытие занимает попытку шага, герой остаётся рядом.
+
 	var door := _find_active_entity(target, "door")
 	if not door.is_empty():
 		if keys <= 0:
@@ -93,6 +103,21 @@ func move_by(dx: int, dy: int) -> bool:
 	_collect_pickups_at(target)
 	_refresh_visibility()
 	return true
+
+
+func _open_chest(chest: Dictionary) -> void:
+	opened_chests[str(chest["id"])] = true
+	var contents: Array[String] = DungeonMap.chest_contents(chest)
+	if "key" in contents:
+		keys += 1
+	if "potion" in contents:
+		potions += 1
+	if contents.size() == 2:
+		last_event_message = "В сундуке: ключ и зелье."
+	elif "key" in contents:
+		last_event_message = "В сундуке: ключ."
+	elif "potion" in contents:
+		last_event_message = "В сундуке: зелье."
 
 
 func _collect_pickups_at(cell: Vector2i) -> void:

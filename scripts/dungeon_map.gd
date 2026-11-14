@@ -53,7 +53,7 @@ func set_terrain(x: int, y: int, kind: String) -> bool:
 	return true
 
 
-func place_entity(kind: String, x: int, y: int) -> bool:
+func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> bool:
 	if not contains(x, y) or kind not in ENTITY_TYPES:
 		return false
 	# Не ставим монстра или сундук внутрь стены.
@@ -68,7 +68,10 @@ func place_entity(kind: String, x: int, y: int) -> bool:
 			if entities[i]["type"] == "player_spawn":
 				entities.remove_at(i)
 	var properties: Dictionary = {}
-	if kind == "stairs_down":
+	if kind == "chest":
+		# Новый сундук пустой: содержимое автор задаёт после размещения.
+		properties = {"contents": []}
+	elif kind == "stairs_down":
 		properties = {"target_map_id": "", "target_x": 0, "target_y": 0}
 	elif kind == "trigger":
 		properties = {"event_id": ""}
@@ -80,6 +83,38 @@ func place_entity(kind: String, x: int, y: int) -> bool:
 		"properties": properties
 	})
 	return true
+
+
+## Описание добычи принадлежит карте; старая форма reward продолжает читаться.
+static func chest_contents(chest: Dictionary) -> Array[String]:
+	var properties: Dictionary = chest.get("properties", {})
+	var contents: Array[String] = []
+	if properties.has("contents"):
+		var raw: Variant = properties["contents"]
+		if raw is Array:
+			for item in raw:
+				var kind: String = str(item)
+				if kind in ["key", "potion"] and kind not in contents:
+					contents.append(kind)
+	elif properties.has("reward"):
+		var legacy: String = str(properties["reward"])
+		if legacy in ["key", "potion"]:
+			contents.append(legacy)
+	return contents
+
+
+func set_chest_contents(chest_id: String, new_contents: Array[String]) -> bool:
+	var normalized: Array[String] = []
+	for item in new_contents:
+		if item in ["key", "potion"] and item not in normalized:
+			normalized.append(item)
+	for entity in entities:
+		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":
+			if chest_contents(entity) == normalized:
+				return false
+			entity["properties"] = {"contents": normalized.duplicate()}
+			return true
+	return false
 
 
 ## Атомарный перенос: проверяем цель до изменения исходной клетки.

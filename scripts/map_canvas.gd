@@ -8,6 +8,7 @@ signal hover_changed(cell: Vector2i)
 signal move_selection_changed(description: String)
 signal move_failed
 signal edit_action_committed(before: Dictionary, after: Dictionary)
+signal chest_tapped(chest_id: String)
 
 const TILE_SIZE := 48.0
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
@@ -41,6 +42,9 @@ var _moving_kind: String = ""
 var _moving_id: String = ""
 var _moving_from := Vector2i(-1, -1)
 var _stroke_before: Dictionary = {}
+var _chest_tap_timer: Timer
+var _pending_chest_id: String = ""
+var _chest_tool_pressed_id: String = ""
 
 
 
@@ -49,6 +53,11 @@ func _ready() -> void:
 	focus_mode = Control.FOCUS_ALL
 	clip_contents = true
 	resized.connect(queue_redraw)
+	_chest_tap_timer = Timer.new()
+	_chest_tap_timer.one_shot = true
+	_chest_tap_timer.wait_time = float(DOUBLE_TAP_MS) / 1000.0
+	_chest_tap_timer.timeout.connect(_on_chest_tap_timeout)
+	add_child(_chest_tap_timer)
 
 
 func set_map(value: DungeonMap) -> void:
@@ -68,6 +77,7 @@ func set_selected_tool(kind: String) -> void:
 		return
 	finish_edit_stroke()
 	cancel_move_selection()
+	_cancel_pending_chest_tap()
 	selected_tool = kind
 	_last_tap_time = -10000
 	_last_tap_cell = Vector2i(-1, -1)
@@ -80,6 +90,8 @@ func set_selected_tool(kind: String) -> void:
 
 
 func _reset_pointer_state() -> void:
+	_cancel_pending_chest_tap()
+	_chest_tool_pressed_id = ""
 	_painting = false
 	_erasing = false
 	_panning = false
@@ -195,7 +207,11 @@ func _draw_cell(x: int, y: int) -> void:
 		var kind := str(entity["type"])
 		if mode == "play" and kind == "player_spawn":
 			continue
-		_draw_entity(kind, Vector2(x, y) * TILE_SIZE)
+		var origin := Vector2(x, y) * TILE_SIZE
+		if kind == "chest" and (DungeonMap.chest_contents(entity).is_empty() or (mode == "play" and game_session != null and game_session.is_chest_open(entity))):
+			_draw_open_chest(origin)
+		else:
+			_draw_entity(kind, origin)
 	if mode == "play" and not can_see:
 		draw_rect(rect, Color(0.0, 0.0, 0.0, 0.55))
 
@@ -206,6 +222,17 @@ func _draw_player(origin: Vector2) -> void:
 	draw_colored_polygon(PackedVector2Array([center + Vector2(-14, 17), center + Vector2(-10, 0), center + Vector2(0, -1), center + Vector2(10, 0), center + Vector2(14, 17)]), Color("#8af0c1"))
 	draw_rect(Rect2(center + Vector2(-5, 3), Vector2(10, 10)), Color("#1e7463"))
 	draw_circle(center + Vector2(14, -12), 4.0, Color("#e8c58a"))
+
+
+func _draw_open_chest(origin: Vector2) -> void:
+	# Крышка откинута, внутри видна пустая тёмная полость.
+	draw_rect(Rect2(origin + Vector2(8, 8), Vector2(32, 13)), Color("#382817"))
+	draw_rect(Rect2(origin + Vector2(10, 10), Vector2(28, 9)), Color("#bd8b48"))
+	draw_rect(Rect2(origin + Vector2(12, 13), Vector2(24, 6)), Color("#211715"))
+	draw_rect(Rect2(origin + Vector2(8, 21), Vector2(32, 20)), Color("#382817"))
+	draw_rect(Rect2(origin + Vector2(10, 23), Vector2(28, 16)), Color("#a76a2d"))
+	draw_rect(Rect2(origin + Vector2(12, 23), Vector2(24, 9)), Color("#171014"))
+	draw_rect(Rect2(origin + Vector2(21, 29), Vector2(6, 10)), Color("#ffe2a0"))
 
 
 func _draw_entity(kind: String, origin: Vector2) -> void:
@@ -356,11 +383,41 @@ func _hand_tap(point: Vector2, is_double: bool) -> void:
 		_select_at(cell)
 
 
+func _chest_at(cell: Vector2i) -> Dictionary:
+	if map_data == null or not map_data.contains(cell.x, cell.y):
+		return {}
+	for entity in map_data.entities_at(cell.x, cell.y):
+		if str(entity.get("type", "")) == "chest":
+			return entity
+	return {}
+
+
+func _cancel_pending_chest_tap() -> void:
+	_pending_chest_id = ""
+	if _chest_tap_timer != null:
+		_chest_tap_timer.stop()
+
+
+func _on_chest_tap_timeout() -> void:
+	if mode == "edit" and selected_tool == "hand" and not _pending_chest_id.is_empty() and not has_move_selection():
+		chest_tapped.emit(_pending_chest_id)
+	_pending_chest_id = ""
+
+
 func _remember_touch_tap(point: Vector2) -> void:
 	var now := Time.get_ticks_msec()
 	var cell := _screen_to_cell(point)
-	var double_tap := cell == _last_tap_cell and now - _last_tap_time <= DOUBLE_TAP_MS
-	_hand_tap(point, double_tap)
+	var double_tap: bool = cell == _last_tap_cell and now - _last_tap_time <= DOUBLE_TAP_MS
+	_cancel_pending_chest_tap()
+	if not double_tap and not has_move_selection():
+		var chest := _chest_at(cell)
+		if not chest.is_empty():
+			_pending_chest_id = str(chest["id"])
+			_chest_tap_timer.start()
+		else:
+			_hand_tap(point, false)
+	else:
+		_hand_tap(point, double_tap)
 	_last_tap_time = now
 	_last_tap_cell = cell
 
@@ -376,6 +433,8 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 		modified = map_data.erase_at(cell.x, cell.y)
 	elif selected_tool in ["floor", "wall"]:
 		modified = map_data.set_terrain(cell.x, cell.y, selected_tool)
+	elif selected_tool == "chest":
+		modified = map_data.place_entity("chest", cell.x, cell.y)
 	else:
 		modified = map_data.place_entity(selected_tool, cell.x, cell.y)
 	if modified:
@@ -416,10 +475,15 @@ func _gui_input(event: InputEvent) -> void:
 			elif mode == "edit":
 				_painting = event.pressed
 				if event.pressed:
+					_mouse_down = event.position
+					_chest_tool_pressed_id = str(_chest_at(_screen_to_cell(event.position)).get("id", "")) if selected_tool == "chest" else ""
 					_begin_edit_stroke()
 					_edit_at(event.position, false)
 				else:
 					finish_edit_stroke()
+					if selected_tool == "chest" and not _chest_tool_pressed_id.is_empty() and event.position.distance_to(_mouse_down) < TAP_MOVE_LIMIT:
+						chest_tapped.emit(_chest_tool_pressed_id)
+					_chest_tool_pressed_id = ""
 				accept_event()
 			elif mode == "play" and event.pressed:
 				grab_focus()
@@ -442,6 +506,7 @@ func _gui_input(event: InputEvent) -> void:
 			if selected_tool == "hand" and mode == "edit":
 				if event.position.distance_to(_mouse_down) > TAP_MOVE_LIMIT:
 					_mouse_dragged = true
+					_cancel_pending_chest_tap()
 			camera_offset += event.relative
 			queue_redraw()
 		elif mode == "edit" and selected_tool != "hand" and (_painting or _erasing):
@@ -451,8 +516,12 @@ func _gui_input(event: InputEvent) -> void:
 		if event.pressed:
 			_touch_positions[event.index] = event.position
 			_touch_starts[event.index] = event.position
+			if mode == "edit" and selected_tool == "chest" and _touch_positions.size() == 1:
+				_chest_tool_pressed_id = str(_chest_at(_screen_to_cell(event.position)).get("id", ""))
 			if _touch_positions.size() >= 2:
 				_touch_invalid_tap = true
+				_chest_tool_pressed_id = ""
+				_cancel_pending_chest_tap()
 			if mode == "edit" and selected_tool != "hand":
 				if _touch_positions.size() == 1 and not _touch_blocked:
 					_begin_edit_stroke()
@@ -466,7 +535,10 @@ func _gui_input(event: InputEvent) -> void:
 			_touch_starts.erase(event.index)
 			if mode == "edit" and selected_tool == "hand" and tap_valid:
 				_remember_touch_tap(event.position)
+			if mode == "edit" and selected_tool == "chest" and tap_valid and not _chest_tool_pressed_id.is_empty() and _touch_positions.is_empty():
+				chest_tapped.emit(_chest_tool_pressed_id)
 			if _touch_positions.is_empty():
+				_chest_tool_pressed_id = ""
 				finish_edit_stroke()
 				_touch_blocked = false
 				_touch_invalid_tap = false
@@ -479,6 +551,9 @@ func _gui_input(event: InputEvent) -> void:
 			_touch_positions[event.index] = event.position
 			if mode == "play" or (mode == "edit" and selected_tool == "hand"):
 				if _touch_positions.size() == 1:
+					var touch_origin: Vector2 = _touch_starts.get(event.index, event.position)
+					if event.position.distance_to(touch_origin) > TAP_MOVE_LIMIT:
+						_cancel_pending_chest_tap()
 					camera_offset += event.position - old_point
 					queue_redraw()
 				elif _touch_positions.size() >= 2:

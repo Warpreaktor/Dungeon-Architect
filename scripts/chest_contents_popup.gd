@@ -2,28 +2,39 @@ class_name ChestContentsPopup
 extends PopupPanel
 
 ## Небольшой редактор содержимого сундука. Ничего не знает о DungeonMap.
-signal contents_changed(chest_id: String, contents: Array[String])
+signal contents_changed(chest_id: String, contents: Array[String], gold_amount: int)
 
 var _chest_id: String = ""
 
 @onready var _key_check: CheckBox = %KeyCheck
 @onready var _potion_check: CheckBox = %PotionCheck
 @onready var _gold_check: CheckBox = %GoldCheck
+@onready var _gold_amount: SpinBox = %GoldAmount
+@onready var _sword_check: CheckBox = %SwordCheck
 
 
 func _ready() -> void:
 	%SaveButton.pressed.connect(_save)
 	%CancelButton.pressed.connect(hide)
+	_gold_check.toggled.connect(_on_gold_toggled)
 
 
-func configure(chest_id: String, contents: Array[String]) -> void:
+func configure(chest_id: String, contents: Array[String], gold_amount: int = 5) -> void:
 	_chest_id = chest_id
 	_key_check.set_pressed_no_signal("key" in contents)
 	_potion_check.set_pressed_no_signal("potion" in contents)
 	_gold_check.set_pressed_no_signal("gold" in contents)
+	_sword_check.set_pressed_no_signal("sword" in contents)
+	_gold_amount.value = gold_amount
+	_on_gold_toggled("gold" in contents)
+
+
+func _on_gold_toggled(enabled: bool) -> void:
+	_gold_amount.visible = enabled
 
 
 func _save() -> void:
+	_gold_amount.apply() # Сохранить число, даже если пользователь ещё редактирует поле.
 	var contents: Array[String] = []
 	if _key_check.button_pressed:
 		contents.append("key")
@@ -31,5 +42,7 @@ func _save() -> void:
 		contents.append("potion")
 	if _gold_check.button_pressed:
 		contents.append("gold")
-	contents_changed.emit(_chest_id, contents)
+	if _sword_check.button_pressed:
+		contents.append("sword")
+	contents_changed.emit(_chest_id, contents, int(_gold_amount.value))
 	hide()

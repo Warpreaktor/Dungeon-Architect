@@ -5,7 +5,7 @@
 [ext_resource type="Texture2D" path="res://assets/hud/heart.png" id="3_heart"]
 [ext_resource type="Texture2D" path="res://assets/hud/health_background.png" id="4_health_back"]
 [ext_resource type="Texture2D" path="res://assets/hud/health_fill.png" id="5_health_fill"]
-[ext_resource type="Texture2D" path="res://assets/hud/attack.png" id="6_attack"]
+[ext_resource type="Texture2D" path="res://assets/hud/fist.png" id="6_attack"]
 [ext_resource type="Texture2D" path="res://assets/hud/shield.png" id="7_shield"]
 [ext_resource type="Texture2D" path="res://assets/hud/coins.png" id="8_coins"]
 
@@ -80,6 +80,7 @@ mouse_filter = 2
 theme_override_constants/separation = 18
 
 [node name="AttackIcon" type="TextureRect" parent="Content/StatsRow"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(22, 22)
 layout_mode = 2
 mouse_filter = 2

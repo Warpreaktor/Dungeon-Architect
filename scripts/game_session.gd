@@ -210,7 +210,7 @@ func _open_chest(chest: Dictionary) -> void:
 		var item := ItemCatalog.get_item(item_id)
 		if item == null:
 			continue
-		var quantity: int = item.default_quantity
+		var quantity: int = DungeonMap.chest_gold_amount(chest) if item_id == "gold" else item.default_quantity
 		_receive_item(item_id, quantity)
 		if item.category == ItemDefinition.Category.CURRENCY:
 			reward_names.append("%d монет" % quantity)
@@ -229,6 +229,8 @@ func _receive_item(item_id: String, quantity: int) -> void:
 		hero.gold += quantity
 	else:
 		carried_items[item_id] = int(carried_items.get(item_id, 0)) + quantity
+		if item.item_id == "sword":
+			hero.equip_weapon(item)
 		keys = int(carried_items.get("key", 0))
 		potions = int(carried_items.get("potion", 0))
 

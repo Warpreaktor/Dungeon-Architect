@@ -472,7 +472,8 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 		modified = map_data.set_terrain(cell.x, cell.y, selected_tool)
 	elif selected_tool == "chest":
 		modified = map_data.place_entity("chest", cell.x, cell.y)
-	else:
+	elif selected_tool not in ["key", "potion", "gold", "sword"]:
+		# Подбираемые вещи появляются только через источники добычи (пока сундуки).
 		modified = map_data.place_entity(selected_tool, cell.x, cell.y)
 	if modified:
 		queue_redraw()

@@ -31,9 +31,6 @@ const TOOLS := [
 	{"id": "door", "label": "Дверь", "hint": "Дверь на клетке пола"},
 	{"id": "chest", "label": "Сундук", "hint": "Контейнер с добычей"},
 	{"id": "monster", "label": "Монстр", "hint": "Место появления противника"},
-	{"id": "key", "label": "Ключ", "hint": "Подбираемый предмет"},
-	{"id": "potion", "label": "Зелье", "hint": "Подбираемый предмет"},
-	{"id": "gold", "label": "Золото", "hint": "5 монет: герой подбирает их при входе в клетку"},
 	{"id": "stairs_down", "label": "Спуск", "hint": "Выход из подземелья (позже станет переходом на другую карту)"},
 	{"id": "trigger", "label": "Триггер", "hint": "Невидимое в игре событие"},
 	{"id": "message", "label": "Послание", "hint": "Авторский текст при входе в клетку или открытии двери"},
@@ -47,9 +44,6 @@ const TOOL_ICONS := {
 	"door": preload("res://assets/icons/door.png"),
 	"chest": preload("res://assets/icons/chest.png"),
 	"monster": preload("res://assets/icons/monster.png"),
-	"key": preload("res://assets/icons/key.png"),
-	"potion": preload("res://assets/icons/potion.png"),
-	"gold": preload("res://assets/icons/gold.png"),
 	"stairs_down": preload("res://assets/icons/stairs_down.png"),
 	"trigger": preload("res://assets/icons/trigger.png"),
 	"message": preload("res://assets/icons/message.png"),
@@ -632,16 +626,16 @@ func _on_chest_tapped(chest_id: String) -> void:
 	_canvas.finish_edit_stroke()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":
-			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity))
-			_chest_popup.popup_centered_clamped(Vector2i(370, 350), 0.9)
+			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity))
+			_chest_popup.popup_centered_clamped(Vector2i(420, 440), 0.9)
 			return
 
 
-func _on_chest_contents_changed(chest_id: String, contents: Array[String]) -> void:
+func _on_chest_contents_changed(chest_id: String, contents: Array[String], gold_amount: int) -> void:
 	if is_play_mode:
 		return
 	var before := _canvas.capture_edit_state()
-	if map_data.set_chest_contents(chest_id, contents):
+	if map_data.set_chest_contents(chest_id, contents, gold_amount):
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()

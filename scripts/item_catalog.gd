@@ -6,7 +6,8 @@ extends RefCounted
 const DEFINITIONS := {
 	"key": preload("res://items/key.tres"),
 	"potion": preload("res://items/potion.tres"),
-	"gold": preload("res://items/gold.tres")
+	"gold": preload("res://items/gold.tres"),
+	"sword": preload("res://items/sword.tres")
 }
 
 

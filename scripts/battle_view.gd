@@ -13,6 +13,8 @@ signal battle_won
 @onready var _result_text: Label = %ResultText
 
 var _combat: CombatSession
+var _hero_attack_damage: int = CombatSession.PUNCH_DAMAGE
+var _attack_name: String = "Удар кулаком"
 
 
 func _ready() -> void:
@@ -26,6 +28,10 @@ func _ready() -> void:
 func begin(combat: CombatSession, hero: HeroState) -> void:
 	_combat = combat
 	_hero_health.text = "%d / %d HP" % [hero.health, hero.max_health]
+	_hero_attack_damage = hero.attack
+	_attack_name = "Удар мечом" if hero.equipped_weapon_id == "sword" else "Удар кулаком"
+	_punch_button.text = "%s  ·  %d" % [_attack_name, _hero_attack_damage]
+	_punch_button.icon = ItemCatalog.get_item("sword").icon if hero.equipped_weapon_id == "sword" else null
 	_update_enemy()
 	_punch_button.disabled = false
 	_punch_button.grab_focus()
@@ -39,9 +45,9 @@ func _on_punch_pressed() -> void:
 	if _combat == null or _combat.is_victory:
 		return
 	_punch_button.disabled = true
-	var damage: int = _combat.hero_punch()
+	var damage: int = _combat.hero_attack(_hero_attack_damage)
 	_update_enemy()
-	_result_text.text = "Удар кулаком: %d урона" % damage
+	_result_text.text = "%s: %d урона" % [_attack_name, damage]
 	# Короткий визуальный отклик: удар и исчезновение поверженного врага.
 	var impact := create_tween()
 	impact.tween_property(_enemy_portrait, "scale", Vector2(0.92, 0.92), 0.09)

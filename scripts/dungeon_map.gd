@@ -7,7 +7,7 @@ extends RefCounted
 const FORMAT_VERSION := 1
 const MAX_SIZE := 256
 const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "gold", "trigger", "player_spawn", "message"]
-const CHEST_REWARDS := ["key", "potion", "gold"]
+const CHEST_REWARDS := ["key", "potion", "gold", "sword"]
 
 var map_id: String = ""
 var display_name: String = "Безымянное подземелье"
@@ -106,16 +106,26 @@ static func chest_contents(chest: Dictionary) -> Array[String]:
 	return contents
 
 
-func set_chest_contents(chest_id: String, new_contents: Array[String]) -> bool:
+## Сумма золота задаётся для каждого сундука. Карты старого формата получают 5 монет.
+static func chest_gold_amount(chest: Dictionary) -> int:
+	var properties: Dictionary = chest.get("properties", {})
+	return clampi(int(properties.get("gold_amount", 5)), 1, 999999)
+
+
+func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amount: int = 5) -> bool:
 	var normalized: Array[String] = []
 	for item in new_contents:
 		if item in CHEST_REWARDS and item not in normalized:
 			normalized.append(item)
+	var amount := clampi(gold_amount, 1, 999999)
 	for entity in entities:
 		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":
-			if chest_contents(entity) == normalized:
+			if chest_contents(entity) == normalized and ("gold" not in normalized or chest_gold_amount(entity) == amount):
 				return false
-			entity["properties"] = {"contents": normalized.duplicate()}
+			var properties: Dictionary = {"contents": normalized.duplicate()}
+			if "gold" in normalized:
+				properties["gold_amount"] = amount
+			entity["properties"] = properties
 			return true
 	return false
 

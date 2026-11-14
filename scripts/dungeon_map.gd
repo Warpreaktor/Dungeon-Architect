@@ -6,7 +6,8 @@ extends RefCounted
 
 const FORMAT_VERSION := 1
 const MAX_SIZE := 256
-const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "trigger", "player_spawn", "message"]
+const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "gold", "trigger", "player_spawn", "message"]
+const CHEST_REWARDS := ["key", "potion", "gold"]
 
 var map_id: String = ""
 var display_name: String = "Безымянное подземелье"
@@ -96,11 +97,11 @@ static func chest_contents(chest: Dictionary) -> Array[String]:
 		if raw is Array:
 			for item in raw:
 				var kind: String = str(item)
-				if kind in ["key", "potion"] and kind not in contents:
+				if kind in CHEST_REWARDS and kind not in contents:
 					contents.append(kind)
 	elif properties.has("reward"):
 		var legacy: String = str(properties["reward"])
-		if legacy in ["key", "potion"]:
+		if legacy in CHEST_REWARDS:
 			contents.append(legacy)
 	return contents
 
@@ -108,7 +109,7 @@ static func chest_contents(chest: Dictionary) -> Array[String]:
 func set_chest_contents(chest_id: String, new_contents: Array[String]) -> bool:
 	var normalized: Array[String] = []
 	for item in new_contents:
-		if item in ["key", "potion"] and item not in normalized:
+		if item in CHEST_REWARDS and item not in normalized:
 			normalized.append(item)
 	for entity in entities:
 		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":

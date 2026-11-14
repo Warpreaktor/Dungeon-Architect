@@ -8,6 +8,7 @@ var _chest_id: String = ""
 
 @onready var _key_check: CheckBox = %KeyCheck
 @onready var _potion_check: CheckBox = %PotionCheck
+@onready var _gold_check: CheckBox = %GoldCheck
 
 
 func _ready() -> void:
@@ -19,6 +20,7 @@ func configure(chest_id: String, contents: Array[String]) -> void:
 	_chest_id = chest_id
 	_key_check.set_pressed_no_signal("key" in contents)
 	_potion_check.set_pressed_no_signal("potion" in contents)
+	_gold_check.set_pressed_no_signal("gold" in contents)
 
 
 func _save() -> void:
@@ -27,5 +29,7 @@ func _save() -> void:
 		contents.append("key")
 	if _potion_check.button_pressed:
 		contents.append("potion")
+	if _gold_check.button_pressed:
+		contents.append("gold")
 	contents_changed.emit(_chest_id, contents)
 	hide()

@@ -11,6 +11,7 @@ var player_pos := Vector2i(-1, -1)
 var steps: int = 0
 var keys: int = 0
 var potions: int = 0
+var carried_items: Dictionary = {} # Количество найденных предметов по ID, без интерфейса инвентаря.
 var is_completed: bool = false # Выход достигнут в текущем прохождении.
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
@@ -181,7 +182,7 @@ func move_by(dx: int, dy: int) -> bool:
 		if keys <= 0:
 			last_event_message = "Дверь заперта. Нужен ключ."
 			return false
-		keys -= 1
+		_remove_carried_item("key", 1)
 		opened_door_id = str(door["id"])
 		removed_entities[opened_door_id] = true
 		last_event_message = "Ключ использован. Дверь открыта!"
@@ -204,33 +205,57 @@ func move_by(dx: int, dy: int) -> bool:
 func _open_chest(chest: Dictionary) -> void:
 	opened_chests[str(chest["id"])] = true
 	var contents: Array[String] = DungeonMap.chest_contents(chest)
-	if "key" in contents:
-		keys += 1
-	if "potion" in contents:
-		potions += 1
-	if contents.size() == 2:
-		last_event_message = "В сундуке: ключ и зелье."
-	elif "key" in contents:
-		last_event_message = "В сундуке: ключ."
-	elif "potion" in contents:
-		last_event_message = "В сундуке: зелье."
+	var reward_names: PackedStringArray = []
+	for item_id in contents:
+		var item := ItemCatalog.get_item(item_id)
+		if item == null:
+			continue
+		var quantity: int = item.default_quantity
+		_receive_item(item_id, quantity)
+		if item.category == ItemDefinition.Category.CURRENCY:
+			reward_names.append("%d монет" % quantity)
+		else:
+			reward_names.append(item.display_name.to_lower())
+	if not reward_names.is_empty():
+		last_event_message = "В сундуке: %s." % ", ".join(reward_names)
+
+
+## Общая логика подбора. Описание предмета — Resource, состояние находок — GameSession.
+func _receive_item(item_id: String, quantity: int) -> void:
+	var item := ItemCatalog.get_item(item_id)
+	if item == null or quantity <= 0:
+		return
+	if item.category == ItemDefinition.Category.CURRENCY:
+		hero.gold += quantity
+	else:
+		carried_items[item_id] = int(carried_items.get(item_id, 0)) + quantity
+		keys = int(carried_items.get("key", 0))
+		potions = int(carried_items.get("potion", 0))
+
+
+func _remove_carried_item(item_id: String, quantity: int) -> bool:
+	var current: int = int(carried_items.get(item_id, 0))
+	if quantity <= 0 or current < quantity:
+		return false
+	carried_items[item_id] = current - quantity
+	keys = int(carried_items.get("key", 0))
+	potions = int(carried_items.get("potion", 0))
+	return true
 
 
 func _collect_pickups_at(cell: Vector2i) -> void:
 	for entity in map_data.entities_at(cell.x, cell.y):
 		if is_entity_removed(entity):
 			continue
-		var pickup_message := ""
-		match str(entity["type"]):
-			"key":
-				keys += 1
-				pickup_message = "Найден ключ! Ключей: %d" % keys
-			"potion":
-				potions += 1
-				pickup_message = "Найдено зелье! Зелий: %d" % potions
-			_:
-				continue
+		var item_id: String = str(entity.get("type", ""))
+		var item := ItemCatalog.get_item(item_id)
+		if item == null:
+			continue
+		var quantity: int = ItemCatalog.quantity_for_entity(entity)
+		_receive_item(item_id, quantity)
 		removed_entities[str(entity["id"])] = true
+		# Это запись в свёрнутую техническую консоль, не всплывающее игровое сообщение.
+		var pickup_message := "Получено: %s ×%d" % [item.display_name, quantity]
 		if last_event_message.is_empty():
 			last_event_message = pickup_message
 		else:

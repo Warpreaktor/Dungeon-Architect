@@ -266,6 +266,15 @@ func _draw_entity(kind: String, origin: Vector2) -> void:
 			draw_circle(origin + Vector2(18, 15), 7.0, Color("#ffe096"), false, 4.0)
 			draw_line(origin + Vector2(22, 20), origin + Vector2(35, 35), Color("#f3ca68"), 5.0)
 			draw_line(origin + Vector2(30, 30), origin + Vector2(35, 26), Color("#f3ca68"), 4.0)
+		"gold":
+			# Монеты рисуются прямо на карте без рамки кнопки палитры.
+			draw_circle(origin + Vector2(17, 29), 10.0, Color("#b97e32"))
+			draw_circle(origin + Vector2(17, 26), 10.0, Color("#f0c15f"))
+			draw_circle(origin + Vector2(28, 29), 10.0, Color("#a66c27"))
+			draw_circle(origin + Vector2(28, 26), 10.0, Color("#efb94f"))
+			draw_circle(origin + Vector2(24, 18), 11.0, Color("#df9d39"))
+			draw_circle(origin + Vector2(24, 16), 11.0, Color("#ffd578"))
+			draw_circle(origin + Vector2(24, 16), 7.0, Color("#dba246"), false, 2.0)
 		"potion":
 			draw_rect(Rect2(origin + Vector2(20, 7), Vector2(8, 10)), Color("#c7b7a2"))
 			draw_rect(Rect2(origin + Vector2(13, 18), Vector2(22, 22)), Color("#94c9cc"))

@@ -33,6 +33,7 @@ const TOOLS := [
 	{"id": "monster", "label": "Монстр", "hint": "Место появления противника"},
 	{"id": "key", "label": "Ключ", "hint": "Подбираемый предмет"},
 	{"id": "potion", "label": "Зелье", "hint": "Подбираемый предмет"},
+	{"id": "gold", "label": "Золото", "hint": "5 монет: герой подбирает их при входе в клетку"},
 	{"id": "stairs_down", "label": "Спуск", "hint": "Выход из подземелья (позже станет переходом на другую карту)"},
 	{"id": "trigger", "label": "Триггер", "hint": "Невидимое в игре событие"},
 	{"id": "message", "label": "Послание", "hint": "Авторский текст при входе в клетку или открытии двери"},
@@ -48,6 +49,7 @@ const TOOL_ICONS := {
 	"monster": preload("res://assets/icons/monster.png"),
 	"key": preload("res://assets/icons/key.png"),
 	"potion": preload("res://assets/icons/potion.png"),
+	"gold": preload("res://assets/icons/gold.png"),
 	"stairs_down": preload("res://assets/icons/stairs_down.png"),
 	"trigger": preload("res://assets/icons/trigger.png"),
 	"message": preload("res://assets/icons/message.png"),
@@ -107,7 +109,7 @@ const PREVIEW_WALL: Texture2D = preload("res://assets/stone_wall.png")
 const PREVIEW_COLORS := {
     "door": Color("#c58a49"), "chest": Color("#edc06c"),
     "monster": Color("#e65d73"), "key": Color("#ffe8a3"),
-    "potion": Color("#b89bff"), "stairs_down": Color("#5bd2e7"),
+    "potion": Color("#b89bff"), "gold": Color("#f4ce67"), "stairs_down": Color("#5bd2e7"),
     "trigger": Color("#ce90e5"), "player_spawn": Color("#70f2aa"),
     "message": Color("#ffdd93")
 }
@@ -631,7 +633,7 @@ func _on_chest_tapped(chest_id: String) -> void:
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":
 			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity))
-			_chest_popup.popup_centered_clamped(Vector2i(370, 300), 0.9)
+			_chest_popup.popup_centered_clamped(Vector2i(370, 350), 0.9)
 			return
 
 

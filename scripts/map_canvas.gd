@@ -8,7 +8,7 @@ signal hover_changed(cell: Vector2i)
 signal move_selection_changed(description: String)
 signal move_failed
 signal edit_action_committed(before: Dictionary, after: Dictionary)
-signal chest_tapped(chest_id: String)
+signal configurable_entity_tapped(kind: String, entity_id: String)
 
 const TILE_SIZE := 48.0
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
@@ -42,9 +42,10 @@ var _moving_kind: String = ""
 var _moving_id: String = ""
 var _moving_from := Vector2i(-1, -1)
 var _stroke_before: Dictionary = {}
-var _chest_tap_timer: Timer
-var _pending_chest_id: String = ""
-var _chest_tool_pressed_id: String = ""
+var _settings_tap_timer: Timer
+var _pending_settings_id: String = ""
+var _pending_settings_kind: String = ""
+var _settings_tool_pressed_id: String = ""
 
 
 
@@ -53,11 +54,11 @@ func _ready() -> void:
 	focus_mode = Control.FOCUS_ALL
 	clip_contents = true
 	resized.connect(queue_redraw)
-	_chest_tap_timer = Timer.new()
-	_chest_tap_timer.one_shot = true
-	_chest_tap_timer.wait_time = float(DOUBLE_TAP_MS) / 1000.0
-	_chest_tap_timer.timeout.connect(_on_chest_tap_timeout)
-	add_child(_chest_tap_timer)
+	_settings_tap_timer = Timer.new()
+	_settings_tap_timer.one_shot = true
+	_settings_tap_timer.wait_time = float(DOUBLE_TAP_MS) / 1000.0
+	_settings_tap_timer.timeout.connect(_on_settings_tap_timeout)
+	add_child(_settings_tap_timer)
 
 
 func set_map(value: DungeonMap) -> void:
@@ -77,7 +78,7 @@ func set_selected_tool(kind: String) -> void:
 		return
 	finish_edit_stroke()
 	cancel_move_selection()
-	_cancel_pending_chest_tap()
+	_cancel_pending_settings_tap()
 	selected_tool = kind
 	_last_tap_time = -10000
 	_last_tap_cell = Vector2i(-1, -1)
@@ -90,8 +91,8 @@ func set_selected_tool(kind: String) -> void:
 
 
 func _reset_pointer_state() -> void:
-	_cancel_pending_chest_tap()
-	_chest_tool_pressed_id = ""
+	_cancel_pending_settings_tap()
+	_settings_tool_pressed_id = ""
 	_painting = false
 	_erasing = false
 	_panning = false
@@ -205,7 +206,7 @@ func _draw_cell(x: int, y: int) -> void:
 		if mode == "play" and game_session != null and game_session.is_entity_removed(entity):
 			continue
 		var kind := str(entity["type"])
-		if mode == "play" and kind == "player_spawn":
+		if mode == "play" and kind in ["player_spawn", "trigger"]:
 			continue
 		var origin := Vector2(x, y) * TILE_SIZE
 		if kind == "chest" and (DungeonMap.chest_contents(entity).is_empty() or (mode == "play" and game_session != null and game_session.is_chest_open(entity))):
@@ -383,37 +384,45 @@ func _hand_tap(point: Vector2, is_double: bool) -> void:
 		_select_at(cell)
 
 
-func _chest_at(cell: Vector2i) -> Dictionary:
+## Контекстные свойства только для уже созданных сундуков и триггеров.
+## В режиме «Рука» выбираем верхний на клетке редактируемый объект.
+func _configurable_at(cell: Vector2i) -> Dictionary:
 	if map_data == null or not map_data.contains(cell.x, cell.y):
 		return {}
-	for entity in map_data.entities_at(cell.x, cell.y):
-		if str(entity.get("type", "")) == "chest":
+	var entities := map_data.entities_at(cell.x, cell.y)
+	for i in range(entities.size() - 1, -1, -1):
+		var entity: Dictionary = entities[i]
+		var kind := str(entity.get("type", ""))
+		if kind in ["chest", "trigger"] and (selected_tool == "hand" or kind == selected_tool):
 			return entity
 	return {}
 
 
-func _cancel_pending_chest_tap() -> void:
-	_pending_chest_id = ""
-	if _chest_tap_timer != null:
-		_chest_tap_timer.stop()
+func _cancel_pending_settings_tap() -> void:
+	_pending_settings_id = ""
+	_pending_settings_kind = ""
+	if _settings_tap_timer != null:
+		_settings_tap_timer.stop()
 
 
-func _on_chest_tap_timeout() -> void:
-	if mode == "edit" and selected_tool == "hand" and not _pending_chest_id.is_empty() and not has_move_selection():
-		chest_tapped.emit(_pending_chest_id)
-	_pending_chest_id = ""
+func _on_settings_tap_timeout() -> void:
+	if mode == "edit" and selected_tool == "hand" and not _pending_settings_id.is_empty() and not has_move_selection():
+		configurable_entity_tapped.emit(_pending_settings_kind, _pending_settings_id)
+	_pending_settings_id = ""
+	_pending_settings_kind = ""
 
 
 func _remember_touch_tap(point: Vector2) -> void:
 	var now := Time.get_ticks_msec()
 	var cell := _screen_to_cell(point)
 	var double_tap: bool = cell == _last_tap_cell and now - _last_tap_time <= DOUBLE_TAP_MS
-	_cancel_pending_chest_tap()
+	_cancel_pending_settings_tap()
 	if not double_tap and not has_move_selection():
-		var chest := _chest_at(cell)
-		if not chest.is_empty():
-			_pending_chest_id = str(chest["id"])
-			_chest_tap_timer.start()
+		var editable := _configurable_at(cell)
+		if not editable.is_empty():
+			_pending_settings_id = str(editable["id"])
+			_pending_settings_kind = str(editable["type"])
+			_settings_tap_timer.start()
 		else:
 			_hand_tap(point, false)
 	else:
@@ -476,14 +485,14 @@ func _gui_input(event: InputEvent) -> void:
 				_painting = event.pressed
 				if event.pressed:
 					_mouse_down = event.position
-					_chest_tool_pressed_id = str(_chest_at(_screen_to_cell(event.position)).get("id", "")) if selected_tool == "chest" else ""
+					_settings_tool_pressed_id = str(_configurable_at(_screen_to_cell(event.position)).get("id", "")) if selected_tool in ["chest", "trigger"] else ""
 					_begin_edit_stroke()
 					_edit_at(event.position, false)
 				else:
 					finish_edit_stroke()
-					if selected_tool == "chest" and not _chest_tool_pressed_id.is_empty() and event.position.distance_to(_mouse_down) < TAP_MOVE_LIMIT:
-						chest_tapped.emit(_chest_tool_pressed_id)
-					_chest_tool_pressed_id = ""
+					if selected_tool in ["chest", "trigger"] and not _settings_tool_pressed_id.is_empty() and event.position.distance_to(_mouse_down) < TAP_MOVE_LIMIT:
+						configurable_entity_tapped.emit(selected_tool, _settings_tool_pressed_id)
+					_settings_tool_pressed_id = ""
 				accept_event()
 			elif mode == "play" and event.pressed:
 				grab_focus()
@@ -506,7 +515,7 @@ func _gui_input(event: InputEvent) -> void:
 			if selected_tool == "hand" and mode == "edit":
 				if event.position.distance_to(_mouse_down) > TAP_MOVE_LIMIT:
 					_mouse_dragged = true
-					_cancel_pending_chest_tap()
+					_cancel_pending_settings_tap()
 			camera_offset += event.relative
 			queue_redraw()
 		elif mode == "edit" and selected_tool != "hand" and (_painting or _erasing):
@@ -516,12 +525,12 @@ func _gui_input(event: InputEvent) -> void:
 		if event.pressed:
 			_touch_positions[event.index] = event.position
 			_touch_starts[event.index] = event.position
-			if mode == "edit" and selected_tool == "chest" and _touch_positions.size() == 1:
-				_chest_tool_pressed_id = str(_chest_at(_screen_to_cell(event.position)).get("id", ""))
+			if mode == "edit" and selected_tool in ["chest", "trigger"] and _touch_positions.size() == 1:
+				_settings_tool_pressed_id = str(_configurable_at(_screen_to_cell(event.position)).get("id", ""))
 			if _touch_positions.size() >= 2:
 				_touch_invalid_tap = true
-				_chest_tool_pressed_id = ""
-				_cancel_pending_chest_tap()
+				_settings_tool_pressed_id = ""
+				_cancel_pending_settings_tap()
 			if mode == "edit" and selected_tool != "hand":
 				if _touch_positions.size() == 1 and not _touch_blocked:
 					_begin_edit_stroke()
@@ -535,10 +544,10 @@ func _gui_input(event: InputEvent) -> void:
 			_touch_starts.erase(event.index)
 			if mode == "edit" and selected_tool == "hand" and tap_valid:
 				_remember_touch_tap(event.position)
-			if mode == "edit" and selected_tool == "chest" and tap_valid and not _chest_tool_pressed_id.is_empty() and _touch_positions.is_empty():
-				chest_tapped.emit(_chest_tool_pressed_id)
+			if mode == "edit" and selected_tool in ["chest", "trigger"] and tap_valid and not _settings_tool_pressed_id.is_empty() and _touch_positions.is_empty():
+				configurable_entity_tapped.emit(selected_tool, _settings_tool_pressed_id)
 			if _touch_positions.is_empty():
-				_chest_tool_pressed_id = ""
+				_settings_tool_pressed_id = ""
 				finish_edit_stroke()
 				_touch_blocked = false
 				_touch_invalid_tap = false
@@ -553,7 +562,7 @@ func _gui_input(event: InputEvent) -> void:
 				if _touch_positions.size() == 1:
 					var touch_origin: Vector2 = _touch_starts.get(event.index, event.position)
 					if event.position.distance_to(touch_origin) > TAP_MOVE_LIMIT:
-						_cancel_pending_chest_tap()
+						_cancel_pending_settings_tap()
 					camera_offset += event.position - old_point
 					queue_redraw()
 				elif _touch_positions.size() >= 2:

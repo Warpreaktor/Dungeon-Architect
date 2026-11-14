@@ -7,6 +7,7 @@ const SIDEBAR_WIDTH := 264.0
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
 const GAME_NOTICE_SCENE: PackedScene = preload("res://scenes/game_notice.tscn")
 const CHEST_CONTENTS_SCENE: PackedScene = preload("res://scenes/chest_contents_popup.tscn")
+const TRIGGER_PROPERTIES_SCENE: PackedScene = preload("res://scenes/trigger_properties_popup.tscn")
 const BATTLE_VIEW_SCENE: PackedScene = preload("res://scenes/battle_view.tscn")
 const VICTORY_VIEW_SCENE: PackedScene = preload("res://scenes/victory_view.tscn")
 const COMMAND_ICONS := {
@@ -77,6 +78,7 @@ var _selection_label: Label
 var _sidebar_panel: PanelContainer
 var _palette_buttons: Dictionary = {}
 var _chest_popup: ChestContentsPopup
+var _trigger_popup: TriggerPropertiesPopup
 var _editor_controls: Array[Control] = []
 var _play_button: Button
 var _load_paths: Array[String] = []
@@ -193,7 +195,7 @@ func _build_interface() -> void:
 	_canvas.edit_action_committed.connect(_on_edit_action_committed)
 	_canvas.move_selection_changed.connect(_on_move_selection_changed)
 	_canvas.move_failed.connect(_on_move_failed)
-	_canvas.chest_tapped.connect(_on_chest_tapped)
+	_canvas.configurable_entity_tapped.connect(_on_configurable_entity_tapped)
 	canvas_host.add_child(_canvas)
 	_build_dpad(canvas_host)
 
@@ -297,6 +299,9 @@ func _create_dialogs() -> void:
 	_chest_popup = CHEST_CONTENTS_SCENE.instantiate() as ChestContentsPopup
 	_chest_popup.contents_changed.connect(_on_chest_contents_changed)
 	add_child(_chest_popup)
+	_trigger_popup = TRIGGER_PROPERTIES_SCENE.instantiate() as TriggerPropertiesPopup
+	_trigger_popup.event_id_changed.connect(_on_trigger_event_id_changed)
+	add_child(_trigger_popup)
 
 	_new_dialog = ConfirmationDialog.new()
 	_new_dialog.title = "Новая карта"
@@ -537,6 +542,36 @@ func _update_hero_hud() -> void:
 	if not is_play_mode or game_session == null:
 		return
 	_hero_hud.set_hero(game_session.hero)
+
+
+func _on_configurable_entity_tapped(kind: String, entity_id: String) -> void:
+	match kind:
+		"chest":
+			_on_chest_tapped(entity_id)
+		"trigger":
+			_on_trigger_tapped(entity_id)
+
+
+func _on_trigger_tapped(trigger_id: String) -> void:
+	if is_play_mode:
+		return
+	_canvas.finish_edit_stroke()
+	for entity in map_data.entities:
+		if str(entity.get("id", "")) == trigger_id and str(entity.get("type", "")) == "trigger":
+			var properties: Dictionary = entity.get("properties", {})
+			_trigger_popup.configure(trigger_id, str(properties.get("event_id", "")))
+			_trigger_popup.popup_centered_clamped(Vector2i(390, 220), 0.9)
+			return
+
+
+func _on_trigger_event_id_changed(trigger_id: String, event_id: String) -> void:
+	if is_play_mode:
+		return
+	var before := _canvas.capture_edit_state()
+	if map_data.set_trigger_event_id(trigger_id, event_id):
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
+		_on_canvas_edited()
+		_canvas.queue_redraw()
 
 
 func _on_chest_tapped(chest_id: String) -> void:
@@ -991,6 +1026,7 @@ func _start_play_mode() -> void:
 	_set_status("Тест карты: прогресс временный • Стрелки/WASD • Esc — в редактор")
 	if not session.last_event_message.is_empty():
 		_show_game_event(session.last_event_message)
+	_log_trigger_events()
 
 
 func _stop_play_mode() -> void:
@@ -1031,6 +1067,20 @@ func _show_game_event(message: String) -> void:
 	_set_status(message)
 
 
+## Триггеры пока отправляют события только в консоль разработчика.
+## Авторские сообщения поверх игры появятся отдельно в DA-2.02.7.
+func _log_trigger_events() -> void:
+	if game_session == null:
+		return
+	for event in game_session.take_trigger_events():
+		var cell: Vector2i = event["position"]
+		var event_id := str(event["event_id"])
+		if event_id.is_empty():
+			_set_status("Сработал триггер на клетке (%d, %d)." % [cell.x, cell.y])
+		else:
+			_set_status("Сработал триггер «%s» на клетке (%d, %d)." % [event_id, cell.x, cell.y])
+
+
 func _try_move_player(dx: int, dy: int) -> void:
 	if not is_play_mode or game_session == null or _combat_active or _victory_view != null:
 		return
@@ -1043,6 +1093,7 @@ func _try_move_player(dx: int, dy: int) -> void:
 	# Сундук меняет вид при открытии, даже если сам герой не сдвинулся.
 	_canvas.queue_redraw()
 	_refresh_stats()
+	_log_trigger_events()
 	if game_session.is_completed:
 		_show_victory_view()
 		return
@@ -1102,6 +1153,7 @@ func _finish_combat() -> void:
 	_canvas.grab_focus()
 	_canvas.queue_redraw()
 	_refresh_stats()
+	_log_trigger_events()
 	if game_session.is_completed:
 		_show_victory_view()
 		return

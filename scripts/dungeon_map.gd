@@ -117,6 +117,22 @@ func set_chest_contents(chest_id: String, new_contents: Array[String]) -> bool:
 	return false
 
 
+## Идентификатор игрового события хранится на самой карте, не в сессии.
+func set_trigger_event_id(trigger_id: String, event_id: String) -> bool:
+	var normalized := event_id.strip_edges()
+	for entity in entities:
+		if str(entity.get("id", "")) != trigger_id or str(entity.get("type", "")) != "trigger":
+			continue
+		var properties: Dictionary = entity.get("properties", {})
+		if str(properties.get("event_id", "")) == normalized:
+			return false
+		var updated: Dictionary = properties.duplicate(true)
+		updated["event_id"] = normalized
+		entity["properties"] = updated
+		return true
+	return false
+
+
 ## Атомарный перенос: проверяем цель до изменения исходной клетки.
 ## kind == "wall" переносит стену; остальные kind — существующую сущность.
 func move_existing(kind: String, entity_id: String, source: Vector2i, target: Vector2i) -> bool:

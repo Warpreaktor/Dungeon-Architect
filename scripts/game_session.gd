@@ -14,6 +14,8 @@ var potions: int = 0
 var is_completed: bool = false # Выход достигнут в текущем прохождении.
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
+var activated_triggers: Dictionary = {} # ID сработавших триггеров; обнуляется с новой сессией.
+var _trigger_events: Array[Dictionary] = [] # События последнего хода для игрового контроллера.
 var last_event_message: String = ""
 var encounter_monster_id: String = ""
 var encounter_target := Vector2i(-1, -1)
@@ -34,6 +36,7 @@ static func start_for(map_ref: DungeonMap) -> GameSession:
 	session._init_masks()
 	session._refresh_visibility()
 	session._collect_pickups_at(spawn)
+	session._activate_triggers_at(spawn)
 	return session
 
 
@@ -93,12 +96,38 @@ func win_pending_encounter() -> bool:
 	return move_by(target.x - player_pos.x, target.y - player_pos.y)
 
 
+## Отдаём события ровно один раз; они не являются всплывающими игровыми сообщениями.
+func take_trigger_events() -> Array[Dictionary]:
+	var pending: Array[Dictionary] = []
+	for event in _trigger_events:
+		pending.append(event)
+	_trigger_events.clear()
+	return pending
+
+
+func _activate_triggers_at(cell: Vector2i) -> void:
+	for entity in map_data.entities_at(cell.x, cell.y):
+		if str(entity.get("type", "")) != "trigger":
+			continue
+		var entity_id := str(entity.get("id", ""))
+		if activated_triggers.has(entity_id):
+			continue
+		activated_triggers[entity_id] = true
+		var properties: Dictionary = entity.get("properties", {})
+		_trigger_events.append({
+			"entity_id": entity_id,
+			"event_id": str(properties.get("event_id", "")),
+			"position": cell
+		})
+
+
 func can_enter(cell: Vector2i) -> bool:
 	return contains(cell.x, cell.y) and map_data.get_terrain(cell.x, cell.y) != "wall"
 
 
 func move_by(dx: int, dy: int) -> bool:
 	last_event_message = ""
+	_trigger_events.clear()
 	if has_pending_encounter() or is_completed:
 		return false
 	var target := player_pos + Vector2i(dx, dy)
@@ -129,6 +158,7 @@ func move_by(dx: int, dy: int) -> bool:
 	player_pos = target
 	steps += 1
 	_collect_pickups_at(target)
+	_activate_triggers_at(target)
 	_refresh_visibility()
 	# Пока лестница завершает приключение. Позже здесь появится переход на другую карту.
 	if not _find_active_entity(target, "stairs_down").is_empty():

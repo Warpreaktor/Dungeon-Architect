@@ -150,6 +150,45 @@ func _initialize() -> void:
 	assert(guarded_exit_session.win_pending_encounter())
 	assert(guarded_exit_session.is_completed)
 
+	# Невидимые триггеры срабатывают один раз за прохождение, в том числе при старте.
+	var trigger_map := DungeonMap.create_blank(8, 8)
+	assert(trigger_map.place_entity("player_spawn", 2, 2))
+	assert(trigger_map.place_entity("trigger", 2, 2))
+	assert(trigger_map.place_entity("trigger", 3, 2))
+	assert(trigger_map.place_entity("trigger", 3, 3))
+	var custom_trigger: Dictionary = trigger_map.entities_at(3, 2)[0]
+	var trigger_id := str(custom_trigger["id"])
+	assert(trigger_map.set_trigger_event_id(trigger_id, "  secret_passage  "))
+	assert(not trigger_map.set_trigger_event_id(trigger_id, "secret_passage"))
+	assert(str(custom_trigger["properties"]["event_id"]) == "secret_passage")
+	var trigger_json := JSON.stringify(trigger_map.to_dict())
+	var trigger_restored := DungeonMap.from_dict(JSON.parse_string(trigger_json))
+	assert(trigger_restored != null)
+	var trigger_session := GameSession.start_for(trigger_restored)
+	assert(trigger_session != null)
+	var first_events := trigger_session.take_trigger_events()
+	assert(first_events.size() == 1)
+	assert(first_events[0]["position"] == Vector2i(2, 2))
+	assert(str(first_events[0]["event_id"]) == "")
+	assert(trigger_session.take_trigger_events().is_empty())
+	assert(trigger_session.move_by(1, 0))
+	var events := trigger_session.take_trigger_events()
+	assert(events.size() == 1)
+	assert(str(events[0]["entity_id"]) == trigger_id)
+	assert(str(events[0]["event_id"]) == "secret_passage")
+	assert(trigger_session.move_by(0, 1))
+	events = trigger_session.take_trigger_events()
+	assert(events.size() == 1 and str(events[0]["event_id"]) == "")
+	assert(trigger_session.move_by(0, -1))
+	assert(trigger_session.take_trigger_events().is_empty()) # Повторный вход в ту же клетку.
+	assert(trigger_session.move_by(-1, 0))
+	assert(trigger_session.take_trigger_events().is_empty()) # Стартовый триггер тоже одноразовый.
+	assert(JSON.stringify(trigger_restored.to_dict()) == trigger_json)
+	var trigger_again := GameSession.start_for(trigger_restored)
+	assert(trigger_again.take_trigger_events().size() == 1) # Новый тест сбрасывает активации.
+	assert(trigger_again.move_by(1, 0))
+	assert(trigger_again.take_trigger_events().size() == 1)
+
 	# Существующая карта с полем reward продолжает работать.
 	var legacy_map := DungeonMap.from_dict(loot_map.to_dict())
 	var legacy_chest: Dictionary = legacy_map.entities_at(3, 2)[0]

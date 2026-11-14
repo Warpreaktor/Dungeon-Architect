@@ -1,0 +1,40 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/game_notice.gd" id="1_script"]
+[ext_resource type="Theme" path="res://themes/hero_hud.tres" id="2_theme"]
+
+[node name="GameNotice" type="CenterContainer"]
+anchor_right = 1.0
+offset_top = 120.0
+offset_bottom = 172.0
+mouse_filter = 2
+script = ExtResource("1_script")
+
+[node name="NoticePanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(320, 48)
+mouse_filter = 2
+theme = ExtResource("2_theme")
+
+[node name="Margin" type="MarginContainer" parent="NoticePanel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 7
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 7
+
+[node name="NoticeText" type="Label" parent="NoticePanel/Margin"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+text = "Найден ключ!"
+
+[node name="NoticeTimer" type="Timer" parent="."]
+unique_name_in_owner = true
+wait_time = 2.7
+one_shot = true

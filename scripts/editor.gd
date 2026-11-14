@@ -5,6 +5,7 @@ extends Control
 
 const SIDEBAR_WIDTH := 264.0
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
+const GAME_NOTICE_SCENE: PackedScene = preload("res://scenes/game_notice.tscn")
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
 	"save": preload("res://assets/icons/commands/save.png"),
@@ -96,6 +97,7 @@ var _width_input: SpinBox
 var _height_input: SpinBox
 var _dpad: Control
 var _hero_hud: HeroHUD
+var _game_notice: GameNotice
 var _load_dialog: ConfirmationDialog
 var _export_dialog: FileDialog
 var _import_dialog: FileDialog
@@ -187,6 +189,9 @@ func _build_interface() -> void:
 	_hero_hud = HERO_HUD_SCENE.instantiate() as HeroHUD
 	_hero_hud.visible = false
 	canvas_host.add_child(_hero_hud)
+	_game_notice = GAME_NOTICE_SCENE.instantiate() as GameNotice
+	_game_notice.visible = false
+	canvas_host.add_child(_game_notice)
 
 	_sidebar_panel = _panel(Color("#202d39"))
 	_sidebar_panel.custom_minimum_size.x = SIDEBAR_WIDTH
@@ -947,9 +952,12 @@ func _start_play_mode() -> void:
 	_update_mode_ui()
 	_refresh_stats()
 	_set_status("Тест карты: прогресс временный • Стрелки/WASD • Esc — в редактор")
+	if not session.last_event_message.is_empty():
+		_show_game_event(session.last_event_message)
 
 
 func _stop_play_mode() -> void:
+	_game_notice.clear()
 	game_session = null
 	is_play_mode = false
 	_canvas.set_game_session(null)
@@ -968,6 +976,7 @@ func _update_mode_ui() -> void:
 	_play_button.tooltip_text = "Выйти из теста и вернуться к редактированию" if is_play_mode else "Проверить текущую карту без сохранения игрового прогресса"
 	_dpad.visible = is_play_mode
 	_hero_hud.visible = is_play_mode
+	_game_notice.visible = is_play_mode
 	for control in _editor_controls:
 		if control is BaseButton:
 			(control as BaseButton).disabled = is_play_mode
@@ -978,16 +987,23 @@ func _update_mode_ui() -> void:
 	_update_history_buttons()
 
 
+func _show_game_event(message: String) -> void:
+	_game_notice.show_message(message)
+	_set_status(message)
+
+
 func _try_move_player(dx: int, dy: int) -> void:
 	if not is_play_mode or game_session == null:
 		return
-	if game_session.move_by(dx, dy):
+	var moved := game_session.move_by(dx, dy)
+	if moved:
 		_canvas.center_on_cell(game_session.player_pos)
 		_canvas.queue_redraw()
 		_refresh_stats()
-		_set_status("Ход %d • Позиция героя: %d,%d" % [game_session.steps, game_session.player_pos.x, game_session.player_pos.y])
-	else:
-		_set_status("Тут пройти нельзя.")
+	if not game_session.last_event_message.is_empty():
+		_show_game_event(game_session.last_event_message)
+	elif not moved:
+		_show_game_event("Тут пройти нельзя.")
 
 
 func _input(event: InputEvent) -> void:

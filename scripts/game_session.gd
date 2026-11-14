@@ -9,6 +9,9 @@ var map_data: DungeonMap
 var hero: HeroState
 var player_pos := Vector2i(-1, -1)
 var steps: int = 0
+var keys: int = 0
+var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
+var last_event_message: String = ""
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
 
@@ -25,6 +28,7 @@ static func start_for(map_ref: DungeonMap) -> GameSession:
 	session.player_pos = spawn
 	session._init_masks()
 	session._refresh_visibility()
+	session._collect_keys_at(spawn)
 	return session
 
 
@@ -53,18 +57,53 @@ func is_visible(x: int, y: int) -> bool:
 	return contains(x, y) and bool(visible[y][x])
 
 
+func is_entity_removed(entity: Dictionary) -> bool:
+	return removed_entities.has(str(entity.get("id", "")))
+
+
+func _find_active_entity(cell: Vector2i, kind: String) -> Dictionary:
+	for entity in map_data.entities_at(cell.x, cell.y):
+		if str(entity["type"]) == kind and not is_entity_removed(entity):
+			return entity
+	return {}
+
+
 func can_enter(cell: Vector2i) -> bool:
 	return contains(cell.x, cell.y) and map_data.get_terrain(cell.x, cell.y) != "wall"
 
 
 func move_by(dx: int, dy: int) -> bool:
+	last_event_message = ""
 	var target := player_pos + Vector2i(dx, dy)
 	if not can_enter(target):
 		return false
+
+	var door := _find_active_entity(target, "door")
+	if not door.is_empty():
+		if keys <= 0:
+			last_event_message = "Дверь заперта. Нужен ключ."
+			return false
+		keys -= 1
+		removed_entities[str(door["id"])] = true
+		last_event_message = "Ключ использован. Дверь открыта!"
+
 	player_pos = target
 	steps += 1
+	_collect_keys_at(target)
 	_refresh_visibility()
 	return true
+
+
+func _collect_keys_at(cell: Vector2i) -> void:
+	for entity in map_data.entities_at(cell.x, cell.y):
+		if str(entity["type"]) != "key" or is_entity_removed(entity):
+			continue
+		keys += 1
+		removed_entities[str(entity["id"])] = true
+		if last_event_message.is_empty():
+			last_event_message = "Найден ключ! Ключей: %d" % keys
+		else:
+			last_event_message += "  Найден ключ! Ключей: %d" % keys
 
 
 func _refresh_visibility() -> void:

@@ -190,6 +190,8 @@ func _draw_cell(x: int, y: int) -> void:
 		draw_texture_rect(FLOOR_TEXTURE, rect, false)
 	var entities_here := map_data.entities_at(x, y)
 	for entity in entities_here:
+		if mode == "play" and game_session != null and game_session.is_entity_removed(entity):
+			continue
 		var kind := str(entity["type"])
 		if mode == "play" and kind == "player_spawn":
 			continue

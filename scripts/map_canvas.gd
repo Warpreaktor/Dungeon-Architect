@@ -405,7 +405,7 @@ func _gui_input(event: InputEvent) -> void:
 					_touch_blocked = true
 		else:
 			var start_point: Vector2 = _touch_starts.get(event.index, event.position)
-			var tap_valid := not _touch_invalid_tap and event.position.distance_to(start_point) < TAP_MOVE_LIMIT
+			var tap_valid: bool = not _touch_invalid_tap and event.position.distance_to(start_point) < TAP_MOVE_LIMIT
 			_touch_positions.erase(event.index)
 			_touch_starts.erase(event.index)
 			if mode == "edit" and selected_tool == "hand" and tap_valid:

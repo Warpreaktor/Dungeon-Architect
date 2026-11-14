@@ -4,8 +4,16 @@ extends Control
 ## Вся сцена собирается обычными Control-узлами, чтобы её можно было расширять.
 
 const SIDEBAR_WIDTH := 264.0
-const TEST_ICON = preload("res://assets/icons/test_mode.png")
-const EDITOR_ICON = preload("res://assets/icons/editor_mode.png")
+const COMMAND_ICONS := {
+	"new": preload("res://assets/icons/commands/new.png"),
+	"save": preload("res://assets/icons/commands/save.png"),
+	"load": preload("res://assets/icons/commands/load.png"),
+	"export": preload("res://assets/icons/commands/export.png"),
+	"import": preload("res://assets/icons/commands/import.png"),
+	"center": preload("res://assets/icons/commands/center.png"),
+	"test": preload("res://assets/icons/commands/test.png"),
+	"editor": preload("res://assets/icons/commands/editor.png")
+}
 const TOOLS := [
 	{"id": "hand", "label": "Рука", "hint": "Безопасно перемещать и масштабировать карту одним или двумя пальцами"},
 	{"id": "floor", "label": "Пол", "hint": "Убирает стену; поверхность становится проходимой"},
@@ -49,7 +57,7 @@ var _status_label: Label
 var _coords_label: Label
 var _stats_label: Label
 var _selection_label: Label
-var _mode_label: Label
+var _sidebar_panel: PanelContainer
 var _palette_buttons: Dictionary = {}
 var _editor_controls: Array[Control] = []
 var _play_button: Button
@@ -80,42 +88,46 @@ func _build_interface() -> void:
 
 	var header := _panel(Color("#1c2935"))
 	root_column.add_child(header)
-	var toolbar := HBoxContainer.new()
-	toolbar.add_theme_constant_override("separation", 7)
+	# Команды переносятся на следующую строку на узких экранах.
+	var toolbar := HFlowContainer.new()
+	toolbar.add_theme_constant_override("h_separation", 7)
+	toolbar.add_theme_constant_override("v_separation", 6)
 	header.add_child(toolbar)
 	var title := _label("DUNGEON  /  ARCHITECT", 19, Color("#e8c58a"))
-	title.custom_minimum_size.x = 242
+	title.custom_minimum_size.x = 190
 	toolbar.add_child(title)
 
 	var new_button := _button("Новая", "Создать пустую карту", _request_new)
+	_set_command_icon(new_button, "new")
 	toolbar.add_child(new_button)
 	_register_editor_control(new_button)
 
 	var save_button := _button("Сохранить", "Сохранить в библиотеку карт приложения (Ctrl+S)", _save_internal)
+	_set_command_icon(save_button, "save")
 	toolbar.add_child(save_button)
 	_register_editor_control(save_button)
 
 	var load_button := _button("Загрузить", "Открыть карту из библиотеки", _show_load)
+	_set_command_icon(load_button, "load")
 	toolbar.add_child(load_button)
 	_register_editor_control(load_button)
 
 	toolbar.add_child(_separator())
 	var export_button := _button("Экспорт JSON", "Записать карту в произвольный JSON-файл", _show_export)
+	_set_command_icon(export_button, "export")
 	toolbar.add_child(export_button)
 	_register_editor_control(export_button)
 	var import_button := _button("Импорт JSON", "Прочитать карту из JSON-файла", _show_import)
+	_set_command_icon(import_button, "import")
 	toolbar.add_child(import_button)
 	_register_editor_control(import_button)
 	toolbar.add_child(_separator())
-	toolbar.add_child(_button("Вписать", "Показать всю карту", _fit_map))
+	var center_button := _button("Центр", "Показать всю карту", _fit_map)
+	_set_command_icon(center_button, "center")
+	toolbar.add_child(center_button)
 	_play_button = _button("Тест", "Проверить текущую карту без сохранения игрового прогресса", _toggle_play_mode)
-	_play_button.icon = TEST_ICON
-	_play_button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_play_button.expand_icon = false
+	_set_command_icon(_play_button, "test")
 	toolbar.add_child(_play_button)
-	_mode_label = _label("РЕЖИМ: редактор", 13, Color("#a9c4d5"))
-	_mode_label.custom_minimum_size.x = 180
-	toolbar.add_child(_mode_label)
 
 	var workspace := HBoxContainer.new()
 	workspace.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -136,13 +148,13 @@ func _build_interface() -> void:
 	canvas_host.add_child(_canvas)
 	_build_dpad(canvas_host)
 
-	var sidebar_panel := _panel(Color("#202d39"))
-	sidebar_panel.custom_minimum_size.x = SIDEBAR_WIDTH
-	workspace.add_child(sidebar_panel)
+	_sidebar_panel = _panel(Color("#202d39"))
+	_sidebar_panel.custom_minimum_size.x = SIDEBAR_WIDTH
+	workspace.add_child(_sidebar_panel)
 	var sidebar_scroll := ScrollContainer.new()
 	sidebar_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sidebar_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sidebar_panel.add_child(sidebar_scroll)
+	_sidebar_panel.add_child(sidebar_scroll)
 	var sidebar := VBoxContainer.new()
 	sidebar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sidebar.add_theme_constant_override("separation", 10)
@@ -371,6 +383,12 @@ func _label(content: String, font_size: int, color: Color) -> Label:
 	node.add_theme_color_override("font_color", color)
 	node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return node
+
+
+func _set_command_icon(button: Button, icon_name: String) -> void:
+	button.icon = COMMAND_ICONS[icon_name]
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.expand_icon = false
 
 
 func _button(content: String, hint: String, callback: Callable) -> Button:
@@ -658,9 +676,9 @@ func _stop_play_mode() -> void:
 
 
 func _update_mode_ui() -> void:
-	_mode_label.text = "РЕЖИМ: тест" if is_play_mode else "РЕЖИМ: редактор"
+	_sidebar_panel.visible = not is_play_mode
 	_play_button.text = "Редактор" if is_play_mode else "Тест"
-	_play_button.icon = EDITOR_ICON if is_play_mode else TEST_ICON
+	_set_command_icon(_play_button, "editor" if is_play_mode else "test")
 	_play_button.tooltip_text = "Выйти из теста и вернуться к редактированию" if is_play_mode else "Проверить текущую карту без сохранения игрового прогресса"
 	_dpad.visible = is_play_mode
 	for control in _editor_controls:

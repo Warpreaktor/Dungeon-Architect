@@ -11,6 +11,7 @@ var player_pos := Vector2i(-1, -1)
 var steps: int = 0
 var keys: int = 0
 var potions: int = 0
+var is_completed: bool = false # Выход достигнут в текущем прохождении.
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
 var last_event_message: String = ""
@@ -98,7 +99,7 @@ func can_enter(cell: Vector2i) -> bool:
 
 func move_by(dx: int, dy: int) -> bool:
 	last_event_message = ""
-	if has_pending_encounter():
+	if has_pending_encounter() or is_completed:
 		return false
 	var target := player_pos + Vector2i(dx, dy)
 	if not can_enter(target):
@@ -129,6 +130,9 @@ func move_by(dx: int, dy: int) -> bool:
 	steps += 1
 	_collect_pickups_at(target)
 	_refresh_visibility()
+	# Пока лестница завершает приключение. Позже здесь появится переход на другую карту.
+	if not _find_active_entity(target, "stairs_down").is_empty():
+		is_completed = true
 	return true
 
 

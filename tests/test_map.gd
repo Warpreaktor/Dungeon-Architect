@@ -121,6 +121,35 @@ func _initialize() -> void:
 	assert(guarded.last_event_message == "Дверь заперта. Нужен ключ.")
 	assert(guarded.move_by(0, 1))
 
+	# Лестница пока завершает тестовую сессию, не меняя карту редактора.
+	var finish_map := DungeonMap.create_blank(8, 8)
+	assert(finish_map.place_entity("player_spawn", 2, 2))
+	assert(finish_map.place_entity("stairs_down", 3, 2))
+	var before_finish := JSON.stringify(finish_map.to_dict())
+	var finish_session := GameSession.start_for(finish_map)
+	assert(not finish_session.is_completed)
+	assert(finish_session.move_by(1, 0))
+	assert(finish_session.is_completed)
+	assert(finish_session.player_pos == Vector2i(3, 2))
+	assert(finish_session.steps == 1)
+	assert(not finish_session.move_by(0, 1)) # После завершения ходить нельзя.
+	assert(JSON.stringify(finish_map.to_dict()) == before_finish)
+	var finish_again := GameSession.start_for(finish_map)
+	assert(not finish_again.is_completed)
+	assert(finish_again.move_by(1, 0)) # Новая попытка снова может закончиться победой.
+
+	# Лестница под монстром срабатывает только после победы в бою.
+	var guarded_exit := DungeonMap.create_blank(8, 8)
+	assert(guarded_exit.place_entity("player_spawn", 2, 2))
+	assert(guarded_exit.place_entity("monster", 3, 2))
+	assert(guarded_exit.place_entity("stairs_down", 3, 2))
+	var guarded_exit_session := GameSession.start_for(guarded_exit)
+	assert(not guarded_exit_session.move_by(1, 0))
+	assert(not guarded_exit_session.is_completed)
+	assert(guarded_exit_session.has_pending_encounter())
+	assert(guarded_exit_session.win_pending_encounter())
+	assert(guarded_exit_session.is_completed)
+
 	# Существующая карта с полем reward продолжает работать.
 	var legacy_map := DungeonMap.from_dict(loot_map.to_dict())
 	var legacy_chest: Dictionary = legacy_map.entities_at(3, 2)[0]

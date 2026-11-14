@@ -8,6 +8,7 @@ const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
 const GAME_NOTICE_SCENE: PackedScene = preload("res://scenes/game_notice.tscn")
 const CHEST_CONTENTS_SCENE: PackedScene = preload("res://scenes/chest_contents_popup.tscn")
 const BATTLE_VIEW_SCENE: PackedScene = preload("res://scenes/battle_view.tscn")
+const VICTORY_VIEW_SCENE: PackedScene = preload("res://scenes/victory_view.tscn")
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
 	"save": preload("res://assets/icons/commands/save.png"),
@@ -29,7 +30,7 @@ const TOOLS := [
 	{"id": "monster", "label": "Монстр", "hint": "Место появления противника"},
 	{"id": "key", "label": "Ключ", "hint": "Подбираемый предмет"},
 	{"id": "potion", "label": "Зелье", "hint": "Подбираемый предмет"},
-	{"id": "stairs_down", "label": "Спуск", "hint": "Переход на другую карту (ссылка добавится позже)"},
+	{"id": "stairs_down", "label": "Спуск", "hint": "Выход из подземелья (позже станет переходом на другую карту)"},
 	{"id": "trigger", "label": "Триггер", "hint": "Невидимое в игре событие"},
 	{"id": "player_spawn", "label": "Старт героя", "hint": "Единственная стартовая позиция"},
 	{"id": "erase", "label": "Ластик", "hint": "Удалить верхний объект или стену"}
@@ -65,6 +66,7 @@ var _redo_button: Button
 var _canvas_host: Control
 var _canvas: DungeonCanvas
 var _battle_view: BattleView
+var _victory_view: VictoryView
 var _combat_active: bool = false
 var _combat_camera_tween: Tween
 var _pre_combat_zoom: float = 1.0
@@ -992,6 +994,7 @@ func _start_play_mode() -> void:
 
 
 func _stop_play_mode() -> void:
+	_remove_victory_view()
 	_abort_combat()
 	_game_notice.clear()
 	game_session = null
@@ -1029,7 +1032,7 @@ func _show_game_event(message: String) -> void:
 
 
 func _try_move_player(dx: int, dy: int) -> void:
-	if not is_play_mode or game_session == null or _combat_active:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null:
 		return
 	var moved := game_session.move_by(dx, dy)
 	if game_session.has_pending_encounter():
@@ -1040,6 +1043,9 @@ func _try_move_player(dx: int, dy: int) -> void:
 	# Сундук меняет вид при открытии, даже если сам герой не сдвинулся.
 	_canvas.queue_redraw()
 	_refresh_stats()
+	if game_session.is_completed:
+		_show_victory_view()
+		return
 	if not game_session.last_event_message.is_empty():
 		_show_game_event(game_session.last_event_message)
 	elif not moved:
@@ -1096,10 +1102,40 @@ func _finish_combat() -> void:
 	_canvas.grab_focus()
 	_canvas.queue_redraw()
 	_refresh_stats()
+	if game_session.is_completed:
+		_show_victory_view()
+		return
 	if not game_session.last_event_message.is_empty():
 		_show_game_event(game_session.last_event_message)
 	elif not moved:
 		_set_status("Монстр побеждён, но клетка пока недоступна.")
+
+
+## Финальный экран не уничтожает карту и сессию, а лишь блокирует исследование.
+## Позже эту же сцену можно будет использовать как экран завершения этажа.
+func _show_victory_view() -> void:
+	if not is_play_mode or game_session == null or _victory_view != null:
+		return
+	_dpad.visible = false
+	_hero_hud.visible = false
+	_game_notice.clear()
+	_victory_view = VICTORY_VIEW_SCENE.instantiate() as VictoryView
+	add_child(_victory_view)
+	_victory_view.retry_requested.connect(_restart_test_after_victory)
+	_victory_view.editor_requested.connect(_stop_play_mode)
+	_victory_view.show_result(game_session.steps)
+	_set_status("Приключение завершено: выход найден.")
+
+
+func _restart_test_after_victory() -> void:
+	_stop_play_mode()
+	_start_play_mode()
+
+
+func _remove_victory_view() -> void:
+	if _victory_view != null:
+		_victory_view.queue_free()
+		_victory_view = null
 
 
 func _abort_combat() -> void:
@@ -1115,6 +1151,13 @@ func _abort_combat() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if is_play_mode:
+			if _victory_view != null:
+				if event.keycode == KEY_ESCAPE:
+					_stop_play_mode()
+					get_viewport().set_input_as_handled()
+				elif event.keycode in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_A, KEY_S, KEY_D]:
+					get_viewport().set_input_as_handled()
+				return
 			if _combat_active:
 				if event.keycode in [KEY_ESCAPE, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_A, KEY_S, KEY_D]:
 					get_viewport().set_input_as_handled()

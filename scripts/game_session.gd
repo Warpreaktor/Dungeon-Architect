@@ -10,6 +10,7 @@ var hero: HeroState
 var player_pos := Vector2i(-1, -1)
 var steps: int = 0
 var keys: int = 0
+var potions: int = 0
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var last_event_message: String = ""
 var revealed: Array = [] # revealed[y][x] = bool
@@ -28,7 +29,7 @@ static func start_for(map_ref: DungeonMap) -> GameSession:
 	session.player_pos = spawn
 	session._init_masks()
 	session._refresh_visibility()
-	session._collect_keys_at(spawn)
+	session._collect_pickups_at(spawn)
 	return session
 
 
@@ -89,21 +90,30 @@ func move_by(dx: int, dy: int) -> bool:
 
 	player_pos = target
 	steps += 1
-	_collect_keys_at(target)
+	_collect_pickups_at(target)
 	_refresh_visibility()
 	return true
 
 
-func _collect_keys_at(cell: Vector2i) -> void:
+func _collect_pickups_at(cell: Vector2i) -> void:
 	for entity in map_data.entities_at(cell.x, cell.y):
-		if str(entity["type"]) != "key" or is_entity_removed(entity):
+		if is_entity_removed(entity):
 			continue
-		keys += 1
+		var pickup_message := ""
+		match str(entity["type"]):
+			"key":
+				keys += 1
+				pickup_message = "Найден ключ! Ключей: %d" % keys
+			"potion":
+				potions += 1
+				pickup_message = "Найдено зелье! Зелий: %d" % potions
+			_:
+				continue
 		removed_entities[str(entity["id"])] = true
 		if last_event_message.is_empty():
-			last_event_message = "Найден ключ! Ключей: %d" % keys
+			last_event_message = pickup_message
 		else:
-			last_event_message += "  Найден ключ! Ключей: %d" % keys
+			last_event_message += "  " + pickup_message
 
 
 func _refresh_visibility() -> void:

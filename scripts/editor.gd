@@ -94,6 +94,8 @@ var _size_preset: OptionButton
 var _width_input: SpinBox
 var _height_input: SpinBox
 var _dpad: Control
+var _hero_hud: PanelContainer
+var _hero_stats_label: Label
 var _load_dialog: ConfirmationDialog
 var _export_dialog: FileDialog
 var _import_dialog: FileDialog
@@ -180,6 +182,16 @@ func _build_interface() -> void:
 	_canvas.move_failed.connect(_on_move_failed)
 	canvas_host.add_child(_canvas)
 	_build_dpad(canvas_host)
+
+	# Игровые характеристики видны только в прохождении; редактору они не нужны.
+	_hero_hud = _panel(Color("#192c38"))
+	_hero_hud.position = Vector2(12, 12)
+	_hero_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hero_hud.visible = false
+	canvas_host.add_child(_hero_hud)
+	_hero_stats_label = _label("", 14, Color("#f4dfb1"))
+	_hero_stats_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hero_hud.add_child(_hero_stats_label)
 
 	_sidebar_panel = _panel(Color("#202d39"))
 	_sidebar_panel.custom_minimum_size.x = SIDEBAR_WIDTH
@@ -502,6 +514,16 @@ func _refresh_stats() -> void:
 	if is_play_mode and game_session != null:
 		base += "   •   ходов: %d" % game_session.steps
 	_stats_label.text = base
+	_update_hero_hud()
+
+
+func _update_hero_hud() -> void:
+	if _hero_stats_label == null or not is_play_mode or game_session == null or game_session.hero == null:
+		return
+	var hero: HeroState = game_session.hero
+	_hero_stats_label.text = "Здоровье: %d/%d    Атака: %d    Защита: %d    Золото: %d" % [
+		hero.health, hero.max_health, hero.attack, hero.defense, hero.gold
+	]
 
 
 func _set_tool(kind: String) -> void:
@@ -953,6 +975,7 @@ func _update_mode_ui() -> void:
 	_set_command_icon(_play_button, "editor" if is_play_mode else "test")
 	_play_button.tooltip_text = "Выйти из теста и вернуться к редактированию" if is_play_mode else "Проверить текущую карту без сохранения игрового прогресса"
 	_dpad.visible = is_play_mode
+	_hero_hud.visible = is_play_mode
 	for control in _editor_controls:
 		if control is BaseButton:
 			(control as BaseButton).disabled = is_play_mode

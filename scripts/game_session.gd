@@ -6,6 +6,7 @@ extends RefCounted
 const VISION_RADIUS := 1
 
 var map_data: DungeonMap
+var hero: HeroState
 var player_pos := Vector2i(-1, -1)
 var steps: int = 0
 var revealed: Array = [] # revealed[y][x] = bool
@@ -20,6 +21,7 @@ static func start_for(map_ref: DungeonMap) -> GameSession:
 		return null
 	var session := GameSession.new()
 	session.map_data = map_ref
+	session.hero = HeroState.new()
 	session.player_pos = spawn
 	session._init_masks()
 	session._refresh_visibility()

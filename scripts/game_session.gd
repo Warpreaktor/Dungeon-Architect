@@ -88,6 +88,14 @@ func has_pending_encounter() -> bool:
 	return not encounter_monster_id.is_empty()
 
 
+## Возвращает описание монстра для следующего поединка; старые карты получают базовый тип.
+func pending_monster_definition() -> MonsterDefinition:
+	for entity in map_data.entities:
+		if str(entity.get("id", "")) == encounter_monster_id and str(entity.get("type", "")) == "monster":
+			return MonsterCatalog.from_entity(entity)
+	return MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID)
+
+
 ## Победа снимает монстра только в сессии, затем повторяет вход в клетку
 ## через обычные правила дверей, сундуков и находок.
 func win_pending_encounter() -> bool:

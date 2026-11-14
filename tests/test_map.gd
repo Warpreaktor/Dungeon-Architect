@@ -72,6 +72,20 @@ func _initialize() -> void:
 	var another_session := GameSession.start_for(loot_map)
 	assert(not another_session.is_chest_open(packed_chest))
 
+	# Выбор вида монстра в палитре сразу задаёт свойства созданной сущности.
+	var monster_palette_map := DungeonMap.create_blank(8, 8)
+	assert(monster_palette_map.place_entity("monster", 2, 2, {"monster_id": "small_monster"}))
+	assert(monster_palette_map.place_entity("monster", 3, 2, {"monster_id": "skeleton_guard"}))
+	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(2, 2)[0]).max_health == 1)
+	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(3, 2)[0]).max_health == 3)
+	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(3, 2)[0]).attack_damage == 2)
+	assert(not monster_palette_map.place_entity("monster", 3, 2, {"monster_id": "small_monster"}))
+	var monster_palette_restored := DungeonMap.from_dict(JSON.parse_string(JSON.stringify(monster_palette_map.to_dict())))
+	assert(monster_palette_restored != null)
+	assert(MonsterCatalog.from_entity(monster_palette_restored.entities_at(3, 2)[0]).monster_id == "skeleton_guard")
+	assert(monster_palette_map.place_entity("monster", 4, 2)) # Старые карты и вызовы без options.
+	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(4, 2)[0]).monster_id == MonsterCatalog.DEFAULT_MONSTER_ID)
+
 	# Контакт с монстром создаёт встречу, но карта остаётся неизменной.
 	var encounter_map := DungeonMap.create_blank(8, 8)
 	assert(encounter_map.place_entity("player_spawn", 2, 2))
@@ -414,6 +428,59 @@ func _initialize() -> void:
 	assert(decorated_chest_map.message_at(3, 2).is_empty())
 	assert(decorated_chest_map.message_at(4, 2)["properties"]["target_entity_id"] == decorated_chest_id)
 
+	# DA-2.03.4: параметры монстров в Resource; старый JSON без типа — слабый монстр.
+	var small := MonsterCatalog.get_monster("small_monster")
+	var guard := MonsterCatalog.get_monster("skeleton_guard")
+	assert(small.max_health == 1 and small.attack_damage == 1)
+	assert(guard.max_health == 3 and guard.attack_damage == 2)
+	assert(MonsterCatalog.get_monster("unknown").monster_id == "small_monster")
+	var monster_map := DungeonMap.create_blank(8, 8)
+	assert(monster_map.place_entity("player_spawn", 2, 2))
+	assert(monster_map.place_entity("monster", 3, 2))
+	var monster_entity: Dictionary = monster_map.entities_at(3, 2)[0]
+	var monster_entity_id: String = str(monster_entity["id"])
+	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "small_monster")
+	assert(not monster_map.set_monster_type(monster_entity_id, "unknown"))
+	assert(monster_map.set_monster_type(monster_entity_id, "skeleton_guard"))
+	assert(not monster_map.set_monster_type(monster_entity_id, "skeleton_guard"))
+	var guard_json := JSON.stringify(monster_map.to_dict())
+	var guard_loaded := DungeonMap.from_dict(JSON.parse_string(guard_json))
+	assert(guard_loaded != null)
+	var guard_game := GameSession.start_for(guard_loaded)
+	assert(not guard_game.move_by(1, 0))
+	assert(guard_game.pending_monster_definition().monster_id == "skeleton_guard")
+	var guard_fight := CombatSession.new(guard_game.pending_monster_definition(), guard_game.hero)
+	assert(guard_fight.enemy_health == 3)
+	assert(guard_fight.hero_attack(1) == 1)
+	assert(guard_fight.enemy_health == 2 and not guard_fight.is_victory)
+	assert(guard_fight.last_counter_damage == 2 and guard_game.hero.health == 18)
+	assert(guard_fight.hero_attack(1) == 1)
+	assert(guard_game.hero.health == 16)
+	assert(guard_fight.hero_attack(1) == 1 and guard_fight.is_victory)
+	assert(guard_game.hero.health == 16) # Погибший противник не отвечает.
+	assert(guard_game.win_pending_encounter())
+	assert(JSON.stringify(guard_loaded.to_dict()) == guard_json)
+	# Меч экономит один ответный удар, щит уменьшает ответ с 2 до 1.
+	var guarded_hero := HeroState.new()
+	guarded_hero.equip_weapon(ItemCatalog.get_item("sword"))
+	guarded_hero.equip_shield(ItemCatalog.get_item("shield"))
+	var guarded_fight := CombatSession.new(guard, guarded_hero)
+	assert(guarded_fight.hero_attack(guarded_hero.attack) == 2)
+	assert(guarded_fight.enemy_health == 1)
+	assert(guarded_fight.last_counter_damage == 1 and guarded_fight.last_blocked_damage == 1)
+	assert(guarded_hero.health == 19)
+	assert(guarded_fight.hero_attack(guarded_hero.attack) == 2 and guarded_fight.is_victory)
+	assert(guarded_hero.health == 19)
+	# Поражение не выдаёт победу и не удаляет монстра.
+	var fragile := HeroState.new()
+	fragile.health = 1
+	var losing_fight := CombatSession.new(guard, fragile)
+	assert(losing_fight.hero_attack(1) == 1)
+	assert(losing_fight.is_defeat and not losing_fight.is_victory)
+	assert(fragile.health == 0 and losing_fight.hero_attack(1) == 0)
+	# Прежние карты без monster_id продолжают встречать обычного монстра.
+	monster_entity["properties"] = {}
+	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "small_monster")
 	# Совместимость: старые карты с находками непосредственно на полу продолжают работать.
 	assert(gold_map_loaded.entities_at(3, 2).size() == 1)
 	print("DungeonMap smoke tests: OK")

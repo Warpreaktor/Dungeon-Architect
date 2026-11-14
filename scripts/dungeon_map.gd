@@ -74,6 +74,11 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		properties = {"contents": []}
 	elif kind == "stairs_down":
 		properties = {"target_map_id": "", "target_x": 0, "target_y": 0}
+	elif kind == "monster":
+		var monster_id: String = str(options.get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
+		if not MonsterCatalog.DEFINITIONS.has(monster_id):
+			monster_id = MonsterCatalog.DEFAULT_MONSTER_ID
+		properties = {"monster_id": monster_id}
 	elif kind == "trigger":
 		properties = {"event_id": ""}
 	elif kind == "message":
@@ -127,6 +132,23 @@ func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amou
 				properties["gold_amount"] = amount
 			entity["properties"] = properties
 			return true
+	return false
+
+
+## Смена вида монстра не затрагивает прочие объекты и сохраняется в JSON карты.
+func set_monster_type(entity_id: String, monster_id: String) -> bool:
+	if not MonsterCatalog.DEFINITIONS.has(monster_id):
+		return false
+	for entity in entities:
+		if str(entity.get("id", "")) != entity_id or str(entity.get("type", "")) != "monster":
+			continue
+		var old_type: String = str(entity.get("properties", {}).get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
+		if old_type == monster_id:
+			return false
+		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		properties["monster_id"] = monster_id
+		entity["properties"] = properties
+		return true
 	return false
 
 

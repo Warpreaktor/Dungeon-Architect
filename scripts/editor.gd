@@ -30,7 +30,6 @@ const TOOLS := [
 	{"id": "wall", "label": "Стена", "hint": "Непроходимая клетка"},
 	{"id": "door", "label": "Дверь", "hint": "Дверь на клетке пола"},
 	{"id": "chest", "label": "Сундук", "hint": "Контейнер с добычей"},
-	{"id": "monster", "label": "Монстр", "hint": "Место появления противника"},
 	{"id": "stairs_down", "label": "Спуск", "hint": "Выход из подземелья (позже станет переходом на другую карту)"},
 	{"id": "trigger", "label": "Триггер", "hint": "Невидимое в игре событие"},
 	{"id": "message", "label": "Послание", "hint": "Авторский текст при входе в клетку или открытии двери"},
@@ -43,7 +42,6 @@ const TOOL_ICONS := {
 	"wall": preload("res://assets/icons/wall.png"),
 	"door": preload("res://assets/icons/door.png"),
 	"chest": preload("res://assets/icons/chest.png"),
-	"monster": preload("res://assets/icons/monster.png"),
 	"stairs_down": preload("res://assets/icons/stairs_down.png"),
 	"trigger": preload("res://assets/icons/trigger.png"),
 	"message": preload("res://assets/icons/message.png"),
@@ -74,7 +72,6 @@ var _pre_combat_zoom: float = 1.0
 var _name_input: LineEdit
 var _last_log_message: String = ""
 var _stats_label: Label
-var _selection_label: Label
 var _sidebar_panel: PanelContainer
 var _palette_buttons: Dictionary = {}
 var _chest_popup: ChestContentsPopup
@@ -254,18 +251,25 @@ func _build_interface() -> void:
 			_add_tool_button(map_tools, tool)
 
 	sidebar.add_child(HSeparator.new())
-	_selection_label = _label("Выбрано: Рука", 13, Color("#aec2d1"))
-	sidebar.add_child(_selection_label)
+	sidebar.add_child(_label("МОНСТРЫ", 14, Color("#e8c58a")))
+	var monster_tools := _tool_grid()
+	sidebar.add_child(monster_tools)
+	# Каждый новый MonsterDefinition автоматически получает собственную кнопку.
+	for monster_id in MonsterCatalog.DEFINITIONS:
+		var monster: MonsterDefinition = MonsterCatalog.get_monster(str(monster_id))
+		_add_tool_button(monster_tools, {
+			"id": "monster:" + monster.monster_id,
+			"label": monster.display_name,
+			"hint": "Здоровье: %d · Урон: %d" % [monster.max_health, monster.attack_damage],
+			"icon": monster.icon
+		})
+
+	sidebar.add_child(HSeparator.new())
 	var grid_checkbox := CheckBox.new()
 	grid_checkbox.text = "Показывать сетку"
 	grid_checkbox.button_pressed = true
 	grid_checkbox.toggled.connect(_toggle_grid)
 	sidebar.add_child(grid_checkbox)
-
-	sidebar.add_child(HSeparator.new())
-	sidebar.add_child(_label("УПРАВЛЕНИЕ", 14, Color("#e8c58a")))
-	var help := _label("Рука: перемещение одним или двумя пальцами, масштабирование двумя. Двойной тап по объекту — захват; тап по новой клетке — перенос; тап по исходной — отмена.\n\nКисть: пальцем/ЛКМ рисовать; ПКМ стирать.\n\nКолесо: масштаб. Средняя кнопка / Space+ЛКМ: перетаскивать карту на ПК.\n\nТест: стрелки/WASD — ходить; ПКМ на ПК или палец на Android — перемещать карту; двумя пальцами — масштабировать. Esc — в редактор.", 12, Color("#a3b9c8"))
-	sidebar.add_child(help)
 
 	# Нижняя консоль полностью скрыта до раскрытия: только небольшая кнопка.
 	var console_row := HBoxContainer.new()
@@ -293,7 +297,7 @@ func _tool_grid() -> GridContainer:
 func _add_tool_button(grid: GridContainer, tool: Dictionary) -> void:
 	var key: String = str(tool["id"])
 	var button := Button.new()
-	button.icon = TOOL_ICONS.get(key)
+	button.icon = tool.get("icon", TOOL_ICONS.get(key)) as Texture2D
 	button.expand_icon = true
 	button.custom_minimum_size = Vector2(66, 66)
 	button.tooltip_text = "%s\n%s" % [str(tool["label"]), str(tool["hint"])]
@@ -669,11 +673,6 @@ func _set_tool(kind: String) -> void:
 		button.add_theme_stylebox_override("hover", style)
 		button.add_theme_stylebox_override("pressed", style)
 		button.modulate = Color(1, 1, 1, 1) if not is_play_mode else Color(1, 1, 1, 0.55)
-	var display_name := kind
-	for tool in TOOLS:
-		if tool["id"] == kind:
-			display_name = str(tool["label"])
-	_selection_label.text = "Выбрано: " + display_name
 
 
 func _on_move_selection_changed(description: String) -> void:
@@ -1073,7 +1072,7 @@ func _start_play_mode() -> void:
 	_canvas.grab_focus()
 	_update_mode_ui()
 	_refresh_stats()
-	_set_status("Тест карты: прогресс временный • Стрелки/WASD • Esc — в редактор")
+	_set_status("Тест карты запущен. Прогресс временный.")
 	if not session.last_event_message.is_empty():
 		_set_status(session.last_event_message)
 	_log_trigger_events()
@@ -1219,7 +1218,8 @@ func _show_combat_view() -> void:
 	_battle_view = BATTLE_VIEW_SCENE.instantiate() as BattleView
 	_canvas_host.add_child(_battle_view)
 	_battle_view.battle_won.connect(_finish_combat)
-	_battle_view.begin(CombatSession.new(), game_session.hero)
+	_battle_view.battle_lost.connect(_lose_combat)
+	_battle_view.begin(CombatSession.new(game_session.pending_monster_definition(), game_session.hero), game_session.hero)
 
 
 func _finish_combat() -> void:
@@ -1250,9 +1250,27 @@ func _finish_combat() -> void:
 		_set_status("Монстр побеждён, но клетка пока недоступна.")
 
 
+func _lose_combat() -> void:
+	if not _combat_active or game_session == null:
+		return
+	if _battle_view != null:
+		_battle_view.queue_free()
+		_battle_view = null
+	_combat_active = false
+	_canvas.zoom = _pre_combat_zoom
+	_canvas.center_on_cell(game_session.player_pos)
+	_canvas.queue_redraw()
+	_refresh_stats()
+	_show_end_view(true)
+
+
 ## Финальный экран не уничтожает карту и сессию, а лишь блокирует исследование.
 ## Позже эту же сцену можно будет использовать как экран завершения этажа.
 func _show_victory_view() -> void:
+	_show_end_view(false)
+
+
+func _show_end_view(defeated: bool) -> void:
 	if not is_play_mode or game_session == null or _victory_view != null or _game_dialogue.visible:
 		return
 	_dpad.visible = false
@@ -1262,8 +1280,12 @@ func _show_victory_view() -> void:
 	add_child(_victory_view)
 	_victory_view.retry_requested.connect(_restart_test_after_victory)
 	_victory_view.editor_requested.connect(_stop_play_mode)
-	_victory_view.show_result(game_session.steps)
-	_set_status("Приключение завершено: выход найден.")
+	if defeated:
+		_victory_view.show_defeat(game_session.steps, game_session.pending_monster_definition())
+		_set_status("Герой пал в сражении. Приключение не завершено.")
+	else:
+		_victory_view.show_result(game_session.steps)
+		_set_status("Приключение завершено: выход найден.")
 
 
 func _restart_test_after_victory() -> void:

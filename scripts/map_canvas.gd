@@ -212,6 +212,8 @@ func _draw_cell(x: int, y: int) -> void:
 		var origin := Vector2(x, y) * TILE_SIZE
 		if kind == "chest" and (DungeonMap.chest_contents(entity).is_empty() or (mode == "play" and game_session != null and game_session.is_chest_open(entity))):
 			_draw_open_chest(origin)
+		elif kind == "monster" and MonsterCatalog.from_entity(entity).monster_id == "skeleton_guard":
+			draw_texture_rect(MonsterCatalog.from_entity(entity).icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		else:
 			_draw_entity(kind, origin)
 	if mode == "play" and not can_see:
@@ -472,6 +474,10 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 		modified = map_data.set_terrain(cell.x, cell.y, selected_tool)
 	elif selected_tool == "chest":
 		modified = map_data.place_entity("chest", cell.x, cell.y)
+	elif selected_tool.begins_with("monster:"):
+		var monster_id: String = selected_tool.trim_prefix("monster:")
+		if MonsterCatalog.DEFINITIONS.has(monster_id):
+			modified = map_data.place_entity("monster", cell.x, cell.y, {"monster_id": monster_id})
 	elif selected_tool not in ["key", "potion", "gold", "sword"]:
 		# Подбираемые вещи появляются только через источники добычи (пока сундуки).
 		modified = map_data.place_entity(selected_tool, cell.x, cell.y)

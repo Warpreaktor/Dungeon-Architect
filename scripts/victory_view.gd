@@ -9,6 +9,10 @@ signal editor_requested
 @onready var _veil: ColorRect = %Veil
 @onready var _card: PanelContainer = %Card
 @onready var _steps_label: Label = %StepsLabel
+@onready var _eyebrow: Label = %Eyebrow
+@onready var _title: Label = %Title
+@onready var _description: Label = %Description
+@onready var _emblem: TextureRect = %Emblem
 @onready var _retry_button: Button = %RetryButton
 @onready var _editor_button: Button = %EditorButton
 
@@ -30,6 +34,20 @@ func _ready() -> void:
 
 func show_result(step_count: int) -> void:
 	_steps_label.text = "Ходов сделано: %d" % step_count
+
+
+## Та же сцена используется при поражении: не дублируем модальные экраны.
+func show_defeat(step_count: int, victor: MonsterDefinition) -> void:
+	_eyebrow.text = "ПУТЬ ОБОРВАЛСЯ"
+	_title.text = "ГЕРОЙ ПАЛ"
+	_description.text = "Тебя одолели обитатели катакомб. Попробуй ещё раз."
+	_emblem.texture = victor.icon
+	var frame := _card.get_theme_stylebox("panel").duplicate(true) as StyleBoxFlat
+	frame.border_color = Color("#ba6b66")
+	_card.add_theme_stylebox_override("panel", frame)
+	_steps_label.text = "Ходов сделано: %d" % step_count
+	_title.add_theme_color_override("font_color", Color("#e5a09d"))
+	_eyebrow.add_theme_color_override("font_color", Color("#d48e86"))
 
 
 func _resize_card() -> void:

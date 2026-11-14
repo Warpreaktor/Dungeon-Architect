@@ -61,7 +61,6 @@ var _redo_button: Button
 var _canvas: DungeonCanvas
 var _name_input: LineEdit
 var _last_log_message: String = ""
-var _coords_label: Label
 var _stats_label: Label
 var _selection_label: Label
 var _sidebar_panel: PanelContainer
@@ -177,7 +176,6 @@ func _build_interface() -> void:
 	_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_canvas.map_edited.connect(_on_canvas_edited)
 	_canvas.edit_action_committed.connect(_on_edit_action_committed)
-	_canvas.hover_changed.connect(_on_hover_changed)
 	_canvas.move_selection_changed.connect(_on_move_selection_changed)
 	_canvas.move_failed.connect(_on_move_failed)
 	canvas_host.add_child(_canvas)
@@ -235,28 +233,19 @@ func _build_interface() -> void:
 	var help := _label("Рука: перемещение одним или двумя пальцами, масштабирование двумя. Двойной тап по объекту — захват; тап по новой клетке — перенос; тап по исходной — отмена.\n\nКисть: пальцем/ЛКМ рисовать; ПКМ стирать.\n\nКолесо: масштаб. Средняя кнопка / Space+ЛКМ: перетаскивать карту на ПК.\n\nТест: стрелки/WASD — ходить; Esc — в редактор.", 12, Color("#a3b9c8"))
 	sidebar.add_child(help)
 
-	var footer := _panel(Color("#17232e"))
-	root_column.add_child(footer)
-	var footer_column := VBoxContainer.new()
-	footer_column.add_theme_constant_override("separation", 4)
-	footer.add_child(footer_column)
-	var footer_row := HBoxContainer.new()
-	footer_column.add_child(footer_row)
+	# Нижняя консоль полностью скрыта до раскрытия: только небольшая кнопка.
+	var console_row := HBoxContainer.new()
+	root_column.add_child(console_row)
 	_log_toggle = _button("▴", "Развернуть консоль сообщений", _toggle_log_console)
 	_log_toggle.focus_mode = Control.FOCUS_NONE
-	_log_toggle.custom_minimum_size = Vector2(36, 28)
-	footer_row.add_child(_log_toggle)
-	var footer_spacer := Control.new()
-	footer_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	footer_row.add_child(footer_spacer)
-	_coords_label = _label("x: —   y: —", 12, Color("#e8c58a"))
-	footer_row.add_child(_coords_label)
+	_log_toggle.custom_minimum_size = Vector2(32, 26)
+	console_row.add_child(_log_toggle)
 	_log_console = RichTextLabel.new()
 	_log_console.custom_minimum_size.y = 145
 	_log_console.scroll_following = true
 	_log_console.selection_enabled = true
 	_log_console.visible = false
-	footer_column.add_child(_log_console)
+	root_column.add_child(_log_console)
 
 
 func _tool_grid() -> GridContainer:
@@ -626,13 +615,6 @@ func _mark_dirty() -> void:
 		return
 	is_dirty = true
 	_set_status("Изменения не сохранены • Ctrl+S для сохранения")
-
-
-func _on_hover_changed(cell: Vector2i) -> void:
-	if cell.x < 0:
-		_coords_label.text = "x: —   y: —"
-	else:
-		_coords_label.text = "x: %d   y: %d" % [cell.x, cell.y]
 
 
 func _set_status(message: String) -> void:

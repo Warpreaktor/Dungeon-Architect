@@ -5,10 +5,14 @@ extends Control
 
 signal map_edited
 signal hover_changed(cell: Vector2i)
+signal move_selection_changed(description: String)
+signal move_failed
 
 const TILE_SIZE := 48.0
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
 const WALL_TEXTURE: Texture2D = preload("res://assets/stone_wall.png")
+const DOUBLE_TAP_MS := 400
+const TAP_MOVE_LIMIT := 16.0
 
 var map_data: DungeonMap
 var game_session: GameSession
@@ -24,6 +28,18 @@ var _erasing: bool = false
 var _panning: bool = false
 var _touch_positions: Dictionary = {}
 var _touch_blocked: bool = false # После мультитача кисть ждёт отпускания всех пальцев.
+var _touch_starts: Dictionary = {}
+var _touch_invalid_tap: bool = false
+var _mouse_down := Vector2.ZERO
+var _mouse_dragged: bool = false
+var _last_tap_time: int = -10000
+var _last_tap_cell := Vector2i(-1, -1)
+var _cancelled_tap_time: int = -10000
+var _cancelled_tap_cell := Vector2i(-1, -1)
+var _moving_kind: String = ""
+var _moving_id: String = ""
+var _moving_from := Vector2i(-1, -1)
+
 
 
 func _ready() -> void:
@@ -38,6 +54,7 @@ func set_map(value: DungeonMap) -> void:
 	game_session = null
 	mode = "edit"
 	_hovered = Vector2i(-1, -1)
+	cancel_move_selection()
 	_reset_pointer_state()
 	call_deferred("fit_to_view")
 	queue_redraw()
@@ -46,7 +63,10 @@ func set_map(value: DungeonMap) -> void:
 func set_selected_tool(kind: String) -> void:
 	if selected_tool == kind:
 		return
+	cancel_move_selection()
 	selected_tool = kind
+	_last_tap_time = -10000
+	_last_tap_cell = Vector2i(-1, -1)
 	_painting = false
 	_erasing = false
 	_panning = false
@@ -60,10 +80,16 @@ func _reset_pointer_state() -> void:
 	_erasing = false
 	_panning = false
 	_touch_positions.clear()
+	_touch_starts.clear()
+	_touch_invalid_tap = false
+	_mouse_dragged = false
+	_last_tap_time = -10000
+	_last_tap_cell = Vector2i(-1, -1)
 	_touch_blocked = false
 
 
 func set_game_session(value: GameSession) -> void:
+	cancel_move_selection()
 	_reset_pointer_state()
 	game_session = value
 	if value != null:
@@ -126,6 +152,10 @@ func _draw() -> void:
 			var pos_y := float(y) * TILE_SIZE
 			draw_line(Vector2(float(min_x) * TILE_SIZE, pos_y), Vector2(float(max_x) * TILE_SIZE, pos_y), grid_color, 1.0 / zoom)
 
+	if mode == "edit" and not _moving_kind.is_empty() and map_data.contains(_moving_from.x, _moving_from.y):
+		var chosen := Rect2(Vector2(_moving_from) * TILE_SIZE, Vector2.ONE * TILE_SIZE)
+		draw_rect(chosen, Color(1.0, 0.78, 0.24, 0.20))
+		draw_rect(chosen.grow(-2), Color("#ffd26c"), false, 3.0 / zoom)
 	if mode == "edit" and selected_tool != "hand" and map_data.contains(_hovered.x, _hovered.y):
 		var hovered_rect := Rect2(Vector2(_hovered) * TILE_SIZE, Vector2.ONE * TILE_SIZE)
 		draw_rect(hovered_rect, Color(0.34, 0.80, 1.0, 0.22))
@@ -223,6 +253,71 @@ func _update_hover(point: Vector2) -> void:
 		queue_redraw()
 
 
+func has_move_selection() -> bool:
+	return not _moving_kind.is_empty()
+
+
+func cancel_move_selection() -> void:
+	if _moving_kind.is_empty():
+		return
+	_moving_kind = ""
+	_moving_id = ""
+	_moving_from = Vector2i(-1, -1)
+	move_selection_changed.emit("")
+	queue_redraw()
+
+
+func _select_at(cell: Vector2i) -> void:
+	var entities := map_data.entities_at(cell.x, cell.y)
+	_moving_from = cell
+	if not entities.is_empty():
+		var selected: Dictionary = entities.back()
+		_moving_kind = str(selected["type"])
+		_moving_id = str(selected["id"])
+	elif map_data.get_terrain(cell.x, cell.y) == "wall":
+		_moving_kind = "wall"
+		_moving_id = ""
+	else:
+		return
+	move_selection_changed.emit(_moving_kind)
+	queue_redraw()
+
+
+func _hand_tap(point: Vector2, is_double: bool) -> void:
+	if mode != "edit" or selected_tool != "hand" or map_data == null:
+		return
+	var cell := _screen_to_cell(point)
+	if not map_data.contains(cell.x, cell.y):
+		return
+	var now := Time.get_ticks_msec()
+	if has_move_selection():
+		if cell == _moving_from:
+			_cancelled_tap_time = now
+			_cancelled_tap_cell = cell
+			cancel_move_selection()
+			return
+		if map_data.move_existing(_moving_kind, _moving_id, _moving_from, cell):
+			_cancelled_tap_time = now
+			_cancelled_tap_cell = cell
+			cancel_move_selection()
+			map_edited.emit()
+			queue_redraw()
+		else:
+			move_failed.emit()
+		return
+	if is_double and not (cell == _cancelled_tap_cell and now - _cancelled_tap_time <= DOUBLE_TAP_MS):
+		_select_at(cell)
+
+
+func _remember_touch_tap(point: Vector2) -> void:
+	var now := Time.get_ticks_msec()
+	var cell := _screen_to_cell(point)
+	var double_tap := cell == _last_tap_cell and now - _last_tap_time <= DOUBLE_TAP_MS
+	_hand_tap(point, double_tap)
+	_last_tap_time = now
+	_last_tap_cell = cell
+
+
 func _edit_at(point: Vector2, erase: bool) -> void:
 	if mode != "edit" or selected_tool == "hand" or map_data == null:
 		return
@@ -243,8 +338,7 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
-		# На Android одно касание может дополнительно приходить как мышь.
-		# Карту обрабатываем по нативным touch-событиям, а UI-кнопки не трогаем.
+		# На Android тач-событие дополнительно эмулирует мышь.
 		if event.device == InputEvent.DEVICE_ID_EMULATION:
 			return
 		_update_hover(event.position)
@@ -258,7 +352,17 @@ func _gui_input(event: InputEvent) -> void:
 			_panning = event.pressed
 			accept_event()
 		elif event.button_index == MOUSE_BUTTON_LEFT:
-			if mode == "edit" and (selected_tool == "hand" or _panning or Input.is_key_pressed(KEY_SPACE)):
+			if mode == "edit" and selected_tool == "hand":
+				if event.pressed:
+					_mouse_down = event.position
+					_mouse_dragged = false
+					_panning = true
+				else:
+					_panning = false
+					if not _mouse_dragged:
+						_remember_touch_tap(event.position)
+				accept_event()
+			elif mode == "edit" and (_panning or Input.is_key_pressed(KEY_SPACE)):
 				_panning = event.pressed
 				_painting = false
 				accept_event()
@@ -280,6 +384,9 @@ func _gui_input(event: InputEvent) -> void:
 		if event.device == InputEvent.DEVICE_ID_EMULATION:
 			return
 		if _panning:
+			if selected_tool == "hand" and mode == "edit":
+				if event.position.distance_to(_mouse_down) > TAP_MOVE_LIMIT:
+					_mouse_dragged = true
 			camera_offset += event.relative
 			queue_redraw()
 		elif mode == "edit" and selected_tool != "hand" and (_painting or _erasing):
@@ -288,16 +395,24 @@ func _gui_input(event: InputEvent) -> void:
 	elif event is InputEventScreenTouch:
 		if event.pressed:
 			_touch_positions[event.index] = event.position
+			_touch_starts[event.index] = event.position
+			if _touch_positions.size() >= 2:
+				_touch_invalid_tap = true
 			if mode == "edit" and selected_tool != "hand":
 				if _touch_positions.size() == 1 and not _touch_blocked:
 					_edit_at(event.position, false)
 				else:
-						# При нескольких пальцах кисть не рисует до конца жеста.
-						_touch_blocked = true
+					_touch_blocked = true
 		else:
+			var start_point: Vector2 = _touch_starts.get(event.index, event.position)
+			var tap_valid := not _touch_invalid_tap and event.position.distance_to(start_point) < TAP_MOVE_LIMIT
 			_touch_positions.erase(event.index)
+			_touch_starts.erase(event.index)
+			if mode == "edit" and selected_tool == "hand" and tap_valid:
+				_remember_touch_tap(event.position)
 			if _touch_positions.is_empty():
 				_touch_blocked = false
+				_touch_invalid_tap = false
 		_update_hover(event.position)
 		accept_event()
 	elif event is InputEventScreenDrag:

@@ -124,6 +124,8 @@ func _build_interface() -> void:
 	_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_canvas.map_edited.connect(_on_canvas_edited)
 	_canvas.hover_changed.connect(_on_hover_changed)
+	_canvas.move_selection_changed.connect(_on_move_selection_changed)
+	_canvas.move_failed.connect(_on_move_failed)
 	canvas_host.add_child(_canvas)
 	_build_dpad(canvas_host)
 
@@ -150,24 +152,20 @@ func _build_interface() -> void:
 	_stats_label = _label("32 × 32", 13, Color("#9ab0bf"))
 	sidebar.add_child(_stats_label)
 	sidebar.add_child(HSeparator.new())
-	sidebar.add_child(_label("ИНСТРУМЕНТЫ", 14, Color("#e8c58a")))
-
-	var palette := GridContainer.new()
-	palette.columns = 3
-	palette.add_theme_constant_override("h_separation", 8)
-	palette.add_theme_constant_override("v_separation", 8)
-	sidebar.add_child(palette)
+	sidebar.add_child(_label("УПРАВЛЕНИЕ КАРТОЙ", 14, Color("#e8c58a")))
+	var control_tools := _tool_grid()
+	sidebar.add_child(control_tools)
 	for tool in TOOLS:
-		var key: String = tool["id"]
-		var button := Button.new()
-		button.icon = TOOL_ICONS.get(key)
-		button.expand_icon = true
-		button.custom_minimum_size = Vector2(66, 66)
-		button.tooltip_text = "%s\n%s" % [str(tool["label"]), str(tool["hint"])]
-		button.pressed.connect(_set_tool.bind(key))
-		palette.add_child(button)
-		_palette_buttons[key] = button
-		_register_editor_control(button)
+		if str(tool["id"]) in ["hand", "erase"]:
+			_add_tool_button(control_tools, tool)
+
+	sidebar.add_child(HSeparator.new())
+	sidebar.add_child(_label("ЭЛЕМЕНТЫ ЛАБИРИНТА", 14, Color("#e8c58a")))
+	var map_tools := _tool_grid()
+	sidebar.add_child(map_tools)
+	for tool in TOOLS:
+		if str(tool["id"]) not in ["hand", "erase"]:
+			_add_tool_button(map_tools, tool)
 
 	sidebar.add_child(HSeparator.new())
 	_selection_label = _label("Выбрано: Рука", 13, Color("#aec2d1"))
@@ -180,7 +178,7 @@ func _build_interface() -> void:
 
 	sidebar.add_child(HSeparator.new())
 	sidebar.add_child(_label("УПРАВЛЕНИЕ", 14, Color("#e8c58a")))
-	var help := _label("Рука: пальцем или ЛКМ двигать карту; двумя пальцами — масштабировать.\n\nКисть: пальцем или ЛКМ рисовать; ПКМ стирать.\n\nКолесо: масштаб.\nСредняя кнопка / Space+ЛКМ: перемещать карту на ПК.\n\nТест: стрелки или WASD — ходить; Esc — в редактор.", 12, Color("#a3b9c8"))
+	var help := _label("Рука: перемещение одним или двумя пальцами, масштабирование двумя. Двойной тап по объекту — захват; тап по новой клетке — перенос; тап по исходной — отмена.\n\nКисть: пальцем/ЛКМ рисовать; ПКМ стирать.\n\nКолесо: масштаб. Средняя кнопка / Space+ЛКМ: перетаскивать карту на ПК.\n\nТест: стрелки/WASD — ходить; Esc — в редактор.", 12, Color("#a3b9c8"))
 	sidebar.add_child(help)
 
 	var footer := _panel(Color("#17232e"))
@@ -192,6 +190,27 @@ func _build_interface() -> void:
 	footer_row.add_child(_status_label)
 	_coords_label = _label("x: —   y: —", 12, Color("#e8c58a"))
 	footer_row.add_child(_coords_label)
+
+
+func _tool_grid() -> GridContainer:
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	return grid
+
+
+func _add_tool_button(grid: GridContainer, tool: Dictionary) -> void:
+	var key: String = str(tool["id"])
+	var button := Button.new()
+	button.icon = TOOL_ICONS.get(key)
+	button.expand_icon = true
+	button.custom_minimum_size = Vector2(66, 66)
+	button.tooltip_text = "%s\n%s" % [str(tool["label"]), str(tool["hint"])]
+	button.pressed.connect(_set_tool.bind(key))
+	grid.add_child(button)
+	_palette_buttons[key] = button
+	_register_editor_control(button)
 
 
 func _create_dialogs() -> void:
@@ -415,6 +434,17 @@ func _set_tool(kind: String) -> void:
 		if tool["id"] == kind:
 			display_name = str(tool["label"])
 	_selection_label.text = "Выбрано: " + display_name
+
+
+func _on_move_selection_changed(description: String) -> void:
+	if description.is_empty():
+		_set_status("Захват отменён.")
+	else:
+		_set_status("Захвачено: %s. Тапни по новой клетке или по исходной для отмены." % description)
+
+
+func _on_move_failed() -> void:
+	_set_status("Перенос невозможен: целевая клетка занята или не подходит.")
 
 
 func _toggle_grid(value: bool) -> void:
@@ -659,6 +689,9 @@ func _input(event: InputEvent) -> void:
 					_try_move_player(1, 0)
 					get_viewport().set_input_as_handled()
 		else:
-			if event.keycode == KEY_S and event.ctrl_pressed:
+			if event.keycode == KEY_ESCAPE and _canvas.has_move_selection():
+				_canvas.cancel_move_selection()
+				get_viewport().set_input_as_handled()
+			elif event.keycode == KEY_S and event.ctrl_pressed:
 				_save_internal()
 				get_viewport().set_input_as_handled()

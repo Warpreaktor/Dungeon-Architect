@@ -82,6 +82,36 @@ func place_entity(kind: String, x: int, y: int) -> bool:
 	return true
 
 
+## Атомарный перенос: проверяем цель до изменения исходной клетки.
+## kind == "wall" переносит стену; остальные kind — существующую сущность.
+func move_existing(kind: String, entity_id: String, source: Vector2i, target: Vector2i) -> bool:
+	if source == target or not contains(source.x, source.y) or not contains(target.x, target.y):
+		return false
+	if kind == "wall":
+		if get_terrain(source.x, source.y) != "wall" or get_terrain(target.x, target.y) != "floor":
+			return false
+		if not entities_at(target.x, target.y).is_empty():
+			return false
+		terrain[source.y][source.x] = "floor"
+		terrain[target.y][target.x] = "wall"
+		return true
+	if get_terrain(target.x, target.y) == "wall":
+		return false
+	var moving: Dictionary = {}
+	for entry in entities:
+		if str(entry["id"]) == entity_id and str(entry["type"]) == kind and int(entry["x"]) == source.x and int(entry["y"]) == source.y:
+			moving = entry
+			break
+	if moving.is_empty():
+		return false
+	for entry in entities_at(target.x, target.y):
+		if str(entry["type"]) == kind:
+			return false
+	moving["x"] = target.x
+	moving["y"] = target.y
+	return true
+
+
 func erase_at(x: int, y: int) -> bool:
 	if not contains(x, y):
 		return false

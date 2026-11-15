@@ -8,13 +8,25 @@ const START_HEALTH: int = 40
 const START_ATTACK: int = 1
 const START_DEFENSE: int = 0
 
+var definition: HeroDefinition
 var max_health: int = START_HEALTH
 var health: int = START_HEALTH
+var base_attack: int = START_ATTACK
+var base_defense: int = START_DEFENSE
 var attack: int = START_ATTACK
 var defense: int = START_DEFENSE
 var gold: int = 0
 var equipped_weapon_id: String = ""
 var equipped_shield_id: String = ""
+
+
+func _init(hero_definition: HeroDefinition = null) -> void:
+	definition = hero_definition if hero_definition != null else HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID)
+	max_health = definition.max_health
+	health = max_health
+	base_attack = definition.base_attack
+	base_defense = definition.base_defense
+	_recalculate_equipment_stats()
 
 
 ## Экипируем предмет в заданный ресурсом слот, не расходуя его из рюкзака.
@@ -52,8 +64,8 @@ func unequip_item(item_id: String) -> bool:
 
 ## Статистика вычисляется из базовых значений и бонусов реально надетых предметов.
 func _recalculate_equipment_stats() -> void:
-	attack = START_ATTACK
-	defense = START_DEFENSE
+	attack = base_attack
+	defense = base_defense
 	for item_id in [equipped_weapon_id, equipped_shield_id]:
 		var item: ItemDefinition = ItemCatalog.get_item(item_id)
 		if item != null:

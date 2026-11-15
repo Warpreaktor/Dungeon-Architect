@@ -1,0 +1,161 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/hero_selection.gd" id="1_script"]
+[ext_resource type="Theme" path="res://themes/hero_hud.tres" id="2_theme"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_idle"]
+bg_color = Color(0.14, 0.20, 0.28, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.35, 0.45, 0.55, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hover"]
+bg_color = Color(0.19, 0.27, 0.36, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.84, 0.66, 0.36, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pressed"]
+bg_color = Color(0.24, 0.31, 0.39, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.81, 0.45, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[node name="HeroSelection" type="VBoxContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+script = ExtResource("1_script")
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.78, 0.55, 1)
+theme_override_font_sizes/font_size = 21
+text = "Выбор героя"
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+custom_minimum_size = Vector2(0, 310)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Cards" type="HFlowContainer" parent="Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+theme_override_constants/h_separation = 18
+theme_override_constants/v_separation = 12
+
+[node name="VolchaButton" type="Button" parent="Scroll/Cards"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(202, 276)
+layout_mode = 2
+focus_mode = 2
+theme = ExtResource("2_theme")
+theme_override_styles/normal = SubResource("StyleBoxFlat_idle")
+theme_override_styles/hover = SubResource("StyleBoxFlat_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_pressed")
+
+[node name="CardContent" type="VBoxContainer" parent="Scroll/Cards/VolchaButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = -12.0
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 7
+
+[node name="Portrait" type="TextureRect" parent="Scroll/Cards/VolchaButton/CardContent"]
+custom_minimum_size = Vector2(112, 165)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 3
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Name" type="Label" parent="Scroll/Cards/VolchaButton/CardContent"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 22
+horizontal_alignment = 1
+
+[node name="Stats" type="Label" parent="Scroll/Cards/VolchaButton/CardContent"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+
+[node name="PetushanButton" type="Button" parent="Scroll/Cards"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(202, 276)
+layout_mode = 2
+focus_mode = 2
+theme = ExtResource("2_theme")
+theme_override_styles/normal = SubResource("StyleBoxFlat_idle")
+theme_override_styles/hover = SubResource("StyleBoxFlat_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_pressed")
+
+[node name="CardContent" type="VBoxContainer" parent="Scroll/Cards/PetushanButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = -12.0
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 7
+
+[node name="Portrait" type="TextureRect" parent="Scroll/Cards/PetushanButton/CardContent"]
+custom_minimum_size = Vector2(112, 165)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 3
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Name" type="Label" parent="Scroll/Cards/PetushanButton/CardContent"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 22
+horizontal_alignment = 1
+
+[node name="Stats" type="Label" parent="Scroll/Cards/PetushanButton/CardContent"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+
+[node name="BackButton" type="Button" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(140, 48)
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Назад"

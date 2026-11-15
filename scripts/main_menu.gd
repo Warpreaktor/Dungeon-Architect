@@ -4,7 +4,7 @@ extends Control
 ## Главный экран и выбор сохранённого подземелья для обычной игры.
 ## Сохранения прохождения здесь намеренно отсутствуют до отдельного этапа.
 signal editor_requested
-signal game_requested(data: DungeonMap)
+signal game_requested(data: DungeonMap, hero_id: String)
 
 const MAPS_DIRECTORY := "user://maps"
 
@@ -15,6 +15,8 @@ const MAPS_DIRECTORY := "user://maps"
 @onready var _no_maps: Label = %NoMaps
 @onready var _error_message: Label = %ErrorMessage
 @onready var _start_button: Button = %StartButton
+@onready var _hero_selection: HeroSelection = %HeroSelection
+var _selected_game_map: DungeonMap
 
 var _maps: Array[DungeonMap] = []
 var _thumbnails: Array[Texture2D] = []
@@ -27,6 +29,8 @@ func _ready() -> void:
 	_start_button.pressed.connect(_start_selected)
 	_map_list.item_selected.connect(_on_map_selected)
 	_map_list.item_activated.connect(_on_map_activated)
+	_hero_selection.character_chosen.connect(_launch_selected_character)
+	_hero_selection.back_requested.connect(_return_to_library)
 	get_viewport().size_changed.connect(_resize_layout)
 	_resize_layout()
 	%PlayButton.grab_focus()
@@ -42,6 +46,7 @@ func _resize_layout() -> void:
 func _open_library() -> void:
 	_home.visible = false
 	_library.visible = true
+	_hero_selection.visible = false
 	_error_message.visible = false
 	_load_saved_maps()
 	_resize_layout()
@@ -52,6 +57,8 @@ func _open_library() -> void:
 
 
 func _back_to_home() -> void:
+	_hero_selection.visible = false
+	_selected_game_map = null
 	_library.visible = false
 	_home.visible = true
 	%PlayButton.grab_focus()
@@ -104,4 +111,18 @@ func _start_selected() -> void:
 		_error_message.text = "На карте не задана точка старта героя"
 		_error_message.visible = true
 		return
-	game_requested.emit(chosen)
+	_selected_game_map = chosen
+	_library.visible = false
+	_hero_selection.visible = true
+	_hero_selection.focus_first()
+
+
+func _return_to_library() -> void:
+	_hero_selection.visible = false
+	_library.visible = true
+	_start_button.grab_focus()
+
+
+func _launch_selected_character(hero_id: String) -> void:
+	if _selected_game_map != null:
+		game_requested.emit(_selected_game_map, hero_id)

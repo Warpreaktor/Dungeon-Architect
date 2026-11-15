@@ -33,8 +33,8 @@ func _open_editor() -> void:
 	_show_screen(editor)
 
 
-func _open_game(data: DungeonMap) -> void:
+func _open_game(data: DungeonMap, hero_id: String) -> void:
 	var game := EDITOR_SCENE.instantiate() as Control
-	game.call("configure_for_game", data)
+	game.call("configure_for_game", data, hero_id)
 	game.connect("menu_requested", _open_menu)
 	_show_screen(game)

@@ -58,6 +58,7 @@ const TOOL_ICONS := {
 var map_data: DungeonMap
 var standalone_game: bool = false
 var _startup_game_map: DungeonMap
+var _startup_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
 var _editor_header: PanelContainer
 var _console_row: HBoxContainer
 var _game_command_bar: GameCommandBar
@@ -122,9 +123,10 @@ var _import_dialog: FileDialog
 
 
 ## Вызывается главным меню до добавления сцены в дерево.
-func configure_for_game(data: DungeonMap) -> void:
+func configure_for_game(data: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID) -> void:
 	standalone_game = true
 	_startup_game_map = data
+	_startup_hero_id = hero_id
 
 
 func _ready() -> void:
@@ -1155,7 +1157,7 @@ func _toggle_play_mode() -> void:
 
 
 func _start_play_mode() -> void:
-	var session := GameSession.start_for(map_data)
+	var session := GameSession.start_for(map_data, _startup_hero_id if standalone_game else HeroCatalog.DEFAULT_HERO_ID)
 	if session == null:
 		_set_status("Нельзя начать тест: поставь на карте точку старта героя.")
 		return

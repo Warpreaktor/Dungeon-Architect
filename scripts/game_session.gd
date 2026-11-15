@@ -26,7 +26,7 @@ var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
 
 
-static func start_for(map_ref: DungeonMap) -> GameSession:
+static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID) -> GameSession:
 	if map_ref == null:
 		return null
 	var spawn := map_ref.find_entity_position("player_spawn")
@@ -34,7 +34,7 @@ static func start_for(map_ref: DungeonMap) -> GameSession:
 		return null
 	var session := GameSession.new()
 	session.map_data = map_ref
-	session.hero = HeroState.new()
+	session.hero = HeroState.new(HeroCatalog.get_hero(hero_id))
 	session.player_pos = spawn
 	session._init_masks()
 	session._refresh_visibility()

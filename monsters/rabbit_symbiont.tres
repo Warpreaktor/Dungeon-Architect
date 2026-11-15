@@ -10,3 +10,4 @@ display_name = "Зайка-симбионт"
 icon = ExtResource("2_icon")
 max_health = 3
 attack_damage = 1
+defense = 0

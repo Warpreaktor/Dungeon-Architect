@@ -7,3 +7,4 @@ extends Resource
 @export var icon: Texture2D
 @export_range(1, 999, 1) var max_health: int = 1
 @export_range(0, 999, 1) var attack_damage: int = 1
+@export_range(0, 999, 1) var defense: int = 0

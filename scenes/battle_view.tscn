@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/battle_view.gd" id="1_battle_script"]
 [ext_resource type="Theme" path="res://themes/hero_hud.tres" id="2_theme"]
@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" path="res://scenes/health_meter.tscn" id="6_health_meter"]
 [ext_resource type="Texture2D" path="res://assets/hud/fist.png" id="7_fist"]
 [ext_resource type="Texture2D" path="res://assets/hud/shield.png" id="8_shield"]
+[ext_resource type="Texture2D" path="res://assets/hud/attack.png" id="9_attack"]
 
 [node name="BattleView" type="Control"]
 layout_mode = 1
@@ -186,6 +187,44 @@ horizontal_alignment = 1
 
 [node name="EnemyHealthMeter" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn" instance=ExtResource("6_health_meter")]
 layout_mode = 2
+
+[node name="EnemyStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn"]
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 9
+
+[node name="EnemyAttackIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyStats"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("9_attack")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="EnemyAttackValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyStats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 18
+text = "0"
+
+[node name="EnemyDefenseIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyStats"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("8_shield")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="EnemyDefenseValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyStats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 18
+text = "0"
 
 [node name="BottomPanel" type="PanelContainer" parent="OuterMargin/Main"]
 layout_mode = 2

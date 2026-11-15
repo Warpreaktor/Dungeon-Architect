@@ -13,6 +13,10 @@ signal battle_lost
 @onready var _hero_attack_value: Label = %HeroAttackValue
 @onready var _hero_defense_icon: TextureRect = %HeroDefenseIcon
 @onready var _hero_defense_value: Label = %HeroDefenseValue
+@onready var _hero_name: Label = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroName
+@onready var _enemy_attack_value: Label = %EnemyAttackValue
+@onready var _enemy_defense_value: Label = %EnemyDefenseValue
+@onready var _enemy_defense_icon: TextureRect = %EnemyDefenseIcon
 @onready var _enemy_name: Label = %EnemyName
 @onready var _enemy_portrait: TextureRect = %EnemyPortrait
 @onready var _punch_button: Button = %PunchButton
@@ -36,6 +40,9 @@ func _ready() -> void:
 
 func begin(combat: CombatSession, hero: HeroState) -> void:
 	_combat = combat
+	if hero.definition != null:
+		_hero_name.text = hero.definition.display_name
+		_hero_portrait.texture = hero.definition.portrait
 	_hero_attack_damage = hero.attack
 	_attack_name = "Удар мечом" if not hero.equipped_weapon_id.is_empty() else "Удар кулаком"
 	var weapon: ItemDefinition = ItemCatalog.get_item(hero.equipped_weapon_id)
@@ -48,6 +55,9 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_defense_idle_color = Color.WHITE if hero.defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
 	_hero_defense_icon.modulate = _defense_idle_color
 	_enemy_name.text = combat.enemy_definition.display_name
+	_enemy_attack_value.text = str(combat.enemy_damage)
+	_enemy_defense_value.text = str(combat.enemy_defense)
+	_enemy_defense_icon.modulate = Color.WHITE if combat.enemy_defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
 	_enemy_portrait.texture = combat.enemy_definition.icon
 	_enemy_portrait.modulate = Color.WHITE
 	_hero_health_meter.set_health(hero.health, hero.max_health)

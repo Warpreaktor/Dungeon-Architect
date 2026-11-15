@@ -10,3 +10,4 @@ display_name = "Лобарь"
 icon = ExtResource("2_icon")
 max_health = 12
 attack_damage = 3
+defense = 0

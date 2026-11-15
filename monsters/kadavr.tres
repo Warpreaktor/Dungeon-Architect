@@ -10,3 +10,4 @@ display_name = "Кадавр"
 icon = ExtResource("2_icon")
 max_health = 15
 attack_damage = 4
+defense = 0

@@ -10,6 +10,7 @@ var enemy_definition: MonsterDefinition
 var enemy_health: int = ENEMY_MAX_HEALTH
 var enemy_max_health: int = ENEMY_MAX_HEALTH
 var enemy_damage: int = 1
+var enemy_defense: int = 0
 var is_victory: bool = false
 var is_defeat: bool = false
 var last_counter_damage: int = 0 # Урон после блока щитом.
@@ -22,13 +23,14 @@ func _init(monster: MonsterDefinition = null, participant: HeroState = null) -> 
 	enemy_max_health = enemy_definition.max_health
 	enemy_health = enemy_max_health
 	enemy_damage = enemy_definition.attack_damage
+	enemy_defense = enemy_definition.defense
 	hero = participant
 
 
 func hero_attack(attack_damage: int) -> int:
 	if is_victory or is_defeat:
 		return 0
-	var damage: int = maxi(attack_damage, 0)
+	var damage: int = maxi(attack_damage - enemy_defense, 0)
 	enemy_health = maxi(enemy_health - damage, 0)
 	is_victory = enemy_health == 0
 	last_counter_damage = 0

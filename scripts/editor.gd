@@ -1,5 +1,7 @@
 extends Control
 
+signal menu_requested
+
 ## Главное окно самостоятельного приложения-редактора.
 ## Вся сцена собирается обычными Control-узлами, чтобы её можно было расширять.
 
@@ -52,6 +54,11 @@ const TOOL_ICONS := {
 }
 
 var map_data: DungeonMap
+var standalone_game: bool = false
+var _startup_game_map: DungeonMap
+var _editor_header: PanelContainer
+var _console_row: HBoxContainer
+var _game_menu_button: Button
 var game_session: GameSession
 var is_dirty: bool = false
 var selected_tool: String = "hand"
@@ -97,15 +104,6 @@ var _log_toggle: Button
 var _log_open: bool = false
 const PREVIEW_WIDTH := 176
 const PREVIEW_HEIGHT := 116
-const PREVIEW_FLOOR: Texture2D = preload("res://assets/stone_floor.png")
-const PREVIEW_WALL: Texture2D = preload("res://assets/stone_wall.png")
-const PREVIEW_COLORS := {
-    "door": Color("#c58a49"), "chest": Color("#edc06c"),
-    "monster": Color("#e65d73"), "key": Color("#ffe8a3"),
-    "potion": Color("#b89bff"), "gold": Color("#f4ce67"), "stairs_down": Color("#5bd2e7"),
-    "trigger": Color("#ce90e5"), "player_spawn": Color("#70f2aa"),
-    "message": Color("#ffdd93")
-}
 var _new_dialog: ConfirmationDialog
 var _size_preset: OptionButton
 var _width_input: SpinBox
@@ -120,12 +118,21 @@ var _export_dialog: FileDialog
 var _import_dialog: FileDialog
 
 
+## Вызывается главным меню до добавления сцены в дерево.
+func configure_for_game(data: DungeonMap) -> void:
+	standalone_game = true
+	_startup_game_map = data
+
+
 func _ready() -> void:
 	_build_interface()
 	_create_dialogs()
-	if not _restore_last_map():
+	if standalone_game:
+		_set_map(_startup_game_map)
+		_start_play_mode()
+	elif not _restore_last_map():
 		_set_map(DungeonMap.create_blank())
-		_set_status("Чистая карта готова. Выбери инструмент и рисуй лабиринт.")
+		_set_status("Создана новая карта.")
 
 
 func _build_interface() -> void:
@@ -135,6 +142,7 @@ func _build_interface() -> void:
 	add_child(root_column)
 
 	var header := _panel(Color("#1c2935"))
+	_editor_header = header
 	root_column.add_child(header)
 	# Команды переносятся на следующую строку на узких экранах.
 	var toolbar := HFlowContainer.new()
@@ -144,6 +152,8 @@ func _build_interface() -> void:
 	var title := _label("DUNGEON  /  ARCHITECT", 19, Color("#e8c58a"))
 	title.custom_minimum_size.x = 190
 	toolbar.add_child(title)
+	var menu_button := _button("Меню", "Вернуться к главному меню", _request_return_to_menu)
+	toolbar.add_child(menu_button)
 
 	var new_button := _button("Новая", "Создать пустую карту", _request_new)
 	_set_command_icon(new_button, "new")
@@ -220,6 +230,15 @@ func _build_interface() -> void:
 	_inventory_button.focus_mode = Control.FOCUS_NONE
 	_inventory_button.visible = false
 	canvas_host.add_child(_inventory_button)
+	_game_menu_button = _button("Меню", "Вернуться к выбору подземелья", _request_return_to_menu)
+	_game_menu_button.focus_mode = Control.FOCUS_NONE
+	_game_menu_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_game_menu_button.offset_left = -174.0
+	_game_menu_button.offset_top = 67.0
+	_game_menu_button.offset_right = -14.0
+	_game_menu_button.offset_bottom = 110.0
+	_game_menu_button.visible = false
+	canvas_host.add_child(_game_menu_button)
 	_inventory_view = INVENTORY_VIEW_SCENE.instantiate() as InventoryView
 	_inventory_view.closed.connect(_on_inventory_closed)
 	_inventory_view.item_use_requested.connect(_on_inventory_use_requested)
@@ -293,6 +312,7 @@ func _build_interface() -> void:
 
 	# Нижняя консоль полностью скрыта до раскрытия: только небольшая кнопка.
 	var console_row := HBoxContainer.new()
+	_console_row = console_row
 	root_column.add_child(console_row)
 	_log_toggle = _button("▴", "Развернуть консоль сообщений", _toggle_log_console)
 	_log_toggle.focus_mode = Control.FOCUS_NONE
@@ -916,42 +936,7 @@ func _refresh_library() -> void:
 
 
 func _make_preview(data: DungeonMap) -> ImageTexture:
-	# Миниатюра строится из сохранённой карты и не требует отдельного PNG.
-	var img := Image.create(PREVIEW_WIDTH, PREVIEW_HEIGHT, false, Image.FORMAT_RGBA8)
-	img.fill(Color("#101820"))
-	var cell_size := minf(float(PREVIEW_WIDTH - 12) / float(data.width), float(PREVIEW_HEIGHT - 12) / float(data.height))
-	var drawn_width := float(data.width) * cell_size
-	var drawn_height := float(data.height) * cell_size
-	var left := (float(PREVIEW_WIDTH) - drawn_width) * 0.5
-	var top := (float(PREVIEW_HEIGHT) - drawn_height) * 0.5
-	var floor_image := PREVIEW_FLOOR.get_image()
-	var wall_image := PREVIEW_WALL.get_image()
-	var x_start := maxi(0, floori(left))
-	var y_start := maxi(0, floori(top))
-	var x_end := mini(PREVIEW_WIDTH, ceili(left + drawn_width))
-	var y_end := mini(PREVIEW_HEIGHT, ceili(top + drawn_height))
-	for py in range(y_start, y_end):
-		for px in range(x_start, x_end):
-			var world_x := (float(px) - left) / cell_size
-			var world_y := (float(py) - top) / cell_size
-			var cx := floori(world_x)
-			var cy := floori(world_y)
-			if not data.contains(cx, cy):
-				continue
-			var source := wall_image if data.get_terrain(cx, cy) == "wall" else floor_image
-			var sx := clampi(floori(fposmod(world_x, 1.0) * float(source.get_width())), 0, source.get_width() - 1)
-			var sy := clampi(floori(fposmod(world_y, 1.0) * float(source.get_height())), 0, source.get_height() - 1)
-			img.set_pixel(px, py, source.get_pixel(sx, sy))
-	for entity in data.entities:
-		var kind := str(entity.get("type", ""))
-		if not PREVIEW_COLORS.has(kind):
-			continue
-		var center_x := roundi(left + (float(entity["x"]) + 0.5) * cell_size)
-		var center_y := roundi(top + (float(entity["y"]) + 0.5) * cell_size)
-		var dot_radius := clampi(roundi(cell_size * 0.23), 1, 4)
-		var dot := Rect2i(center_x - dot_radius, center_y - dot_radius, dot_radius * 2 + 1, dot_radius * 2 + 1)
-		img.fill_rect(dot.intersection(Rect2i(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT)), PREVIEW_COLORS[kind])
-	return ImageTexture.create_from_image(img)
+	return MapPreview.make_preview(data)
 
 
 func _read_map(path: String) -> DungeonMap:
@@ -1110,6 +1095,17 @@ func _show_import() -> void:
 	_import_dialog.popup_centered_ratio(0.8)
 
 
+func _request_return_to_menu() -> void:
+	if standalone_game:
+		_stop_play_mode()
+	else:
+		_confirm_if_dirty(_emit_menu_requested)
+
+
+func _emit_menu_requested() -> void:
+	menu_requested.emit()
+
+
 func _toggle_play_mode() -> void:
 	if is_play_mode:
 		_stop_play_mode()
@@ -1133,15 +1129,26 @@ func _start_play_mode() -> void:
 	_canvas.center_on_cell(session.player_pos)
 	_canvas.grab_focus()
 	_update_mode_ui()
+	# При входе из главного меню ожидаем фактический размер игрового поля.
+	if standalone_game:
+		call_deferred("_center_game_camera_after_layout")
 	_refresh_stats()
-	_set_status("Тест карты запущен. Прогресс временный.")
+	if not standalone_game:
+		_set_status("Тест карты запущен. Прогресс временный.")
 	if not session.last_event_message.is_empty():
 		_set_status(session.last_event_message)
 	_log_trigger_events()
 	_collect_game_messages()
 
 
-func _stop_play_mode() -> void:
+func _center_game_camera_after_layout() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if is_play_mode and game_session != null:
+		_canvas.center_on_cell(game_session.player_pos)
+
+
+func _stop_play_mode(return_to_menu: bool = true) -> void:
 	_remove_victory_view()
 	_abort_combat()
 	_game_notice.clear()
@@ -1156,11 +1163,18 @@ func _stop_play_mode() -> void:
 	_canvas.queue_redraw()
 	_update_mode_ui()
 	_refresh_stats()
-	_set_status("Возврат в редактор. Карта не изменена.")
+	if standalone_game and return_to_menu:
+		menu_requested.emit()
+	else:
+		_set_status("Возврат в редактор. Карта не изменена.")
 
 
 func _update_mode_ui() -> void:
-	_sidebar_panel.visible = not is_play_mode
+	_sidebar_panel.visible = not is_play_mode and not standalone_game
+	_editor_header.visible = not standalone_game
+	_console_row.visible = not standalone_game
+	_log_console.visible = _log_open and not standalone_game
+	_game_menu_button.visible = standalone_game and is_play_mode
 	_play_button.text = "Редактор" if is_play_mode else "Тест"
 	_set_command_icon(_play_button, "editor" if is_play_mode else "test")
 	_play_button.tooltip_text = "Выйти из теста и вернуться к редактированию" if is_play_mode else "Проверить текущую карту без сохранения игрового прогресса"
@@ -1379,6 +1393,8 @@ func _show_end_view(defeated: bool) -> void:
 	add_child(_victory_view)
 	_victory_view.retry_requested.connect(_restart_test_after_victory)
 	_victory_view.editor_requested.connect(_stop_play_mode)
+	if standalone_game:
+		_victory_view.set_exit_text("В меню")
 	if defeated:
 		_victory_view.show_defeat(game_session.steps, game_session.pending_monster_definition())
 		_set_status("Герой пал в сражении. Приключение не завершено.")
@@ -1388,7 +1404,7 @@ func _show_end_view(defeated: bool) -> void:
 
 
 func _restart_test_after_victory() -> void:
-	_stop_play_mode()
+	_stop_play_mode(false)
 	_start_play_mode()
 
 

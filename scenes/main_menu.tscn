@@ -1,0 +1,203 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_menu"]
+[ext_resource type="Texture2D" path="res://assets/stone_wall.png" id="2_stone"]
+[ext_resource type="Texture2D" path="res://assets/icons/commands/test.png" id="3_play"]
+[ext_resource type="Texture2D" path="res://assets/icons/commands/editor.png" id="4_editor"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+bg_color = Color(0.090, 0.132, 0.18, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.67, 0.51, 0.29, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+shadow_color = Color(0, 0, 0, 0.65)
+shadow_size = 16
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_primary"]
+bg_color = Color(0.64, 0.44, 0.21, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_primary_hover"]
+bg_color = Color(0.78, 0.57, 0.28, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_secondary"]
+bg_color = Color(0.18, 0.26, 0.34, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_menu")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+modulate = Color(0.35, 0.38, 0.42, 1)
+texture = ExtResource("2_stone")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Veil" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.024, 0.035, 0.055, 0.80)
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="Center" type="CenterContainer" parent="SafeArea"]
+layout_mode = 2
+
+[node name="Card" type="PanelContainer" parent="SafeArea/Center"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="Padding" type="MarginContainer" parent="SafeArea/Center/Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 22
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 22
+theme_override_constants/margin_bottom = 20
+
+[node name="Content" type="VBoxContainer" parent="SafeArea/Center/Card/Padding"]
+layout_mode = 2
+theme_override_constants/separation = 17
+
+[node name="Title" type="Label" parent="SafeArea/Center/Card/Padding/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.79, 0.54, 1)
+theme_override_font_sizes/font_size = 28
+text = "DUNGEON ARCHITECT"
+horizontal_alignment = 1
+
+[node name="Rule" type="ColorRect" parent="SafeArea/Center/Card/Padding/Content"]
+custom_minimum_size = Vector2(0, 2)
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.72, 0.53, 0.28, 1)
+
+[node name="HomeActions" type="VBoxContainer" parent="SafeArea/Center/Card/Padding/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PlayButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/HomeActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 64)
+layout_mode = 2
+focus_mode = 2
+theme_override_colors/font_color = Color(1, 0.94, 0.82, 1)
+theme_override_font_sizes/font_size = 22
+theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
+theme_override_styles/hover = SubResource("StyleBoxFlat_primary_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_primary_hover")
+text = "Играть"
+icon = ExtResource("3_play")
+
+[node name="EditorButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/HomeActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 64)
+layout_mode = 2
+focus_mode = 2
+theme_override_colors/font_color = Color(0.90, 0.94, 0.98, 1)
+theme_override_font_sizes/font_size = 22
+theme_override_styles/normal = SubResource("StyleBoxFlat_secondary")
+theme_override_styles/hover = SubResource("StyleBoxFlat_primary")
+text = "Редактор"
+icon = ExtResource("4_editor")
+
+[node name="Library" type="VBoxContainer" parent="SafeArea/Center/Card/Padding/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LibraryTitle" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.93, 0.78, 0.55, 1)
+theme_override_font_sizes/font_size = 18
+text = "Выбор подземелья"
+
+[node name="MapList" type="ItemList" parent="SafeArea/Center/Card/Padding/Content/Library"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 280)
+layout_mode = 2
+size_flags_horizontal = 3
+icon_mode = 1
+fixed_icon_size = Vector2i(176, 116)
+max_columns = 3
+same_column_width = true
+
+[node name="NoMaps" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.70, 0.77, 0.81, 1)
+text = "Сохранённых подземелий нет"
+horizontal_alignment = 1
+
+[node name="ErrorMessage" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.55, 0.52, 1)
+autowrap_mode = 3
+
+[node name="LibraryActions" type="HFlowContainer" parent="SafeArea/Center/Card/Padding/Content/Library"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 8
+
+[node name="BackButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(125, 48)
+layout_mode = 2
+focus_mode = 2
+theme_override_font_sizes/font_size = 17
+theme_override_styles/normal = SubResource("StyleBoxFlat_secondary")
+text = "Назад"
+
+[node name="StartButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(185, 48)
+layout_mode = 2
+focus_mode = 2
+theme_override_font_sizes/font_size = 17
+theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
+theme_override_styles/hover = SubResource("StyleBoxFlat_primary_hover")
+text = "Начать"

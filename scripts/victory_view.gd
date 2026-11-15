@@ -54,6 +54,10 @@ func _resize_card() -> void:
 	_card.custom_minimum_size.x = minf(510.0, maxf(260.0, get_viewport().get_visible_rect().size.x - 40.0))
 
 
+func set_exit_text(value: String) -> void:
+	_editor_button.text = value
+
+
 func _on_retry_pressed() -> void:
 	retry_requested.emit()
 

@@ -1,0 +1,259 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/inventory_view.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+bg_color = Color(0.082, 0.119, 0.167, 0.99)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.76, 0.58, 0.32, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+shadow_color = Color(0, 0, 0, 0.7)
+shadow_size = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_section"]
+bg_color = Color(0.12, 0.17, 0.22, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+content_margin_left = 11.0
+content_margin_top = 9.0
+content_margin_right = 11.0
+content_margin_bottom = 9.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_list"]
+bg_color = Color(0.07, 0.09, 0.12, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_selected"]
+bg_color = Color(0.29, 0.39, 0.45, 1)
+border_width_left = 2
+border_color = Color(0.86, 0.7, 0.4, 1)
+
+[node name="InventoryView" type="CanvasLayer"]
+layer = 19
+script = ExtResource("1_script")
+
+[node name="Veil" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+color = Color(0.015, 0.02, 0.035, 0.83)
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+
+[node name="Card" type="PanelContainer" parent="Center"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(720, 500)
+mouse_filter = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="Margins" type="MarginContainer" parent="Center/Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 19
+theme_override_constants/margin_right = 19
+theme_override_constants/margin_top = 15
+theme_override_constants/margin_bottom = 15
+
+[node name="Content" type="VBoxContainer" parent="Center/Card/Margins"]
+layout_mode = 2
+theme_override_constants/separation = 11
+
+[node name="Header" type="HBoxContainer" parent="Center/Card/Margins/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Center/Card/Margins/Content/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "РЮКЗАК ПУТЕШЕСТВЕННИКА"
+theme_override_font_sizes/font_size = 21
+theme_override_colors/font_color = Color(0.91, 0.74, 0.47, 1)
+
+[node name="CloseButton" type="Button" parent="Center/Card/Margins/Content/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(104, 38)
+layout_mode = 2
+focus_mode = 2
+text = "Закрыть"
+
+[node name="Stats" type="HBoxContainer" parent="Center/Card/Margins/Content"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="GoldLabel" type="Label" parent="Center/Card/Margins/Content/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Золото: 0"
+theme_override_colors/font_color = Color(0.97, 0.81, 0.44, 1)
+
+[node name="AttackLabel" type="Label" parent="Center/Card/Margins/Content/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Атака: 1"
+theme_override_colors/font_color = Color(0.83, 0.9, 0.95, 1)
+
+[node name="DefenseLabel" type="Label" parent="Center/Card/Margins/Content/Stats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Блок: 0"
+theme_override_colors/font_color = Color(0.83, 0.9, 0.95, 1)
+
+[node name="Separator" type="HSeparator" parent="Center/Card/Margins/Content"]
+layout_mode = 2
+
+[node name="BodyScroll" type="ScrollContainer" parent="Center/Card/Margins/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Columns" type="GridContainer" parent="Center/Card/Margins/Content/BodyScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+columns = 2
+theme_override_constants/h_separation = 14
+theme_override_constants/v_separation = 12
+
+[node name="Bag" type="VBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns"]
+custom_minimum_size = Vector2(265, 235)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 7
+
+[node name="BagTitle" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Bag"]
+layout_mode = 2
+text = "ПРЕДМЕТЫ"
+theme_override_colors/font_color = Color(0.82, 0.66, 0.41, 1)
+
+[node name="ItemList" type="ItemList" parent="Center/Card/Margins/Content/BodyScroll/Columns/Bag"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(265, 210)
+layout_mode = 2
+size_flags_vertical = 3
+icon_mode = 1
+fixed_icon_size = Vector2i(36, 36)
+max_columns = 1
+select_mode = 0
+theme_override_font_sizes/font_size = 16
+theme_override_styles/panel = SubResource("StyleBoxFlat_list")
+theme_override_styles/selected = SubResource("StyleBoxFlat_selected")
+
+[node name="EmptyLabel" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Bag"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Пока пусто"
+theme_override_colors/font_color = Color(0.68, 0.72, 0.76, 1)
+
+[node name="Details" type="VBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns"]
+custom_minimum_size = Vector2(290, 235)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="DetailsPanel" type="PanelContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_section")
+
+[node name="DetailsContent" type="VBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/DetailsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DetailsTitle" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/DetailsPanel/DetailsContent"]
+layout_mode = 2
+text = "О ПРЕДМЕТЕ"
+theme_override_colors/font_color = Color(0.82, 0.66, 0.41, 1)
+
+[node name="ItemHeading" type="HBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/DetailsPanel/DetailsContent"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ItemIcon" type="TextureRect" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/DetailsPanel/DetailsContent/ItemHeading"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(42, 42)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ItemName" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/DetailsPanel/DetailsContent/ItemHeading"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Нет предметов"
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.96, 0.9, 0.78, 1)
+autowrap_mode = 3
+
+[node name="ItemDescription" type="RichTextLabel" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/DetailsPanel/DetailsContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 65)
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = false
+scroll_active = true
+mouse_filter = 1
+text = "Открой сундук, чтобы найти первые вещи."
+
+[node name="ItemProperties" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/DetailsPanel/DetailsContent"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 3
+theme_override_colors/font_color = Color(0.75, 0.84, 0.89, 1)
+
+[node name="EquipmentTitle" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details"]
+layout_mode = 2
+text = "ЭКИПИРОВАНО"
+theme_override_colors/font_color = Color(0.82, 0.66, 0.41, 1)
+
+[node name="WeaponRow" type="HBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="WeaponIcon" type="TextureRect" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/WeaponRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="WeaponName" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/WeaponRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Оружие: не найдено"
+
+[node name="ShieldRow" type="HBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ShieldIcon" type="TextureRect" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/ShieldRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ShieldName" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/ShieldRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Щит: не найден"

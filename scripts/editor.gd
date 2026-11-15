@@ -12,6 +12,8 @@ const BATTLE_VIEW_SCENE: PackedScene = preload("res://scenes/battle_view.tscn")
 const VICTORY_VIEW_SCENE: PackedScene = preload("res://scenes/victory_view.tscn")
 const MESSAGE_EDITOR_SCENE: PackedScene = preload("res://scenes/message_editor_popup.tscn")
 const GAME_DIALOGUE_SCENE: PackedScene = preload("res://scenes/game_dialogue_view.tscn")
+const INVENTORY_VIEW_SCENE: PackedScene = preload("res://scenes/inventory_view.tscn")
+const EDITOR_SETTINGS_PATH := "user://editor_state.cfg"
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
 	"save": preload("res://assets/icons/commands/save.png"),
@@ -110,6 +112,8 @@ var _width_input: SpinBox
 var _height_input: SpinBox
 var _dpad: Control
 var _hero_hud: HeroHUD
+var _inventory_view: InventoryView
+var _inventory_button: Button
 var _game_notice: GameNotice
 var _load_dialog: ConfirmationDialog
 var _export_dialog: FileDialog
@@ -119,8 +123,9 @@ var _import_dialog: FileDialog
 func _ready() -> void:
 	_build_interface()
 	_create_dialogs()
-	_set_map(DungeonMap.create_blank())
-	_set_status("Чистая карта готова. Выбери инструмент и рисуй лабиринт.")
+	if not _restore_last_map():
+		_set_map(DungeonMap.create_blank())
+		_set_status("Чистая карта готова. Выбери инструмент и рисуй лабиринт.")
 
 
 func _build_interface() -> void:
@@ -205,6 +210,19 @@ func _build_interface() -> void:
 	_hero_hud = HERO_HUD_SCENE.instantiate() as HeroHUD
 	_hero_hud.visible = false
 	canvas_host.add_child(_hero_hud)
+	_inventory_button = _button("Инвентарь", "Просмотреть найденные предметы (I)", _toggle_inventory)
+	_inventory_button.icon = preload("res://assets/hud/bag.png")
+	_inventory_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_inventory_button.offset_left = -174.0
+	_inventory_button.offset_top = 14.0
+	_inventory_button.offset_right = -14.0
+	_inventory_button.offset_bottom = 60.0
+	_inventory_button.focus_mode = Control.FOCUS_NONE
+	_inventory_button.visible = false
+	canvas_host.add_child(_inventory_button)
+	_inventory_view = INVENTORY_VIEW_SCENE.instantiate() as InventoryView
+	_inventory_view.closed.connect(_on_inventory_closed)
+	add_child(_inventory_view)
 	_game_notice = GAME_NOTICE_SCENE.instantiate() as GameNotice
 	_game_notice.visible = false
 	canvas_host.add_child(_game_notice)
@@ -791,6 +809,43 @@ func _maps_dir() -> String:
 	return "user://maps"
 
 
+## На устройстве запоминаем только ID сохранённой карты, не игровые данные.
+func _remember_last_map(map_id: String) -> void:
+	var config := ConfigFile.new()
+	config.load(EDITOR_SETTINGS_PATH)
+	config.set_value("editor", "last_map_id", map_id)
+	if config.save(EDITOR_SETTINGS_PATH) != OK:
+		_set_status("Не удалось запомнить последнюю карту")
+
+
+func _restore_last_map() -> bool:
+	var config := ConfigFile.new()
+	if config.load(EDITOR_SETTINGS_PATH) != OK:
+		return false
+	var saved_id := str(config.get_value("editor", "last_map_id", ""))
+	if saved_id.is_empty() or not saved_id.is_valid_filename():
+		return false
+	var path := _maps_dir().path_join(saved_id + ".json")
+	if not FileAccess.file_exists(path):
+		return false
+	var saved_map := _read_map(path)
+	if saved_map == null or saved_map.map_id != saved_id:
+		return false
+	_set_map(saved_map)
+	_set_status("Открыта последняя карта: " + saved_map.display_name)
+	return true
+
+
+func _forget_last_map_if_deleted(path: String) -> void:
+	var config := ConfigFile.new()
+	if config.load(EDITOR_SETTINGS_PATH) != OK:
+		return
+	if str(config.get_value("editor", "last_map_id", "")) != path.get_file().get_basename():
+		return
+	config.set_value("editor", "last_map_id", null)
+	config.save(EDITOR_SETTINGS_PATH)
+
+
 func _ensure_maps_dir() -> bool:
 	return DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_maps_dir())) == OK
 
@@ -814,6 +869,7 @@ func _save_internal() -> void:
 	var path := _maps_dir().path_join(map_data.map_id + ".json")
 	if _write_map(path):
 		is_dirty = false
+		_remember_last_map(map_data.map_id)
 		_set_status("Сохранено: " + path)
 
 
@@ -951,6 +1007,8 @@ func _load_from_path_confirmed(path: String) -> void:
 		_set_status("Ошибка чтения карты: " + path)
 		return
 	_set_map(loaded_map)
+	if path == _maps_dir().path_join(loaded_map.map_id + ".json"):
+		_remember_last_map(loaded_map.map_id)
 	_set_status("Загружено: " + path)
 
 
@@ -1012,6 +1070,7 @@ func _delete_selected() -> void:
 		return
 	var err := DirAccess.remove_absolute(ProjectSettings.globalize_path(_delete_path))
 	if err == OK:
+		_forget_last_map_if_deleted(_delete_path)
 		_set_status("Карта удалена из библиотеки")
 		_refresh_library()
 		if _load_paths.is_empty():
@@ -1065,6 +1124,7 @@ func _start_play_mode() -> void:
 	_editor_camera_offset = _canvas.camera_offset
 	_editor_camera_zoom = _canvas.zoom
 	game_session = session
+	_inventory_view.dismiss()
 	_pending_game_messages.clear()
 	is_play_mode = true
 	_canvas.set_game_session(session)
@@ -1084,6 +1144,7 @@ func _stop_play_mode() -> void:
 	_abort_combat()
 	_game_notice.clear()
 	_game_dialogue.dismiss()
+	_inventory_view.dismiss()
 	_pending_game_messages.clear()
 	game_session = null
 	is_play_mode = false
@@ -1103,6 +1164,7 @@ func _update_mode_ui() -> void:
 	_play_button.tooltip_text = "Выйти из теста и вернуться к редактированию" if is_play_mode else "Проверить текущую карту без сохранения игрового прогресса"
 	_dpad.visible = is_play_mode
 	_hero_hud.visible = is_play_mode
+	_inventory_button.visible = is_play_mode
 	_game_notice.visible = is_play_mode
 	for control in _editor_controls:
 		if control is BaseButton:
@@ -1112,6 +1174,22 @@ func _update_mode_ui() -> void:
 		control.modulate = Color(1, 1, 1, 0.60) if is_play_mode else Color(1, 1, 1, 1)
 	_set_tool(selected_tool)
 	_update_history_buttons()
+
+
+func _toggle_inventory() -> void:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible:
+		return
+	if _inventory_view.visible:
+		_inventory_view.close_by_player()
+	else:
+		_inventory_view.open_for(game_session)
+		_dpad.visible = false
+
+
+func _on_inventory_closed() -> void:
+	if is_play_mode and not _combat_active and _victory_view == null:
+		_dpad.visible = true
+		_canvas.grab_focus()
 
 
 func _show_game_event(message: String) -> void:
@@ -1162,7 +1240,7 @@ func _log_trigger_events() -> void:
 
 
 func _try_move_player(dx: int, dy: int) -> void:
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible:
 		return
 	var moved := game_session.move_by(dx, dy)
 	if game_session.has_pending_encounter():
@@ -1312,6 +1390,17 @@ func _abort_combat() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if is_play_mode:
+			if _inventory_view.visible:
+				if event.keycode in [KEY_ESCAPE, KEY_I]:
+					_inventory_view.close_by_player()
+					get_viewport().set_input_as_handled()
+				elif event.keycode in [KEY_W, KEY_A, KEY_S, KEY_D]:
+					get_viewport().set_input_as_handled()
+				return
+			if event.keycode == KEY_I and not _combat_active and _victory_view == null and not _game_dialogue.visible:
+				_toggle_inventory()
+				get_viewport().set_input_as_handled()
+				return
 			if _game_dialogue.visible:
 				if event.keycode in [KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER]:
 					_game_dialogue.dismiss_by_player()

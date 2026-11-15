@@ -168,11 +168,11 @@ func _build_interface() -> void:
 	toolbar.add_child(_redo_button)
 
 	toolbar.add_child(_separator())
-	var export_button := _button("Экспорт JSON", "Записать карту в произвольный JSON-файл", _show_export)
+	var export_button := _button("Экспорт", "Сохранить карту в файл", _show_export)
 	_set_command_icon(export_button, "export")
 	toolbar.add_child(export_button)
 	_register_editor_control(export_button)
-	var import_button := _button("Импорт JSON", "Прочитать карту из JSON-файла", _show_import)
+	var import_button := _button("Импорт", "Загрузить карту из файла", _show_import)
 	_set_command_icon(import_button, "import")
 	toolbar.add_child(import_button)
 	_register_editor_control(import_button)

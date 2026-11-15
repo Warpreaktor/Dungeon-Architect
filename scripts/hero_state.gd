@@ -17,18 +17,59 @@ var equipped_weapon_id: String = ""
 var equipped_shield_id: String = ""
 
 
-func equip_weapon(item: ItemDefinition) -> void:
+## Экипируем предмет в заданный ресурсом слот, не расходуя его из рюкзака.
+## Если слот занят, прежний предмет остаётся в инвентаре.
+func equip_item(item: ItemDefinition) -> bool:
 	if item == null or item.category != ItemDefinition.Category.EQUIPMENT:
-		return
-	equipped_weapon_id = item.item_id
-	attack = START_ATTACK + item.attack_bonus
+		return false
+	match item.equipment_slot:
+		ItemDefinition.EquipmentSlot.WEAPON:
+			if equipped_weapon_id == item.item_id:
+				return false
+			equipped_weapon_id = item.item_id
+		ItemDefinition.EquipmentSlot.SHIELD:
+			if equipped_shield_id == item.item_id:
+				return false
+			equipped_shield_id = item.item_id
+		_:
+			return false
+	_recalculate_equipment_stats()
+	return true
+
+
+func unequip_item(item_id: String) -> bool:
+	if item_id.is_empty():
+		return false
+	if equipped_weapon_id == item_id:
+		equipped_weapon_id = ""
+	elif equipped_shield_id == item_id:
+		equipped_shield_id = ""
+	else:
+		return false
+	_recalculate_equipment_stats()
+	return true
+
+
+## Статистика вычисляется из базовых значений и бонусов реально надетых предметов.
+func _recalculate_equipment_stats() -> void:
+	attack = START_ATTACK
+	defense = START_DEFENSE
+	for item_id in [equipped_weapon_id, equipped_shield_id]:
+		var item: ItemDefinition = ItemCatalog.get_item(item_id)
+		if item != null:
+			attack += item.attack_bonus
+			defense += item.defense_bonus
+
+
+## Совместимые методы для уже существующей игровой логики.
+func equip_weapon(item: ItemDefinition) -> void:
+	if item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON:
+		equip_item(item)
 
 
 func equip_shield(item: ItemDefinition) -> void:
-	if item == null or item.category != ItemDefinition.Category.EQUIPMENT:
-		return
-	equipped_shield_id = item.item_id
-	defense = START_DEFENSE + item.defense_bonus
+	if item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
+		equip_item(item)
 
 
 ## Лечит не выше максимума, возвращает фактически восстановленное здоровье.

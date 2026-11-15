@@ -212,7 +212,7 @@ size_flags_vertical = 3
 bbcode_enabled = false
 scroll_active = true
 mouse_filter = 1
-text = "Открой сундук, чтобы найти первые вещи."
+text = ""
 
 [node name="ItemProperties" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Details/DetailsPanel/DetailsContent"]
 unique_name_in_owner = true

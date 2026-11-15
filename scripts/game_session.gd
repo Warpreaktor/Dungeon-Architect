@@ -237,15 +237,30 @@ func _receive_item(item_id: String, quantity: int) -> void:
 		hero.gold += quantity
 	else:
 		carried_items[item_id] = int(carried_items.get(item_id, 0)) + quantity
-		if item.item_id == "sword":
-			hero.equip_weapon(item)
-		elif item.item_id == "shield":
-			hero.equip_shield(item)
+		if item.category == ItemDefinition.Category.EQUIPMENT:
+			# Первая находка заполняет пустой слот; следующую можно надеть вручную.
+			if item.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON and hero.equipped_weapon_id.is_empty():
+				hero.equip_item(item)
+			elif item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD and hero.equipped_shield_id.is_empty():
+				hero.equip_item(item)
 		keys = int(carried_items.get("key", 0))
 		potions = int(carried_items.get("potion", 0))
 
 
 ## Инвентарь лишь запрашивает действие: предметы и здоровье изменяет игровая сессия.
+## Снаряжение остаётся в рюкзаке и не расходуется при надевании.
+func equip_item(item_id: String) -> bool:
+	if hero == null or int(carried_items.get(item_id, 0)) <= 0:
+		return false
+	return hero.equip_item(ItemCatalog.get_item(item_id))
+
+
+func unequip_item(item_id: String) -> bool:
+	if hero == null:
+		return false
+	return hero.unequip_item(item_id)
+
+
 ## Сообщение используется в самом окне инвентаря, не как всплывающий игровой диалог.
 func use_item(item_id: String) -> Dictionary:
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)

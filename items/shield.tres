@@ -11,4 +11,5 @@ description = "Простой щит. Уменьшает получаемый у
 icon = ExtResource("2_icon")
 category = 3
 stackable = false
+equipment_slot = 2
 defense_bonus = 1

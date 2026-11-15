@@ -86,6 +86,42 @@ func _initialize() -> void:
 	assert(monster_palette_map.place_entity("monster", 4, 2)) # Старые карты и вызовы без options.
 	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(4, 2)[0]).monster_id == MonsterCatalog.DEFAULT_MONSTER_ID)
 
+	# Ручное управление экипировкой через GameSession; бонусы берутся из .tres.
+	var equip_map := DungeonMap.create_blank(8, 8)
+	assert(equip_map.place_entity("player_spawn", 2, 2))
+	assert(equip_map.place_entity("chest", 3, 2))
+	var equipment_chest: Dictionary = equip_map.entities_at(3, 2)[0]
+	assert(equip_map.set_chest_contents(str(equipment_chest["id"]), ["sword", "shield"]))
+	var equipment_map_json: String = JSON.stringify(equip_map.to_dict())
+	var equipment_session := GameSession.start_for(equip_map)
+	assert(not equipment_session.move_by(1, 0))
+	assert(equipment_session.hero.equipped_weapon_id == "sword")
+	assert(equipment_session.hero.equipped_shield_id == "shield")
+	assert(equipment_session.carried_items["sword"] == 1)
+	assert(equipment_session.carried_items["shield"] == 1)
+	var sword_def: ItemDefinition = ItemCatalog.get_item("sword")
+	var shield_def: ItemDefinition = ItemCatalog.get_item("shield")
+	assert(equipment_session.hero.attack == HeroState.START_ATTACK + sword_def.attack_bonus + shield_def.attack_bonus)
+	assert(equipment_session.hero.defense == HeroState.START_DEFENSE + sword_def.defense_bonus + shield_def.defense_bonus)
+	assert(equipment_session.unequip_item("sword"))
+	assert(equipment_session.hero.equipped_weapon_id.is_empty())
+	assert(equipment_session.hero.attack == HeroState.START_ATTACK + shield_def.attack_bonus)
+	assert(equipment_session.carried_items["sword"] == 1) # Предмет не расходуется.
+	assert(not equipment_session.unequip_item("sword"))
+	assert(equipment_session.equip_item("sword"))
+	assert(not equipment_session.equip_item("sword"))
+	assert(not equipment_session.equip_item("potion"))
+	assert(not equipment_session.equip_item("gold"))
+	assert(not equipment_session.equip_item("unknown"))
+	assert(equipment_session.unequip_item("shield"))
+	assert(equipment_session.hero.defense == HeroState.START_DEFENSE + sword_def.defense_bonus)
+	assert(equipment_session.equip_item("shield"))
+	assert(equipment_session.hero.take_damage(2) == maxi(2 - equipment_session.hero.defense, 0))
+	assert(JSON.stringify(equip_map.to_dict()) == equipment_map_json)
+	var equipment_restart: GameSession = GameSession.start_for(equip_map)
+	assert(equipment_restart.hero.equipped_weapon_id.is_empty())
+	assert(equipment_restart.hero.equipped_shield_id.is_empty())
+
 	# Контакт с монстром создаёт встречу, но карта остаётся неизменной.
 	var encounter_map := DungeonMap.create_blank(8, 8)
 	assert(encounter_map.place_entity("player_spawn", 2, 2))

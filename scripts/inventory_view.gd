@@ -5,6 +5,7 @@ extends CanvasLayer
 ## Изменение состояния предметов выполняет игровой контроллер, а не UI.
 signal closed
 signal item_use_requested(item_id: String)
+signal equipment_requested(item_id: String, equip: bool)
 
 @onready var _card: PanelContainer = %Card
 @onready var _columns: GridContainer = %Columns
@@ -104,7 +105,7 @@ func _set_equipment(icon_node: TextureRect, name_node: Label, item_id: String, e
 func _clear_item_info() -> void:
 	_item_icon.texture = null
 	_item_name.text = "Нет предметов"
-	_item_description.text = "Открой сундук, чтобы найти первые вещи."
+	_item_description.text = ""
 	_item_properties.text = ""
 	_use_button.visible = false
 
@@ -119,8 +120,12 @@ func _show_item(index: int) -> void:
 	_item_icon.texture = item.icon
 	_item_name.text = item.display_name
 	_item_description.text = item.description
-	_use_button.visible = true
 	_use_feedback.text = ""
+	_use_button.visible = item.category == ItemDefinition.Category.CONSUMABLE or item.category == ItemDefinition.Category.EQUIPMENT
+	if item.category == ItemDefinition.Category.EQUIPMENT:
+		_use_button.text = "Снять" if _is_equipped(item_id) else "Надеть"
+	else:
+		_use_button.text = "Использовать"
 	var category := "Квестовый предмет"
 	match item.category:
 		ItemDefinition.Category.CONSUMABLE:
@@ -139,16 +144,30 @@ func _show_item(index: int) -> void:
 		details += "\nАтака: +%d" % item.attack_bonus
 	if item.defense_bonus > 0:
 		details += "\nБлок: +%d" % item.defense_bonus
-	if item_id in [_session.hero.equipped_weapon_id, _session.hero.equipped_shield_id]:
-		details += "\nЭкипировано автоматически"
+	if _is_equipped(item_id):
+		details += "\nНадето"
 	_item_properties.text = details
 
 
+func _is_equipped(item_id: String) -> bool:
+	if _session == null or _session.hero == null:
+		return false
+	return item_id == _session.hero.equipped_weapon_id or item_id == _session.hero.equipped_shield_id
+
+
 func _request_use_selected() -> void:
-	var index: int = _item_list.get_selected_items()[0] if not _item_list.get_selected_items().is_empty() else -1
+	var selected: PackedInt32Array = _item_list.get_selected_items()
+	var index: int = selected[0] if not selected.is_empty() else -1
 	if index < 0 or index >= _entries.size() or _session == null:
 		return
-	item_use_requested.emit(_entries[index])
+	var item_id: String = _entries[index]
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	if item == null:
+		return
+	if item.category == ItemDefinition.Category.EQUIPMENT:
+		equipment_requested.emit(item_id, not _is_equipped(item_id))
+	elif item.category == ItemDefinition.Category.CONSUMABLE:
+		item_use_requested.emit(item_id)
 
 
 ## Обновляем количество и характеристики, сохраняя выбранный предмет при возможности.
@@ -161,6 +180,17 @@ func show_use_result(item_id: String, message: String) -> void:
 		_item_list.select(index)
 		_show_item(index)
 	_use_feedback.text = message
+
+
+## Обновляем слоты, подписи и характеристики после смены экипировки.
+func show_equipment_result(item_id: String) -> void:
+	if _session == null:
+		return
+	_refresh_contents()
+	var index: int = _entries.find(item_id)
+	if index >= 0:
+		_item_list.select(index)
+		_show_item(index)
 
 
 func _resize_card() -> void:

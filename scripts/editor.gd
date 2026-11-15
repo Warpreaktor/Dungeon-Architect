@@ -223,6 +223,7 @@ func _build_interface() -> void:
 	_inventory_view = INVENTORY_VIEW_SCENE.instantiate() as InventoryView
 	_inventory_view.closed.connect(_on_inventory_closed)
 	_inventory_view.item_use_requested.connect(_on_inventory_use_requested)
+	_inventory_view.equipment_requested.connect(_on_inventory_equipment_requested)
 	add_child(_inventory_view)
 	_game_notice = GAME_NOTICE_SCENE.instantiate() as GameNotice
 	_game_notice.visible = false
@@ -1200,6 +1201,16 @@ func _on_inventory_use_requested(item_id: String) -> void:
 	_inventory_view.show_use_result(item_id, str(result.get("message", "")))
 	if bool(result.get("used", false)):
 		_refresh_stats()
+
+
+func _on_inventory_equipment_requested(item_id: String, equip: bool) -> void:
+	if not is_play_mode or game_session == null or not _inventory_view.visible:
+		return
+	var changed: bool = game_session.equip_item(item_id) if equip else game_session.unequip_item(item_id)
+	if not changed:
+		return
+	_inventory_view.show_equipment_result(item_id)
+	_refresh_stats()
 
 
 func _show_game_event(message: String) -> void:

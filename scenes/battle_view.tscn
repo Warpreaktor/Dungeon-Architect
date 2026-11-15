@@ -1,10 +1,13 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/battle_view.gd" id="1_battle_script"]
 [ext_resource type="Theme" path="res://themes/hero_hud.tres" id="2_theme"]
 [ext_resource type="Texture2D" path="res://assets/stone_wall.png" id="3_wall"]
 [ext_resource type="Texture2D" path="res://assets/icons/player_spawn.png" id="4_hero"]
 [ext_resource type="Texture2D" path="res://assets/icons/monster.png" id="5_enemy"]
+[ext_resource type="PackedScene" path="res://scenes/health_meter.tscn" id="6_health_meter"]
+[ext_resource type="Texture2D" path="res://assets/hud/fist.png" id="7_fist"]
+[ext_resource type="Texture2D" path="res://assets/hud/shield.png" id="8_shield"]
 
 [node name="BattleView" type="Control"]
 layout_mode = 1
@@ -99,12 +102,47 @@ theme_override_font_sizes/font_size = 20
 text = "Герой"
 horizontal_alignment = 1
 
-[node name="HeroHealth" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
+[node name="HeroHealthMeter" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn" instance=ExtResource("6_health_meter")]
+layout_mode = 2
+
+[node name="HeroStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 9
+
+[node name="HeroAttackIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("7_fist")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HeroAttackValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
-text = "20 / 20 HP"
-horizontal_alignment = 1
+theme_override_font_sizes/font_size = 18
+text = "1"
+
+[node name="HeroDefenseIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("8_shield")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HeroDefenseValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 18
+text = "0"
 
 [node name="EnemyCard" type="PanelContainer" parent="OuterMargin/Main/Battlefield"]
 layout_mode = 2
@@ -146,12 +184,8 @@ theme_override_font_sizes/font_size = 20
 text = "Монстр"
 horizontal_alignment = 1
 
-[node name="EnemyHealth" type="Label" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn"]
-unique_name_in_owner = true
+[node name="EnemyHealthMeter" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn" instance=ExtResource("6_health_meter")]
 layout_mode = 2
-mouse_filter = 2
-text = "1 / 1 HP"
-horizontal_alignment = 1
 
 [node name="BottomPanel" type="PanelContainer" parent="OuterMargin/Main"]
 layout_mode = 2

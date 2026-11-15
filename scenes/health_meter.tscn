@@ -1,0 +1,56 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/health_meter.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/hud/heart.png" id="2_heart"]
+[ext_resource type="Texture2D" path="res://assets/hud/health_background.png" id="3_background"]
+[ext_resource type="Texture2D" path="res://assets/hud/health_fill.png" id="4_fill"]
+
+[node name="HealthMeter" type="HBoxContainer"]
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 9
+script = ExtResource("1_script")
+
+[node name="HeartIcon" type="TextureRect" parent="."]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("2_heart")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HealthColumn" type="VBoxContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 3
+
+[node name="HealthCaption" type="HBoxContainer" parent="HealthColumn"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="HealthTitle" type="Label" parent="HealthColumn/HealthCaption"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_font_sizes/font_size = 12
+text = "ЗДОРОВЬЕ"
+
+[node name="HealthValue" type="Label" parent="HealthColumn/HealthCaption"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 13
+text = "20 / 20"
+
+[node name="HealthBar" type="TextureProgressBar" parent="HealthColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(250, 12)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+max_value = 20.0
+value = 20.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_background")
+texture_progress = ExtResource("4_fill")

@@ -101,11 +101,29 @@ func pending_monster_definition() -> MonsterDefinition:
 func win_pending_encounter() -> bool:
 	if not has_pending_encounter():
 		return false
-	var target := encounter_target
-	removed_entities[encounter_monster_id] = true
+	var target: Vector2i = encounter_target
+	var defeated_id: String = encounter_monster_id
+	var defeated: Dictionary = {}
+	for entity in map_data.entities:
+		if str(entity.get("id", "")) == defeated_id and str(entity.get("type", "")) == "monster":
+			defeated = entity
+			break
+	removed_entities[defeated_id] = true
 	encounter_monster_id = ""
 	encounter_target = Vector2i(-1, -1)
-	return move_by(target.x - player_pos.x, target.y - player_pos.y)
+	var moved: bool = move_by(target.x - player_pos.x, target.y - player_pos.y)
+	if not defeated.is_empty():
+		var rewards: Array[Dictionary] = []
+		for item_id in DungeonMap.monster_loot_contents(defeated):
+			var item: ItemDefinition = ItemCatalog.get_item(item_id)
+			if item == null:
+				continue
+			var quantity: int = DungeonMap.monster_gold_amount(defeated) if item_id == "gold" else item.default_quantity
+			_receive_item(item_id, quantity)
+			rewards.append({"item_id": item_id, "quantity": quantity})
+		if not rewards.is_empty():
+			_activate_message_at(target, "monster_defeated", defeated_id, rewards)
+	return moved
 
 
 ## Отдаём события ровно один раз; они не являются всплывающими игровыми сообщениями.

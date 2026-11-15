@@ -87,6 +87,7 @@ var _stats_label: Label
 var _sidebar_panel: PanelContainer
 var _palette_buttons: Dictionary = {}
 var _chest_popup: ChestContentsPopup
+var _monster_loot_popup: ChestContentsPopup
 var _trigger_popup: TriggerPropertiesPopup
 var _message_popup: MessageEditorPopup
 var _game_dialogue: GameDialogueView
@@ -344,6 +345,9 @@ func _create_dialogs() -> void:
 	_chest_popup = CHEST_CONTENTS_SCENE.instantiate() as ChestContentsPopup
 	_chest_popup.contents_changed.connect(_on_chest_contents_changed)
 	add_child(_chest_popup)
+	_monster_loot_popup = CHEST_CONTENTS_SCENE.instantiate() as ChestContentsPopup
+	_monster_loot_popup.contents_changed.connect(_on_monster_loot_changed)
+	add_child(_monster_loot_popup)
 	_trigger_popup = TRIGGER_PROPERTIES_SCENE.instantiate() as TriggerPropertiesPopup
 	_trigger_popup.event_id_changed.connect(_on_trigger_event_id_changed)
 	add_child(_trigger_popup)
@@ -597,6 +601,8 @@ func _on_configurable_entity_tapped(kind: String, entity_id: String) -> void:
 	match kind:
 		"chest":
 			_on_chest_tapped(entity_id)
+		"monster":
+			_on_monster_tapped(entity_id)
 		"trigger":
 			_on_trigger_tapped(entity_id)
 		"message":
@@ -676,6 +682,27 @@ func _on_chest_contents_changed(chest_id: String, contents: Array[String], gold_
 		return
 	var before := _canvas.capture_edit_state()
 	if map_data.set_chest_contents(chest_id, contents, gold_amount):
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
+		_on_canvas_edited()
+		_canvas.queue_redraw()
+
+
+func _on_monster_tapped(monster_entity_id: String) -> void:
+	if is_play_mode:
+		return
+	_canvas.finish_edit_stroke()
+	for entity in map_data.entities:
+		if str(entity.get("id", "")) == monster_entity_id and str(entity.get("type", "")) == "monster":
+			_monster_loot_popup.configure(monster_entity_id, DungeonMap.monster_loot_contents(entity), DungeonMap.monster_gold_amount(entity), true)
+			_monster_loot_popup.popup_centered_clamped(Vector2i(420, 490), 0.9)
+			return
+
+
+func _on_monster_loot_changed(monster_entity_id: String, contents: Array[String], gold_amount: int) -> void:
+	if is_play_mode:
+		return
+	var before := _canvas.capture_edit_state()
+	if map_data.set_monster_loot(monster_entity_id, contents, gold_amount):
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()

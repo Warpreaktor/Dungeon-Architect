@@ -74,15 +74,15 @@ func _initialize() -> void:
 
 	# Выбор вида монстра в палитре сразу задаёт свойства созданной сущности.
 	var monster_palette_map := DungeonMap.create_blank(8, 8)
-	assert(monster_palette_map.place_entity("monster", 2, 2, {"monster_id": "small_monster"}))
-	assert(monster_palette_map.place_entity("monster", 3, 2, {"monster_id": "skeleton_guard"}))
-	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(2, 2)[0]).max_health == 1)
-	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(3, 2)[0]).max_health == 3)
+	assert(monster_palette_map.place_entity("monster", 2, 2, {"monster_id": "rabbit_symbiont"}))
+	assert(monster_palette_map.place_entity("monster", 3, 2, {"monster_id": "hunter"}))
+	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(2, 2)[0]).max_health == 3)
+	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(3, 2)[0]).max_health == 5)
 	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(3, 2)[0]).attack_damage == 2)
-	assert(not monster_palette_map.place_entity("monster", 3, 2, {"monster_id": "small_monster"}))
+	assert(not monster_palette_map.place_entity("monster", 3, 2, {"monster_id": "rabbit_symbiont"}))
 	var monster_palette_restored := DungeonMap.from_dict(JSON.parse_string(JSON.stringify(monster_palette_map.to_dict())))
 	assert(monster_palette_restored != null)
-	assert(MonsterCatalog.from_entity(monster_palette_restored.entities_at(3, 2)[0]).monster_id == "skeleton_guard")
+	assert(MonsterCatalog.from_entity(monster_palette_restored.entities_at(3, 2)[0]).monster_id == "hunter")
 	assert(monster_palette_map.place_entity("monster", 4, 2)) # Старые карты и вызовы без options.
 	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(4, 2)[0]).monster_id == MonsterCatalog.DEFAULT_MONSTER_ID)
 
@@ -141,9 +141,11 @@ func _initialize() -> void:
 	assert(not encounter.move_by(0, 1)) # Во время боя нельзя ходить.
 
 	var combat := CombatSession.new()
-	assert(combat.enemy_health == 1)
+	assert(combat.enemy_health == 3)
 	assert(combat.hero_punch() == 1)
-	assert(combat.is_victory)
+	assert(not combat.is_victory)
+	assert(combat.hero_punch() == 1)
+	assert(combat.hero_punch() == 1 and combat.is_victory)
 	assert(combat.enemy_health == 0)
 	assert(combat.hero_punch() == 0) # Победа выдаётся только однажды.
 	assert(encounter.win_pending_encounter())
@@ -385,7 +387,8 @@ func _initialize() -> void:
 	assert(equip_session.has_pending_encounter())
 	var equip_combat := CombatSession.new()
 	assert(equip_combat.hero_attack(equip_session.hero.attack) == 2)
-	assert(equip_combat.is_victory)
+	assert(not equip_combat.is_victory)
+	assert(equip_combat.hero_attack(equip_session.hero.attack) == 2 and equip_combat.is_victory)
 	assert(equip_session.win_pending_encounter())
 	assert(JSON.stringify(equip_loaded.to_dict()) == equip_json)
 	var equip_again := GameSession.start_for(equip_loaded)
@@ -445,7 +448,7 @@ func _initialize() -> void:
 	assert(decorated_session.hero.defense == 1)
 	assert(decorated_session.hero.equipped_shield_id == "shield")
 	assert(decorated_session.hero.take_damage(2) == 1)
-	assert(decorated_session.hero.health == 19)
+	assert(decorated_session.hero.health == 39)
 	assert(decorated_session.move_by(1, 0))
 	assert(decorated_session.take_message_events().is_empty())
 	assert(JSON.stringify(decorated_chest_map.to_dict()) == decorated_json)
@@ -464,59 +467,86 @@ func _initialize() -> void:
 	assert(decorated_chest_map.message_at(3, 2).is_empty())
 	assert(decorated_chest_map.message_at(4, 2)["properties"]["target_entity_id"] == decorated_chest_id)
 
-	# DA-2.03.4: параметры монстров в Resource; старый JSON без типа — слабый монстр.
-	var small := MonsterCatalog.get_monster("small_monster")
-	var guard := MonsterCatalog.get_monster("skeleton_guard")
-	assert(small.max_health == 1 and small.attack_damage == 1)
-	assert(guard.max_health == 3 and guard.attack_damage == 2)
-	assert(MonsterCatalog.get_monster("unknown").monster_id == "small_monster")
+	# Пять видов врагов с собственными Resource, старые идентификаторы перенаправляются.
+	assert(HeroState.START_HEALTH == 40)
+	var expected_stats := {
+		"rabbit_symbiont": [3, 1], "hunter": [5, 2], "giant_crab": [8, 2],
+		"lobar": [12, 3], "kadavr": [15, 4]
+	}
+	assert(MonsterCatalog.DEFINITIONS.size() == expected_stats.size())
+	for monster_kind in expected_stats:
+		var definition: MonsterDefinition = MonsterCatalog.get_monster(monster_kind)
+		assert(definition.monster_id == monster_kind)
+		assert(definition.max_health == int(expected_stats[monster_kind][0]))
+		assert(definition.attack_damage == int(expected_stats[monster_kind][1]))
+		assert(definition.icon != null)
+	assert(MonsterCatalog.get_monster("small_monster").monster_id == "rabbit_symbiont")
+	assert(MonsterCatalog.get_monster("skeleton_guard").monster_id == "hunter")
+	assert(MonsterCatalog.get_monster("unknown").monster_id == "rabbit_symbiont")
 	var monster_map := DungeonMap.create_blank(8, 8)
 	assert(monster_map.place_entity("player_spawn", 2, 2))
 	assert(monster_map.place_entity("monster", 3, 2))
 	var monster_entity: Dictionary = monster_map.entities_at(3, 2)[0]
 	var monster_entity_id: String = str(monster_entity["id"])
-	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "small_monster")
+	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "rabbit_symbiont")
 	assert(not monster_map.set_monster_type(monster_entity_id, "unknown"))
-	assert(monster_map.set_monster_type(monster_entity_id, "skeleton_guard"))
-	assert(not monster_map.set_monster_type(monster_entity_id, "skeleton_guard"))
-	var guard_json := JSON.stringify(monster_map.to_dict())
-	var guard_loaded := DungeonMap.from_dict(JSON.parse_string(guard_json))
-	assert(guard_loaded != null)
-	var guard_game := GameSession.start_for(guard_loaded)
-	assert(not guard_game.move_by(1, 0))
-	assert(guard_game.pending_monster_definition().monster_id == "skeleton_guard")
-	var guard_fight := CombatSession.new(guard_game.pending_monster_definition(), guard_game.hero)
-	assert(guard_fight.enemy_health == 3)
-	assert(guard_fight.hero_attack(1) == 1)
-	assert(guard_fight.enemy_health == 2 and not guard_fight.is_victory)
-	assert(guard_fight.last_counter_damage == 2 and guard_game.hero.health == 18)
-	assert(guard_fight.hero_attack(1) == 1)
-	assert(guard_game.hero.health == 16)
-	assert(guard_fight.hero_attack(1) == 1 and guard_fight.is_victory)
-	assert(guard_game.hero.health == 16) # Погибший противник не отвечает.
-	assert(guard_game.win_pending_encounter())
-	assert(JSON.stringify(guard_loaded.to_dict()) == guard_json)
-	# Меч экономит один ответный удар, щит уменьшает ответ с 2 до 1.
+	assert(monster_map.set_monster_type(monster_entity_id, "hunter"))
+	assert(not monster_map.set_monster_type(monster_entity_id, "hunter"))
+	var hunter_json := JSON.stringify(monster_map.to_dict())
+	var hunter_loaded := DungeonMap.from_dict(JSON.parse_string(hunter_json))
+	assert(hunter_loaded != null)
+	var hunter_game := GameSession.start_for(hunter_loaded)
+	assert(not hunter_game.move_by(1, 0))
+	assert(hunter_game.pending_monster_definition().monster_id == "hunter")
+	var hunter_fight := CombatSession.new(hunter_game.pending_monster_definition(), hunter_game.hero)
+	for hit_index in range(5):
+		assert(hunter_fight.hero_attack(1) == 1)
+	assert(hunter_fight.is_victory)
+	assert(hunter_game.hero.health == 40 - 4 * 2)
+	assert(hunter_game.win_pending_encounter())
+	assert(JSON.stringify(hunter_loaded.to_dict()) == hunter_json)
+	# Меч сокращает поединок, щит поглощает единицу урона за ответный удар.
 	var guarded_hero := HeroState.new()
 	guarded_hero.equip_weapon(ItemCatalog.get_item("sword"))
 	guarded_hero.equip_shield(ItemCatalog.get_item("shield"))
-	var guarded_fight := CombatSession.new(guard, guarded_hero)
+	var guarded_fight := CombatSession.new(MonsterCatalog.get_monster("hunter"), guarded_hero)
 	assert(guarded_fight.hero_attack(guarded_hero.attack) == 2)
-	assert(guarded_fight.enemy_health == 1)
+	assert(guarded_fight.enemy_health == 3)
 	assert(guarded_fight.last_counter_damage == 1 and guarded_fight.last_blocked_damage == 1)
-	assert(guarded_hero.health == 19)
+	assert(guarded_hero.health == 39)
+	assert(guarded_fight.hero_attack(guarded_hero.attack) == 2)
 	assert(guarded_fight.hero_attack(guarded_hero.attack) == 2 and guarded_fight.is_victory)
-	assert(guarded_hero.health == 19)
-	# Поражение не выдаёт победу и не удаляет монстра.
+	assert(guarded_hero.health == 38)
+	# Поражение не удаляет монстра из игрового мира.
 	var fragile := HeroState.new()
 	fragile.health = 1
-	var losing_fight := CombatSession.new(guard, fragile)
+	var losing_fight := CombatSession.new(MonsterCatalog.get_monster("hunter"), fragile)
 	assert(losing_fight.hero_attack(1) == 1)
 	assert(losing_fight.is_defeat and not losing_fight.is_victory)
 	assert(fragile.health == 0 and losing_fight.hero_attack(1) == 0)
-	# Прежние карты без monster_id продолжают встречать обычного монстра.
+	# Совместимость JSON, в котором стояли прежние монстры.
+	monster_entity["properties"] = {"monster_id": "skeleton_guard"}
+	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "hunter")
 	monster_entity["properties"] = {}
-	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "small_monster")
+	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "rabbit_symbiont")
+	# Награда за победу настраивается у конкретного монстра, исходный JSON неизменен.
+	assert(monster_map.set_monster_loot(monster_entity_id, ["gold", "potion", "sword"], 27))
+	assert(not monster_map.set_monster_loot(monster_entity_id, ["gold", "potion", "sword"], 27))
+	assert(DungeonMap.monster_gold_amount(monster_entity) == 27)
+	assert(DungeonMap.monster_loot_contents(monster_entity) == ["gold", "potion", "sword"])
+	var reward_json := JSON.stringify(monster_map.to_dict())
+	var reward_game := GameSession.start_for(monster_map)
+	assert(not reward_game.move_by(1, 0))
+	assert(reward_game.win_pending_encounter())
+	assert(reward_game.hero.gold == 27)
+	assert(reward_game.potions == 1)
+	assert(reward_game.hero.equipped_weapon_id == "sword")
+	var victory_events := reward_game.take_message_events()
+	assert(victory_events.size() == 1 and victory_events[0]["loot"].size() == 3)
+	assert(not reward_game.win_pending_encounter())
+	assert(JSON.stringify(monster_map.to_dict()) == reward_json)
+	var reward_again := GameSession.start_for(monster_map)
+	assert(reward_again.hero.gold == 0 and reward_again.potions == 0)
 	# Совместимость: старые карты с находками непосредственно на полу продолжают работать.
 	assert(gold_map_loaded.entities_at(3, 2).size() == 1)
 	# Использование расходников: лечение по свойствам Resource, без перерасхода.

@@ -4,7 +4,7 @@ extends RefCounted
 ## Характеристики одного героя в рамках игрового прохождения.
 ## Не относятся к исходной карте и пока не сохраняются на диск.
 
-const START_HEALTH: int = 20
+const START_HEALTH: int = 40
 const START_ATTACK: int = 1
 const START_DEFENSE: int = 0
 

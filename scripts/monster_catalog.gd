@@ -1,16 +1,30 @@
 class_name MonsterCatalog
 extends RefCounted
 
-## Тип монстра хранится в properties объекта карты, сами параметры — в Resource.
-const DEFAULT_MONSTER_ID := "small_monster"
+## Ресурсы монстров определяют характеристики и иконки, сущности карты хранят ID.
+const DEFAULT_MONSTER_ID := "rabbit_symbiont"
 const DEFINITIONS := {
-	"small_monster": preload("res://monsters/small_monster.tres"),
-	"skeleton_guard": preload("res://monsters/skeleton_guard.tres")
+	"rabbit_symbiont": preload("res://monsters/rabbit_symbiont.tres"),
+	"hunter": preload("res://monsters/hunter.tres"),
+	"giant_crab": preload("res://monsters/giant_crab.tres"),
+	"lobar": preload("res://monsters/lobar.tres"),
+	"kadavr": preload("res://monsters/kadavr.tres")
+}
+
+## Старые карты с прежними видами монстров продолжают загружаться.
+const LEGACY_IDS := {
+	"small_monster": "rabbit_symbiont",
+	"skeleton_guard": "hunter"
 }
 
 
+static func resolve_id(monster_id: String) -> String:
+	var resolved: String = str(LEGACY_IDS.get(monster_id, monster_id))
+	return resolved if DEFINITIONS.has(resolved) else DEFAULT_MONSTER_ID
+
+
 static func get_monster(monster_id: String) -> MonsterDefinition:
-	return DEFINITIONS.get(monster_id, DEFINITIONS[DEFAULT_MONSTER_ID]) as MonsterDefinition
+	return DEFINITIONS[resolve_id(monster_id)] as MonsterDefinition
 
 
 static func from_entity(entity: Dictionary) -> MonsterDefinition:

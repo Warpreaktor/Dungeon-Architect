@@ -12,6 +12,8 @@ var _chest_id: String = ""
 @onready var _gold_amount: SpinBox = %GoldAmount
 @onready var _sword_check: CheckBox = %SwordCheck
 @onready var _shield_check: CheckBox = %ShieldCheck
+@onready var _title: Label = $ContentMargin/Content/Title
+@onready var _description: Label = $ContentMargin/Content/Description
 
 
 func _ready() -> void:
@@ -20,8 +22,10 @@ func _ready() -> void:
 	_gold_check.toggled.connect(_on_gold_toggled)
 
 
-func configure(chest_id: String, contents: Array[String], gold_amount: int = 5) -> void:
+func configure(chest_id: String, contents: Array[String], gold_amount: int = 5, is_monster: bool = false) -> void:
 	_chest_id = chest_id
+	_title.text = "Награда за победу" if is_monster else "Содержимое сундука"
+	_description.visible = not is_monster
 	_key_check.set_pressed_no_signal("key" in contents)
 	_potion_check.set_pressed_no_signal("potion" in contents)
 	_gold_check.set_pressed_no_signal("gold" in contents)

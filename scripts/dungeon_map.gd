@@ -78,7 +78,7 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		var monster_id: String = str(options.get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
 		if not MonsterCatalog.DEFINITIONS.has(monster_id):
 			monster_id = MonsterCatalog.DEFAULT_MONSTER_ID
-		properties = {"monster_id": monster_id}
+		properties = {"monster_id": monster_id, "loot_contents": []}
 	elif kind == "trigger":
 		properties = {"event_id": ""}
 	elif kind == "message":
@@ -132,6 +132,46 @@ func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amou
 				properties["gold_amount"] = amount
 			entity["properties"] = properties
 			return true
+	return false
+
+
+## Настраиваемая награда монстра — отдельные свойства его сущности в JSON.
+## Для совместимости старых карт отсутствие loot_contents означает отсутствие награды.
+static func monster_loot_contents(monster: Dictionary) -> Array[String]:
+	var properties: Dictionary = monster.get("properties", {})
+	var items: Array[String] = []
+	var raw: Variant = properties.get("loot_contents", [])
+	if raw is Array:
+		for entry in raw:
+			var item_id: String = str(entry)
+			if item_id in CHEST_REWARDS and item_id not in items:
+				items.append(item_id)
+	return items
+
+
+static func monster_gold_amount(monster: Dictionary) -> int:
+	var properties: Dictionary = monster.get("properties", {})
+	return clampi(int(properties.get("loot_gold_amount", 5)), 1, 999999)
+
+
+func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: int = 5) -> bool:
+	var normalized: Array[String] = []
+	for item_id in contents:
+		if item_id in CHEST_REWARDS and item_id not in normalized:
+			normalized.append(item_id)
+	var amount: int = clampi(gold_amount, 1, 999999)
+	for entity in entities:
+		if str(entity.get("id", "")) != monster_id or str(entity.get("type", "")) != "monster":
+			continue
+		if monster_loot_contents(entity) == normalized and ("gold" not in normalized or monster_gold_amount(entity) == amount):
+			return false
+		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		properties["loot_contents"] = normalized.duplicate()
+		properties.erase("loot_gold_amount")
+		if "gold" in normalized:
+			properties["loot_gold_amount"] = amount
+		entity["properties"] = properties
+		return true
 	return false
 
 

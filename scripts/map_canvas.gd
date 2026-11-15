@@ -212,8 +212,9 @@ func _draw_cell(x: int, y: int) -> void:
 		var origin := Vector2(x, y) * TILE_SIZE
 		if kind == "chest" and (DungeonMap.chest_contents(entity).is_empty() or (mode == "play" and game_session != null and game_session.is_chest_open(entity))):
 			_draw_open_chest(origin)
-		elif kind == "monster" and MonsterCatalog.from_entity(entity).monster_id == "skeleton_guard":
-			draw_texture_rect(MonsterCatalog.from_entity(entity).icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
+		elif kind == "monster":
+			var icon: Texture2D = MonsterCatalog.from_entity(entity).icon
+			draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		else:
 			_draw_entity(kind, origin)
 	if mode == "play" and not can_see:
@@ -252,13 +253,6 @@ func _draw_entity(kind: String, origin: Vector2) -> void:
 			draw_rect(Rect2(origin + Vector2(10, 19), Vector2(28, 19)), Color("#a76a2d"))
 			draw_rect(Rect2(origin + Vector2(10, 14), Vector2(28, 9)), Color("#d8a45b"))
 			draw_rect(Rect2(origin + Vector2(21, 16), Vector2(6, 16)), Color("#ffe2a0"))
-		"monster":
-			draw_circle(center + Vector2(0, 3), 16.0, Color("#4a1727"))
-			draw_circle(center, 13.0, Color("#d95665"))
-			draw_colored_polygon(PackedVector2Array([origin + Vector2(11, 16), origin + Vector2(13, 4), origin + Vector2(23, 13)]), Color("#e88079"))
-			draw_colored_polygon(PackedVector2Array([origin + Vector2(27, 13), origin + Vector2(36, 4), origin + Vector2(37, 17)]), Color("#e88079"))
-			draw_circle(origin + Vector2(19, 24), 3.0, Color("#fff0d3"))
-			draw_circle(origin + Vector2(29, 24), 3.0, Color("#fff0d3"))
 		"stairs_down":
 			draw_rect(Rect2(origin + Vector2(7, 9), Vector2(34, 31)), Color("#172d37"))
 			for i in range(4):
@@ -406,7 +400,7 @@ func _hand_tap(point: Vector2, is_double: bool) -> void:
 		_select_at(cell)
 
 
-## Контекстные свойства для сундуков, триггеров и авторских сообщений.
+## Контекстные свойства для сундуков, монстров, триггеров и посланий.
 ## В режиме «Рука» выбираем верхний на клетке редактируемый объект.
 func _configurable_at(cell: Vector2i) -> Dictionary:
 	if map_data == null or not map_data.contains(cell.x, cell.y):
@@ -415,9 +409,13 @@ func _configurable_at(cell: Vector2i) -> Dictionary:
 	for i in range(entities.size() - 1, -1, -1):
 		var entity: Dictionary = entities[i]
 		var kind := str(entity.get("type", ""))
-		if kind in ["chest", "trigger", "message"] and (selected_tool == "hand" or kind == selected_tool):
+		if kind in ["chest", "trigger", "message", "monster"] and (selected_tool == "hand" or kind == selected_tool or (kind == "monster" and selected_tool.begins_with("monster:"))):
 			return entity
 	return {}
+
+
+func _selected_tool_has_properties() -> bool:
+	return selected_tool in ["chest", "trigger"] or selected_tool.begins_with("monster:")
 
 
 func _cancel_pending_settings_tap() -> void:
@@ -526,13 +524,13 @@ func _gui_input(event: InputEvent) -> void:
 				_painting = event.pressed
 				if event.pressed:
 					_mouse_down = event.position
-					_settings_tool_pressed_id = str(_configurable_at(_screen_to_cell(event.position)).get("id", "")) if selected_tool in ["chest", "trigger"] else ""
+					_settings_tool_pressed_id = str(_configurable_at(_screen_to_cell(event.position)).get("id", "")) if _selected_tool_has_properties() else ""
 					_begin_edit_stroke()
 					_edit_at(event.position, false)
 				else:
 					finish_edit_stroke()
-					if selected_tool in ["chest", "trigger"] and not _settings_tool_pressed_id.is_empty() and event.position.distance_to(_mouse_down) < TAP_MOVE_LIMIT:
-						configurable_entity_tapped.emit(selected_tool, _settings_tool_pressed_id)
+					if _selected_tool_has_properties() and not _settings_tool_pressed_id.is_empty() and event.position.distance_to(_mouse_down) < TAP_MOVE_LIMIT:
+						configurable_entity_tapped.emit("monster" if selected_tool.begins_with("monster:") else selected_tool, _settings_tool_pressed_id)
 					_settings_tool_pressed_id = ""
 				accept_event()
 			elif mode == "play" and event.pressed:
@@ -566,7 +564,7 @@ func _gui_input(event: InputEvent) -> void:
 		if event.pressed:
 			_touch_positions[event.index] = event.position
 			_touch_starts[event.index] = event.position
-			if mode == "edit" and selected_tool in ["chest", "trigger"] and _touch_positions.size() == 1:
+			if mode == "edit" and _selected_tool_has_properties() and _touch_positions.size() == 1:
 				_settings_tool_pressed_id = str(_configurable_at(_screen_to_cell(event.position)).get("id", ""))
 			if _touch_positions.size() >= 2:
 				_touch_invalid_tap = true
@@ -587,8 +585,8 @@ func _gui_input(event: InputEvent) -> void:
 				_remember_touch_tap(event.position)
 			if mode == "edit" and selected_tool == "message" and tap_valid and _touch_positions.is_empty():
 				_request_message_at(event.position)
-			if mode == "edit" and selected_tool in ["chest", "trigger"] and tap_valid and not _settings_tool_pressed_id.is_empty() and _touch_positions.is_empty():
-				configurable_entity_tapped.emit(selected_tool, _settings_tool_pressed_id)
+			if mode == "edit" and _selected_tool_has_properties() and tap_valid and not _settings_tool_pressed_id.is_empty() and _touch_positions.is_empty():
+				configurable_entity_tapped.emit("monster" if selected_tool.begins_with("monster:") else selected_tool, _settings_tool_pressed_id)
 			if _touch_positions.is_empty():
 				_settings_tool_pressed_id = ""
 				finish_edit_stroke()

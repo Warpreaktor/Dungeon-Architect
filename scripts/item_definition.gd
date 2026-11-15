@@ -14,3 +14,4 @@ enum Category { QUEST, CONSUMABLE, CURRENCY, EQUIPMENT }
 @export var stackable: bool = true
 @export var attack_bonus: int = 0
 @export var defense_bonus: int = 0
+@export_range(0, 9999, 1) var healing_amount: int = 0

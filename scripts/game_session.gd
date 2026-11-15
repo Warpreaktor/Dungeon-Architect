@@ -245,6 +245,23 @@ func _receive_item(item_id: String, quantity: int) -> void:
 		potions = int(carried_items.get("potion", 0))
 
 
+## Инвентарь лишь запрашивает действие: предметы и здоровье изменяет игровая сессия.
+## Сообщение используется в самом окне инвентаря, не как всплывающий игровой диалог.
+func use_item(item_id: String) -> Dictionary:
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	if item == null or int(carried_items.get(item_id, 0)) <= 0:
+		return {"used": false, "message": "Этого предмета нет в рюкзаке."}
+	if item.category != ItemDefinition.Category.CONSUMABLE or item.healing_amount <= 0:
+		return {"used": false, "message": "Этот предмет пока нельзя использовать из рюкзака."}
+	if hero == null or hero.health >= hero.max_health:
+		return {"used": false, "message": "Здоровье уже полное. Зелье не потрачено."}
+	var recovered: int = hero.restore_health(item.healing_amount)
+	if recovered <= 0:
+		return {"used": false, "message": "Сейчас зелье не требуется."}
+	_remove_carried_item(item_id, 1)
+	return {"used": true, "message": "Здоровье восстановлено: +%d HP" % recovered}
+
+
 func _remove_carried_item(item_id: String, quantity: int) -> bool:
 	var current: int = int(carried_items.get(item_id, 0))
 	if quantity <= 0 or current < quantity:

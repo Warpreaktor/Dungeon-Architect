@@ -31,6 +31,13 @@ func equip_shield(item: ItemDefinition) -> void:
 	defense = START_DEFENSE + item.defense_bonus
 
 
+## Лечит не выше максимума, возвращает фактически восстановленное здоровье.
+func restore_health(amount: int) -> int:
+	var restored: int = mini(maxi(amount, 0), maxi(max_health - health, 0))
+	health += restored
+	return restored
+
+
 ## Возвращает реально полученный урон; поглощение не уводит его ниже нуля.
 func take_damage(incoming: int) -> int:
 	var taken := maxi(incoming - defense, 0)

@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 item_id = "shield"
 display_name = "Щит"
-description = "Простой щит. Поглощает 1 единицу получаемого урона."
+description = "Простой щит. Уменьшает получаемый урон."
 icon = ExtResource("2_icon")
 category = 3
 stackable = false

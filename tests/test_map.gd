@@ -483,5 +483,31 @@ func _initialize() -> void:
 	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "small_monster")
 	# Совместимость: старые карты с находками непосредственно на полу продолжают работать.
 	assert(gold_map_loaded.entities_at(3, 2).size() == 1)
+	# Использование расходников: лечение по свойствам Resource, без перерасхода.
+	var healer := HeroState.new()
+	assert(healer.restore_health(10) == 0) # Полное здоровье.
+	healer.health = 12
+	var potion_def: ItemDefinition = ItemCatalog.get_item("potion")
+	assert(potion_def.healing_amount > 0)
+	var potion_session := GameSession.start_for(tiny_restored)
+	assert(potion_session != null)
+	potion_session._receive_item("potion", 2)
+	potion_session._receive_item("key", 1)
+	assert(not bool(potion_session.use_item("key")["used"]))
+	assert(potion_session.keys == 1 and potion_session.potions == 2)
+	potion_session.hero.health = potion_session.hero.max_health - 2
+	assert(bool(potion_session.use_item("potion")["used"]))
+	assert(potion_session.hero.health == potion_session.hero.max_health)
+	assert(potion_session.potions == 1)
+	assert(not bool(potion_session.use_item("potion")["used"]))
+	assert(potion_session.potions == 1)
+	potion_session.hero.health = 1
+	assert(bool(potion_session.use_item("potion")["used"]))
+	assert(potion_session.hero.health == 1 + potion_def.healing_amount)
+	assert(potion_session.potions == 0)
+	assert(not bool(potion_session.use_item("potion")["used"]))
+	assert(potion_session.hero.health == 1 + potion_def.healing_amount)
+	assert(potion_session.carried_items.get("potion", 0) == 0)
+
 	print("DungeonMap smoke tests: OK")
 	quit()

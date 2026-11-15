@@ -2,8 +2,9 @@ class_name InventoryView
 extends CanvasLayer
 
 ## Только представление: предметы и экипировка принадлежат GameSession/HeroState.
-## В этой версии вещи можно осматривать, но не применять и не перекладывать.
+## Изменение состояния предметов выполняет игровой контроллер, а не UI.
 signal closed
+signal item_use_requested(item_id: String)
 
 @onready var _card: PanelContainer = %Card
 @onready var _columns: GridContainer = %Columns
@@ -16,6 +17,8 @@ signal closed
 @onready var _item_name: Label = %ItemName
 @onready var _item_description: RichTextLabel = %ItemDescription
 @onready var _item_properties: Label = %ItemProperties
+@onready var _use_button: Button = %UseButton
+@onready var _use_feedback: Label = %UseFeedback
 @onready var _weapon_icon: TextureRect = %WeaponIcon
 @onready var _weapon_name: Label = %WeaponName
 @onready var _shield_icon: TextureRect = %ShieldIcon
@@ -28,6 +31,7 @@ var _entries: Array[String] = []
 
 func _ready() -> void:
 	_item_list.item_selected.connect(_show_item)
+	_use_button.pressed.connect(_request_use_selected)
 	_close_button.pressed.connect(close_by_player)
 	get_viewport().size_changed.connect(_resize_card)
 	_resize_card()
@@ -38,6 +42,7 @@ func open_for(session: GameSession) -> void:
 	if session == null or session.hero == null:
 		return
 	_session = session
+	_use_feedback.text = ""
 	_refresh_contents()
 	_resize_card()
 	show()
@@ -101,6 +106,7 @@ func _clear_item_info() -> void:
 	_item_name.text = "Нет предметов"
 	_item_description.text = "Открой сундук, чтобы найти первые вещи."
 	_item_properties.text = ""
+	_use_button.visible = false
 
 
 func _show_item(index: int) -> void:
@@ -113,6 +119,8 @@ func _show_item(index: int) -> void:
 	_item_icon.texture = item.icon
 	_item_name.text = item.display_name
 	_item_description.text = item.description
+	_use_button.visible = true
+	_use_feedback.text = ""
 	var category := "Квестовый предмет"
 	match item.category:
 		ItemDefinition.Category.CONSUMABLE:
@@ -125,6 +133,8 @@ func _show_item(index: int) -> void:
 	var count: int = int(_session.carried_items.get(item_id, 0))
 	if item.stackable:
 		details += "  ·  количество: %d" % count
+	if item.healing_amount > 0:
+		details += "\nВосстанавливает: до %d HP" % item.healing_amount
 	if item.attack_bonus > 0:
 		details += "\nАтака: +%d" % item.attack_bonus
 	if item.defense_bonus > 0:
@@ -132,6 +142,25 @@ func _show_item(index: int) -> void:
 	if item_id in [_session.hero.equipped_weapon_id, _session.hero.equipped_shield_id]:
 		details += "\nЭкипировано автоматически"
 	_item_properties.text = details
+
+
+func _request_use_selected() -> void:
+	var index: int = _item_list.get_selected_items()[0] if not _item_list.get_selected_items().is_empty() else -1
+	if index < 0 or index >= _entries.size() or _session == null:
+		return
+	item_use_requested.emit(_entries[index])
+
+
+## Обновляем количество и характеристики, сохраняя выбранный предмет при возможности.
+func show_use_result(item_id: String, message: String) -> void:
+	if _session == null:
+		return
+	_refresh_contents()
+	var index: int = _entries.find(item_id)
+	if index >= 0:
+		_item_list.select(index)
+		_show_item(index)
+	_use_feedback.text = message
 
 
 func _resize_card() -> void:

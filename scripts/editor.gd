@@ -222,6 +222,7 @@ func _build_interface() -> void:
 	canvas_host.add_child(_inventory_button)
 	_inventory_view = INVENTORY_VIEW_SCENE.instantiate() as InventoryView
 	_inventory_view.closed.connect(_on_inventory_closed)
+	_inventory_view.item_use_requested.connect(_on_inventory_use_requested)
 	add_child(_inventory_view)
 	_game_notice = GAME_NOTICE_SCENE.instantiate() as GameNotice
 	_game_notice.visible = false
@@ -1190,6 +1191,15 @@ func _on_inventory_closed() -> void:
 	if is_play_mode and not _combat_active and _victory_view == null:
 		_dpad.visible = true
 		_canvas.grab_focus()
+
+
+func _on_inventory_use_requested(item_id: String) -> void:
+	if not is_play_mode or game_session == null or not _inventory_view.visible:
+		return
+	var result: Dictionary = game_session.use_item(item_id)
+	_inventory_view.show_use_result(item_id, str(result.get("message", "")))
+	if bool(result.get("used", false)):
+		_refresh_stats()
 
 
 func _show_game_event(message: String) -> void:

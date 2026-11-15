@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 item_id = "sword"
 display_name = "Меч"
-description = "Простой меч. Урон героя увеличивается с 1 до 2."
+description = "Простой меч. Увеличивает урон при атаке."
 icon = ExtResource("2_icon")
 category = 3
 stackable = false

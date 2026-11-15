@@ -15,6 +15,8 @@ const VICTORY_VIEW_SCENE: PackedScene = preload("res://scenes/victory_view.tscn"
 const MESSAGE_EDITOR_SCENE: PackedScene = preload("res://scenes/message_editor_popup.tscn")
 const GAME_DIALOGUE_SCENE: PackedScene = preload("res://scenes/game_dialogue_view.tscn")
 const INVENTORY_VIEW_SCENE: PackedScene = preload("res://scenes/inventory_view.tscn")
+const GAME_COMMAND_BAR_SCENE: PackedScene = preload("res://scenes/game_command_bar.tscn")
+const GAME_SYSTEM_MENU_SCENE: PackedScene = preload("res://scenes/game_system_menu.tscn")
 const EDITOR_SETTINGS_PATH := "user://editor_state.cfg"
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
@@ -58,7 +60,8 @@ var standalone_game: bool = false
 var _startup_game_map: DungeonMap
 var _editor_header: PanelContainer
 var _console_row: HBoxContainer
-var _game_menu_button: Button
+var _game_command_bar: GameCommandBar
+var _game_system_menu: GameSystemMenu
 var game_session: GameSession
 var is_dirty: bool = false
 var selected_tool: String = "hand"
@@ -111,7 +114,6 @@ var _height_input: SpinBox
 var _dpad: Control
 var _hero_hud: HeroHUD
 var _inventory_view: InventoryView
-var _inventory_button: Button
 var _game_notice: GameNotice
 var _load_dialog: ConfirmationDialog
 var _export_dialog: FileDialog
@@ -220,25 +222,16 @@ func _build_interface() -> void:
 	_hero_hud = HERO_HUD_SCENE.instantiate() as HeroHUD
 	_hero_hud.visible = false
 	canvas_host.add_child(_hero_hud)
-	_inventory_button = _button("Инвентарь", "Просмотреть найденные предметы (I)", _toggle_inventory)
-	_inventory_button.icon = preload("res://assets/hud/bag.png")
-	_inventory_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_inventory_button.offset_left = -174.0
-	_inventory_button.offset_top = 14.0
-	_inventory_button.offset_right = -14.0
-	_inventory_button.offset_bottom = 60.0
-	_inventory_button.focus_mode = Control.FOCUS_NONE
-	_inventory_button.visible = false
-	canvas_host.add_child(_inventory_button)
-	_game_menu_button = _button("Меню", "Вернуться к выбору подземелья", _request_return_to_menu)
-	_game_menu_button.focus_mode = Control.FOCUS_NONE
-	_game_menu_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_game_menu_button.offset_left = -174.0
-	_game_menu_button.offset_top = 67.0
-	_game_menu_button.offset_right = -14.0
-	_game_menu_button.offset_bottom = 110.0
-	_game_menu_button.visible = false
-	canvas_host.add_child(_game_menu_button)
+	# Экранные команды — отдельная сцена, не часть HUD персонажа.
+	_game_command_bar = GAME_COMMAND_BAR_SCENE.instantiate() as GameCommandBar
+	_game_command_bar.inventory_requested.connect(_toggle_inventory)
+	_game_command_bar.menu_requested.connect(_open_game_system_menu)
+	_game_command_bar.visible = false
+	canvas_host.add_child(_game_command_bar)
+	_game_system_menu = GAME_SYSTEM_MENU_SCENE.instantiate() as GameSystemMenu
+	_game_system_menu.continue_requested.connect(_close_game_system_menu)
+	_game_system_menu.leave_requested.connect(_leave_from_game_system_menu)
+	add_child(_game_system_menu)
 	_inventory_view = INVENTORY_VIEW_SCENE.instantiate() as InventoryView
 	_inventory_view.closed.connect(_on_inventory_closed)
 	_inventory_view.item_use_requested.connect(_on_inventory_use_requested)
@@ -1106,6 +1099,27 @@ func _emit_menu_requested() -> void:
 	menu_requested.emit()
 
 
+func _open_game_system_menu() -> void:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible:
+		return
+	_game_command_bar.visible = false
+	_dpad.visible = false
+	_game_system_menu.open_for(standalone_game)
+
+
+func _close_game_system_menu() -> void:
+	_game_system_menu.dismiss()
+	if is_play_mode and not _combat_active and _victory_view == null:
+		_game_command_bar.visible = true
+		_dpad.visible = true
+		_canvas.grab_focus()
+
+
+func _leave_from_game_system_menu() -> void:
+	_game_system_menu.dismiss()
+	_stop_play_mode()
+
+
 func _toggle_play_mode() -> void:
 	if is_play_mode:
 		_stop_play_mode()
@@ -1123,6 +1137,7 @@ func _start_play_mode() -> void:
 	_editor_camera_zoom = _canvas.zoom
 	game_session = session
 	_inventory_view.dismiss()
+	_game_system_menu.dismiss()
 	_pending_game_messages.clear()
 	is_play_mode = true
 	_canvas.set_game_session(session)
@@ -1154,6 +1169,7 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 	_game_notice.clear()
 	_game_dialogue.dismiss()
 	_inventory_view.dismiss()
+	_game_system_menu.dismiss()
 	_pending_game_messages.clear()
 	game_session = null
 	is_play_mode = false
@@ -1174,13 +1190,12 @@ func _update_mode_ui() -> void:
 	_editor_header.visible = not standalone_game
 	_console_row.visible = not standalone_game
 	_log_console.visible = _log_open and not standalone_game
-	_game_menu_button.visible = standalone_game and is_play_mode
 	_play_button.text = "Редактор" if is_play_mode else "Тест"
 	_set_command_icon(_play_button, "editor" if is_play_mode else "test")
 	_play_button.tooltip_text = "Выйти из теста и вернуться к редактированию" if is_play_mode else "Проверить текущую карту без сохранения игрового прогресса"
 	_dpad.visible = is_play_mode
 	_hero_hud.visible = is_play_mode
-	_inventory_button.visible = is_play_mode
+	_game_command_bar.visible = is_play_mode and not _combat_active and _victory_view == null
 	_game_notice.visible = is_play_mode
 	for control in _editor_controls:
 		if control is BaseButton:
@@ -1193,17 +1208,19 @@ func _update_mode_ui() -> void:
 
 
 func _toggle_inventory() -> void:
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _game_system_menu.visible:
 		return
 	if _inventory_view.visible:
 		_inventory_view.close_by_player()
 	else:
 		_inventory_view.open_for(game_session)
+		_game_command_bar.visible = false
 		_dpad.visible = false
 
 
 func _on_inventory_closed() -> void:
 	if is_play_mode and not _combat_active and _victory_view == null:
+		_game_command_bar.visible = true
 		_dpad.visible = true
 		_canvas.grab_focus()
 
@@ -1275,7 +1292,7 @@ func _log_trigger_events() -> void:
 
 
 func _try_move_player(dx: int, dy: int) -> void:
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible:
 		return
 	var moved := game_session.move_by(dx, dy)
 	if game_session.has_pending_encounter():
@@ -1303,6 +1320,7 @@ func _try_move_player(dx: int, dy: int) -> void:
 ## отдельная сцена боя поверх карты. Исследование остаётся в памяти.
 func _start_combat() -> void:
 	_combat_active = true
+	_game_command_bar.visible = false
 	_dpad.visible = false
 	_hero_hud.visible = false
 	_game_notice.clear()
@@ -1345,6 +1363,7 @@ func _finish_combat() -> void:
 	_combat_active = false
 	_canvas.zoom = _pre_combat_zoom
 	_canvas.center_on_cell(game_session.player_pos)
+	_game_command_bar.visible = true
 	_dpad.visible = true
 	_hero_hud.visible = true
 	_canvas.grab_focus()
@@ -1387,6 +1406,7 @@ func _show_end_view(defeated: bool) -> void:
 	if not is_play_mode or game_session == null or _victory_view != null or _game_dialogue.visible:
 		return
 	_dpad.visible = false
+	_game_command_bar.visible = false
 	_hero_hud.visible = false
 	_game_notice.clear()
 	_victory_view = VICTORY_VIEW_SCENE.instantiate() as VictoryView
@@ -1427,6 +1447,13 @@ func _abort_combat() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if is_play_mode:
+			if _game_system_menu.visible:
+				if event.keycode == KEY_ESCAPE:
+					_close_game_system_menu()
+					get_viewport().set_input_as_handled()
+				elif event.keycode in [KEY_I, KEY_W, KEY_A, KEY_S, KEY_D]:
+					get_viewport().set_input_as_handled()
+				return
 			if _inventory_view.visible:
 				if event.keycode in [KEY_ESCAPE, KEY_I]:
 					_inventory_view.close_by_player()
@@ -1456,7 +1483,7 @@ func _input(event: InputEvent) -> void:
 				return
 			match event.keycode:
 				KEY_ESCAPE:
-					_stop_play_mode()
+					_open_game_system_menu()
 					get_viewport().set_input_as_handled()
 				KEY_UP, KEY_W:
 					_try_move_player(0, -1)

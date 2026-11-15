@@ -1,0 +1,72 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/game_command_bar.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/hud/bag.png" id="2_bag"]
+[ext_resource type="Texture2D" path="res://assets/hud/menu.png" id="3_menu"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_toolbar"]
+bg_color = Color(0.08, 0.12, 0.16, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.36, 0.45, 0.52, 0.92)
+corner_radius_top_left = 9
+corner_radius_top_right = 9
+corner_radius_bottom_right = 9
+corner_radius_bottom_left = 9
+
+[node name="GameCommandBar" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("1_script")
+
+[node name="Anchor" type="MarginContainer" parent="."]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -300.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = 70.0
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="Anchor"]
+layout_mode = 2
+mouse_filter = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_toolbar")
+
+[node name="Margins" type="MarginContainer" parent="Anchor/Panel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 7
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 7
+theme_override_constants/margin_bottom = 6
+
+[node name="Commands" type="HBoxContainer" parent="Anchor/Panel/Margins"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 7
+
+[node name="InventoryButton" type="Button" parent="Anchor/Panel/Margins/Commands"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(144, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Инвентарь"
+icon = ExtResource("2_bag")
+icon_alignment = 0
+expand_icon = true
+tooltip_text = "Инвентарь (I)"
+
+[node name="MenuButton" type="Button" parent="Anchor/Panel/Margins/Commands"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Меню"
+icon = ExtResource("3_menu")
+icon_alignment = 0
+expand_icon = true

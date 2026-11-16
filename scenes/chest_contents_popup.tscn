@@ -62,6 +62,7 @@ custom_minimum_size = Vector2(0, 335)
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
+scroll_deadzone = 12
 
 [node name="LootRows" type="VBoxContainer" parent="ContentMargin/Content/LootScroll"]
 unique_name_in_owner = true

@@ -269,6 +269,7 @@ func _build_interface() -> void:
 	var sidebar_scroll := ScrollContainer.new()
 	sidebar_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sidebar_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sidebar_scroll.scroll_deadzone = 12
 	_sidebar_panel.add_child(sidebar_scroll)
 	var sidebar := VBoxContainer.new()
 	sidebar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -414,13 +415,20 @@ func _create_dialogs() -> void:
 	_load_dialog.add_child(library_layout)
 	_load_list = ItemList.new()
 	_load_list.custom_minimum_size = Vector2(620, 300)
-	_load_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_load_list.mouse_filter = Control.MOUSE_FILTER_PASS
+	_load_list.auto_height = true
 	_load_list.icon_mode = ItemList.ICON_MODE_TOP
 	_load_list.fixed_icon_size = Vector2i(PREVIEW_WIDTH, PREVIEW_HEIGHT)
 	_load_list.max_columns = 3
 	_load_list.same_column_width = true
 	_load_list.item_activated.connect(_load_activated)
-	library_layout.add_child(_load_list)
+	var library_scroll := ScrollContainer.new()
+	library_scroll.custom_minimum_size = Vector2(620, 300)
+	library_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	library_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	library_scroll.scroll_deadzone = 12
+	library_layout.add_child(library_scroll)
+	library_scroll.add_child(_load_list)
 	var library_actions := HBoxContainer.new()
 	library_layout.add_child(library_actions)
 	library_actions.add_child(_button("Переименовать", "Изменить название выбранной карты", _request_rename))

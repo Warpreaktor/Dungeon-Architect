@@ -58,6 +58,7 @@ func _build_item_rows() -> void:
 			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			row.add_child(icon)
 			var check := CheckBox.new()
+			check.mouse_filter = Control.MOUSE_FILTER_PASS
 			check.text = item.display_name
 			check.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			check.toggled.connect(_refresh_enabled)

@@ -43,8 +43,14 @@ func equip_item(item: ItemDefinition) -> bool:
 			if equipped_weapon_id == item.item_id:
 				return false
 			equipped_weapon_id = item.item_id
+			if item.two_handed:
+				# Щит остаётся в рюкзаке с прежней прочностью.
+				equipped_shield_id = ""
 		ItemDefinition.EquipmentSlot.SHIELD:
 			if equipped_shield_id == item.item_id:
+				return false
+			var weapon: ItemDefinition = ItemCatalog.get_item(equipped_weapon_id)
+			if weapon != null and weapon.two_handed:
 				return false
 			equipped_shield_id = item.item_id
 		_:

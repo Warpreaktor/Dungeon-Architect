@@ -189,7 +189,7 @@ func show_use_result(item_id: String, message: String) -> void:
 
 
 ## Обновляем слоты, подписи и характеристики после смены экипировки.
-func show_equipment_result(item_id: String) -> void:
+func show_equipment_result(item_id: String, message: String = "") -> void:
 	if _session == null:
 		return
 	_refresh_contents()
@@ -197,6 +197,7 @@ func show_equipment_result(item_id: String) -> void:
 	if index >= 0:
 		_item_list.select(index)
 		_show_item(index)
+	_use_feedback.text = message
 
 
 func _resize_card() -> void:

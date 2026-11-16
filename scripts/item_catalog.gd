@@ -19,7 +19,10 @@ const DEFINITIONS := {
 	"wooden_shield": preload("res://items/wooden_shield.tres"),
 	"heraldic_shield": preload("res://items/heraldic_shield.tres"),
 	"tower_shield": preload("res://items/tower_shield.tres"),
-	"spiked_shield": preload("res://items/spiked_shield.tres")
+	"spiked_shield": preload("res://items/spiked_shield.tres"),
+	"greatsword": preload("res://items/greatsword.tres"),
+	"warhammer": preload("res://items/warhammer.tres"),
+	"halberd": preload("res://items/halberd.tres")
 }
 
 
@@ -37,13 +40,21 @@ static func quantity_for_entity(entity: Dictionary) -> int:
 
 ## Одна награда на открытие; выпадение рассчитывается только в GameSession.
 const RANDOM_LOOT_POOL := [
-	"gold", "gold", "gold", "potion", "key",
+	"gold", "gold", "gold", "potion",
 	"sword", "dagger", "hatchet", "spear", "mace", "pickaxe",
-	"battle_axe", "flail", "shield", "wooden_shield", "heraldic_shield", "tower_shield", "spiked_shield"
+	"battle_axe", "flail", "greatsword", "warhammer", "halberd", "shield", "wooden_shield", "heraldic_shield", "tower_shield", "spiked_shield"
 ]
 
 static func roll_loot() -> Dictionary:
-	var item_id: String = RANDOM_LOOT_POOL.pick_random()
+	# Квестовые предметы не входят в случайную выдачу.
+	var eligible: Array[String] = []
+	for candidate in RANDOM_LOOT_POOL:
+		var item: ItemDefinition = get_item(candidate)
+		if item != null and item.category != ItemDefinition.Category.QUEST:
+			eligible.append(candidate)
+	if eligible.is_empty():
+		return {}
+	var item_id: String = eligible.pick_random()
 	var definition: ItemDefinition = get_item(item_id)
 	var quantity: int = randi_range(3, 12) if item_id == "gold" else definition.default_quantity
 	return {"item_id": item_id, "quantity": quantity}

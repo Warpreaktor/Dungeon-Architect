@@ -575,5 +575,27 @@ func _initialize() -> void:
 	assert(potion_session.hero.health == 1 + potion_def.healing_amount)
 	assert(potion_session.carried_items.get("potion", 0) == 0)
 
+	# Случайная добыча не содержит квестовых предметов.
+	for i in range(100):
+		var reward: Dictionary = ItemCatalog.roll_loot()
+		var reward_item: ItemDefinition = ItemCatalog.get_item(str(reward.get("item_id", "")))
+		assert(reward_item != null and reward_item.category != ItemDefinition.Category.QUEST)
+
+	# Двуручное оружие снимает щит, но не уничтожает его.
+	var two_handed_hero := HeroState.new()
+	var shield_item: ItemDefinition = ItemCatalog.get_item("shield")
+	var sword_item: ItemDefinition = ItemCatalog.get_item("sword")
+	var heavy_item: ItemDefinition = ItemCatalog.get_item("greatsword")
+	assert(heavy_item != null and heavy_item.two_handed)
+	assert(two_handed_hero.equip_item(shield_item))
+	assert(two_handed_hero.equip_item(heavy_item))
+	assert(two_handed_hero.equipped_shield_id.is_empty())
+	assert(two_handed_hero.defense == two_handed_hero.base_defense)
+	assert(not two_handed_hero.equip_item(shield_item))
+	assert(two_handed_hero.unequip_item("greatsword"))
+	assert(two_handed_hero.equip_item(shield_item))
+	assert(two_handed_hero.equip_item(sword_item))
+	assert(two_handed_hero.equipped_shield_id == "shield")
+
 	print("DungeonMap smoke tests: OK")
 	quit()

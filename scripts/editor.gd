@@ -1268,6 +1268,11 @@ func _on_inventory_equipment_requested(item_id: String, equip: bool) -> void:
 		return
 	var changed: bool = game_session.equip_item(item_id) if equip else game_session.unequip_item(item_id)
 	if not changed:
+		if equip:
+			var weapon: ItemDefinition = ItemCatalog.get_item(game_session.hero.equipped_weapon_id)
+			var item: ItemDefinition = ItemCatalog.get_item(item_id)
+			if item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD and weapon != null and weapon.two_handed:
+				_inventory_view.show_equipment_result(item_id, "Нельзя надеть щит: герой держит двуручное оружие.")
 		return
 	_inventory_view.show_equipment_result(item_id)
 	_refresh_stats()

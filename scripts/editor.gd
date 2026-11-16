@@ -68,7 +68,7 @@ var _game_system_menu: GameSystemMenu
 var _map_screen: MapScreen
 var _mini_map: PanelContainer
 var _mini_overview: MapOverview
-var _minimap_enabled: bool = false
+var _minimap_enabled: bool = true
 var game_session: GameSession
 var is_dirty: bool = false
 var selected_tool: String = "hand"
@@ -690,16 +690,16 @@ func _on_chest_tapped(chest_id: String) -> void:
 	_canvas.finish_edit_stroke()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":
-			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity), false, DungeonMap.chest_is_random(entity))
+			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity), false, DungeonMap.chest_is_random(entity), bool(entity.get("properties", {}).get("hidden", false)))
 			_chest_popup.popup_centered_clamped(Vector2i(470, 530), 0.9)
 			return
 
 
-func _on_chest_contents_changed(chest_id: String, contents: Array[String], gold_amount: int, random_mode: bool) -> void:
+func _on_chest_contents_changed(chest_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool) -> void:
 	if is_play_mode:
 		return
 	var before := _canvas.capture_edit_state()
-	if map_data.set_chest_contents(chest_id, contents, gold_amount, random_mode):
+	if map_data.set_chest_contents(chest_id, contents, gold_amount, random_mode, hidden):
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()
@@ -711,16 +711,16 @@ func _on_monster_tapped(monster_entity_id: String) -> void:
 	_canvas.finish_edit_stroke()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == monster_entity_id and str(entity.get("type", "")) == "monster":
-			_monster_loot_popup.configure(monster_entity_id, DungeonMap.monster_loot_contents(entity), DungeonMap.monster_gold_amount(entity), true, DungeonMap.monster_loot_is_random(entity))
+			_monster_loot_popup.configure(monster_entity_id, DungeonMap.monster_loot_contents(entity), DungeonMap.monster_gold_amount(entity), true, DungeonMap.monster_loot_is_random(entity), bool(entity.get("properties", {}).get("hidden", false)))
 			_monster_loot_popup.popup_centered_clamped(Vector2i(470, 530), 0.9)
 			return
 
 
-func _on_monster_loot_changed(monster_entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool) -> void:
+func _on_monster_loot_changed(monster_entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool) -> void:
 	if is_play_mode:
 		return
 	var before := _canvas.capture_edit_state()
-	if map_data.set_monster_loot(monster_entity_id, contents, gold_amount, random_mode):
+	if map_data.set_monster_loot(monster_entity_id, contents, gold_amount, random_mode, hidden):
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()
@@ -1313,6 +1313,11 @@ func _on_inventory_use_requested(item_id: String) -> void:
 	_inventory_view.show_use_result(item_id, str(result.get("message", "")))
 	if bool(result.get("used", false)):
 		_refresh_stats()
+		if game_session.hero.has_vision_effect():
+			_canvas.zoom = DungeonCanvas.PLAY_VISION_MIN_ZOOM
+			_canvas.center_on_cell(game_session.player_pos)
+		_canvas.queue_redraw()
+		_refresh_map_overlays()
 
 
 func _on_inventory_equipment_requested(item_id: String, equip: bool) -> void:
@@ -1387,6 +1392,8 @@ func _try_move_player(dx: int, dy: int) -> void:
 			_start_combat()
 		return
 	if moved:
+		if not game_session.hero.has_vision_effect() and _canvas.zoom < DungeonCanvas.PLAY_MIN_ZOOM:
+			_canvas.zoom = DungeonCanvas.PLAY_MIN_ZOOM
 		_canvas.center_on_cell(game_session.player_pos)
 	# Сундук меняет вид при открытии, даже если сам герой не сдвинулся.
 	_canvas.queue_redraw()

@@ -22,6 +22,14 @@ var equipped_shield_id: String = ""
 var shield_durabilities: Dictionary = {} # item_id -> Array[int]
 var last_shield_broken: String = ""
 
+# Временные эффекты принадлежат прохождению, а не карте или ресурсам предметов.
+var strength_bonus: int = 0
+var strength_steps: int = 0
+var vitality_percent: int = 0
+var vitality_steps: int = 0
+var vision_bonus: int = 0
+var vision_steps: int = 0
+
 
 
 func _init(hero_definition: HeroDefinition = null) -> void:
@@ -74,7 +82,7 @@ func unequip_item(item_id: String) -> bool:
 
 ## Статистика вычисляется из базовых значений и бонусов реально надетых предметов.
 func _recalculate_equipment_stats() -> void:
-	attack = base_attack
+	attack = base_attack + strength_bonus
 	defense = base_defense
 	for item_id in [equipped_weapon_id, equipped_shield_id]:
 		var item: ItemDefinition = ItemCatalog.get_item(item_id)
@@ -136,5 +144,67 @@ func take_damage(incoming: int) -> int:
 				if not last_shield_broken.is_empty():
 					equipped_shield_id = ""
 					_recalculate_equipment_stats()
+	if vitality_steps > 0 and vitality_percent > 0 and remaining > 0:
+		remaining = maxi(1, ceili(float(remaining) * float(100 - vitality_percent) / 100.0))
 	health = maxi(health - remaining, 0)
 	return remaining
+
+
+## Эффекты повторного зелья обновляют силу/длительность, а не складывают значения.
+func apply_potion(item: ItemDefinition) -> Dictionary:
+	if item == null or item.category != ItemDefinition.Category.CONSUMABLE:
+		return {"used": false, "message": "Предмет нельзя использовать."}
+	match item.consumable_effect:
+		ItemDefinition.ConsumableEffect.HEAL, ItemDefinition.ConsumableEffect.NONE:
+			if item.healing_amount <= 0:
+				return {"used": false, "message": "Предмет нельзя использовать."}
+			if health >= max_health:
+				return {"used": false, "message": "Здоровье уже полное."}
+			var healed := restore_health(item.healing_amount)
+			return {"used": healed > 0, "message": "+%d HP" % healed}
+		ItemDefinition.ConsumableEffect.ATTACK:
+			strength_bonus = maxi(strength_bonus, item.effect_value)
+			strength_steps = maxi(strength_steps, item.effect_duration_steps)
+			_recalculate_equipment_stats()
+			return {"used": true, "message": "Атака +%d (%d шагов)" % [strength_bonus, strength_steps]}
+		ItemDefinition.ConsumableEffect.RESIST:
+			vitality_percent = maxi(vitality_percent, clampi(item.effect_value, 0, 90))
+			vitality_steps = maxi(vitality_steps, item.effect_duration_steps)
+			return {"used": true, "message": "Получаемый урон −%d%% (%d шагов)" % [vitality_percent, vitality_steps]}
+		ItemDefinition.ConsumableEffect.VISION:
+			vision_bonus = maxi(vision_bonus, item.effect_value)
+			vision_steps = maxi(vision_steps, item.effect_duration_steps)
+			return {"used": true, "message": "Обзор +%d (%d шагов)" % [vision_bonus, vision_steps]}
+	return {"used": false, "message": "Предмет нельзя использовать."}
+
+
+## Длительность отсчитывается по успешным шагам героя, не по кадровому времени.
+func advance_effects() -> void:
+	if strength_steps > 0:
+		strength_steps -= 1
+		if strength_steps == 0:
+			strength_bonus = 0
+			_recalculate_equipment_stats()
+	if vitality_steps > 0:
+		vitality_steps -= 1
+		if vitality_steps == 0:
+			vitality_percent = 0
+	if vision_steps > 0:
+		vision_steps -= 1
+		if vision_steps == 0:
+			vision_bonus = 0
+
+
+func has_vision_effect() -> bool:
+	return vision_steps > 0 and vision_bonus > 0
+
+
+func active_effects_summary() -> String:
+	var parts: Array[String] = []
+	if strength_steps > 0:
+		parts.append("Сила +%d · %d ш." % [strength_bonus, strength_steps])
+	if vitality_steps > 0:
+		parts.append("Живучесть %d%% · %d ш." % [vitality_percent, vitality_steps])
+	if vision_steps > 0:
+		parts.append("Всевиденье +%d · %d ш." % [vision_bonus, vision_steps])
+	return "  |  ".join(parts)

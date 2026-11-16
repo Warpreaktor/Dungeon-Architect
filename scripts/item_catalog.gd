@@ -6,6 +6,18 @@ extends RefCounted
 const DEFINITIONS := {
 	"key": preload("res://items/key.tres"),
 	"potion": preload("res://items/potion.tres"),
+	"potion_health_small": preload("res://items/potion_health_small.tres"),
+	"potion_health_medium": preload("res://items/potion_health_medium.tres"),
+	"potion_health_large": preload("res://items/potion_health_large.tres"),
+	"potion_strength_small": preload("res://items/potion_strength_small.tres"),
+	"potion_strength_medium": preload("res://items/potion_strength_medium.tres"),
+	"potion_strength_large": preload("res://items/potion_strength_large.tres"),
+	"potion_vitality_small": preload("res://items/potion_vitality_small.tres"),
+	"potion_vitality_medium": preload("res://items/potion_vitality_medium.tres"),
+	"potion_vitality_large": preload("res://items/potion_vitality_large.tres"),
+	"potion_vision_small": preload("res://items/potion_vision_small.tres"),
+	"potion_vision_medium": preload("res://items/potion_vision_medium.tres"),
+	"potion_vision_large": preload("res://items/potion_vision_large.tres"),
 	"gold": preload("res://items/gold.tres"),
 	"sword": preload("res://items/sword.tres"),
 	"shield": preload("res://items/shield.tres"),
@@ -40,11 +52,20 @@ static func quantity_for_entity(entity: Dictionary) -> int:
 
 ## Одна награда на открытие; выпадение рассчитывается только в GameSession.
 const RANDOM_LOOT_POOL := [
-	"gold", "gold", "gold", "potion",
+	"gold", "gold", "gold", "gold", "gold", "gold",
+	"gold", "gold", "gold", "gold", "gold", "gold",
+	"gold", "gold", "gold", "gold", "gold", "gold",
+	"gold", "gold", "potion_health_small", "potion_health_small", "potion_health_small", "potion_health_small",
+	"potion_health_small", "potion_health_small", "potion_health_medium", "potion_health_medium", "potion_health_medium", "potion_health_large",
+	"potion_strength_small", "potion_strength_small", "potion_strength_small", "potion_strength_small", "potion_strength_small", "potion_strength_small",
+	"potion_strength_medium", "potion_strength_medium", "potion_strength_medium", "potion_strength_large", "potion_vitality_small", "potion_vitality_small",
+	"potion_vitality_small", "potion_vitality_small", "potion_vitality_small", "potion_vitality_small", "potion_vitality_medium", "potion_vitality_medium",
+	"potion_vitality_medium", "potion_vitality_large", "potion_vision_small", "potion_vision_small", "potion_vision_small", "potion_vision_small",
+	"potion_vision_small", "potion_vision_small", "potion_vision_medium", "potion_vision_medium", "potion_vision_medium", "potion_vision_large",
 	"sword", "dagger", "hatchet", "spear", "mace", "pickaxe",
-	"battle_axe", "flail", "greatsword", "warhammer", "halberd", "shield", "wooden_shield", "heraldic_shield", "tower_shield", "spiked_shield"
+	"battle_axe", "flail", "greatsword", "warhammer", "halberd", "shield",
+	"wooden_shield", "heraldic_shield", "tower_shield", "spiked_shield"
 ]
-
 static func roll_loot() -> Dictionary:
 	# Квестовые предметы не входят в случайную выдачу.
 	var eligible: Array[String] = []
@@ -58,6 +79,16 @@ static func roll_loot() -> Dictionary:
 	var definition: ItemDefinition = get_item(item_id)
 	var quantity: int = randi_range(3, 12) if item_id == "gold" else definition.default_quantity
 	return {"item_id": item_id, "quantity": quantity}
+
+static func consumable_ids() -> Array[String]:
+	var result: Array[String] = []
+	for item_id in DEFINITIONS:
+		var item: ItemDefinition = get_item(item_id)
+		if item != null and item.category == ItemDefinition.Category.CONSUMABLE:
+			result.append(item_id)
+	result.sort()
+	return result
+
 
 static func equipment_ids() -> Array[String]:
 	var result: Array[String] = []

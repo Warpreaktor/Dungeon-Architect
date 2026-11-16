@@ -5,6 +5,7 @@ extends Resource
 
 enum Category { QUEST, CONSUMABLE, CURRENCY, EQUIPMENT }
 enum EquipmentSlot { NONE, WEAPON, SHIELD }
+enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 
 @export var item_id: String = ""
 @export var display_name: String = ""
@@ -19,3 +20,6 @@ enum EquipmentSlot { NONE, WEAPON, SHIELD }
 @export var defense_bonus: int = 0
 @export_range(0, 999, 1) var max_durability: int = 0
 @export_range(0, 9999, 1) var healing_amount: int = 0
+@export var consumable_effect: ConsumableEffect = ConsumableEffect.NONE
+@export_range(0, 9999, 1) var effect_value: int = 0
+@export_range(0, 9999, 1) var effect_duration_steps: int = 0

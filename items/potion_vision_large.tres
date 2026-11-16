@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/icons/potion_vision_large.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_script")
+item_id = "potion_vision_large"
+display_name = "Большое зелье всевиденья"
+description = "Расширяет обзор на 1 клетку на 16 шагов."
+icon = ExtResource("2_icon")
+category = 1
+consumable_effect = 4
+effect_value = 1
+effect_duration_steps = 16

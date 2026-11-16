@@ -222,6 +222,8 @@ func move_by(dx: int, dy: int) -> bool:
 		_activate_message_at(target, "door_open", opened_door_id)
 	else:
 		_activate_message_at(target, "enter")
+	if hero != null:
+		hero.advance_effects()
 	_refresh_visibility()
 	# Пока лестница завершает приключение. Позже здесь появится переход на другую карту.
 	if not _find_active_entity(target, "stairs_down").is_empty():
@@ -306,15 +308,13 @@ func use_item(item_id: String) -> Dictionary:
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
 	if item == null or int(carried_items.get(item_id, 0)) <= 0:
 		return {"used": false, "message": "Этого предмета нет в рюкзаке."}
-	if item.category != ItemDefinition.Category.CONSUMABLE or item.healing_amount <= 0:
-		return {"used": false, "message": "Этот предмет пока нельзя использовать из рюкзака."}
-	if hero == null or hero.health >= hero.max_health:
-		return {"used": false, "message": "Здоровье уже полное. Зелье не потрачено."}
-	var recovered: int = hero.restore_health(item.healing_amount)
-	if recovered <= 0:
-		return {"used": false, "message": "Сейчас зелье не требуется."}
-	_remove_carried_item(item_id, 1)
-	return {"used": true, "message": "Здоровье восстановлено: +%d HP" % recovered}
+	if hero == null:
+		return {"used": false, "message": "Герой недоступен."}
+	var result: Dictionary = hero.apply_potion(item)
+	if bool(result.get("used", false)):
+		_remove_carried_item(item_id, 1)
+		_refresh_visibility()
+	return result
 
 
 func _remove_carried_item(item_id: String, quantity: int) -> bool:
@@ -350,8 +350,9 @@ func _refresh_visibility() -> void:
 	for y in range(map_data.height):
 		for x in range(map_data.width):
 			visible[y][x] = false
-	for y in range(player_pos.y - VISION_RADIUS, player_pos.y + VISION_RADIUS + 1):
-		for x in range(player_pos.x - VISION_RADIUS, player_pos.x + VISION_RADIUS + 1):
+	var radius: int = VISION_RADIUS + (hero.vision_bonus if hero != null and hero.has_vision_effect() else 0)
+	for y in range(player_pos.y - radius, player_pos.y + radius + 1):
+		for x in range(player_pos.x - radius, player_pos.x + radius + 1):
 			if contains(x, y):
 				visible[y][x] = true
 				revealed[y][x] = true

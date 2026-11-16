@@ -7,7 +7,7 @@ extends RefCounted
 const FORMAT_VERSION := 1
 const MAX_SIZE := 256
 const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "gold", "trigger", "player_spawn", "message"]
-static var CHEST_REWARDS: Array = ["key", "potion", "gold"] + ItemCatalog.equipment_ids()
+static var CHEST_REWARDS: Array = ["key", "potion", "gold"] + ItemCatalog.consumable_ids() + ItemCatalog.equipment_ids()
 
 var map_id: String = ""
 var display_name: String = "Безымянное подземелье"
@@ -124,7 +124,7 @@ static func chest_is_random(chest: Dictionary) -> bool:
 	return chest_contents(chest).is_empty()
 
 
-func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amount: int = 5, random_mode: bool = false) -> bool:
+func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amount: int = 5, random_mode: bool = false, hidden: bool = false) -> bool:
 	var normalized: Array[String] = []
 	for item in new_contents:
 		if item in CHEST_REWARDS and item not in normalized:
@@ -133,9 +133,12 @@ func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amou
 	for entity in entities:
 		if str(entity.get("id", "")) != chest_id or str(entity.get("type", "")) != "chest":
 			continue
-		if chest_contents(entity) == normalized and chest_is_random(entity) == random_mode and ("gold" not in normalized or chest_gold_amount(entity) == amount):
+		if chest_contents(entity) == normalized and chest_is_random(entity) == random_mode and ("gold" not in normalized or chest_gold_amount(entity) == amount) and bool(entity.get("properties", {}).get("hidden", false)) == hidden:
 			return false
-		var properties: Dictionary = {"contents": normalized.duplicate(), "loot_mode": "random" if random_mode else "fixed"}
+		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		properties["contents"] = normalized.duplicate()
+		properties["loot_mode"] = "random" if random_mode else "fixed"
+		properties["hidden"] = hidden
 		if "gold" in normalized:
 			properties["gold_amount"] = amount
 		entity["properties"] = properties
@@ -169,7 +172,7 @@ static func monster_loot_is_random(monster: Dictionary) -> bool:
 	return monster_loot_contents(monster).is_empty()
 
 
-func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: int = 5, random_mode: bool = false) -> bool:
+func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: int = 5, random_mode: bool = false, hidden: bool = false) -> bool:
 	var normalized: Array[String] = []
 	for item_id in contents:
 		if item_id in CHEST_REWARDS and item_id not in normalized:
@@ -178,11 +181,12 @@ func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: 
 	for entity in entities:
 		if str(entity.get("id", "")) != monster_id or str(entity.get("type", "")) != "monster":
 			continue
-		if monster_loot_contents(entity) == normalized and monster_loot_is_random(entity) == random_mode and ("gold" not in normalized or monster_gold_amount(entity) == amount):
+		if monster_loot_contents(entity) == normalized and monster_loot_is_random(entity) == random_mode and ("gold" not in normalized or monster_gold_amount(entity) == amount) and bool(entity.get("properties", {}).get("hidden", false)) == hidden:
 			return false
 		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
 		properties["loot_contents"] = normalized.duplicate()
 		properties["loot_mode"] = "random" if random_mode else "fixed"
+		properties["hidden"] = hidden
 		properties.erase("loot_gold_amount")
 		if "gold" in normalized:
 			properties["loot_gold_amount"] = amount

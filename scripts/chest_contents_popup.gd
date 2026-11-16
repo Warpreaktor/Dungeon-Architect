@@ -2,10 +2,11 @@ class_name ChestContentsPopup
 extends PopupPanel
 
 ## Общая панель настройки наград сундуков и монстров; типы берутся из ItemCatalog.
-signal contents_changed(entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool)
+signal contents_changed(entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool)
 
 @onready var _title: Label = %Title
 @onready var _random_check: CheckBox = %RandomCheck
+@onready var _hidden_check: CheckBox = %HiddenCheck
 @onready var _rows: VBoxContainer = %LootRows
 @onready var _gold_amount: SpinBox = %GoldAmount
 @onready var _gold_row: HBoxContainer = $ContentMargin/Content/GoldRow
@@ -30,8 +31,13 @@ func _build_item_rows() -> void:
 			weapons.append(item_id)
 		else:
 			shields.append(item_id)
+	var potions: Array[String] = ["potion"]
+	for kind in ["health", "strength", "vitality", "vision"]:
+		for grade in ["small", "medium", "large"]:
+			potions.append("potion_%s_%s" % [kind, grade])
 	var groups: Array = [
-		{"title": "ПРЕДМЕТЫ", "items": ["key", "potion", "gold"]},
+		{"title": "ПРЕДМЕТЫ", "items": ["key", "gold"]},
+		{"title": "ЗЕЛЬЯ", "items": potions},
 		{"title": "ОРУЖИЕ", "items": weapons},
 		{"title": "ЩИТЫ", "items": shields}
 	]
@@ -60,10 +66,11 @@ func _build_item_rows() -> void:
 			_item_checks[item_id] = check
 
 
-func configure(entity_id: String, contents: Array[String], gold_amount: int = 5, is_monster: bool = false, random_mode: bool = true) -> void:
+func configure(entity_id: String, contents: Array[String], gold_amount: int = 5, is_monster: bool = false, random_mode: bool = true, hidden: bool = false) -> void:
 	_entity_id = entity_id
 	_title.text = "Награда за победу" if is_monster else "Содержимое сундука"
 	_random_check.set_pressed_no_signal(random_mode)
+	_hidden_check.set_pressed_no_signal(hidden)
 	for item_id in _item_checks:
 		var check: CheckBox = _item_checks[item_id]
 		check.set_pressed_no_signal(item_id in contents)
@@ -84,5 +91,5 @@ func _save() -> void:
 	for item_id in _item_checks:
 		if (_item_checks[item_id] as CheckBox).button_pressed:
 			contents.append(item_id)
-	contents_changed.emit(_entity_id, contents, int(_gold_amount.value), _random_check.button_pressed)
+	contents_changed.emit(_entity_id, contents, int(_gold_amount.value), _random_check.button_pressed, _hidden_check.button_pressed)
 	hide()

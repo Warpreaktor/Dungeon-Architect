@@ -18,6 +18,7 @@ const DOUBLE_TAP_MS := 400
 const TAP_MOVE_LIMIT := 16.0
 const PLAY_START_ZOOM := 4.0
 const PLAY_MIN_ZOOM := 3.25
+const PLAY_VISION_MIN_ZOOM := 2.7
 const PLAY_MAX_ZOOM := 4.0
 
 var map_data: DungeonMap
@@ -155,7 +156,10 @@ func center_on_cell(cell: Vector2i) -> void:
 
 
 func zoom_at(screen_point: Vector2, factor: float) -> void:
-	var new_zoom := clampf(zoom * factor, PLAY_MIN_ZOOM if mode == "play" else 0.2, PLAY_MAX_ZOOM if mode == "play" else 3.5)
+	var min_play_zoom := PLAY_MIN_ZOOM
+	if game_session != null and game_session.hero != null and game_session.hero.has_vision_effect():
+		min_play_zoom = PLAY_VISION_MIN_ZOOM
+	var new_zoom := clampf(zoom * factor, min_play_zoom if mode == "play" else 0.2, PLAY_MAX_ZOOM if mode == "play" else 3.5)
 	if mode == "play" and game_session != null:
 		zoom = new_zoom
 		center_on_cell(game_session.player_pos)
@@ -221,6 +225,10 @@ func _draw_cell(x: int, y: int) -> void:
 		if mode == "play" and game_session != null and game_session.is_entity_removed(entity):
 			continue
 		var kind := str(entity["type"])
+		# Скрытые монстры и сундуки доступны только под действием всевиденья.
+		if mode == "play" and kind in ["monster", "chest"] and bool(entity.get("properties", {}).get("hidden", false)):
+			if game_session == null or game_session.hero == null or not game_session.hero.has_vision_effect():
+				continue
 		if mode == "play" and kind in ["player_spawn", "trigger", "message"]:
 			continue
 		var origin := Vector2(x, y) * TILE_SIZE

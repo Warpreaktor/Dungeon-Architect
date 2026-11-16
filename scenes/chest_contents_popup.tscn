@@ -49,6 +49,11 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Случайная награда"
 
+[node name="HiddenCheck" type="CheckBox" parent="ContentMargin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Скрытый объект"
+
 [node name="Separator" type="HSeparator" parent="ContentMargin/Content"]
 layout_mode = 2
 

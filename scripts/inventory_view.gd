@@ -142,8 +142,18 @@ func _show_item(index: int) -> void:
 	var count: int = int(_session.carried_items.get(item_id, 0))
 	if item.stackable:
 		details += "  ·  количество: %d" % count
-	if item.healing_amount > 0:
-		details += "\nВосстанавливает: до %d HP" % item.healing_amount
+	match item.consumable_effect:
+		ItemDefinition.ConsumableEffect.HEAL:
+			details += "\nВосстанавливает: до %d HP" % item.healing_amount
+		ItemDefinition.ConsumableEffect.ATTACK:
+			details += "\nАтака: +%d на %d шагов" % [item.effect_value, item.effect_duration_steps]
+		ItemDefinition.ConsumableEffect.RESIST:
+			details += "\nПолучаемый урон: −%d%% на %d шагов" % [item.effect_value, item.effect_duration_steps]
+		ItemDefinition.ConsumableEffect.VISION:
+			details += "\nОбзор: +%d на %d шагов" % [item.effect_value, item.effect_duration_steps]
+		_:
+			if item.healing_amount > 0:
+				details += "\nВосстанавливает: до %d HP" % item.healing_amount
 	if item.attack_bonus > 0:
 		details += "\nАтака: +%d" % item.attack_bonus
 	if item.defense_bonus > 0:

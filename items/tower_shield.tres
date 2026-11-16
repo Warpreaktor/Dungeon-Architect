@@ -12,4 +12,4 @@ category = 3
 stackable = false
 equipment_slot = 2
 defense_bonus = 4
-max_durability = 4
+max_durability = 13

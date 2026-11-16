@@ -1,5 +1,5 @@
 class_name MessageEditorPopup
-extends PopupPanel
+extends MobileKeyboardPopup
 
 ## Содержимое сообщения задаёт автор лабиринта, а не логика предметов.
 signal saved(cell: Vector2i, text: String)
@@ -16,6 +16,8 @@ func _ready() -> void:
 	%SaveButton.pressed.connect(_save)
 	%CancelButton.pressed.connect(hide)
 	_delete_button.pressed.connect(_remove)
+	%KeyboardDoneButton.pressed.connect(_finish_typing)
+	%KeyboardDoneButton.visible = OS.has_feature("mobile")
 
 
 func configure(cell: Vector2i, text: String, target_kind: String) -> void:
@@ -33,11 +35,21 @@ func configure(cell: Vector2i, text: String, target_kind: String) -> void:
 	_delete_button.disabled = text.strip_edges().is_empty()
 
 
+func _keyboard_layout_changed(open: bool) -> void:
+	_input.custom_minimum_size.y = 70 if open else 160
+
+
+func _finish_typing() -> void:
+	close_soft_keyboard(_input)
+
+
 func _save() -> void:
 	saved.emit(_cell, _input.text)
+	close_soft_keyboard(_input)
 	hide()
 
 
 func _remove() -> void:
 	removed.emit(_cell)
+	close_soft_keyboard(_input)
 	hide()

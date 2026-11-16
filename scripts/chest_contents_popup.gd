@@ -1,5 +1,5 @@
 class_name ChestContentsPopup
-extends PopupPanel
+extends MobileKeyboardPopup
 
 ## Общая панель настройки наград сундуков и монстров; типы берутся из ItemCatalog.
 signal contents_changed(entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool)
@@ -20,6 +20,12 @@ func _ready() -> void:
 	%CancelButton.pressed.connect(hide)
 	_random_check.toggled.connect(_refresh_enabled)
 	_build_item_rows()
+	var amount_input := _gold_amount.get_line_edit()
+	amount_input.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	amount_input.keep_editing_on_text_submit = false
+	amount_input.text_submitted.connect(_on_amount_submitted)
+	%KeyboardDoneButton.pressed.connect(_finish_amount)
+	%KeyboardDoneButton.visible = OS.has_feature("mobile")
 
 
 func _build_item_rows() -> void:
@@ -86,8 +92,23 @@ func _refresh_enabled(_value: bool = false) -> void:
 	_gold_row.visible = not is_random and (_item_checks["gold"] as CheckBox).button_pressed
 
 
+func _keyboard_layout_changed(open: bool) -> void:
+	# Пока редактируется сумма, список наград уступает место полю и кнопкам.
+	%LootScroll.visible = not open
+
+
+func _on_amount_submitted(_text: String) -> void:
+	close_soft_keyboard(_gold_amount.get_line_edit())
+
+
+func _finish_amount() -> void:
+	_gold_amount.apply()
+	close_soft_keyboard(_gold_amount.get_line_edit())
+
+
 func _save() -> void:
 	_gold_amount.apply()
+	close_soft_keyboard(_gold_amount.get_line_edit())
 	var contents: Array[String] = []
 	for item_id in _item_checks:
 		if (_item_checks[item_id] as CheckBox).button_pressed:

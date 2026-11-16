@@ -482,6 +482,8 @@ func _dimension_input() -> SpinBox:
 	spin.rounded = true
 	spin.value = 16
 	spin.custom_minimum_size.x = 90
+	spin.get_line_edit().virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	spin.get_line_edit().keep_editing_on_text_submit = false
 	return spin
 
 

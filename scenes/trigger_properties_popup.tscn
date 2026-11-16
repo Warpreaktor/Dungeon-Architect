@@ -59,6 +59,12 @@ layout_mode = 2
 alignment = 2
 theme_override_constants/separation = 12
 
+[node name="KeyboardDoneButton" type="Button" parent="Margin/Content/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(90, 42)
+text = "Готово"
+
 [node name="CancelButton" type="Button" parent="Margin/Content/Actions"]
 unique_name_in_owner = true
 layout_mode = 2

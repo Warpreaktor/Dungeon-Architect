@@ -80,6 +80,10 @@ func _refresh_contents() -> void:
 		else:
 			for index in range(quantity):
 				var label := definition.display_name
+				if definition.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
+					var values: Array = hero.shield_durabilities.get(item_id, [])
+					if index < values.size():
+						label += "  ·  %d/%d" % [int(values[index]), definition.max_durability]
 				if index == 0 and item_id in [hero.equipped_weapon_id, hero.equipped_shield_id]:
 					label += "  ·  надето"
 				_add_entry(item_id, label, definition.icon)
@@ -144,6 +148,8 @@ func _show_item(index: int) -> void:
 		details += "\nАтака: +%d" % item.attack_bonus
 	if item.defense_bonus > 0:
 		details += "\nБлок: +%d" % item.defense_bonus
+		if item.max_durability > 0:
+			details += "\nПрочность: %d / %d" % [_session.hero.current_shield_durability(item_id), item.max_durability]
 	if _is_equipped(item_id):
 		details += "\nНадето"
 	_item_properties.text = details

@@ -674,16 +674,16 @@ func _on_chest_tapped(chest_id: String) -> void:
 	_canvas.finish_edit_stroke()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":
-			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity))
-			_chest_popup.popup_centered_clamped(Vector2i(420, 490), 0.9)
+			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity), false, DungeonMap.chest_is_random(entity))
+			_chest_popup.popup_centered_clamped(Vector2i(470, 530), 0.9)
 			return
 
 
-func _on_chest_contents_changed(chest_id: String, contents: Array[String], gold_amount: int) -> void:
+func _on_chest_contents_changed(chest_id: String, contents: Array[String], gold_amount: int, random_mode: bool) -> void:
 	if is_play_mode:
 		return
 	var before := _canvas.capture_edit_state()
-	if map_data.set_chest_contents(chest_id, contents, gold_amount):
+	if map_data.set_chest_contents(chest_id, contents, gold_amount, random_mode):
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()
@@ -695,16 +695,16 @@ func _on_monster_tapped(monster_entity_id: String) -> void:
 	_canvas.finish_edit_stroke()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == monster_entity_id and str(entity.get("type", "")) == "monster":
-			_monster_loot_popup.configure(monster_entity_id, DungeonMap.monster_loot_contents(entity), DungeonMap.monster_gold_amount(entity), true)
-			_monster_loot_popup.popup_centered_clamped(Vector2i(420, 490), 0.9)
+			_monster_loot_popup.configure(monster_entity_id, DungeonMap.monster_loot_contents(entity), DungeonMap.monster_gold_amount(entity), true, DungeonMap.monster_loot_is_random(entity))
+			_monster_loot_popup.popup_centered_clamped(Vector2i(470, 530), 0.9)
 			return
 
 
-func _on_monster_loot_changed(monster_entity_id: String, contents: Array[String], gold_amount: int) -> void:
+func _on_monster_loot_changed(monster_entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool) -> void:
 	if is_play_mode:
 		return
 	var before := _canvas.capture_edit_state()
-	if map_data.set_monster_loot(monster_entity_id, contents, gold_amount):
+	if map_data.set_monster_loot(monster_entity_id, contents, gold_amount, random_mode):
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()
@@ -1379,7 +1379,15 @@ func _show_combat_view() -> void:
 	_canvas_host.add_child(_battle_view)
 	_battle_view.battle_won.connect(_finish_combat)
 	_battle_view.battle_lost.connect(_lose_combat)
+	_battle_view.shield_broken.connect(_on_battle_shield_broken)
 	_battle_view.begin(CombatSession.new(game_session.pending_monster_definition(), game_session.hero), game_session.hero)
+
+
+
+func _on_battle_shield_broken(_item_id: String) -> void:
+	if game_session != null:
+		game_session.resolve_broken_shield()
+		_update_hero_hud()
 
 
 func _finish_combat() -> void:

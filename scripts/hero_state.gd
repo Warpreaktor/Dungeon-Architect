@@ -18,6 +18,10 @@ var defense: int = START_DEFENSE
 var gold: int = 0
 var equipped_weapon_id: String = ""
 var equipped_shield_id: String = ""
+## Состояние экземпляров щитов: каждый найденный щит имеет собственную прочность.
+var shield_durabilities: Dictionary = {} # item_id -> Array[int]
+var last_shield_broken: String = ""
+
 
 
 func _init(hero_definition: HeroDefinition = null) -> void:
@@ -91,8 +95,40 @@ func restore_health(amount: int) -> int:
 	return restored
 
 
-## Возвращает реально полученный урон; поглощение не уводит его ниже нуля.
+## У нового щита полная прочность; копии одного типа изнашиваются независимо.
+func register_shield(item: ItemDefinition) -> void:
+	if item == null or item.equipment_slot != ItemDefinition.EquipmentSlot.SHIELD:
+		return
+	var values: Array = shield_durabilities.get(item.item_id, [])
+	values.append(maxi(item.max_durability, item.defense_bonus))
+	shield_durabilities[item.item_id] = values
+
+
+func current_shield_durability(item_id: String) -> int:
+	var values: Array = shield_durabilities.get(item_id, [])
+	return int(values[0]) if not values.is_empty() else 0
+
+
+## Возвращает реально полученный HP-урон. Щит расходует прочность на заблокированный
+## урон и сообщает GameSession, какой экземпляр требуется удалить из рюкзака.
 func take_damage(incoming: int) -> int:
-	var taken := maxi(incoming - defense, 0)
-	health = maxi(health - taken, 0)
-	return taken
+	last_shield_broken = ""
+	var remaining: int = maxi(incoming - base_defense, 0)
+	if not equipped_shield_id.is_empty():
+		var item: ItemDefinition = ItemCatalog.get_item(equipped_shield_id)
+		if item != null:
+			var durability: int = current_shield_durability(equipped_shield_id)
+			var blocked: int = mini(remaining, mini(item.defense_bonus, durability))
+			remaining -= blocked
+			if blocked > 0:
+				var values: Array = shield_durabilities.get(equipped_shield_id, [])
+				values[0] = durability - blocked
+				if int(values[0]) <= 0:
+					last_shield_broken = equipped_shield_id
+					values.remove_at(0)
+				shield_durabilities[equipped_shield_id] = values
+				if not last_shield_broken.is_empty():
+					equipped_shield_id = ""
+					_recalculate_equipment_stats()
+	health = maxi(health - remaining, 0)
+	return remaining

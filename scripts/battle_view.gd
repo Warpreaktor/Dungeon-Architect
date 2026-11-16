@@ -5,6 +5,7 @@ extends Control
 ## Сведения о здоровье, атаке и блоке берутся из CombatSession/HeroState.
 signal battle_won
 signal battle_lost
+signal shield_broken(item_id: String)
 
 @onready var _hero_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroHealthMeter
 @onready var _enemy_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyHealthMeter
@@ -44,7 +45,8 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 		_hero_name.text = hero.definition.display_name
 		_hero_portrait.texture = hero.definition.portrait
 	_hero_attack_damage = hero.attack
-	_attack_name = "Удар мечом" if not hero.equipped_weapon_id.is_empty() else "Удар кулаком"
+	var equipped_weapon: ItemDefinition = ItemCatalog.get_item(hero.equipped_weapon_id)
+	_attack_name = "Удар: " + equipped_weapon.display_name if equipped_weapon != null else "Удар кулаком"
 	var weapon: ItemDefinition = ItemCatalog.get_item(hero.equipped_weapon_id)
 	var weapon_icon: Texture2D = weapon.icon if weapon != null else _default_attack_icon
 	_punch_button.text = "%s  ·  %d" % [_attack_name, _hero_attack_damage]
@@ -97,6 +99,13 @@ func _show_enemy_reply() -> void:
 		if blocked > 0:
 			_result_text.text += "  ·  блок: %d" % blocked
 
+	if not _combat.hero.last_shield_broken.is_empty():
+		var broken_id: String = _combat.hero.last_shield_broken
+		_result_text.text += "  ·  Щит разбит"
+		_hero_defense_value.text = str(_combat.hero.defense)
+		_hero_defense_icon.modulate = Color(0.55, 0.60, 0.67, 0.65)
+		_defense_idle_color = _hero_defense_icon.modulate
+		shield_broken.emit(broken_id)
 	if blocked > 0:
 		var shield_flash: Tween = create_tween()
 		shield_flash.tween_property(_hero_defense_icon, "modulate", Color(0.35, 0.85, 1.0), 0.15)

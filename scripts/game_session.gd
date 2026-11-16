@@ -113,14 +113,12 @@ func win_pending_encounter() -> bool:
 	encounter_target = Vector2i(-1, -1)
 	var moved: bool = move_by(target.x - player_pos.x, target.y - player_pos.y)
 	if not defeated.is_empty():
-		var rewards: Array[Dictionary] = []
-		for item_id in DungeonMap.monster_loot_contents(defeated):
-			var item: ItemDefinition = ItemCatalog.get_item(item_id)
-			if item == null:
-				continue
-			var quantity: int = DungeonMap.monster_gold_amount(defeated) if item_id == "gold" else item.default_quantity
-			_receive_item(item_id, quantity)
-			rewards.append({"item_id": item_id, "quantity": quantity})
+		var rewards: Array[Dictionary] = _resolve_rewards(
+			DungeonMap.monster_loot_contents(defeated),
+			DungeonMap.monster_loot_is_random(defeated),
+			DungeonMap.monster_gold_amount(defeated))
+		for reward in rewards:
+			_receive_item(str(reward["item_id"]), int(reward["quantity"]))
 		if not rewards.is_empty():
 			_activate_message_at(target, "monster_defeated", defeated_id, rewards)
 	return moved
@@ -201,7 +199,7 @@ func move_by(dx: int, dy: int) -> bool:
 		return false
 
 	var chest := _find_active_entity(target, "chest")
-	if not chest.is_empty() and not is_chest_open(chest) and not DungeonMap.chest_contents(chest).is_empty():
+	if not chest.is_empty() and not is_chest_open(chest) and (DungeonMap.chest_is_random(chest) or not DungeonMap.chest_contents(chest).is_empty()):
 		_open_chest(chest)
 		return false # Открытие занимает попытку шага, герой остаётся рядом.
 
@@ -231,18 +229,29 @@ func move_by(dx: int, dy: int) -> bool:
 	return true
 
 
+## Случайная награда разыгрывается в момент открытия и живёт только в GameSession.
+func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: int) -> Array[Dictionary]:
+	var rewards: Array[Dictionary] = []
+	if random_mode:
+		rewards.append(ItemCatalog.roll_loot())
+	else:
+		for item_id in contents:
+			var item: ItemDefinition = ItemCatalog.get_item(item_id)
+			if item == null:
+				continue
+			var quantity: int = gold_amount if item_id == "gold" else item.default_quantity
+			rewards.append({"item_id": item_id, "quantity": quantity})
+	return rewards
+
+
 func _open_chest(chest: Dictionary) -> void:
 	opened_chests[str(chest["id"])] = true
-	var contents: Array[String] = DungeonMap.chest_contents(chest)
-	var rewards: Array[Dictionary] = []
-	for item_id in contents:
-		var item := ItemCatalog.get_item(item_id)
-		if item == null:
-			continue
-		var quantity: int = DungeonMap.chest_gold_amount(chest) if item_id == "gold" else item.default_quantity
-		_receive_item(item_id, quantity)
-		rewards.append({"item_id": item_id, "quantity": quantity})
-	# Авторское послание и найденные сокровища показываются в ОДНОМ окне.
+	var rewards: Array[Dictionary] = _resolve_rewards(
+		DungeonMap.chest_contents(chest),
+		DungeonMap.chest_is_random(chest),
+		DungeonMap.chest_gold_amount(chest))
+	for reward in rewards:
+		_receive_item(str(reward["item_id"]), int(reward["quantity"]))
 	_activate_message_at(Vector2i(int(chest["x"]), int(chest["y"])), "chest_open", str(chest["id"]), rewards)
 
 
@@ -255,6 +264,9 @@ func _receive_item(item_id: String, quantity: int) -> void:
 		hero.gold += quantity
 	else:
 		carried_items[item_id] = int(carried_items.get(item_id, 0)) + quantity
+		if item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
+			for index in range(quantity):
+				hero.register_shield(item)
 		if item.category == ItemDefinition.Category.EQUIPMENT:
 			# Первая находка заполняет пустой слот; следующую можно надеть вручную.
 			if item.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON and hero.equipped_weapon_id.is_empty():
@@ -277,6 +289,16 @@ func unequip_item(item_id: String) -> bool:
 	if hero == null:
 		return false
 	return hero.unequip_item(item_id)
+
+
+## Выполняется после ответной атаки; удаляем только сломанный экземпляр.
+func resolve_broken_shield() -> String:
+	if hero == null or hero.last_shield_broken.is_empty():
+		return ""
+	var item_id: String = hero.last_shield_broken
+	hero.last_shield_broken = ""
+	_remove_carried_item(item_id, 1)
+	return item_id
 
 
 ## Сообщение используется в самом окне инвентаря, не как всплывающий игровой диалог.

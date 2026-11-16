@@ -8,7 +8,18 @@ const DEFINITIONS := {
 	"potion": preload("res://items/potion.tres"),
 	"gold": preload("res://items/gold.tres"),
 	"sword": preload("res://items/sword.tres"),
-	"shield": preload("res://items/shield.tres")
+	"shield": preload("res://items/shield.tres"),
+	"battle_axe": preload("res://items/battle_axe.tres"),
+	"mace": preload("res://items/mace.tres"),
+	"dagger": preload("res://items/dagger.tres"),
+	"pickaxe": preload("res://items/pickaxe.tres"),
+	"flail": preload("res://items/flail.tres"),
+	"spear": preload("res://items/spear.tres"),
+	"hatchet": preload("res://items/hatchet.tres"),
+	"wooden_shield": preload("res://items/wooden_shield.tres"),
+	"heraldic_shield": preload("res://items/heraldic_shield.tres"),
+	"tower_shield": preload("res://items/tower_shield.tres"),
+	"spiked_shield": preload("res://items/spiked_shield.tres")
 }
 
 
@@ -22,3 +33,26 @@ static func quantity_for_entity(entity: Dictionary) -> int:
 		return 0
 	var properties: Dictionary = entity.get("properties", {})
 	return maxi(1, int(properties.get("quantity", definition.default_quantity)))
+
+
+## Одна награда на открытие; выпадение рассчитывается только в GameSession.
+const RANDOM_LOOT_POOL := [
+	"gold", "gold", "gold", "potion", "key",
+	"sword", "dagger", "hatchet", "spear", "mace", "pickaxe",
+	"battle_axe", "flail", "shield", "wooden_shield", "heraldic_shield", "tower_shield", "spiked_shield"
+]
+
+static func roll_loot() -> Dictionary:
+	var item_id: String = RANDOM_LOOT_POOL.pick_random()
+	var definition: ItemDefinition = get_item(item_id)
+	var quantity: int = randi_range(3, 12) if item_id == "gold" else definition.default_quantity
+	return {"item_id": item_id, "quantity": quantity}
+
+static func equipment_ids() -> Array[String]:
+	var result: Array[String] = []
+	for item_id in DEFINITIONS:
+		var item: ItemDefinition = get_item(item_id)
+		if item != null and item.category == ItemDefinition.Category.EQUIPMENT:
+			result.append(item_id)
+	result.sort()
+	return result

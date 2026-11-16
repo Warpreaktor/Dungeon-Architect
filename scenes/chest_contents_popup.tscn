@@ -1,11 +1,6 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/chest_contents_popup.gd" id="1_popup_script"]
-[ext_resource type="Texture2D" path="res://assets/icons/key.png" id="2_key_icon"]
-[ext_resource type="Texture2D" path="res://assets/icons/potion.png" id="3_potion_icon"]
-[ext_resource type="Texture2D" path="res://assets/icons/gold.png" id="4_gold_icon"]
-[ext_resource type="Texture2D" path="res://assets/icons/sword.png" id="5_sword_icon"]
-[ext_resource type="Texture2D" path="res://assets/icons/shield.png" id="6_shield_icon"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_popup"]
 bg_color = Color(0.105, 0.153, 0.198, 1)
@@ -23,14 +18,11 @@ content_margin_top = 12.0
 content_margin_right = 12.0
 content_margin_bottom = 12.0
 
-[sub_resource type="Theme" id="Theme_chest"]
-PopupPanel/styles/panel = SubResource("StyleBoxFlat_popup")
-
 [node name="ChestContentsPopup" type="PopupPanel"]
-size = Vector2i(420, 490)
+size = Vector2i(460, 530)
 transparent = false
-theme = SubResource("Theme_chest")
 script = ExtResource("1_popup_script")
+theme_override_styles/panel = SubResource("StyleBoxFlat_popup")
 
 [node name="ContentMargin" type="MarginContainer" parent="."]
 anchors_preset = 15
@@ -46,114 +38,50 @@ layout_mode = 2
 theme_override_constants/separation = 10
 
 [node name="Title" type="Label" parent="ContentMargin/Content"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.77, 0.54, 1)
 theme_override_font_sizes/font_size = 21
 text = "Содержимое сундука"
 
-[node name="Description" type="Label" parent="ContentMargin/Content"]
+[node name="RandomCheck" type="CheckBox" parent="ContentMargin/Content"]
+unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.71, 0.79, 0.83, 1)
-text = "Что находится внутри?"
+text = "Случайная награда"
 
 [node name="Separator" type="HSeparator" parent="ContentMargin/Content"]
 layout_mode = 2
 
-[node name="KeyRow" type="HBoxContainer" parent="ContentMargin/Content"]
+[node name="LootScroll" type="ScrollContainer" parent="ContentMargin/Content"]
+custom_minimum_size = Vector2(0, 335)
 layout_mode = 2
-theme_override_constants/separation = 12
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
-[node name="KeyIcon" type="TextureRect" parent="ContentMargin/Content/KeyRow"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 2
-texture = ExtResource("2_key_icon")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="KeyCheck" type="CheckBox" parent="ContentMargin/Content/KeyRow"]
+[node name="LootRows" type="VBoxContainer" parent="ContentMargin/Content/LootScroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Ключ"
-
-[node name="PotionRow" type="HBoxContainer" parent="ContentMargin/Content"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="PotionIcon" type="TextureRect" parent="ContentMargin/Content/PotionRow"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 2
-texture = ExtResource("3_potion_icon")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="PotionCheck" type="CheckBox" parent="ContentMargin/Content/PotionRow"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Зелье"
+theme_override_constants/separation = 2
 
 [node name="GoldRow" type="HBoxContainer" parent="ContentMargin/Content"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="GoldIcon" type="TextureRect" parent="ContentMargin/Content/GoldRow"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 2
-texture = ExtResource("4_gold_icon")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="GoldCheck" type="CheckBox" parent="ContentMargin/Content/GoldRow"]
-unique_name_in_owner = true
+[node name="GoldLabel" type="Label" parent="ContentMargin/Content/GoldRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Золото"
+text = "Количество монет"
 
 [node name="GoldAmount" type="SpinBox" parent="ContentMargin/Content/GoldRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(112, 40)
+custom_minimum_size = Vector2(125, 40)
 layout_mode = 2
 min_value = 1.0
 max_value = 999999.0
 value = 5.0
 step = 1.0
 rounded = true
-suffix = "мон."
-
-[node name="SwordRow" type="HBoxContainer" parent="ContentMargin/Content"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="SwordIcon" type="TextureRect" parent="ContentMargin/Content/SwordRow"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 2
-texture = ExtResource("5_sword_icon")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="SwordCheck" type="CheckBox" parent="ContentMargin/Content/SwordRow"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Меч"
-
-[node name="ShieldRow" type="HBoxContainer" parent="ContentMargin/Content"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="ShieldIcon" type="TextureRect" parent="ContentMargin/Content/ShieldRow"]
-custom_minimum_size = Vector2(40, 40)
-layout_mode = 2
-texture = ExtResource("6_shield_icon")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="ShieldCheck" type="CheckBox" parent="ContentMargin/Content/ShieldRow"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Щит"
 
 [node name="Buttons" type="HBoxContainer" parent="ContentMargin/Content"]
 layout_mode = 2

@@ -210,7 +210,7 @@ func _draw_cell(x: int, y: int) -> void:
 		if mode == "play" and kind in ["player_spawn", "trigger", "message"]:
 			continue
 		var origin := Vector2(x, y) * TILE_SIZE
-		if kind == "chest" and (DungeonMap.chest_contents(entity).is_empty() or (mode == "play" and game_session != null and game_session.is_chest_open(entity))):
+		if kind == "chest" and ((DungeonMap.chest_contents(entity).is_empty() and not DungeonMap.chest_is_random(entity)) or (mode == "play" and game_session != null and game_session.is_chest_open(entity))):
 			_draw_open_chest(origin)
 		elif kind == "monster":
 			var icon: Texture2D = MonsterCatalog.from_entity(entity).icon

@@ -7,7 +7,7 @@ extends RefCounted
 const FORMAT_VERSION := 1
 const MAX_SIZE := 256
 const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "gold", "trigger", "player_spawn", "message"]
-const CHEST_REWARDS := ["key", "potion", "gold", "sword", "shield"]
+static var CHEST_REWARDS: Array = ["key", "potion", "gold"] + ItemCatalog.equipment_ids()
 
 var map_id: String = ""
 var display_name: String = "Безымянное подземелье"
@@ -71,14 +71,14 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 	var properties: Dictionary = {}
 	if kind == "chest":
 		# Новый сундук пустой: содержимое автор задаёт после размещения.
-		properties = {"contents": []}
+		properties = {"contents": [], "loot_mode": "random"}
 	elif kind == "stairs_down":
 		properties = {"target_map_id": "", "target_x": 0, "target_y": 0}
 	elif kind == "monster":
 		var monster_id: String = str(options.get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
 		if not MonsterCatalog.DEFINITIONS.has(monster_id):
 			monster_id = MonsterCatalog.DEFAULT_MONSTER_ID
-		properties = {"monster_id": monster_id, "loot_contents": []}
+		properties = {"monster_id": monster_id, "loot_contents": [], "loot_mode": "random"}
 	elif kind == "trigger":
 		properties = {"event_id": ""}
 	elif kind == "message":
@@ -117,21 +117,29 @@ static func chest_gold_amount(chest: Dictionary) -> int:
 	return clampi(int(properties.get("gold_amount", 5)), 1, 999999)
 
 
-func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amount: int = 5) -> bool:
+static func chest_is_random(chest: Dictionary) -> bool:
+	var properties: Dictionary = chest.get("properties", {})
+	if properties.has("loot_mode"):
+		return str(properties["loot_mode"]) == "random"
+	return chest_contents(chest).is_empty()
+
+
+func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amount: int = 5, random_mode: bool = false) -> bool:
 	var normalized: Array[String] = []
 	for item in new_contents:
 		if item in CHEST_REWARDS and item not in normalized:
 			normalized.append(item)
-	var amount := clampi(gold_amount, 1, 999999)
+	var amount: int = clampi(gold_amount, 1, 999999)
 	for entity in entities:
-		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":
-			if chest_contents(entity) == normalized and ("gold" not in normalized or chest_gold_amount(entity) == amount):
-				return false
-			var properties: Dictionary = {"contents": normalized.duplicate()}
-			if "gold" in normalized:
-				properties["gold_amount"] = amount
-			entity["properties"] = properties
-			return true
+		if str(entity.get("id", "")) != chest_id or str(entity.get("type", "")) != "chest":
+			continue
+		if chest_contents(entity) == normalized and chest_is_random(entity) == random_mode and ("gold" not in normalized or chest_gold_amount(entity) == amount):
+			return false
+		var properties: Dictionary = {"contents": normalized.duplicate(), "loot_mode": "random" if random_mode else "fixed"}
+		if "gold" in normalized:
+			properties["gold_amount"] = amount
+		entity["properties"] = properties
+		return true
 	return false
 
 
@@ -154,7 +162,14 @@ static func monster_gold_amount(monster: Dictionary) -> int:
 	return clampi(int(properties.get("loot_gold_amount", 5)), 1, 999999)
 
 
-func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: int = 5) -> bool:
+static func monster_loot_is_random(monster: Dictionary) -> bool:
+	var properties: Dictionary = monster.get("properties", {})
+	if properties.has("loot_mode"):
+		return str(properties["loot_mode"]) == "random"
+	return monster_loot_contents(monster).is_empty()
+
+
+func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: int = 5, random_mode: bool = false) -> bool:
 	var normalized: Array[String] = []
 	for item_id in contents:
 		if item_id in CHEST_REWARDS and item_id not in normalized:
@@ -163,10 +178,11 @@ func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: 
 	for entity in entities:
 		if str(entity.get("id", "")) != monster_id or str(entity.get("type", "")) != "monster":
 			continue
-		if monster_loot_contents(entity) == normalized and ("gold" not in normalized or monster_gold_amount(entity) == amount):
+		if monster_loot_contents(entity) == normalized and monster_loot_is_random(entity) == random_mode and ("gold" not in normalized or monster_gold_amount(entity) == amount):
 			return false
 		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
 		properties["loot_contents"] = normalized.duplicate()
+		properties["loot_mode"] = "random" if random_mode else "fixed"
 		properties.erase("loot_gold_amount")
 		if "gold" in normalized:
 			properties["loot_gold_amount"] = amount

@@ -16,4 +16,5 @@ enum EquipmentSlot { NONE, WEAPON, SHIELD }
 @export var equipment_slot: EquipmentSlot = EquipmentSlot.NONE
 @export var attack_bonus: int = 0
 @export var defense_bonus: int = 0
+@export_range(0, 999, 1) var max_durability: int = 0
 @export_range(0, 9999, 1) var healing_amount: int = 0

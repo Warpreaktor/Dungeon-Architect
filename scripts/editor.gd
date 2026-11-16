@@ -17,6 +17,8 @@ const GAME_DIALOGUE_SCENE: PackedScene = preload("res://scenes/game_dialogue_vie
 const INVENTORY_VIEW_SCENE: PackedScene = preload("res://scenes/inventory_view.tscn")
 const GAME_COMMAND_BAR_SCENE: PackedScene = preload("res://scenes/game_command_bar.tscn")
 const GAME_SYSTEM_MENU_SCENE: PackedScene = preload("res://scenes/game_system_menu.tscn")
+const MAP_SCREEN_SCENE: PackedScene = preload("res://scenes/map_screen.tscn")
+const MINI_MAP_SCENE: PackedScene = preload("res://scenes/mini_map.tscn")
 const EDITOR_SETTINGS_PATH := "user://editor_state.cfg"
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
@@ -63,6 +65,10 @@ var _editor_header: PanelContainer
 var _console_row: HBoxContainer
 var _game_command_bar: GameCommandBar
 var _game_system_menu: GameSystemMenu
+var _map_screen: MapScreen
+var _mini_map: PanelContainer
+var _mini_overview: MapOverview
+var _minimap_enabled: bool = false
 var game_session: GameSession
 var is_dirty: bool = false
 var selected_tool: String = "hand"
@@ -229,8 +235,18 @@ func _build_interface() -> void:
 	_game_command_bar = GAME_COMMAND_BAR_SCENE.instantiate() as GameCommandBar
 	_game_command_bar.inventory_requested.connect(_toggle_inventory)
 	_game_command_bar.menu_requested.connect(_open_game_system_menu)
+	_game_command_bar.map_requested.connect(_toggle_map_screen)
 	_game_command_bar.visible = false
 	canvas_host.add_child(_game_command_bar)
+	_mini_map = MINI_MAP_SCENE.instantiate() as PanelContainer
+	_mini_overview = _mini_map.get_node("Overview") as MapOverview
+	_mini_overview.miniature = true
+	_mini_map.visible = false
+	canvas_host.add_child(_mini_map)
+	_map_screen = MAP_SCREEN_SCENE.instantiate() as MapScreen
+	_map_screen.closed.connect(_on_map_closed)
+	_map_screen.minimap_changed.connect(_set_minimap_enabled)
+	add_child(_map_screen)
 	_game_system_menu = GAME_SYSTEM_MENU_SCENE.instantiate() as GameSystemMenu
 	_game_system_menu.continue_requested.connect(_close_game_system_menu)
 	_game_system_menu.leave_requested.connect(_leave_from_game_system_menu)
@@ -1129,7 +1145,7 @@ func _emit_menu_requested() -> void:
 
 
 func _open_game_system_menu() -> void:
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	_game_command_bar.visible = false
 	_dpad.visible = false
@@ -1147,6 +1163,36 @@ func _close_game_system_menu() -> void:
 func _leave_from_game_system_menu() -> void:
 	_game_system_menu.dismiss()
 	_stop_play_mode()
+
+
+func _toggle_map_screen() -> void:
+	if _map_screen.visible:
+		_map_screen.dismiss_by_player()
+		return
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _inventory_view.visible or _game_system_menu.visible or _game_dialogue.visible:
+		return
+	_map_screen.open_for(game_session, _minimap_enabled)
+	_game_command_bar.visible = false
+	_dpad.visible = false
+
+
+func _on_map_closed() -> void:
+	if is_play_mode and not _combat_active and _victory_view == null:
+		_game_command_bar.visible = true
+		_dpad.visible = true
+		_canvas.grab_focus()
+
+
+func _set_minimap_enabled(enabled: bool) -> void:
+	_minimap_enabled = enabled
+	_mini_map.visible = is_play_mode and enabled and not _combat_active and _victory_view == null
+	if _mini_map.visible:
+		_mini_overview.refresh()
+
+
+func _refresh_map_overlays() -> void:
+	if _mini_map.visible:
+		_mini_overview.refresh()
 
 
 func _toggle_play_mode() -> void:
@@ -1167,10 +1213,13 @@ func _start_play_mode() -> void:
 	game_session = session
 	_inventory_view.dismiss()
 	_game_system_menu.dismiss()
+	_map_screen.dismiss()
 	_pending_game_messages.clear()
 	is_play_mode = true
 	_canvas.set_game_session(session)
+	_canvas.zoom = DungeonCanvas.PLAY_START_ZOOM
 	_canvas.center_on_cell(session.player_pos)
+	_mini_overview.show_session(session)
 	_canvas.grab_focus()
 	_update_mode_ui()
 	# При входе из главного меню ожидаем фактический размер игрового поля.
@@ -1199,6 +1248,8 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 	_game_dialogue.dismiss()
 	_inventory_view.dismiss()
 	_game_system_menu.dismiss()
+	_map_screen.dismiss()
+	_mini_map.visible = false
 	_pending_game_messages.clear()
 	game_session = null
 	is_play_mode = false
@@ -1225,6 +1276,7 @@ func _update_mode_ui() -> void:
 	_dpad.visible = is_play_mode
 	_hero_hud.visible = is_play_mode
 	_game_command_bar.visible = is_play_mode and not _combat_active and _victory_view == null
+	_mini_map.visible = is_play_mode and _minimap_enabled and not _combat_active and _victory_view == null
 	_game_notice.visible = is_play_mode
 	for control in _editor_controls:
 		if control is BaseButton:
@@ -1237,7 +1289,7 @@ func _update_mode_ui() -> void:
 
 
 func _toggle_inventory() -> void:
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _game_system_menu.visible:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	if _inventory_view.visible:
 		_inventory_view.close_by_player()
@@ -1326,7 +1378,7 @@ func _log_trigger_events() -> void:
 
 
 func _try_move_player(dx: int, dy: int) -> void:
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	var moved := game_session.move_by(dx, dy)
 	if game_session.has_pending_encounter():
@@ -1338,6 +1390,7 @@ func _try_move_player(dx: int, dy: int) -> void:
 		_canvas.center_on_cell(game_session.player_pos)
 	# Сундук меняет вид при открытии, даже если сам герой не сдвинулся.
 	_canvas.queue_redraw()
+	_refresh_map_overlays()
 	_refresh_stats()
 	_log_trigger_events()
 	_collect_game_messages()
@@ -1356,11 +1409,12 @@ func _start_combat() -> void:
 	_combat_active = true
 	_game_command_bar.visible = false
 	_dpad.visible = false
+	_mini_map.visible = false
 	_hero_hud.visible = false
 	_game_notice.clear()
 	_pre_combat_zoom = _canvas.zoom
 	var original_offset: Vector2 = _canvas.camera_offset
-	var focus_zoom: float = minf(_pre_combat_zoom * 1.5, 3.5)
+	var focus_zoom: float = minf(_pre_combat_zoom * 1.25, DungeonCanvas.PLAY_MAX_ZOOM * 1.4)
 	var target_center: Vector2 = (Vector2(game_session.encounter_target) + Vector2.ONE * 0.5) * DungeonCanvas.TILE_SIZE
 	var target_offset: Vector2 = _canvas.size * 0.5 - target_center * focus_zoom
 	_combat_camera_tween = create_tween()
@@ -1407,9 +1461,11 @@ func _finish_combat() -> void:
 	_canvas.center_on_cell(game_session.player_pos)
 	_game_command_bar.visible = true
 	_dpad.visible = true
+	_mini_map.visible = _minimap_enabled
 	_hero_hud.visible = true
 	_canvas.grab_focus()
 	_canvas.queue_redraw()
+	_refresh_map_overlays()
 	_refresh_stats()
 	_log_trigger_events()
 	_collect_game_messages()
@@ -1449,6 +1505,7 @@ func _show_end_view(defeated: bool) -> void:
 		return
 	_dpad.visible = false
 	_game_command_bar.visible = false
+	_mini_map.visible = false
 	_hero_hud.visible = false
 	_game_notice.clear()
 	_victory_view = VICTORY_VIEW_SCENE.instantiate() as VictoryView
@@ -1489,6 +1546,15 @@ func _abort_combat() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if is_play_mode:
+			if _map_screen.visible:
+				if event.keycode in [KEY_ESCAPE, KEY_M]:
+					_map_screen.dismiss_by_player()
+				get_viewport().set_input_as_handled()
+				return
+			if event.keycode == KEY_M and not _combat_active and _victory_view == null:
+				_toggle_map_screen()
+				get_viewport().set_input_as_handled()
+				return
 			if _game_system_menu.visible:
 				if event.keycode == KEY_ESCAPE:
 					_close_game_system_menu()

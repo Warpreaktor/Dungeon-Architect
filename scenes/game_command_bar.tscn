@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/game_command_bar.gd" id="1_script"]
 [ext_resource type="Texture2D" path="res://assets/hud/bag.png" id="2_bag"]
 [ext_resource type="Texture2D" path="res://assets/hud/menu.png" id="3_menu"]
+[ext_resource type="Texture2D" path="res://assets/hud/map.png" id="4_map"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_toolbar"]
 bg_color = Color(0.08, 0.12, 0.16, 0.92)
@@ -26,7 +27,7 @@ script = ExtResource("1_script")
 [node name="Anchor" type="MarginContainer" parent="."]
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -300.0
+offset_left = -402.0
 offset_top = 12.0
 offset_right = -12.0
 offset_bottom = 70.0
@@ -52,7 +53,7 @@ theme_override_constants/separation = 7
 
 [node name="InventoryButton" type="Button" parent="Anchor/Panel/Margins/Commands"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(144, 44)
+custom_minimum_size = Vector2(135, 44)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Инвентарь"
@@ -60,6 +61,17 @@ icon = ExtResource("2_bag")
 icon_alignment = 0
 expand_icon = true
 tooltip_text = "Инвентарь (I)"
+
+[node name="MapButton" type="Button" parent="Anchor/Panel/Margins/Commands"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(93, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Карта"
+icon = ExtResource("4_map")
+icon_alignment = 0
+expand_icon = true
+tooltip_text = "Карта (M)"
 
 [node name="MenuButton" type="Button" parent="Anchor/Panel/Margins/Commands"]
 unique_name_in_owner = true

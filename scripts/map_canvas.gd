@@ -16,6 +16,9 @@ const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
 const WALL_TEXTURE: Texture2D = preload("res://assets/stone_wall.png")
 const DOUBLE_TAP_MS := 400
 const TAP_MOVE_LIMIT := 16.0
+const PLAY_START_ZOOM := 4.0
+const PLAY_MIN_ZOOM := 3.25
+const PLAY_MAX_ZOOM := 4.0
 
 var map_data: DungeonMap
 var game_session: GameSession
@@ -54,12 +57,19 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_ALL
 	clip_contents = true
-	resized.connect(queue_redraw)
+	resized.connect(_on_canvas_resized)
 	_settings_tap_timer = Timer.new()
 	_settings_tap_timer.one_shot = true
 	_settings_tap_timer.wait_time = float(DOUBLE_TAP_MS) / 1000.0
 	_settings_tap_timer.timeout.connect(_on_settings_tap_timeout)
 	add_child(_settings_tap_timer)
+
+
+func _on_canvas_resized() -> void:
+	if mode == "play" and game_session != null:
+		center_on_cell(game_session.player_pos)
+	else:
+		queue_redraw()
 
 
 func set_map(value: DungeonMap) -> void:
@@ -145,10 +155,14 @@ func center_on_cell(cell: Vector2i) -> void:
 
 
 func zoom_at(screen_point: Vector2, factor: float) -> void:
-	var new_zoom := clampf(zoom * factor, 0.2, 3.5)
-	camera_offset = screen_point - (screen_point - camera_offset) * (new_zoom / zoom)
-	zoom = new_zoom
-	queue_redraw()
+	var new_zoom := clampf(zoom * factor, PLAY_MIN_ZOOM if mode == "play" else 0.2, PLAY_MAX_ZOOM if mode == "play" else 3.5)
+	if mode == "play" and game_session != null:
+		zoom = new_zoom
+		center_on_cell(game_session.player_pos)
+	else:
+		camera_offset = screen_point - (screen_point - camera_offset) * (new_zoom / zoom)
+		zoom = new_zoom
+		queue_redraw()
 
 
 func _draw() -> void:
@@ -501,7 +515,7 @@ func _gui_input(event: InputEvent) -> void:
 			zoom_at(event.position, 1.0 / 1.12)
 			accept_event()
 		elif event.button_index == MOUSE_BUTTON_MIDDLE:
-			_panning = event.pressed
+			_panning = event.pressed if mode == "edit" else false
 			accept_event()
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			if mode == "edit" and selected_tool == "message":
@@ -542,7 +556,8 @@ func _gui_input(event: InputEvent) -> void:
 				accept_event()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			if mode == "play":
-				_panning = event.pressed
+				# В игре камера следует за героем; свободный обзор — в экране карты.
+				_panning = false
 			elif mode == "edit" and selected_tool != "hand":
 				_erasing = event.pressed
 				if event.pressed:
@@ -603,7 +618,18 @@ func _gui_input(event: InputEvent) -> void:
 			var old_point: Vector2 = _touch_positions[event.index]
 			var old_positions := _touch_positions.values()
 			_touch_positions[event.index] = event.position
-			if mode == "play" or (mode == "edit" and selected_tool == "hand"):
+			if mode == "play":
+				# Одним пальцем карту не сдвигаем. Два пальца меняют только масштаб.
+				if _touch_positions.size() >= 2:
+					var new_positions := _touch_positions.values()
+					var old_a: Vector2 = old_positions[0]
+					var old_b: Vector2 = old_positions[1]
+					var new_a: Vector2 = new_positions[0]
+					var new_b: Vector2 = new_positions[1]
+					var old_distance := old_a.distance_to(old_b)
+					if old_distance > 20.0:
+						zoom_at(size * 0.5, new_a.distance_to(new_b) / old_distance)
+			elif mode == "edit" and selected_tool == "hand":
 				if _touch_positions.size() == 1:
 					var touch_origin: Vector2 = _touch_starts.get(event.index, event.position)
 					if event.position.distance_to(touch_origin) > TAP_MOVE_LIMIT:

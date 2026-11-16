@@ -1,13 +1,16 @@
-[gd_resource type="Resource" script_class="HeroDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="HeroDefinition" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/hero_definition.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assets/heroes/volcha.png" id="2_portrait"]
+[ext_resource type="Texture2D" path="res://assets/heroes/volcha_portrait.png" id="2_portrait"]
+
+[ext_resource type="Texture2D" path="res://assets/heroes/volcha_map.png" id="3_map"]
 
 [resource]
 script = ExtResource("1_script")
 hero_id = "volcha"
 display_name = "Волча"
 portrait = ExtResource("2_portrait")
+map_icon = ExtResource("3_map")
 max_health = 48
 base_attack = 6
 base_defense = 0

@@ -222,6 +222,10 @@ func _draw_cell(x: int, y: int) -> void:
 
 
 func _draw_player(origin: Vector2) -> void:
+	var icon: Texture2D = game_session.hero.definition.map_icon if game_session != null and game_session.hero != null and game_session.hero.definition != null else null
+	if icon != null:
+		draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
+		return
 	var center := origin + Vector2.ONE * (TILE_SIZE / 2.0)
 	draw_circle(center + Vector2(0, -9), 8.0, Color("#f9fff4"))
 	draw_colored_polygon(PackedVector2Array([center + Vector2(-14, 17), center + Vector2(-10, 0), center + Vector2(0, -1), center + Vector2(10, 0), center + Vector2(14, 17)]), Color("#8af0c1"))

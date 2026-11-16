@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://l4ufl61fg5mu"
-path="res://.godot/imported/volcha.png-27e4ef7aa4074cc3c0d265e1112fef9f.ctex"
+uid="uid://djgxi3n3kvbh3"
+path="res://.godot/imported/petushan_map.png-52c53c1b43e9b1cebb90a4d79b3da021.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/heroes/volcha.png"
-dest_files=["res://.godot/imported/volcha.png-27e4ef7aa4074cc3c0d265e1112fef9f.ctex"]
+source_file="res://assets/heroes/petushan_map.png"
+dest_files=["res://.godot/imported/petushan_map.png-52c53c1b43e9b1cebb90a4d79b3da021.ctex"]
 
 [params]
 

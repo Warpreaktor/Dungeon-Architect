@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c3f35krcl6gdl"
-path="res://.godot/imported/petushan.png-fecd8b3a084aaea48ac987306702c491.ctex"
+uid="uid://diodar5ygje7r"
+path="res://.godot/imported/petushan_portrait.png-b0d356f0fe4f5d0ab1ffc89ea8c56bfc.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/heroes/petushan.png"
-dest_files=["res://.godot/imported/petushan.png-fecd8b3a084aaea48ac987306702c491.ctex"]
+source_file="res://assets/heroes/petushan_portrait.png"
+dest_files=["res://.godot/imported/petushan_portrait.png-b0d356f0fe4f5d0ab1ffc89ea8c56bfc.ctex"]
 
 [params]
 

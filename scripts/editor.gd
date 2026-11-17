@@ -161,6 +161,9 @@ var _size_preset: OptionButton
 var _width_input: SpinBox
 var _height_input: SpinBox
 var _dpad: Control
+var _held_dpad_direction := Vector2i.ZERO
+var _held_move_keys: Array[int] = []
+var _blocked_hold_direction := Vector2i.ZERO
 var _hero_hud: HeroHUD
 var _inventory_view: InventoryView
 var _game_notice: GameNotice
@@ -728,7 +731,8 @@ func _build_dpad(host: Control) -> void:
 			button.focus_mode = Control.FOCUS_NONE
 			button.custom_minimum_size = Vector2(68, 68)
 			button.add_theme_font_size_override("font_size", 28)
-			button.pressed.connect(_move_from_dpad.bind(direction))
+			button.button_down.connect(_on_dpad_down.bind(direction))
+			button.button_up.connect(_on_dpad_up.bind(direction))
 			grid.add_child(button)
 		else:
 			var spacer := Control.new()
@@ -737,8 +741,63 @@ func _build_dpad(host: Control) -> void:
 			grid.add_child(spacer)
 
 
-func _move_from_dpad(direction: Vector2i) -> void:
+## Движение начинается на нажатии и повторяется после завершения анимации.
+func _on_dpad_down(direction: Vector2i) -> void:
+	_held_dpad_direction = direction
+	_blocked_hold_direction = Vector2i.ZERO
+	_advance_held_move()
+
+
+func _on_dpad_up(direction: Vector2i) -> void:
+	if _held_dpad_direction == direction:
+		_held_dpad_direction = Vector2i.ZERO
+		_blocked_hold_direction = Vector2i.ZERO
+
+
+func _direction_for_key(keycode: int) -> Vector2i:
+	match keycode:
+		KEY_UP, KEY_W:
+			return Vector2i.UP
+		KEY_DOWN, KEY_S:
+			return Vector2i.DOWN
+		KEY_LEFT, KEY_A:
+			return Vector2i.LEFT
+		KEY_RIGHT, KEY_D:
+			return Vector2i.RIGHT
+	return Vector2i.ZERO
+
+
+func _held_move_direction() -> Vector2i:
+	if _held_dpad_direction != Vector2i.ZERO:
+		return _held_dpad_direction
+	if not _held_move_keys.is_empty():
+		return _direction_for_key(_held_move_keys.back())
+	return Vector2i.ZERO
+
+
+func _clear_held_movement() -> void:
+	_held_dpad_direction = Vector2i.ZERO
+	_held_move_keys.clear()
+	_blocked_hold_direction = Vector2i.ZERO
+
+
+func _movement_input_allowed() -> bool:
+	return is_play_mode and game_session != null and not _combat_active and _victory_view == null and not _game_dialogue.visible and not _inventory_view.visible and not _game_system_menu.visible and not _map_screen.visible
+
+
+func _advance_held_move() -> void:
+	var direction := _held_move_direction()
+	if direction == Vector2i.ZERO or direction == _blocked_hold_direction or not _movement_input_allowed() or _canvas.is_player_moving():
+		return
+	var previous_pos: Vector2i = game_session.player_pos
 	_try_move_player(direction.x, direction.y)
+	if not is_play_mode or game_session == null or game_session.player_pos == previous_pos:
+		# Упёрлись в стену/закрытую дверь: не спамим попытками каждый кадр.
+		_blocked_hold_direction = direction
+
+
+func _process(_delta: float) -> void:
+	_advance_held_move()
 
 
 func _panel(bg: Color) -> PanelContainer:
@@ -1685,6 +1744,7 @@ func _toggle_play_mode() -> void:
 
 
 func _start_play_mode() -> void:
+	_clear_held_movement()
 	_settings_dialog.hide()
 	_clear_reachability()
 	_pending_next_map = null
@@ -1731,6 +1791,7 @@ func _center_game_camera_after_layout() -> void:
 
 
 func _stop_play_mode(return_to_menu: bool = true) -> void:
+	_clear_held_movement()
 	_pending_next_map = null
 	_remove_victory_view()
 	_abort_combat()
@@ -2089,6 +2150,17 @@ func _abort_combat() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey and is_play_mode:
+		var direction := _direction_for_key(event.keycode)
+		if direction != Vector2i.ZERO:
+			if not event.pressed:
+				_held_move_keys.erase(event.keycode)
+				_blocked_hold_direction = Vector2i.ZERO
+				get_viewport().set_input_as_handled()
+				return
+			if event.echo:
+				get_viewport().set_input_as_handled()
+				return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if is_play_mode:
 			if _map_screen.visible:
@@ -2138,17 +2210,11 @@ func _input(event: InputEvent) -> void:
 				KEY_ESCAPE:
 					_open_game_system_menu()
 					get_viewport().set_input_as_handled()
-				KEY_UP, KEY_W:
-					_try_move_player(0, -1)
-					get_viewport().set_input_as_handled()
-				KEY_DOWN, KEY_S:
-					_try_move_player(0, 1)
-					get_viewport().set_input_as_handled()
-				KEY_LEFT, KEY_A:
-					_try_move_player(-1, 0)
-					get_viewport().set_input_as_handled()
-				KEY_RIGHT, KEY_D:
-					_try_move_player(1, 0)
+				KEY_UP, KEY_W, KEY_DOWN, KEY_S, KEY_LEFT, KEY_A, KEY_RIGHT, KEY_D:
+					if not _held_move_keys.has(event.keycode):
+						_held_move_keys.append(event.keycode)
+						_blocked_hold_direction = Vector2i.ZERO
+						_advance_held_move()
 					get_viewport().set_input_as_handled()
 		else:
 			var focused := get_viewport().gui_get_focus_owner()

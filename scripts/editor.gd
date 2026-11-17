@@ -6,6 +6,16 @@ signal menu_requested
 ## Вся сцена собирается обычными Control-узлами, чтобы её можно было расширять.
 
 const SIDEBAR_WIDTH := 264.0
+const PALETTE_WIDTH := 252.0
+const COMPACT_LAYOUT_WIDTH := 1160.0
+# Разделяем постоянные команды, настройки запуска и визуальные слои.
+const FILE_HOME := 1
+const FILE_NEW := 2
+const FILE_LOAD := 3
+const FILE_IMPORT := 4
+const FILE_EXPORT := 5
+const VIEW_REACHABILITY := 1
+const VIEW_GRID := 2
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
 const GAME_NOTICE_SCENE: PackedScene = preload("res://scenes/game_notice.tscn")
 const CHEST_CONTENTS_SCENE: PackedScene = preload("res://scenes/chest_contents_popup.tscn")
@@ -31,7 +41,11 @@ const COMMAND_ICONS := {
 	"test": preload("res://assets/icons/commands/test.png"),
 	"editor": preload("res://assets/icons/commands/editor.png"),
 	"undo": preload("res://assets/icons/commands/undo.png"),
-	"redo": preload("res://assets/icons/commands/redo.png")
+	"redo": preload("res://assets/icons/commands/redo.png"),
+	"file": preload("res://assets/icons/commands/file.png"),
+	"layers": preload("res://assets/icons/commands/layers.png"),
+	"settings": preload("res://assets/icons/commands/settings.png"),
+	"inspector": preload("res://assets/icons/commands/inspector.png")
 }
 const TOOLS := [
 	{"id": "hand", "label": "Рука", "hint": "Безопасно перемещать и масштабировать карту одним или двумя пальцами"},
@@ -80,13 +94,23 @@ const HISTORY_LIMIT := 40
 var _undo_stack: Array[Dictionary] = []
 var _redo_stack: Array[Dictionary] = []
 var _undo_button: Button
-var _reachability_button: Button
+var _save_button: Button
+var _file_menu: MenuButton
+var _layers_menu: MenuButton
+var _inspector_toggle: Button
+var _palette_toggle: Button
+var _palette_panel: PanelContainer
+var _fit_button: Button
+var _compact_layout: bool = false
+var _show_palette: bool = true
+var _show_inspector: bool = true
 var _reachability_enabled: bool = false
 var _reachability_refresh_timer: Timer
 var _issues_button: Button
 var _issues_list: VBoxContainer
 var _issues_container: VBoxContainer
 var _issues_expanded: bool = false
+var _current_issue_count: int = 0
 var _redo_button: Button
 
 var _canvas_host: Control
@@ -155,6 +179,8 @@ func _ready() -> void:
 	add_child(_reachability_refresh_timer)
 	_build_interface()
 	_create_dialogs()
+	get_viewport().size_changed.connect(_on_editor_viewport_resized)
+	_on_editor_viewport_resized()
 	if standalone_game:
 		_set_map(_startup_game_map)
 		_start_play_mode()
@@ -165,91 +191,135 @@ func _ready() -> void:
 
 func _build_interface() -> void:
 	var root_column := VBoxContainer.new()
+	root_column.name = "EditorLayout"
 	root_column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root_column.add_theme_constant_override("separation", 0)
 	add_child(root_column)
 
 	var header := _panel(Color("#1c2935"))
+	header.name = "EditorHeader"
 	_editor_header = header
 	root_column.add_child(header)
-	# Команды переносятся на следующую строку на узких экранах.
-	var toolbar := HFlowContainer.new()
-	toolbar.add_theme_constant_override("h_separation", 7)
-	toolbar.add_theme_constant_override("v_separation", 6)
+	# Одна предсказуемая строка: редкие операции в меню, карта не уступает место кнопкам.
+	var toolbar := HBoxContainer.new()
+	toolbar.name = "EditorToolbar"
+	toolbar.add_theme_constant_override("separation", 6)
 	header.add_child(toolbar)
-	var title := _label("DUNGEON  /  ARCHITECT", 19, Color("#e8c58a"))
-	title.custom_minimum_size.x = 190
+	var title := _label("DA", 19, Color("#e8c58a"))
+	title.tooltip_text = "DUNGEON / ARCHITECT"
 	toolbar.add_child(title)
-	var menu_button := _button("Меню", "Вернуться к главному меню", _request_return_to_menu)
-	toolbar.add_child(menu_button)
 
-	var new_button := _button("Новая", "Создать пустую карту", _request_new)
-	_set_command_icon(new_button, "new")
-	toolbar.add_child(new_button)
-	_register_editor_control(new_button)
+	_file_menu = MenuButton.new()
+	_file_menu.name = "FileMenu"
+	_file_menu.text = "Файл"
+	_file_menu.icon = COMMAND_ICONS["file"]
+	_file_menu.custom_minimum_size.y = 44
+	_file_menu.tooltip_text = "Карты и главное меню"
+	var file_popup := _file_menu.get_popup()
+	file_popup.add_icon_item(COMMAND_ICONS["new"], "Новая карта", FILE_NEW)
+	file_popup.add_icon_item(COMMAND_ICONS["load"], "Загрузить из библиотеки", FILE_LOAD)
+	file_popup.add_separator()
+	file_popup.add_icon_item(COMMAND_ICONS["import"], "Импорт JSON", FILE_IMPORT)
+	file_popup.add_icon_item(COMMAND_ICONS["export"], "Экспорт JSON", FILE_EXPORT)
+	file_popup.add_separator()
+	file_popup.add_item("В главное меню", FILE_HOME)
+	file_popup.id_pressed.connect(_on_file_action_selected)
+	toolbar.add_child(_file_menu)
+	_register_editor_control(_file_menu)
 
-	var save_button := _button("Сохранить", "Сохранить в библиотеку карт приложения (Ctrl+S)", _save_internal)
-	_set_command_icon(save_button, "save")
-	toolbar.add_child(save_button)
-	_register_editor_control(save_button)
+	_save_button = _button("Сохранить", "Сохранить карту (Ctrl+S)", _save_internal)
+	_set_command_icon(_save_button, "save")
+	_save_button.custom_minimum_size.y = 44
+	toolbar.add_child(_save_button)
+	_register_editor_control(_save_button)
 
-	var load_button := _button("Загрузить", "Открыть карту из библиотеки", _show_load)
-	_set_command_icon(load_button, "load")
-	toolbar.add_child(load_button)
-	_register_editor_control(load_button)
-
-	_undo_button = _button("Отменить", "Отменить действие (Ctrl+Z)", _undo_edit)
+	_undo_button = _button("", "Отменить (Ctrl+Z)", _undo_edit)
 	_set_command_icon(_undo_button, "undo")
+	_undo_button.custom_minimum_size = Vector2(44, 44)
 	toolbar.add_child(_undo_button)
-	_redo_button = _button("Повторить", "Повторить действие (Ctrl+Y / Ctrl+Shift+Z)", _redo_edit)
+	_redo_button = _button("", "Повторить (Ctrl+Y / Ctrl+Shift+Z)", _redo_edit)
 	_set_command_icon(_redo_button, "redo")
+	_redo_button.custom_minimum_size = Vector2(44, 44)
 	toolbar.add_child(_redo_button)
 
-	toolbar.add_child(_separator())
-	var export_button := _button("Экспорт", "Сохранить карту в файл", _show_export)
-	_set_command_icon(export_button, "export")
-	toolbar.add_child(export_button)
-	_register_editor_control(export_button)
-	var import_button := _button("Импорт", "Загрузить карту из файла", _show_import)
-	_set_command_icon(import_button, "import")
-	toolbar.add_child(import_button)
-	_register_editor_control(import_button)
-	toolbar.add_child(_separator())
-	var center_button := _button("Центр", "Показать всю карту", _fit_map)
-	_set_command_icon(center_button, "center")
-	toolbar.add_child(center_button)
-	_play_button = _button("Тест", "Проверить текущую карту без сохранения игрового прогресса", _toggle_play_mode)
+	var flexible_space := Control.new()
+	flexible_space.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	toolbar.add_child(flexible_space)
+
+	_palette_toggle = _button("Объекты", "Показать инструменты и объекты", _toggle_palette_panel)
+	_palette_toggle.name = "PaletteToggle"
+	_palette_toggle.toggle_mode = true
+	_palette_toggle.icon = TOOL_ICONS["hand"]
+	_palette_toggle.custom_minimum_size.y = 44
+	toolbar.add_child(_palette_toggle)
+	_register_editor_control(_palette_toggle)
+
+	_layers_menu = MenuButton.new()
+	_layers_menu.name = "LayersMenu"
+	_layers_menu.text = "Слои"
+	_layers_menu.icon = COMMAND_ICONS["layers"]
+	_layers_menu.custom_minimum_size.y = 44
+	_layers_menu.tooltip_text = "Визуальные слои карты"
+	var layers_popup := _layers_menu.get_popup()
+	layers_popup.add_icon_check_item(TOOL_ICONS["player_spawn"], "Достижимость", VIEW_REACHABILITY)
+	layers_popup.add_icon_check_item(TOOL_ICONS["floor"], "Сетка", VIEW_GRID)
+	layers_popup.set_item_checked(layers_popup.get_item_index(VIEW_GRID), true)
+	layers_popup.id_pressed.connect(_on_view_option_selected)
+	toolbar.add_child(_layers_menu)
+	_register_editor_control(_layers_menu)
+
+	_inspector_toggle = _button("Свойства", "Сведения о карте и замечания проверки", _toggle_inspector_panel)
+	_inspector_toggle.name = "InspectorToggle"
+	_inspector_toggle.toggle_mode = true
+	_inspector_toggle.icon = COMMAND_ICONS["inspector"]
+	_inspector_toggle.custom_minimum_size.y = 44
+	toolbar.add_child(_inspector_toggle)
+	_register_editor_control(_inspector_toggle)
+
+	_play_button = _button("Тест", "Проверить карту без сохранения игрового прогресса", _toggle_play_mode)
 	_set_command_icon(_play_button, "test")
+	_play_button.custom_minimum_size.y = 44
 	toolbar.add_child(_play_button)
 
-	# Параметры отладочного запуска отделены от палитры объектов.
+	# Кнопка запуска всегда отдельная, шестерёнка меняет только параметры теста.
 	_testing_menu = MenuButton.new()
-	_testing_menu.text = "Тестирование"
-	_testing_menu.icon = COMMAND_ICONS["test"]
-	_testing_menu.custom_minimum_size.y = 38
-	_testing_menu.tooltip_text = "Настройки следующего теста из редактора"
+	_testing_menu.name = "TestingMenu"
+	_testing_menu.icon = COMMAND_ICONS["settings"]
+	_testing_menu.custom_minimum_size = Vector2(44, 44)
+	_testing_menu.tooltip_text = "Настройки тестирования"
 	var testing_popup := _testing_menu.get_popup()
 	testing_popup.add_check_item("Открытая карта", TEST_OPTION_OPEN_MAP)
-	testing_popup.set_item_tooltip(0, "Начать тест со всеми открытыми клетками, без тумана войны")
+	testing_popup.set_item_tooltip(0, "Запустить тест без тумана войны")
 	testing_popup.id_pressed.connect(_on_testing_option_selected)
 	toolbar.add_child(_testing_menu)
 	_register_editor_control(_testing_menu)
 
-	_reachability_button = _button("Достижимость", "Постоянный слой: пересчитывается после изменений карты", _toggle_reachability)
-	_reachability_button.toggle_mode = true
-	_reachability_button.icon = TOOL_ICONS["player_spawn"]
-	toolbar.add_child(_reachability_button)
-	_register_editor_control(_reachability_button)
-
 	var workspace := HBoxContainer.new()
+	workspace.name = "EditorWorkspace"
 	workspace.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	workspace.add_theme_constant_override("separation", 0)
 	root_column.add_child(workspace)
+
+	# Палитра слева: выбираем инструмент и сразу применяем к карте в центре.
+	_palette_panel = _panel(Color("#202d39"))
+	_palette_panel.name = "PalettePanel"
+	_palette_panel.custom_minimum_size.x = PALETTE_WIDTH
+	workspace.add_child(_palette_panel)
+	var palette_scroll := ScrollContainer.new()
+	palette_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	palette_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	palette_scroll.scroll_deadzone = 12
+	_palette_panel.add_child(palette_scroll)
+	var palette := VBoxContainer.new()
+	palette.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	palette.add_theme_constant_override("separation", 10)
+	palette_scroll.add_child(palette)
 
 	var canvas_host := Control.new()
 	canvas_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	canvas_host.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_canvas_host = canvas_host
+	canvas_host.name = "MapViewport"
 	workspace.add_child(canvas_host)
 
 	_canvas = DungeonCanvas.new()
@@ -261,6 +331,22 @@ func _build_interface() -> void:
 	_canvas.configurable_entity_tapped.connect(_on_configurable_entity_tapped)
 	_canvas.message_cell_tapped.connect(_on_message_cell_tapped)
 	canvas_host.add_child(_canvas)
+	# Накладная кнопка не участвует в расчёте ширины панели редактора.
+	var viewport_actions := Control.new()
+	viewport_actions.name = "ViewportActions"
+	viewport_actions.anchor_left = 1.0
+	viewport_actions.anchor_right = 1.0
+	viewport_actions.offset_left = -143.0
+	viewport_actions.offset_right = -12.0
+	viewport_actions.offset_top = 12.0
+	viewport_actions.offset_bottom = 58.0
+	viewport_actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	canvas_host.add_child(viewport_actions)
+	_fit_button = _button("Центр", "Вписать карту в окно", _fit_map)
+	_set_command_icon(_fit_button, "center")
+	viewport_actions.add_child(_fit_button)
+	_fit_button.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_register_editor_control(_fit_button)
 	_build_dpad(canvas_host)
 
 	# Интерфейс героя — самостоятельная сцена, не часть логики редактора.
@@ -301,6 +387,7 @@ func _build_interface() -> void:
 	add_child(_game_dialogue)
 
 	_sidebar_panel = _panel(Color("#202d39"))
+	_sidebar_panel.name = "InspectorPanel"
 	_sidebar_panel.custom_minimum_size.x = SIDEBAR_WIDTH
 	workspace.add_child(_sidebar_panel)
 	var sidebar_scroll := ScrollContainer.new()
@@ -313,7 +400,7 @@ func _build_interface() -> void:
 	sidebar.add_theme_constant_override("separation", 10)
 	sidebar_scroll.add_child(sidebar)
 
-	sidebar.add_child(_label("КАРТА", 14, Color("#e8c58a")))
+	sidebar.add_child(_label("СВОЙСТВА КАРТЫ", 14, Color("#e8c58a")))
 	_name_input = LineEdit.new()
 	_name_input.placeholder_text = "Название карты"
 	_name_input.tooltip_text = "Имя будет записано в JSON"
@@ -335,27 +422,25 @@ func _build_interface() -> void:
 	_issues_list.add_theme_constant_override("separation", 4)
 	_issues_list.visible = false
 	_issues_container.add_child(_issues_list)
-	sidebar.add_child(HSeparator.new())
-	sidebar.add_child(_label("УПРАВЛЕНИЕ КАРТОЙ", 14, Color("#e8c58a")))
+	palette.add_child(_label("ИНСТРУМЕНТЫ", 14, Color("#e8c58a")))
 	var control_tools := _tool_grid()
-	sidebar.add_child(control_tools)
+	palette.add_child(control_tools)
 	for tool in TOOLS:
 		if str(tool["id"]) in ["hand", "erase"]:
 			_add_tool_button(control_tools, tool)
 
-	sidebar.add_child(HSeparator.new())
-	sidebar.add_child(_label("ЭЛЕМЕНТЫ ЛАБИРИНТА", 14, Color("#e8c58a")))
+	palette.add_child(HSeparator.new())
+	palette.add_child(_label("ОБЪЕКТЫ", 14, Color("#e8c58a")))
 	var map_tools := _tool_grid()
-	sidebar.add_child(map_tools)
+	palette.add_child(map_tools)
 	for tool in TOOLS:
 		if str(tool["id"]) not in ["hand", "erase"]:
 			_add_tool_button(map_tools, tool)
 
-	sidebar.add_child(HSeparator.new())
-	sidebar.add_child(_label("МОНСТРЫ", 14, Color("#e8c58a")))
+	palette.add_child(HSeparator.new())
+	palette.add_child(_label("МОНСТРЫ", 14, Color("#e8c58a")))
 	var monster_tools := _tool_grid()
-	sidebar.add_child(monster_tools)
-	# Каждый новый MonsterDefinition автоматически получает собственную кнопку.
+	palette.add_child(monster_tools)
 	for monster_id in MonsterCatalog.DEFINITIONS:
 		var monster: MonsterDefinition = MonsterCatalog.get_monster(str(monster_id))
 		_add_tool_button(monster_tools, {
@@ -364,13 +449,6 @@ func _build_interface() -> void:
 			"hint": "Здоровье: %d · Урон: %d" % [monster.max_health, monster.attack_damage],
 			"icon": monster.icon
 		})
-
-	sidebar.add_child(HSeparator.new())
-	var grid_checkbox := CheckBox.new()
-	grid_checkbox.text = "Показывать сетку"
-	grid_checkbox.button_pressed = true
-	grid_checkbox.toggled.connect(_toggle_grid)
-	sidebar.add_child(grid_checkbox)
 
 	# Нижняя консоль полностью скрыта до раскрытия: только небольшая кнопка.
 	var console_row := HBoxContainer.new()
@@ -644,17 +722,89 @@ func _separator() -> VSeparator:
 	return result
 
 
+func _on_file_action_selected(id: int) -> void:
+	match id:
+		FILE_HOME:
+			_request_return_to_menu()
+		FILE_NEW:
+			_request_new()
+		FILE_LOAD:
+			_show_load()
+		FILE_IMPORT:
+			_show_import()
+		FILE_EXPORT:
+			_show_export()
+
+
+func _on_view_option_selected(id: int) -> void:
+	match id:
+		VIEW_REACHABILITY:
+			_toggle_reachability()
+		VIEW_GRID:
+			_toggle_grid(not _canvas.show_grid)
+
+
 func _toggle_reachability() -> void:
 	if is_play_mode or map_data == null:
 		return
-	_reachability_enabled = _reachability_button.button_pressed
-	_reachability_button.text = "Скрыть путь" if _reachability_enabled else "Достижимость"
+	_reachability_enabled = not _reachability_enabled
+	var popup := _layers_menu.get_popup()
+	popup.set_item_checked(popup.get_item_index(VIEW_REACHABILITY), _reachability_enabled)
 	if _reachability_enabled:
 		_canvas.finish_edit_stroke()
 		_refresh_reachability()
 	else:
 		_clear_reachability()
 	_issues_container.visible = _reachability_enabled
+	_update_inspector_caption()
+
+
+func _toggle_palette_panel() -> void:
+	_show_palette = not _show_palette
+	if _compact_layout and _show_palette:
+		_show_inspector = false
+	_apply_editor_panels()
+
+
+func _toggle_inspector_panel() -> void:
+	_show_inspector = not _show_inspector
+	if _compact_layout and _show_inspector:
+		_show_palette = false
+	_apply_editor_panels()
+
+
+func _on_editor_viewport_resized() -> void:
+	var compact := get_viewport_rect().size.x < COMPACT_LAYOUT_WIDTH
+	if compact != _compact_layout:
+		_compact_layout = compact
+		_show_palette = true
+		_show_inspector = not compact
+	_apply_editor_panels()
+
+
+func _apply_editor_panels() -> void:
+	if _palette_panel == null or _sidebar_panel == null:
+		return
+	var editing := not is_play_mode and not standalone_game
+	_palette_panel.visible = editing and _show_palette
+	_sidebar_panel.visible = editing and _show_inspector
+	_palette_toggle.visible = editing and _compact_layout
+	var narrow := get_viewport_rect().size.x < 900
+	_palette_toggle.text = "" if narrow else "Объекты"
+	_layers_menu.text = "" if narrow else "Слои"
+	_save_button.text = "" if get_viewport_rect().size.x < 760 else "Сохранить"
+	_palette_toggle.set_pressed_no_signal(_show_palette)
+	_inspector_toggle.set_pressed_no_signal(_show_inspector)
+	_fit_button.visible = editing
+	_update_inspector_caption()
+
+
+func _update_inspector_caption() -> void:
+	if _inspector_toggle == null:
+		return
+	var caption := "Замечания (%d)" % _current_issue_count if _reachability_enabled else "Свойства"
+	_inspector_toggle.text = "" if get_viewport_rect().size.x < 900 else caption
+	_inspector_toggle.tooltip_text = caption + ". Открыть или скрыть боковую панель"
 
 
 func _toggle_issues() -> void:
@@ -669,7 +819,9 @@ func _focus_issue(cell: Vector2i) -> void:
 
 func _show_reachability_issues(result: Dictionary) -> void:
 	var issues: Array[Dictionary] = DungeonDiagnostics.analyze(map_data, result)
+	_current_issue_count = issues.size()
 	_issues_button.text = "Замечания: %d %s" % [issues.size(), "▴" if _issues_expanded else "▾"]
+	_update_inspector_caption()
 	for child in _issues_list.get_children():
 		_issues_list.remove_child(child)
 		child.queue_free()
@@ -697,6 +849,7 @@ func _refresh_reachability() -> void:
 	if not _reachability_enabled or is_play_mode or map_data == null or _canvas == null:
 		return
 	var result: Dictionary = DungeonReachability.analyze(map_data)
+	_issues_container.visible = true
 	_canvas.reachability_result = result
 	_canvas.queue_redraw()
 	_show_reachability_issues(result)
@@ -930,6 +1083,8 @@ func _on_move_failed() -> void:
 
 func _toggle_grid(value: bool) -> void:
 	_canvas.show_grid = value
+	var popup := _layers_menu.get_popup()
+	popup.set_item_checked(popup.get_item_index(VIEW_GRID), value)
 	_canvas.queue_redraw()
 
 
@@ -1445,8 +1600,8 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 
 
 func _update_mode_ui() -> void:
-	_sidebar_panel.visible = not is_play_mode and not standalone_game
 	_editor_header.visible = not standalone_game
+	_apply_editor_panels()
 	_console_row.visible = not standalone_game
 	_log_console.visible = _log_open and not standalone_game
 	_play_button.text = "Редактор" if is_play_mode else "Тест"

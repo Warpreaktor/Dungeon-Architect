@@ -25,6 +25,8 @@ var encounter_target := Vector2i(-1, -1)
 var debug_open_map: bool = false # Только для теста редактора, никогда не сериализуется.
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
+var _floor_states: Dictionary = {} # Состояние посещённых карт только в памяти этого прохождения.
+
 
 
 static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID, open_map: bool = false) -> GameSession:
@@ -44,6 +46,57 @@ static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT
 	session._activate_triggers_at(spawn)
 	session._activate_message_at(spawn, "enter")
 	return session
+
+
+## Переход между этажами без пересоздания героя и инвентаря.
+## Повторное посещение восстанавливает открытые двери, сундуки и исследованные клетки.
+func enter_map(next_map: DungeonMap) -> bool:
+	if next_map == null or next_map.map_id.is_empty():
+		return false
+	var spawn := next_map.find_entity_position("player_spawn")
+	if spawn.x < 0 or spawn.y < 0 or next_map.get_terrain(spawn.x, spawn.y) == "wall":
+		return false
+	if map_data != null:
+		_floor_states[map_data.map_id] = {
+			"map": map_data,
+			"position": player_pos,
+			"removed": removed_entities.duplicate(true),
+			"chests": opened_chests.duplicate(true),
+			"triggers": activated_triggers.duplicate(true),
+			"messages": shown_messages.duplicate(true),
+			"revealed": revealed.duplicate(true)
+		}
+	var saved: Dictionary = _floor_states.get(next_map.map_id, {})
+	map_data = saved.get("map", next_map)
+	player_pos = saved.get("position", spawn)
+	removed_entities = saved.get("removed", {}).duplicate(true)
+	opened_chests = saved.get("chests", {}).duplicate(true)
+	activated_triggers = saved.get("triggers", {}).duplicate(true)
+	shown_messages = saved.get("messages", {}).duplicate(true)
+	encounter_monster_id = ""
+	encounter_target = Vector2i(-1, -1)
+	is_completed = false
+	last_event_message = ""
+	_message_events.clear()
+	_trigger_events.clear()
+	_init_masks()
+	if saved.has("revealed"):
+		revealed = saved["revealed"].duplicate(true)
+	else:
+		_collect_pickups_at(player_pos)
+		_activate_triggers_at(player_pos)
+		_activate_message_at(player_pos, "enter")
+	_refresh_visibility()
+	return true
+
+
+func next_map_id() -> String:
+	if not is_completed:
+		return ""
+	var stairs := _find_active_entity(player_pos, "stairs_down")
+	if stairs.is_empty():
+		return ""
+	return DungeonMap.stairs_target_id(stairs)
 
 
 func _init_masks() -> void:

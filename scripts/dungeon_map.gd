@@ -277,6 +277,25 @@ func set_door_lock(door_id: String, lock_id: String) -> bool:
 	return false
 
 
+## Связь выхода с другой картой хранится в JSON текущего лабиринта.
+static func stairs_target_id(stairs: Dictionary) -> String:
+	return str(stairs.get("properties", {}).get("target_map_id", "")).strip_edges()
+
+
+func set_stairs_target(stairs_id: String, target_map_id: String) -> bool:
+	var normalized := target_map_id.strip_edges()
+	for entity in entities:
+		if str(entity.get("id", "")) != stairs_id or str(entity.get("type", "")) != "stairs_down":
+			continue
+		if stairs_target_id(entity) == normalized:
+			return false
+		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		properties["target_map_id"] = normalized
+		entity["properties"] = properties
+		return true
+	return false
+
+
 ## Идентификатор игрового события хранится на самой карте, не в сессии.
 func set_trigger_event_id(trigger_id: String, event_id: String) -> bool:
 	var normalized := event_id.strip_edges()

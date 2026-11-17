@@ -477,13 +477,13 @@ func _configurable_at(cell: Vector2i) -> Dictionary:
 	for i in range(entities.size() - 1, -1, -1):
 		var entity: Dictionary = entities[i]
 		var kind := str(entity.get("type", ""))
-		if kind in ["chest", "trigger", "message", "monster", "door"] and (selected_tool == "hand" or kind == selected_tool or (kind == "monster" and selected_tool.begins_with("monster:"))):
+		if kind in ["chest", "trigger", "message", "monster", "door", "stairs_down"] and (selected_tool == "hand" or kind == selected_tool or (kind == "monster" and selected_tool.begins_with("monster:"))):
 			return entity
 	return {}
 
 
 func _selected_tool_has_properties() -> bool:
-	return selected_tool in ["chest", "trigger", "door"] or selected_tool.begins_with("monster:")
+	return selected_tool in ["chest", "trigger", "door", "stairs_down"] or selected_tool.begins_with("monster:")
 
 
 func _cancel_pending_settings_tap() -> void:

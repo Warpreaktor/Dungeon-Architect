@@ -53,7 +53,7 @@ const TOOLS := [
 	{"id": "wall", "label": "Стена", "hint": "Непроходимая клетка"},
 	{"id": "door", "label": "Дверь", "hint": "Дверь на клетке пола"},
 	{"id": "chest", "label": "Сундук", "hint": "Контейнер с добычей"},
-	{"id": "stairs_down", "label": "Спуск", "hint": "Выход из подземелья (позже станет переходом на другую карту)"},
+	{"id": "stairs_down", "label": "Спуск", "hint": "Выход из подземелья или переход на следующую карту"},
 	{"id": "trigger", "label": "Триггер", "hint": "Невидимое в игре событие"},
 	{"id": "message", "label": "Послание", "hint": "Авторский текст при входе в клетку или открытии двери"},
 	{"id": "player_spawn", "label": "Старт героя", "hint": "Единственная стартовая позиция"},
@@ -139,6 +139,11 @@ var _test_open_map: bool = false
 const TEST_OPTION_OPEN_MAP := 1
 var _load_paths: Array[String] = []
 var _load_list: ItemList
+var _library_actions: HBoxContainer
+var _unlink_stairs_button: Button
+var _linking_stairs_id: String = ""
+var _pending_next_map: DungeonMap
+
 var _preview_textures: Array[Texture2D] = []
 var _rename_dialog: ConfirmationDialog
 var _rename_input: LineEdit
@@ -612,11 +617,14 @@ func _create_dialogs() -> void:
 	library_scroll.scroll_deadzone = 12
 	library_layout.add_child(library_scroll)
 	library_scroll.add_child(_load_list)
-	var library_actions := HBoxContainer.new()
-	library_layout.add_child(library_actions)
-	library_actions.add_child(_button("Переименовать", "Изменить название выбранной карты", _request_rename))
-	library_actions.add_child(_button("Копировать", "Создать отдельную копию карты", _duplicate_selected))
-	library_actions.add_child(_button("Удалить", "Удалить выбранную карту после подтверждения", _request_delete))
+	_library_actions = HBoxContainer.new()
+	library_layout.add_child(_library_actions)
+	_library_actions.add_child(_button("Переименовать", "Изменить название выбранной карты", _request_rename))
+	_library_actions.add_child(_button("Копировать", "Создать отдельную копию карты", _duplicate_selected))
+	_library_actions.add_child(_button("Удалить", "Удалить выбранную карту после подтверждения", _request_delete))
+	_unlink_stairs_button = _button("Без перехода", "Оставить лестницу финальным выходом", _unlink_selected_stairs)
+	_unlink_stairs_button.visible = false
+	library_layout.add_child(_unlink_stairs_button)
 
 	_rename_dialog = ConfirmationDialog.new()
 	_rename_dialog.title = "Переименование карты"
@@ -973,6 +981,8 @@ func _on_configurable_entity_tapped(kind: String, entity_id: String) -> void:
 	match kind:
 		"door":
 			_on_door_tapped(entity_id)
+		"stairs_down":
+			_on_stairs_tapped(entity_id)
 		"chest":
 			_on_chest_tapped(entity_id)
 		"monster":
@@ -1038,6 +1048,78 @@ func _on_trigger_event_id_changed(trigger_id: String, event_id: String) -> void:
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()
+
+
+## Та же библиотека, что у «Загрузить», но выбор изменяет только свойства лестницы.
+func _on_stairs_tapped(stairs_id: String) -> void:
+	if is_play_mode:
+		return
+	_canvas.finish_edit_stroke()
+	_linking_stairs_id = stairs_id
+	_refresh_library()
+	_load_dialog.title = "Следующее подземелье"
+	_load_dialog.ok_button_text = "Связать"
+	_library_actions.visible = false
+	_unlink_stairs_button.visible = true
+	for entity in map_data.entities:
+		if str(entity.get("id", "")) == stairs_id:
+			var linked_id := DungeonMap.stairs_target_id(entity)
+			for index in range(_load_paths.size()):
+				var candidate := _read_map(_load_paths[index])
+				if candidate != null and candidate.map_id == linked_id:
+					_load_list.select(index)
+					break
+			break
+	_load_dialog.popup_centered(Vector2i(720, 530))
+
+
+func _link_selected_stairs() -> void:
+	if _linking_stairs_id.is_empty():
+		return
+	var path := _selected_library_path()
+	if path.is_empty():
+		return
+	var target := _read_map(path)
+	if target == null or target.map_id.is_empty():
+		_set_status("Не удалось прочитать выбранное подземелье.")
+		return
+	if target.find_entity_position("player_spawn").x < 0:
+		_set_status("В следующем подземелье не задан старт героя.")
+		return
+	var before := _canvas.capture_edit_state()
+	if map_data.set_stairs_target(_linking_stairs_id, target.map_id):
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
+		_on_canvas_edited()
+		_canvas.queue_redraw()
+	_set_status("Лестница ведёт в «%s»." % target.display_name)
+	_linking_stairs_id = ""
+
+
+func _unlink_selected_stairs() -> void:
+	if _linking_stairs_id.is_empty():
+		return
+	var before := _canvas.capture_edit_state()
+	if map_data.set_stairs_target(_linking_stairs_id, ""):
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
+		_on_canvas_edited()
+		_canvas.queue_redraw()
+	_set_status("Лестница снова завершает приключение.")
+	_linking_stairs_id = ""
+	_load_dialog.hide()
+
+
+func _find_linked_map(map_id: String) -> DungeonMap:
+	# Не полагаемся на имя файла: карта идентифицируется полем id внутри JSON.
+	var folder := DirAccess.open(_maps_dir())
+	if folder == null:
+		return null
+	for filename in folder.get_files():
+		if not filename.ends_with(".json"):
+			continue
+		var candidate := _read_map(_maps_dir().path_join(filename))
+		if candidate != null and candidate.map_id == map_id:
+			return candidate
+	return null
 
 
 func _on_door_tapped(door_id: String) -> void:
@@ -1316,6 +1398,11 @@ func _save_internal() -> void:
 func _show_load() -> void:
 	if is_play_mode:
 		return
+	_linking_stairs_id = ""
+	_load_dialog.title = "Библиотека карт"
+	_load_dialog.ok_button_text = "Загрузить"
+	_library_actions.visible = true
+	_unlink_stairs_button.visible = false
 	_refresh_library()
 	if _load_paths.is_empty():
 		_set_status("Библиотека пуста. Сначала сохрани карту.")
@@ -1377,10 +1464,17 @@ func _selected_library_path() -> String:
 func _load_activated(index: int) -> void:
 	if index >= 0 and index < _load_paths.size():
 		_load_dialog.hide()
-		_load_from_path(_load_paths[index])
+		if not _linking_stairs_id.is_empty():
+			_load_list.select(index)
+			_link_selected_stairs()
+		else:
+			_load_from_path(_load_paths[index])
 
 
 func _load_selected() -> void:
+	if not _linking_stairs_id.is_empty():
+		_link_selected_stairs()
+		return
 	var path := _selected_library_path()
 	if not path.is_empty():
 		_load_from_path(path)
@@ -1593,6 +1687,7 @@ func _toggle_play_mode() -> void:
 func _start_play_mode() -> void:
 	_settings_dialog.hide()
 	_clear_reachability()
+	_pending_next_map = null
 	var session := GameSession.start_for(
 		map_data,
 		_startup_hero_id if standalone_game else HeroCatalog.DEFAULT_HERO_ID,
@@ -1636,6 +1731,7 @@ func _center_game_camera_after_layout() -> void:
 
 
 func _stop_play_mode(return_to_menu: bool = true) -> void:
+	_pending_next_map = null
 	_remove_victory_view()
 	_abort_combat()
 	_game_notice.clear()
@@ -1648,6 +1744,7 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 	game_session = null
 	is_play_mode = false
 	_canvas.set_game_session(null)
+	_canvas.map_data = map_data # Возвращаем исходную карту без отложенного fit_to_view().
 	_canvas.zoom = _editor_camera_zoom
 	_canvas.camera_offset = _editor_camera_offset
 	_canvas.queue_redraw()
@@ -1910,9 +2007,22 @@ func _show_end_view(defeated: bool) -> void:
 	_mini_map.visible = false
 	_hero_hud.visible = false
 	_game_notice.clear()
+	_pending_next_map = null
+	if not defeated:
+		var target_id: String = game_session.next_map_id()
+		if not target_id.is_empty():
+			_pending_next_map = _find_linked_map(target_id)
+			if _pending_next_map == null:
+				_set_status("Связанное подземелье не найдено. Проверь выбор карты у лестницы.")
+			elif _pending_next_map.find_entity_position("player_spawn").x < 0:
+				_set_status("На следующем уровне отсутствует точка старта героя.")
+				_pending_next_map = null
 	_victory_view = VICTORY_VIEW_SCENE.instantiate() as VictoryView
 	add_child(_victory_view)
-	_victory_view.retry_requested.connect(_restart_test_after_victory)
+	if _pending_next_map != null and not defeated:
+		_victory_view.retry_requested.connect(_enter_next_floor)
+	else:
+		_victory_view.retry_requested.connect(_restart_test_after_victory)
 	_victory_view.editor_requested.connect(_stop_play_mode)
 	if standalone_game:
 		_victory_view.set_exit_text("В меню")
@@ -1920,8 +2030,38 @@ func _show_end_view(defeated: bool) -> void:
 		_victory_view.show_defeat(game_session.steps, game_session.pending_monster_definition())
 		_set_status("Герой пал в сражении. Приключение не завершено.")
 	else:
-		_victory_view.show_result(game_session.steps)
-		_set_status("Приключение завершено: выход найден.")
+		if _pending_next_map != null:
+			_victory_view.show_floor_transition(game_session.steps, _pending_next_map.display_name)
+			_set_status("Следующий уровень: %s." % _pending_next_map.display_name)
+		else:
+			_victory_view.show_result(game_session.steps)
+			_set_status("Приключение завершено: выход найден.")
+
+
+func _enter_next_floor() -> void:
+	if game_session == null or _pending_next_map == null:
+		return
+	var next_map: DungeonMap = _pending_next_map
+	if not game_session.enter_map(next_map):
+		_set_status("Переход невозможен: нет корректной стартовой клетки.")
+		return
+	_pending_next_map = null
+	_remove_victory_view()
+	_canvas.set_map(game_session.map_data)
+	_canvas.set_game_session(game_session)
+	_canvas.zoom = DungeonCanvas.PLAY_START_ZOOM
+	_canvas.center_on_cell(game_session.player_pos)
+	_mini_overview.show_session(game_session)
+	_dpad.visible = true
+	_hero_hud.visible = true
+	_game_command_bar.visible = true
+	_mini_map.visible = _minimap_enabled
+	_canvas.grab_focus()
+	_canvas.queue_redraw()
+	_refresh_stats()
+	_refresh_map_overlays()
+	_collect_game_messages()
+	_set_status("Ты вошёл в «%s»." % game_session.map_data.display_name)
 
 
 func _restart_test_after_victory() -> void:

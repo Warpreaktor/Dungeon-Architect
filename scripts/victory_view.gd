@@ -36,6 +36,15 @@ func show_result(step_count: int) -> void:
 	_steps_label.text = "Ходов сделано: %d" % step_count
 
 
+## Завершение этажа: оставляем единый экран, но меняем действие кнопки.
+func show_floor_transition(step_count: int, next_name: String) -> void:
+	_eyebrow.text = "ПУТЬ ПРОДОЛЖАЕТСЯ"
+	_title.text = "СЛЕДУЮЩИЙ УРОВЕНЬ"
+	_description.text = "Ты спускаешься в «%s»." % next_name
+	_steps_label.text = "Ходов сделано: %d" % step_count
+	_retry_button.text = "Продолжить"
+
+
 ## Та же сцена используется при поражении: не дублируем модальные экраны.
 func show_defeat(step_count: int, victor: MonsterDefinition) -> void:
 	_eyebrow.text = "ПУТЬ ОБОРВАЛСЯ"

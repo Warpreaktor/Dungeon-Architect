@@ -708,5 +708,37 @@ func _initialize() -> void:
 	assert(two_handed_hero.equip_item(sword_item))
 	assert(two_handed_hero.equipped_shield_id == "shield")
 
+	# Связанные лестницы: JSON-связь, единый герой и память посещённых этажей.
+	var first_floor := DungeonMap.create_blank(6, 6)
+	var second_floor := DungeonMap.create_blank(6, 6)
+	assert(first_floor.place_entity("player_spawn", 1, 1))
+	assert(first_floor.place_entity("stairs_down", 2, 1))
+	assert(second_floor.place_entity("player_spawn", 1, 1))
+	assert(second_floor.place_entity("stairs_down", 1, 2))
+	var stairs_one: Dictionary = first_floor.entities_at(2, 1)[0]
+	var stairs_two: Dictionary = second_floor.entities_at(1, 2)[0]
+	assert(first_floor.set_stairs_target(str(stairs_one["id"]), second_floor.map_id))
+	assert(second_floor.set_stairs_target(str(stairs_two["id"]), first_floor.map_id))
+	assert(DungeonMap.stairs_target_id(stairs_one) == second_floor.map_id)
+	var restored_first: DungeonMap = DungeonMap.from_dict(JSON.parse_string(JSON.stringify(first_floor.to_dict())))
+	assert(DungeonMap.stairs_target_id(restored_first.entities_at(2, 1)[0]) == second_floor.map_id)
+	var journey := GameSession.start_for(first_floor)
+	assert(journey != null)
+	journey.hero.health = 13
+	journey.carried_items["key"] = 2
+	assert(journey.move_by(1, 0) and journey.is_completed)
+	assert(journey.next_map_id() == second_floor.map_id)
+	assert(journey.enter_map(second_floor))
+	assert(journey.hero.health == 13 and int(journey.carried_items["key"]) == 2)
+	assert(journey.map_data == second_floor and journey.player_pos == Vector2i(1, 1))
+	assert(journey.move_by(0, 1) and journey.is_completed)
+	assert(journey.next_map_id() == first_floor.map_id)
+	assert(journey.enter_map(first_floor))
+	assert(journey.player_pos == Vector2i(2, 1))
+	assert(journey.hero.health == 13 and int(journey.carried_items["key"]) == 2)
+	assert(journey.is_revealed(1, 1))
+	assert(not journey.is_completed)
+	assert(not journey.enter_map(DungeonMap.create_blank(5, 5)))
+
 	print("DungeonMap smoke tests: OK")
 	quit()

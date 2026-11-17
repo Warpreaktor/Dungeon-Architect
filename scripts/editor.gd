@@ -5,7 +5,6 @@ signal menu_requested
 ## Главное окно самостоятельного приложения-редактора.
 ## Вся сцена собирается обычными Control-узлами, чтобы её можно было расширять.
 
-const SIDEBAR_WIDTH := 264.0
 const PALETTE_WIDTH := 252.0
 const COMPACT_LAYOUT_WIDTH := 1160.0
 # Разделяем постоянные команды, настройки запуска и визуальные слои.
@@ -14,6 +13,7 @@ const FILE_NEW := 2
 const FILE_LOAD := 3
 const FILE_IMPORT := 4
 const FILE_EXPORT := 5
+const SETTINGS_MAP_PROPERTIES := 1
 const VIEW_REACHABILITY := 1
 const VIEW_GRID := 2
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
@@ -95,21 +95,22 @@ var _undo_stack: Array[Dictionary] = []
 var _redo_stack: Array[Dictionary] = []
 var _undo_button: Button
 var _save_button: Button
+var _brand_label: Label
 var _file_menu: MenuButton
+var _settings_menu: MenuButton
 var _layers_menu: MenuButton
-var _inspector_toggle: Button
+var _issues_toggle: Button
+var _settings_dialog: AcceptDialog
+var _issues_dialog: PopupPanel
 var _palette_toggle: Button
 var _palette_panel: PanelContainer
 var _fit_button: Button
 var _compact_layout: bool = false
 var _show_palette: bool = true
-var _show_inspector: bool = true
 var _reachability_enabled: bool = false
 var _reachability_refresh_timer: Timer
-var _issues_button: Button
 var _issues_list: VBoxContainer
 var _issues_container: VBoxContainer
-var _issues_expanded: bool = false
 var _current_issue_count: int = 0
 var _redo_button: Button
 
@@ -123,7 +124,6 @@ var _pre_combat_zoom: float = 1.0
 var _name_input: LineEdit
 var _last_log_message: String = ""
 var _stats_label: Label
-var _sidebar_panel: PanelContainer
 var _palette_buttons: Dictionary = {}
 var _chest_popup: ChestContentsPopup
 var _monster_loot_popup: ChestContentsPopup
@@ -205,9 +205,14 @@ func _build_interface() -> void:
 	toolbar.name = "EditorToolbar"
 	toolbar.add_theme_constant_override("separation", 6)
 	header.add_child(toolbar)
-	var title := _label("DA", 19, Color("#e8c58a"))
-	title.tooltip_text = "DUNGEON / ARCHITECT"
-	toolbar.add_child(title)
+	# У логотипа собственная минимальная ширина: обычный Label переносил даже "DA" по буквам.
+	_brand_label = _label("DUNGEON /\nARCHITECT", 19, Color("#e8c58a"))
+	_brand_label.name = "EditorBrand"
+	_brand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_brand_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_brand_label.custom_minimum_size = Vector2(174, 52)
+	_brand_label.tooltip_text = "DUNGEON / ARCHITECT"
+	toolbar.add_child(_brand_label)
 
 	_file_menu = MenuButton.new()
 	_file_menu.name = "FileMenu"
@@ -226,6 +231,18 @@ func _build_interface() -> void:
 	file_popup.id_pressed.connect(_on_file_action_selected)
 	toolbar.add_child(_file_menu)
 	_register_editor_control(_file_menu)
+
+	_settings_menu = MenuButton.new()
+	_settings_menu.name = "SettingsMenu"
+	_settings_menu.text = "Настройки"
+	_settings_menu.icon = COMMAND_ICONS["settings"]
+	_settings_menu.custom_minimum_size.y = 44
+	_settings_menu.tooltip_text = "Настройки редактора и текущей карты"
+	var settings_popup := _settings_menu.get_popup()
+	settings_popup.add_icon_item(COMMAND_ICONS["inspector"], "Свойства карты", SETTINGS_MAP_PROPERTIES)
+	settings_popup.id_pressed.connect(_on_settings_option_selected)
+	toolbar.add_child(_settings_menu)
+	_register_editor_control(_settings_menu)
 
 	_save_button = _button("Сохранить", "Сохранить карту (Ctrl+S)", _save_internal)
 	_set_command_icon(_save_button, "save")
@@ -268,13 +285,13 @@ func _build_interface() -> void:
 	toolbar.add_child(_layers_menu)
 	_register_editor_control(_layers_menu)
 
-	_inspector_toggle = _button("Свойства", "Сведения о карте и замечания проверки", _toggle_inspector_panel)
-	_inspector_toggle.name = "InspectorToggle"
-	_inspector_toggle.toggle_mode = true
-	_inspector_toggle.icon = COMMAND_ICONS["inspector"]
-	_inspector_toggle.custom_minimum_size.y = 44
-	toolbar.add_child(_inspector_toggle)
-	_register_editor_control(_inspector_toggle)
+	_issues_toggle = _button("Замечания", "Показать диагностику подземелья", _open_issues_dialog)
+	_issues_toggle.name = "IssuesToggle"
+	_issues_toggle.icon = COMMAND_ICONS["inspector"]
+	_issues_toggle.custom_minimum_size.y = 44
+	_issues_toggle.visible = false
+	toolbar.add_child(_issues_toggle)
+	_register_editor_control(_issues_toggle)
 
 	_play_button = _button("Тест", "Проверить карту без сохранения игрового прогресса", _toggle_play_mode)
 	_set_command_icon(_play_button, "test")
@@ -300,7 +317,7 @@ func _build_interface() -> void:
 	workspace.add_theme_constant_override("separation", 0)
 	root_column.add_child(workspace)
 
-	# Палитра слева: выбираем инструмент и сразу применяем к карте в центре.
+	# Палитра располагается справа от карты и панели свойств.
 	_palette_panel = _panel(Color("#202d39"))
 	_palette_panel.name = "PalettePanel"
 	_palette_panel.custom_minimum_size.x = PALETTE_WIDTH
@@ -386,42 +403,6 @@ func _build_interface() -> void:
 	_game_dialogue.closed.connect(_on_game_dialogue_closed)
 	add_child(_game_dialogue)
 
-	_sidebar_panel = _panel(Color("#202d39"))
-	_sidebar_panel.name = "InspectorPanel"
-	_sidebar_panel.custom_minimum_size.x = SIDEBAR_WIDTH
-	workspace.add_child(_sidebar_panel)
-	var sidebar_scroll := ScrollContainer.new()
-	sidebar_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sidebar_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sidebar_scroll.scroll_deadzone = 12
-	_sidebar_panel.add_child(sidebar_scroll)
-	var sidebar := VBoxContainer.new()
-	sidebar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sidebar.add_theme_constant_override("separation", 10)
-	sidebar_scroll.add_child(sidebar)
-
-	sidebar.add_child(_label("СВОЙСТВА КАРТЫ", 14, Color("#e8c58a")))
-	_name_input = LineEdit.new()
-	_name_input.placeholder_text = "Название карты"
-	_name_input.tooltip_text = "Имя будет записано в JSON"
-	_name_input.text_changed.connect(_on_name_changed)
-	sidebar.add_child(_name_input)
-	_register_editor_control(_name_input)
-
-	_stats_label = _label("32 × 32", 13, Color("#9ab0bf"))
-	sidebar.add_child(_stats_label)
-	# Диагностика живёт внутри прокручиваемой боковой панели и не влияет на размеры карты.
-	_issues_container = VBoxContainer.new()
-	_issues_container.visible = false
-	_issues_container.add_theme_constant_override("separation", 6)
-	sidebar.add_child(_issues_container)
-	_issues_button = _button("Проверка карты", "Показать замечания к лабиринту", _toggle_issues)
-	_issues_button.icon = TOOL_ICONS["stairs_down"]
-	_issues_container.add_child(_issues_button)
-	_issues_list = VBoxContainer.new()
-	_issues_list.add_theme_constant_override("separation", 4)
-	_issues_list.visible = false
-	_issues_container.add_child(_issues_list)
 	palette.add_child(_label("ИНСТРУМЕНТЫ", 14, Color("#e8c58a")))
 	var control_tools := _tool_grid()
 	palette.add_child(control_tools)
@@ -449,6 +430,10 @@ func _build_interface() -> void:
 			"hint": "Здоровье: %d · Урон: %d" % [monster.max_health, monster.attack_damage],
 			"icon": monster.icon
 		})
+
+	# Перестановка дочернего Control в HBoxContainer меняет порядок панелей
+	# без переподключения сигналов и пересоздания палитры.
+	workspace.move_child(_palette_panel, workspace.get_child_count() - 1)
 
 	# Нижняя консоль полностью скрыта до раскрытия: только небольшая кнопка.
 	var console_row := HBoxContainer.new()
@@ -504,6 +489,74 @@ func _create_dialogs() -> void:
 	_message_popup.saved.connect(_on_message_saved)
 	_message_popup.removed.connect(_on_message_removed)
 	add_child(_message_popup)
+
+	# Настройки не занимают постоянную колонку редактора.
+	_settings_dialog = AcceptDialog.new()
+	_settings_dialog.name = "MapSettingsDialog"
+	_settings_dialog.title = "Настройки"
+	_settings_dialog.ok_button_text = "Закрыть"
+	add_child(_settings_dialog)
+	var settings_tabs := TabContainer.new()
+	settings_tabs.name = "SettingsTabs"
+	settings_tabs.custom_minimum_size = Vector2(430, 188)
+	_settings_dialog.add_child(settings_tabs)
+	var map_tab := MarginContainer.new()
+	map_tab.name = "Свойства карты"
+	for margin_side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		map_tab.add_theme_constant_override(margin_side, 12)
+	settings_tabs.add_child(map_tab)
+	# Вертикальная форма не сжимает подписи в узкую колонку.
+	var map_properties := VBoxContainer.new()
+	map_properties.name = "MapProperties"
+	map_properties.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	map_properties.add_theme_constant_override("separation", 12)
+	map_tab.add_child(map_properties)
+	var name_caption := _label("Название карты", 15, Color("#d5e0e7"))
+	name_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
+	map_properties.add_child(name_caption)
+	_name_input = LineEdit.new()
+	_name_input.name = "MapName"
+	_name_input.placeholder_text = "Название карты"
+	_name_input.tooltip_text = "Название сохраняется вместе с картой"
+	_name_input.custom_minimum_size = Vector2(0, 44)
+	_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_name_input.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_name_input.keep_editing_on_text_submit = false
+	_name_input.text_changed.connect(_on_name_changed)
+	map_properties.add_child(_name_input)
+	_register_editor_control(_name_input)
+	var size_caption := _label("Размер карты", 15, Color("#d5e0e7"))
+	size_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
+	map_properties.add_child(size_caption)
+	_stats_label = _label("", 15, Color("#9ab0bf"))
+	_stats_label.name = "MapSize"
+	_stats_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_stats_label.tooltip_text = "Размер задаётся при создании карты и здесь не меняется"
+	map_properties.add_child(_stats_label)
+
+	# Диагностика остаётся доступной по запросу, но не забирает ширину у карты.
+	_issues_dialog = PopupPanel.new()
+	_issues_dialog.name = "IssuesDialog"
+	add_child(_issues_dialog)
+	var issues_margin := MarginContainer.new()
+	for margin_side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		issues_margin.add_theme_constant_override(margin_side, 12)
+	_issues_dialog.add_child(issues_margin)
+	_issues_container = VBoxContainer.new()
+	_issues_container.visible = false
+	_issues_container.custom_minimum_size = Vector2(400, 260)
+	_issues_container.add_theme_constant_override("separation", 12)
+	issues_margin.add_child(_issues_container)
+	_issues_container.add_child(_label("ПРОВЕРКА ПОДЗЕМЕЛЬЯ", 15, Color("#e8c58a")))
+	var issues_scroll := ScrollContainer.new()
+	issues_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	issues_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	issues_scroll.scroll_deadzone = 12
+	_issues_container.add_child(issues_scroll)
+	_issues_list = VBoxContainer.new()
+	_issues_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_issues_list.add_theme_constant_override("separation", 6)
+	issues_scroll.add_child(_issues_list)
 
 	_new_dialog = ConfirmationDialog.new()
 	_new_dialog.title = "Новая карта"
@@ -756,20 +809,11 @@ func _toggle_reachability() -> void:
 	else:
 		_clear_reachability()
 	_issues_container.visible = _reachability_enabled
-	_update_inspector_caption()
+	_update_issues_caption()
 
 
 func _toggle_palette_panel() -> void:
 	_show_palette = not _show_palette
-	if _compact_layout and _show_palette:
-		_show_inspector = false
-	_apply_editor_panels()
-
-
-func _toggle_inspector_panel() -> void:
-	_show_inspector = not _show_inspector
-	if _compact_layout and _show_inspector:
-		_show_palette = false
 	_apply_editor_panels()
 
 
@@ -778,50 +822,65 @@ func _on_editor_viewport_resized() -> void:
 	if compact != _compact_layout:
 		_compact_layout = compact
 		_show_palette = true
-		_show_inspector = not compact
 	_apply_editor_panels()
 
 
-func _apply_editor_panels() -> void:
-	if _palette_panel == null or _sidebar_panel == null:
+func _update_brand_caption() -> void:
+	if _brand_label == null:
 		return
+	var compact := get_viewport_rect().size.x < COMPACT_LAYOUT_WIDTH
+	_brand_label.text = "DA" if compact else "DUNGEON /\nARCHITECT"
+	_brand_label.custom_minimum_size.x = 44.0 if compact else 174.0
+
+
+func _apply_editor_panels() -> void:
+	if _palette_panel == null:
+		return
+	_update_brand_caption()
 	var editing := not is_play_mode and not standalone_game
 	_palette_panel.visible = editing and _show_palette
-	_sidebar_panel.visible = editing and _show_inspector
 	_palette_toggle.visible = editing and _compact_layout
 	var narrow := get_viewport_rect().size.x < 900
 	_palette_toggle.text = "" if narrow else "Объекты"
+	_settings_menu.text = "" if get_viewport_rect().size.x < 760 else "Настройки"
 	_layers_menu.text = "" if narrow else "Слои"
 	_save_button.text = "" if get_viewport_rect().size.x < 760 else "Сохранить"
 	_palette_toggle.set_pressed_no_signal(_show_palette)
-	_inspector_toggle.set_pressed_no_signal(_show_inspector)
 	_fit_button.visible = editing
-	_update_inspector_caption()
+	_update_issues_caption()
 
 
-func _update_inspector_caption() -> void:
-	if _inspector_toggle == null:
+func _on_settings_option_selected(id: int) -> void:
+	if id == SETTINGS_MAP_PROPERTIES and map_data != null and not is_play_mode:
+		_name_input.text = map_data.display_name
+		_refresh_stats()
+		_settings_dialog.popup_centered_clamped(Vector2i(490, 240))
+
+
+func _open_issues_dialog() -> void:
+	if _reachability_enabled and not is_play_mode:
+		_issues_dialog.popup_centered_clamped(Vector2i(470, 330))
+
+
+func _update_issues_caption() -> void:
+	if _issues_toggle == null:
 		return
-	var caption := "Замечания (%d)" % _current_issue_count if _reachability_enabled else "Свойства"
-	_inspector_toggle.text = "" if get_viewport_rect().size.x < 900 else caption
-	_inspector_toggle.tooltip_text = caption + ". Открыть или скрыть боковую панель"
-
-
-func _toggle_issues() -> void:
-	_issues_expanded = not _issues_expanded
-	_issues_list.visible = _issues_expanded
+	_issues_toggle.visible = _reachability_enabled and not is_play_mode and not standalone_game
+	var caption := "Замечания (%d)" % _current_issue_count
+	_issues_toggle.text = "" if get_viewport_rect().size.x < 900 else caption
+	_issues_toggle.tooltip_text = caption + ". Показать список диагностики"
 
 
 func _focus_issue(cell: Vector2i) -> void:
 	if map_data != null and map_data.contains(cell.x, cell.y):
+		_issues_dialog.hide()
 		_canvas.center_on_cell(cell)
 
 
 func _show_reachability_issues(result: Dictionary) -> void:
 	var issues: Array[Dictionary] = DungeonDiagnostics.analyze(map_data, result)
 	_current_issue_count = issues.size()
-	_issues_button.text = "Замечания: %d %s" % [issues.size(), "▴" if _issues_expanded else "▾"]
-	_update_inspector_caption()
+	_update_issues_caption()
 	for child in _issues_list.get_children():
 		_issues_list.remove_child(child)
 		child.queue_free()
@@ -869,6 +928,10 @@ func _clear_reachability() -> void:
 		_reachability_refresh_timer.stop()
 	if _issues_container != null:
 		_issues_container.visible = false
+	if _issues_dialog != null:
+		_issues_dialog.hide()
+	_current_issue_count = 0
+	_update_issues_caption()
 	if _canvas != null:
 		_canvas.reachability_result.clear()
 		_canvas.queue_redraw()
@@ -896,10 +959,7 @@ func _set_map(new_map: DungeonMap) -> void:
 
 
 func _refresh_stats() -> void:
-	var base := "%d × %d клеток   •   %d объектов" % [map_data.width, map_data.height, map_data.entities.size()]
-	if is_play_mode and game_session != null:
-		base += "   •   ходов: %d" % game_session.steps
-	_stats_label.text = base
+	_stats_label.text = "%d × %d клеток (только просмотр)" % [map_data.width, map_data.height]
 	_update_hero_hud()
 
 
@@ -1531,6 +1591,7 @@ func _toggle_play_mode() -> void:
 
 
 func _start_play_mode() -> void:
+	_settings_dialog.hide()
 	_clear_reachability()
 	var session := GameSession.start_for(
 		map_data,

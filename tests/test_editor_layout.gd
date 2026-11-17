@@ -14,22 +14,59 @@ func _run() -> void:
 	var toolbar := editor.get_node("EditorLayout/EditorHeader/EditorToolbar") as HBoxContainer
 	assert(toolbar != null)
 	var file_menu := toolbar.get_node("FileMenu") as MenuButton
+	var settings_menu := toolbar.get_node("SettingsMenu") as MenuButton
 	var layers_menu := toolbar.get_node("LayersMenu") as MenuButton
 	var testing_menu := toolbar.get_node("TestingMenu") as MenuButton
-	assert(file_menu != null and layers_menu != null and testing_menu != null)
+	var issues_button := toolbar.get_node("IssuesToggle") as Button
+	assert(file_menu != null and settings_menu != null and layers_menu != null and testing_menu != null)
+	assert(issues_button != null and not issues_button.visible)
+	assert(settings_menu.get_index() == file_menu.get_index() + 1)
+	assert(settings_menu.get_popup().get_item_index(1) >= 0)
+	var brand := toolbar.get_node("EditorBrand") as Label
+	assert(brand != null)
+	assert(brand.autowrap_mode == TextServer.AUTOWRAP_OFF)
+	assert(brand.tooltip_text == "DUNGEON / ARCHITECT")
 	assert(file_menu.get_popup().get_item_index(2) >= 0) # Новая карта
 	assert(file_menu.get_popup().get_item_index(5) >= 0) # Экспорт JSON
 	assert(testing_menu.get_popup().get_item_index(1) >= 0) # Открытая карта
 
 	var workspace := editor.get_node("EditorLayout/EditorWorkspace") as HBoxContainer
 	var palette := workspace.get_node("PalettePanel") as PanelContainer
-	var inspector := workspace.get_node("InspectorPanel") as PanelContainer
 	var map_view := workspace.get_node("MapViewport") as Control
-	assert(palette != null and inspector != null and map_view != null)
-	assert(workspace.get_child(0) == palette)
-	assert(workspace.get_child(1) == map_view)
-	assert(workspace.get_child(2) == inspector)
+	assert(palette != null and map_view != null)
+	assert(workspace.get_child_count() == 2)
+	assert(workspace.get_child(0) == map_view)
+	assert(workspace.get_child(1) == palette)
 	assert(map_view.get_node("ViewportActions") != null)
+
+	var settings_dialog := editor.get_node("MapSettingsDialog") as AcceptDialog
+	var tabs := settings_dialog.get_node("SettingsTabs") as TabContainer
+	assert(tabs.get_tab_count() == 1)
+	assert(tabs.get_tab_title(0) == "Свойства карты")
+	var properties := tabs.get_node("Свойства карты/MapProperties") as VBoxContainer
+	assert(properties != null and properties.get_child_count() == 4)
+	var name_caption := properties.get_child(0) as Label
+	var size_caption := properties.get_child(2) as Label
+	var name_input := properties.get_node("MapName") as LineEdit
+	var size_label := properties.get_node("MapSize") as Label
+	assert(name_input != null and size_label != null)
+	assert(name_caption.text == "Название карты" and size_caption.text == "Размер карты")
+	assert(name_caption.autowrap_mode == TextServer.AUTOWRAP_OFF)
+	assert(size_caption.autowrap_mode == TextServer.AUTOWRAP_OFF)
+	assert(size_label.autowrap_mode == TextServer.AUTOWRAP_OFF)
+	assert(name_input.size_flags_vertical == Control.SIZE_SHRINK_BEGIN)
+	assert(name_input.custom_minimum_size.y == 44)
+	assert(size_label.text.contains("только просмотр"))
+	var current_map := editor.get("map_data") as DungeonMap
+	assert(name_input.text == current_map.display_name)
+	assert(size_label.text.begins_with("%d × %d" % [current_map.width, current_map.height]))
+	editor.call("_on_settings_option_selected", 1)
+	assert(settings_dialog.visible)
+	settings_dialog.hide()
+	name_input.text = "Карта из окна настроек"
+	name_input.text_changed.emit(name_input.text)
+	assert(current_map.display_name == name_input.text)
+	assert(bool(editor.get("is_dirty")))
 
 	var reach_index := layers_menu.get_popup().get_item_index(1)
 	var grid_index := layers_menu.get_popup().get_item_index(2)
@@ -42,12 +79,14 @@ func _run() -> void:
 	editor.call("_on_view_option_selected", 2)
 	assert(not layers_menu.get_popup().is_item_checked(grid_index))
 
-	var before := inspector.visible
-	editor.call("_toggle_inspector_panel")
-	assert(inspector.visible != before)
-	editor.call("_toggle_inspector_panel")
-	assert(inspector.visible == before)
+	var issues_dialog := editor.get_node("IssuesDialog") as PopupPanel
+	editor.call("_on_view_option_selected", 1)
+	assert(issues_button.visible)
+	editor.call("_open_issues_dialog")
+	assert(issues_dialog.visible)
+	editor.call("_on_view_option_selected", 1)
+	assert(not issues_button.visible and not issues_dialog.visible)
 
 	editor.queue_free()
-	print("Editor UI: menus, panels, overlays OK")
+	print("Editor UI: map settings dialog, compact panels and diagnostics OK")
 	quit()

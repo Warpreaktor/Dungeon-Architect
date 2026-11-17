@@ -20,6 +20,7 @@ const PLAY_START_ZOOM := 4.0
 const PLAY_MIN_ZOOM := 3.25
 const PLAY_VISION_MIN_ZOOM := 2.7
 const PLAY_MAX_ZOOM := 4.0
+const PLAYER_STEP_SECONDS := 0.30
 
 var map_data: DungeonMap
 var game_session: GameSession
@@ -29,6 +30,8 @@ var selected_tool: String = "wall"
 var show_grid: bool = true
 var camera_offset := Vector2.ZERO
 var zoom: float = 1.0
+var _player_visual_cell := Vector2.ZERO
+var _player_step_tween: Tween
 
 var _hovered := Vector2i(-1, -1)
 var _painting: bool = false
@@ -75,6 +78,7 @@ func _on_canvas_resized() -> void:
 
 
 func set_map(value: DungeonMap) -> void:
+	_cancel_player_step()
 	reachability_result.clear()
 	_stroke_before.clear()
 	map_data = value
@@ -120,12 +124,14 @@ func _reset_pointer_state() -> void:
 
 
 func set_game_session(value: GameSession) -> void:
+	_cancel_player_step()
 	reachability_result.clear()
 	cancel_move_selection()
 	_reset_pointer_state()
 	game_session = value
 	if value != null:
 		map_data = value.map_data
+		_player_visual_cell = Vector2(value.player_pos)
 		mode = "play"
 	else:
 		mode = "edit"
@@ -139,6 +145,41 @@ func _fit_after_layout() -> void:
 	await get_tree().process_frame
 	if mode == "edit":
 		fit_to_view()
+
+
+## Только отображение шага анимируется: игровая позиция уже обновлена в GameSession.
+## Во время Tween новые команды перемещения не принимаются редактором.
+func is_player_moving() -> bool:
+	return _player_step_tween != null and _player_step_tween.is_running()
+
+
+func animate_player_step(from_cell: Vector2i, to_cell: Vector2i) -> void:
+	if mode != "play" or game_session == null or from_cell == to_cell:
+		return
+	_cancel_player_step()
+	_player_visual_cell = Vector2(from_cell)
+	_player_step_tween = create_tween()
+	_player_step_tween.set_trans(Tween.TRANS_LINEAR)
+	_player_step_tween.tween_method(_update_player_visual_cell, Vector2(from_cell), Vector2(to_cell), PLAYER_STEP_SECONDS)
+	_player_step_tween.finished.connect(_finish_player_step.bind(Vector2(to_cell)))
+
+
+func _update_player_visual_cell(cell: Vector2) -> void:
+	_player_visual_cell = cell
+	var world_center := (_player_visual_cell + Vector2.ONE * 0.5) * TILE_SIZE
+	camera_offset = size * 0.5 - world_center * zoom
+	queue_redraw()
+
+
+func _finish_player_step(cell: Vector2) -> void:
+	_player_step_tween = null
+	_update_player_visual_cell(cell)
+
+
+func _cancel_player_step() -> void:
+	if _player_step_tween != null:
+		_player_step_tween.kill()
+		_player_step_tween = null
 
 
 func fit_to_view() -> void:
@@ -189,7 +230,7 @@ func _draw() -> void:
 			_draw_cell(x, y)
 
 	if mode == "play" and game_session != null and map_data.contains(game_session.player_pos.x, game_session.player_pos.y):
-		_draw_player(Vector2(game_session.player_pos) * TILE_SIZE)
+		_draw_player(_player_visual_cell * TILE_SIZE)
 
 	if show_grid:
 		var grid_color := Color(0.82, 0.84, 0.91, 0.20)

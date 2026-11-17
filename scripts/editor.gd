@@ -1877,6 +1877,9 @@ func _log_trigger_events() -> void:
 func _try_move_player(dx: int, dy: int) -> void:
 	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
+	if _canvas.is_player_moving():
+		return
+	var previous_pos: Vector2i = game_session.player_pos
 	var moved := game_session.move_by(dx, dy)
 	if game_session.has_pending_encounter():
 		_collect_game_messages()
@@ -1886,7 +1889,7 @@ func _try_move_player(dx: int, dy: int) -> void:
 	if moved:
 		if not game_session.hero.has_vision_effect() and _canvas.zoom < DungeonCanvas.PLAY_MIN_ZOOM:
 			_canvas.zoom = DungeonCanvas.PLAY_MIN_ZOOM
-		_canvas.center_on_cell(game_session.player_pos)
+		_canvas.animate_player_step(previous_pos, game_session.player_pos)
 	# Сундук меняет вид при открытии, даже если сам герой не сдвинулся.
 	_canvas.queue_redraw()
 	_refresh_map_overlays()

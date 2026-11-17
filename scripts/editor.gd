@@ -80,6 +80,9 @@ const HISTORY_LIMIT := 40
 var _undo_stack: Array[Dictionary] = []
 var _redo_stack: Array[Dictionary] = []
 var _undo_button: Button
+var _reachability_button: Button
+var _reachability_enabled: bool = false
+var _reachability_refresh_timer: Timer
 var _redo_button: Button
 
 var _canvas_host: Control
@@ -138,6 +141,11 @@ func configure_for_game(data: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_
 
 
 func _ready() -> void:
+	_reachability_refresh_timer = Timer.new()
+	_reachability_refresh_timer.one_shot = true
+	_reachability_refresh_timer.wait_time = 0.15
+	_reachability_refresh_timer.timeout.connect(_refresh_reachability)
+	add_child(_reachability_refresh_timer)
 	_build_interface()
 	_create_dialogs()
 	if standalone_game:
@@ -207,6 +215,12 @@ func _build_interface() -> void:
 	_set_command_icon(_play_button, "test")
 	toolbar.add_child(_play_button)
 
+	_reachability_button = _button("Достижимость", "Постоянный слой: пересчитывается после изменений карты", _toggle_reachability)
+	_reachability_button.toggle_mode = true
+	_reachability_button.icon = TOOL_ICONS["player_spawn"]
+	toolbar.add_child(_reachability_button)
+	_register_editor_control(_reachability_button)
+
 	var workspace := HBoxContainer.new()
 	workspace.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	workspace.add_theme_constant_override("separation", 0)
@@ -261,6 +275,7 @@ func _build_interface() -> void:
 	_game_notice = GAME_NOTICE_SCENE.instantiate() as GameNotice
 	_game_notice.visible = false
 	canvas_host.add_child(_game_notice)
+
 	_game_dialogue = GAME_DIALOGUE_SCENE.instantiate() as GameDialogueView
 	_game_dialogue.closed.connect(_on_game_dialogue_closed)
 	add_child(_game_dialogue)
@@ -597,16 +612,61 @@ func _separator() -> VSeparator:
 	return result
 
 
+func _toggle_reachability() -> void:
+	if is_play_mode or map_data == null:
+		return
+	_reachability_enabled = _reachability_button.button_pressed
+	_reachability_button.text = "Скрыть путь" if _reachability_enabled else "Достижимость"
+	if _reachability_enabled:
+		_canvas.finish_edit_stroke()
+		_refresh_reachability()
+	else:
+		_clear_reachability()
+
+
+func _schedule_reachability_refresh() -> void:
+	if _reachability_enabled and not is_play_mode and map_data != null:
+		# Сгруппировать последовательные изменения при рисовании кистью.
+		_reachability_refresh_timer.start()
+
+
+func _refresh_reachability() -> void:
+	if not _reachability_enabled or is_play_mode or map_data == null or _canvas == null:
+		return
+	var result: Dictionary = DungeonReachability.analyze(map_data)
+	_canvas.reachability_result = result
+	_canvas.queue_redraw()
+	if not bool(result.get("has_spawn", false)):
+		_set_status("Проверка пути: на карте нет точки старта.")
+		return
+	var certain: Dictionary = result["reachable"]
+	var possible: Dictionary = result["possible"]
+	var summary: String = "Проверка пути: %d доступно, ещё %d условно доступно (победы и скрытые сундуки)." % [certain.size(), maxi(possible.size() - certain.size(), 0)]
+	if not bool(result["complete"]):
+		summary += " Анализ ограничен по числу состояний: результат неполный."
+	_set_status(summary)
+
+
+func _clear_reachability() -> void:
+	if _reachability_refresh_timer != null:
+		_reachability_refresh_timer.stop()
+	if _canvas != null:
+		_canvas.reachability_result.clear()
+		_canvas.queue_redraw()
+
+
 func _register_editor_control(control: Control) -> void:
 	_editor_controls.append(control)
 
 
 func _set_map(new_map: DungeonMap) -> void:
+	_clear_reachability()
 	map_data = new_map
 	game_session = null
 	is_play_mode = false
 	_name_input.text = map_data.display_name
 	_canvas.set_map(map_data)
+	_schedule_reachability_refresh()
 	_undo_stack.clear()
 	_redo_stack.clear()
 	_update_history_buttons()
@@ -868,6 +928,7 @@ func _on_canvas_edited() -> void:
 func _mark_dirty() -> void:
 	if is_play_mode:
 		return
+	_schedule_reachability_refresh()
 	is_dirty = true
 	_set_status("Изменения не сохранены • Ctrl+S для сохранения")
 
@@ -1241,6 +1302,7 @@ func _toggle_play_mode() -> void:
 
 
 func _start_play_mode() -> void:
+	_clear_reachability()
 	var session := GameSession.start_for(map_data, _startup_hero_id if standalone_game else HeroCatalog.DEFAULT_HERO_ID)
 	if session == null:
 		_set_status("Нельзя начать тест: поставь на карте точку старта героя.")
@@ -1297,6 +1359,7 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 	_canvas.queue_redraw()
 	_update_mode_ui()
 	_refresh_stats()
+	_schedule_reachability_refresh()
 	if standalone_game and return_to_menu:
 		menu_requested.emit()
 	else:

@@ -24,6 +24,7 @@ const PLAY_MAX_ZOOM := 4.0
 var map_data: DungeonMap
 var game_session: GameSession
 var mode: String = "edit" # edit | play
+var reachability_result: Dictionary = {}
 var selected_tool: String = "wall"
 var show_grid: bool = true
 var camera_offset := Vector2.ZERO
@@ -74,6 +75,7 @@ func _on_canvas_resized() -> void:
 
 
 func set_map(value: DungeonMap) -> void:
+	reachability_result.clear()
 	_stroke_before.clear()
 	map_data = value
 	game_session = null
@@ -118,6 +120,7 @@ func _reset_pointer_state() -> void:
 
 
 func set_game_session(value: GameSession) -> void:
+	reachability_result.clear()
 	cancel_move_selection()
 	_reset_pointer_state()
 	game_session = value
@@ -220,6 +223,17 @@ func _draw_cell(x: int, y: int) -> void:
 		draw_texture_rect(WALL_TEXTURE, rect, false)
 	else:
 		draw_texture_rect(FLOOR_TEXTURE, rect, false)
+	# Полупрозрачный слой анализа виден только автору, не игроку.
+	if mode == "edit" and not reachability_result.is_empty() and map_data.get_terrain(x, y) != "wall":
+		var position := Vector2i(x, y)
+		var certain: Dictionary = reachability_result.get("reachable", {})
+		var possible: Dictionary = reachability_result.get("possible", {})
+		if certain.has(position):
+			draw_rect(rect, Color(0.22, 0.78, 0.41, 0.27))
+		elif possible.has(position):
+			draw_rect(rect, Color(0.24, 0.65, 0.95, 0.30))
+		else:
+			draw_rect(rect, Color(0.85, 0.25, 0.35, 0.24))
 	var entities_here := map_data.entities_at(x, y)
 	for entity in entities_here:
 		if mode == "play" and game_session != null and game_session.is_entity_removed(entity):

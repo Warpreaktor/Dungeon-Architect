@@ -83,6 +83,10 @@ var _undo_button: Button
 var _reachability_button: Button
 var _reachability_enabled: bool = false
 var _reachability_refresh_timer: Timer
+var _issues_button: Button
+var _issues_list: VBoxContainer
+var _issues_container: VBoxContainer
+var _issues_expanded: bool = false
 var _redo_button: Button
 
 var _canvas_host: Control
@@ -303,6 +307,18 @@ func _build_interface() -> void:
 
 	_stats_label = _label("32 × 32", 13, Color("#9ab0bf"))
 	sidebar.add_child(_stats_label)
+	# Диагностика живёт внутри прокручиваемой боковой панели и не влияет на размеры карты.
+	_issues_container = VBoxContainer.new()
+	_issues_container.visible = false
+	_issues_container.add_theme_constant_override("separation", 6)
+	sidebar.add_child(_issues_container)
+	_issues_button = _button("Проверка карты", "Показать замечания к лабиринту", _toggle_issues)
+	_issues_button.icon = TOOL_ICONS["stairs_down"]
+	_issues_container.add_child(_issues_button)
+	_issues_list = VBoxContainer.new()
+	_issues_list.add_theme_constant_override("separation", 4)
+	_issues_list.visible = false
+	_issues_container.add_child(_issues_list)
 	sidebar.add_child(HSeparator.new())
 	sidebar.add_child(_label("УПРАВЛЕНИЕ КАРТОЙ", 14, Color("#e8c58a")))
 	var control_tools := _tool_grid()
@@ -622,6 +638,37 @@ func _toggle_reachability() -> void:
 		_refresh_reachability()
 	else:
 		_clear_reachability()
+	_issues_container.visible = _reachability_enabled
+
+
+func _toggle_issues() -> void:
+	_issues_expanded = not _issues_expanded
+	_issues_list.visible = _issues_expanded
+
+
+func _focus_issue(cell: Vector2i) -> void:
+	if map_data != null and map_data.contains(cell.x, cell.y):
+		_canvas.center_on_cell(cell)
+
+
+func _show_reachability_issues(result: Dictionary) -> void:
+	var issues: Array[Dictionary] = DungeonDiagnostics.analyze(map_data, result)
+	_issues_button.text = "Замечания: %d %s" % [issues.size(), "▴" if _issues_expanded else "▾"]
+	for child in _issues_list.get_children():
+		_issues_list.remove_child(child)
+		child.queue_free()
+	if issues.is_empty():
+		_issues_list.add_child(_label("✓ Проблем не обнаружено", 13, Color("#80ca9d")))
+	for issue in issues:
+		var severity: String = str(issue["severity"])
+		var prefix := "✕ " if severity == "error" else ("⚠ " if severity == "warning" else "ⓘ ")
+		var item := _button(prefix + str(issue["message"]), "Показать место на карте", func() -> void: _focus_issue(issue["cell"]))
+		item.icon = TOOL_ICONS.get(str(issue["icon"]), TOOL_ICONS["hand"])
+		item.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		item.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		item.add_theme_color_override("font_color", Color("#ff9e9e") if severity == "error" else (Color("#efcd8d") if severity == "warning" else Color("#b3ccdf")))
+		_issues_list.add_child(item)
 
 
 func _schedule_reachability_refresh() -> void:
@@ -636,6 +683,7 @@ func _refresh_reachability() -> void:
 	var result: Dictionary = DungeonReachability.analyze(map_data)
 	_canvas.reachability_result = result
 	_canvas.queue_redraw()
+	_show_reachability_issues(result)
 	if not bool(result.get("has_spawn", false)):
 		_set_status("Проверка пути: на карте нет точки старта.")
 		return
@@ -650,6 +698,8 @@ func _refresh_reachability() -> void:
 func _clear_reachability() -> void:
 	if _reachability_refresh_timer != null:
 		_reachability_refresh_timer.stop()
+	if _issues_container != null:
+		_issues_container.visible = false
 	if _canvas != null:
 		_canvas.reachability_result.clear()
 		_canvas.queue_redraw()

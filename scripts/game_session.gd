@@ -206,10 +206,11 @@ func move_by(dx: int, dy: int) -> bool:
 	var door := _find_active_entity(target, "door")
 	var opened_door_id := ""
 	if not door.is_empty():
-		if keys <= 0:
-			last_event_message = "Дверь заперта. Нужен ключ."
+		var required_key: String = LockCatalog.required_key(door)
+		if int(carried_items.get(required_key, 0)) <= 0:
+			last_event_message = "Дверь заперта. Нужен %s ключ." % LockCatalog.label(required_key).to_lower()
 			return false
-		_remove_carried_item("key", 1)
+		_remove_carried_item(required_key, 1)
 		opened_door_id = str(door["id"])
 		removed_entities[opened_door_id] = true
 		last_event_message = "Ключ использован. Дверь открыта!"
@@ -259,6 +260,8 @@ func _open_chest(chest: Dictionary) -> void:
 
 ## Общая логика подбора. Описание предмета — Resource, состояние находок — GameSession.
 func _receive_item(item_id: String, quantity: int) -> void:
+	if item_id == "key_yellow":
+		item_id = "key"
 	var item := ItemCatalog.get_item(item_id)
 	if item == null or quantity <= 0:
 		return

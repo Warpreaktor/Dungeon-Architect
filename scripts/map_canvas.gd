@@ -239,8 +239,19 @@ func _draw_cell(x: int, y: int) -> void:
 			draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		else:
 			_draw_entity(kind, origin)
+			if kind == "door":
+				_draw_door_lock(origin, LockCatalog.required_key(entity))
 	if mode == "play" and not can_see:
 		draw_rect(rect, Color(0.0, 0.0, 0.0, 0.55))
+
+
+## Цветной знак замка виден при редактировании и при прохождении.
+func _draw_door_lock(origin: Vector2, lock_id: String) -> void:
+	var tint: Color = LockCatalog.color(lock_id)
+	draw_rect(Rect2(origin + Vector2(19, 21), Vector2(11, 14)), Color("#1a1b22"))
+	draw_arc(origin + Vector2(24.5, 22.5), 4.0, PI, TAU, 10, tint, 2.8)
+	draw_rect(Rect2(origin + Vector2(20.5, 25), Vector2(8, 8)), tint)
+	draw_circle(origin + Vector2(24.5, 28), 1.3, Color("#24202b"))
 
 
 func _draw_player(origin: Vector2) -> void:
@@ -435,13 +446,13 @@ func _configurable_at(cell: Vector2i) -> Dictionary:
 	for i in range(entities.size() - 1, -1, -1):
 		var entity: Dictionary = entities[i]
 		var kind := str(entity.get("type", ""))
-		if kind in ["chest", "trigger", "message", "monster"] and (selected_tool == "hand" or kind == selected_tool or (kind == "monster" and selected_tool.begins_with("monster:"))):
+		if kind in ["chest", "trigger", "message", "monster", "door"] and (selected_tool == "hand" or kind == selected_tool or (kind == "monster" and selected_tool.begins_with("monster:"))):
 			return entity
 	return {}
 
 
 func _selected_tool_has_properties() -> bool:
-	return selected_tool in ["chest", "trigger"] or selected_tool.begins_with("monster:")
+	return selected_tool in ["chest", "trigger", "door"] or selected_tool.begins_with("monster:")
 
 
 func _cancel_pending_settings_tap() -> void:

@@ -9,6 +9,7 @@ const SIDEBAR_WIDTH := 264.0
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
 const GAME_NOTICE_SCENE: PackedScene = preload("res://scenes/game_notice.tscn")
 const CHEST_CONTENTS_SCENE: PackedScene = preload("res://scenes/chest_contents_popup.tscn")
+const DOOR_PROPERTIES_SCENE: PackedScene = preload("res://scenes/door_properties_popup.tscn")
 const TRIGGER_PROPERTIES_SCENE: PackedScene = preload("res://scenes/trigger_properties_popup.tscn")
 const BATTLE_VIEW_SCENE: PackedScene = preload("res://scenes/battle_view.tscn")
 const VICTORY_VIEW_SCENE: PackedScene = preload("res://scenes/victory_view.tscn")
@@ -95,6 +96,7 @@ var _sidebar_panel: PanelContainer
 var _palette_buttons: Dictionary = {}
 var _chest_popup: ChestContentsPopup
 var _monster_loot_popup: ChestContentsPopup
+var _door_popup: DoorPropertiesPopup
 var _trigger_popup: TriggerPropertiesPopup
 var _message_popup: MessageEditorPopup
 var _game_dialogue: GameDialogueView
@@ -367,6 +369,9 @@ func _create_dialogs() -> void:
 	_monster_loot_popup = CHEST_CONTENTS_SCENE.instantiate() as ChestContentsPopup
 	_monster_loot_popup.contents_changed.connect(_on_monster_loot_changed)
 	add_child(_monster_loot_popup)
+	_door_popup = DOOR_PROPERTIES_SCENE.instantiate() as DoorPropertiesPopup
+	_door_popup.lock_changed.connect(_on_door_lock_changed)
+	add_child(_door_popup)
 	_trigger_popup = TRIGGER_PROPERTIES_SCENE.instantiate() as TriggerPropertiesPopup
 	_trigger_popup.event_id_changed.connect(_on_trigger_event_id_changed)
 	add_child(_trigger_popup)
@@ -627,6 +632,8 @@ func _update_hero_hud() -> void:
 
 func _on_configurable_entity_tapped(kind: String, entity_id: String) -> void:
 	match kind:
+		"door":
+			_on_door_tapped(entity_id)
 		"chest":
 			_on_chest_tapped(entity_id)
 		"monster":
@@ -689,6 +696,27 @@ func _on_trigger_event_id_changed(trigger_id: String, event_id: String) -> void:
 		return
 	var before := _canvas.capture_edit_state()
 	if map_data.set_trigger_event_id(trigger_id, event_id):
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
+		_on_canvas_edited()
+		_canvas.queue_redraw()
+
+
+func _on_door_tapped(door_id: String) -> void:
+	if is_play_mode:
+		return
+	_canvas.finish_edit_stroke()
+	for entity in map_data.entities:
+		if str(entity.get("id", "")) == door_id and str(entity.get("type", "")) == "door":
+			_door_popup.configure(door_id, LockCatalog.required_key(entity))
+			_door_popup.popup_centered_clamped(Vector2i(410, 215), 0.9)
+			return
+
+
+func _on_door_lock_changed(door_id: String, lock_id: String) -> void:
+	if is_play_mode:
+		return
+	var before := _canvas.capture_edit_state()
+	if map_data.set_door_lock(door_id, lock_id):
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()

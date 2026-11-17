@@ -5,6 +5,13 @@ extends RefCounted
 
 const DEFINITIONS := {
 	"key": preload("res://items/key.tres"),
+	"key_red": preload("res://items/key_red.tres"),
+	"key_orange": preload("res://items/key_orange.tres"),
+	"key_green": preload("res://items/key_green.tres"),
+	"key_blue": preload("res://items/key_blue.tres"),
+	"key_indigo": preload("res://items/key_indigo.tres"),
+	"key_violet": preload("res://items/key_violet.tres"),
+
 	"potion": preload("res://items/potion.tres"),
 	"potion_health_small": preload("res://items/potion_health_small.tres"),
 	"potion_health_medium": preload("res://items/potion_health_medium.tres"),
@@ -39,7 +46,7 @@ const DEFINITIONS := {
 
 
 static func get_item(item_id: String) -> ItemDefinition:
-	return DEFINITIONS.get(item_id) as ItemDefinition
+	return DEFINITIONS.get("key" if item_id == "key_yellow" else item_id) as ItemDefinition
 
 
 static func quantity_for_entity(entity: Dictionary) -> int:

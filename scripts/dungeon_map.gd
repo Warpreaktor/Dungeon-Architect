@@ -7,7 +7,7 @@ extends RefCounted
 const FORMAT_VERSION := 1
 const MAX_SIZE := 256
 const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "gold", "trigger", "player_spawn", "message"]
-static var CHEST_REWARDS: Array = ["key", "potion", "gold"] + ItemCatalog.consumable_ids() + ItemCatalog.equipment_ids()
+static var CHEST_REWARDS: Array = LockCatalog.LOCK_IDS + ["potion", "gold"] + ItemCatalog.consumable_ids() + ItemCatalog.equipment_ids()
 
 var map_id: String = ""
 var display_name: String = "Безымянное подземелье"
@@ -69,7 +69,9 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 			if entities[i]["type"] == "player_spawn":
 				entities.remove_at(i)
 	var properties: Dictionary = {}
-	if kind == "chest":
+	if kind == "door":
+		properties = {"lock_id": "key"}
+	elif kind == "chest":
 		# Новый сундук пустой: содержимое автор задаёт после размещения.
 		properties = {"contents": [], "loot_mode": "random"}
 	elif kind == "stairs_down":
@@ -101,11 +103,11 @@ static func chest_contents(chest: Dictionary) -> Array[String]:
 		var raw: Variant = properties["contents"]
 		if raw is Array:
 			for item in raw:
-				var kind: String = str(item)
+				var kind: String = "key" if str(item) == "key_yellow" else str(item)
 				if kind in CHEST_REWARDS and kind not in contents:
 					contents.append(kind)
 	elif properties.has("reward"):
-		var legacy: String = str(properties["reward"])
+		var legacy: String = "key" if str(properties["reward"]) == "key_yellow" else str(properties["reward"])
 		if legacy in CHEST_REWARDS:
 			contents.append(legacy)
 	return contents
@@ -127,8 +129,9 @@ static func chest_is_random(chest: Dictionary) -> bool:
 func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amount: int = 5, random_mode: bool = false, hidden: bool = false) -> bool:
 	var normalized: Array[String] = []
 	for item in new_contents:
-		if item in CHEST_REWARDS and item not in normalized:
-			normalized.append(item)
+		var item_id: String = "key" if item == "key_yellow" else item
+		if item_id in CHEST_REWARDS and item_id not in normalized:
+			normalized.append(item_id)
 	var amount: int = clampi(gold_amount, 1, 999999)
 	for entity in entities:
 		if str(entity.get("id", "")) != chest_id or str(entity.get("type", "")) != "chest":
@@ -154,7 +157,7 @@ static func monster_loot_contents(monster: Dictionary) -> Array[String]:
 	var raw: Variant = properties.get("loot_contents", [])
 	if raw is Array:
 		for entry in raw:
-			var item_id: String = str(entry)
+			var item_id: String = "key" if str(entry) == "key_yellow" else str(entry)
 			if item_id in CHEST_REWARDS and item_id not in items:
 				items.append(item_id)
 	return items
@@ -175,8 +178,9 @@ static func monster_loot_is_random(monster: Dictionary) -> bool:
 func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: int = 5, random_mode: bool = false, hidden: bool = false) -> bool:
 	var normalized: Array[String] = []
 	for item_id in contents:
-		if item_id in CHEST_REWARDS and item_id not in normalized:
-			normalized.append(item_id)
+		var canonical_id: String = "key" if item_id == "key_yellow" else item_id
+		if canonical_id in CHEST_REWARDS and canonical_id not in normalized:
+			normalized.append(canonical_id)
 	var amount: int = clampi(gold_amount, 1, 999999)
 	for entity in entities:
 		if str(entity.get("id", "")) != monster_id or str(entity.get("type", "")) != "monster":
@@ -207,6 +211,21 @@ func set_monster_type(entity_id: String, monster_id: String) -> bool:
 			return false
 		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
 		properties["monster_id"] = monster_id
+		entity["properties"] = properties
+		return true
+	return false
+
+
+## Тип замка является свойством двери в JSON, а не состоянием прохождения.
+func set_door_lock(door_id: String, lock_id: String) -> bool:
+	var normalized: String = LockCatalog.normalize(lock_id)
+	for entity in entities:
+		if str(entity.get("id", "")) != door_id or str(entity.get("type", "")) != "door":
+			continue
+		if LockCatalog.required_key(entity) == normalized:
+			return false
+		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		properties["lock_id"] = normalized
 		entity["properties"] = properties
 		return true
 	return false

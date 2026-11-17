@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/door_properties_popup.gd" id="1_script"]
+
+[node name="DoorPropertiesPopup" type="PopupPanel"]
+size = Vector2i(410, 215)
+script = ExtResource("1_script")

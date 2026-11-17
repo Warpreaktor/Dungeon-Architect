@@ -42,7 +42,7 @@ func _build_item_rows() -> void:
 		for grade in ["small", "medium", "large"]:
 			potions.append("potion_%s_%s" % [kind, grade])
 	var groups: Array = [
-		{"title": "ПРЕДМЕТЫ", "items": ["key", "gold"]},
+		{"title": "ПРЕДМЕТЫ", "items": LockCatalog.LOCK_IDS + ["gold"]},
 		{"title": "ЗЕЛЬЯ", "items": potions},
 		{"title": "ОРУЖИЕ", "items": weapons},
 		{"title": "ЩИТЫ", "items": shields}
@@ -80,7 +80,7 @@ func configure(entity_id: String, contents: Array[String], gold_amount: int = 5,
 	_hidden_check.set_pressed_no_signal(hidden)
 	for item_id in _item_checks:
 		var check: CheckBox = _item_checks[item_id]
-		check.set_pressed_no_signal(item_id in contents)
+		check.set_pressed_no_signal(item_id in contents or (item_id == "key" and "key_yellow" in contents))
 	_gold_amount.value = gold_amount
 	_refresh_enabled()
 

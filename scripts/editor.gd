@@ -110,6 +110,9 @@ var _game_dialogue: GameDialogueView
 var _pending_game_messages: Array[Dictionary] = []
 var _editor_controls: Array[Control] = []
 var _play_button: Button
+var _testing_menu: MenuButton
+var _test_open_map: bool = false
+const TEST_OPTION_OPEN_MAP := 1
 var _load_paths: Array[String] = []
 var _load_list: ItemList
 var _preview_textures: Array[Texture2D] = []
@@ -218,6 +221,19 @@ func _build_interface() -> void:
 	_play_button = _button("Тест", "Проверить текущую карту без сохранения игрового прогресса", _toggle_play_mode)
 	_set_command_icon(_play_button, "test")
 	toolbar.add_child(_play_button)
+
+	# Параметры отладочного запуска отделены от палитры объектов.
+	_testing_menu = MenuButton.new()
+	_testing_menu.text = "Тестирование"
+	_testing_menu.icon = COMMAND_ICONS["test"]
+	_testing_menu.custom_minimum_size.y = 38
+	_testing_menu.tooltip_text = "Настройки следующего теста из редактора"
+	var testing_popup := _testing_menu.get_popup()
+	testing_popup.add_check_item("Открытая карта", TEST_OPTION_OPEN_MAP)
+	testing_popup.set_item_tooltip(0, "Начать тест со всеми открытыми клетками, без тумана войны")
+	testing_popup.id_pressed.connect(_on_testing_option_selected)
+	toolbar.add_child(_testing_menu)
+	_register_editor_control(_testing_menu)
 
 	_reachability_button = _button("Достижимость", "Постоянный слой: пересчитывается после изменений карты", _toggle_reachability)
 	_reachability_button.toggle_mode = true
@@ -1344,6 +1360,14 @@ func _refresh_map_overlays() -> void:
 		_mini_overview.refresh()
 
 
+func _on_testing_option_selected(id: int) -> void:
+	if id != TEST_OPTION_OPEN_MAP:
+		return
+	_test_open_map = not _test_open_map
+	var popup := _testing_menu.get_popup()
+	popup.set_item_checked(popup.get_item_index(TEST_OPTION_OPEN_MAP), _test_open_map)
+
+
 func _toggle_play_mode() -> void:
 	if is_play_mode:
 		_stop_play_mode()
@@ -1353,7 +1377,11 @@ func _toggle_play_mode() -> void:
 
 func _start_play_mode() -> void:
 	_clear_reachability()
-	var session := GameSession.start_for(map_data, _startup_hero_id if standalone_game else HeroCatalog.DEFAULT_HERO_ID)
+	var session := GameSession.start_for(
+		map_data,
+		_startup_hero_id if standalone_game else HeroCatalog.DEFAULT_HERO_ID,
+		_test_open_map and not standalone_game
+	)
 	if session == null:
 		_set_status("Нельзя начать тест: поставь на карте точку старта героя.")
 		return

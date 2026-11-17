@@ -22,11 +22,12 @@ var _trigger_events: Array[Dictionary] = [] # События последнег�
 var last_event_message: String = ""
 var encounter_monster_id: String = ""
 var encounter_target := Vector2i(-1, -1)
+var debug_open_map: bool = false # Только для теста редактора, никогда не сериализуется.
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
 
 
-static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID) -> GameSession:
+static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID, open_map: bool = false) -> GameSession:
 	if map_ref == null:
 		return null
 	var spawn := map_ref.find_entity_position("player_spawn")
@@ -36,6 +37,7 @@ static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT
 	session.map_data = map_ref
 	session.hero = HeroState.new(HeroCatalog.get_hero(hero_id))
 	session.player_pos = spawn
+	session.debug_open_map = open_map
 	session._init_masks()
 	session._refresh_visibility()
 	session._collect_pickups_at(spawn)
@@ -356,7 +358,11 @@ func _collect_pickups_at(cell: Vector2i) -> void:
 func _refresh_visibility() -> void:
 	for y in range(map_data.height):
 		for x in range(map_data.width):
-			visible[y][x] = false
+			visible[y][x] = debug_open_map
+			if debug_open_map:
+				revealed[y][x] = true
+	if debug_open_map:
+		return
 	var radius: int = VISION_RADIUS + (hero.vision_bonus if hero != null and hero.has_vision_effect() else 0)
 	for y in range(player_pos.y - radius, player_pos.y + radius + 1):
 		for x in range(player_pos.x - radius, player_pos.x + radius + 1):

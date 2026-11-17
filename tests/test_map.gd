@@ -60,10 +60,11 @@ func _initialize() -> void:
 	assert(loot_session.keys == 0 and loot_session.potions == 0)
 	assert(not loot_session.move_by(1, 0)) # Дверь без ключа закрыта.
 	assert(loot_session.move_by(-1, 0))
-	assert(not loot_session.move_by(0, 1)) # Сундук с добычей открывается за один шаг.
+	assert(loot_session.move_by(0, 1)) # Открываем сундук и входим на его клетку.
+	assert(loot_session.player_pos == Vector2i(2, 3))
 	assert(loot_session.keys == 1 and loot_session.potions == 1)
 	assert(loot_session.is_chest_open(packed_chest))
-	assert(loot_session.move_by(0, 1))
+	assert(loot_session.move_by(0, -1))
 	assert(loot_session.keys == 1 and loot_session.potions == 1)
 	assert(loot_session.move_by(1, 0) and loot_session.move_by(1, 0))
 	assert(loot_session.move_by(0, -1)) # Ключ открывает дверь и расходуется.
@@ -90,7 +91,6 @@ func _initialize() -> void:
 	assert(DungeonMap.chest_contents(old_yellow_chest) == ["key"])
 	assert(LockCatalog.required_key(old_yellow_door) == "key")
 	var old_yellow_session := GameSession.start_for(old_yellow_map)
-	assert(not old_yellow_session.move_by(0, 1))
 	assert(old_yellow_session.move_by(0, 1))
 	assert(int(old_yellow_session.carried_items.get("key", 0)) == 1)
 	assert(old_yellow_session.move_by(0, -1))
@@ -115,9 +115,8 @@ func _initialize() -> void:
 		assert(LockCatalog.required_key(restored_colors.entities_at(3, 2)[0]) == lock_id)
 		var colored_session := GameSession.start_for(restored_colors)
 		assert(not colored_session.move_by(1, 0))
-		assert(not colored_session.move_by(0, 1))
-		assert(int(colored_session.carried_items.get(lock_id, 0)) == 1)
 		assert(colored_session.move_by(0, 1))
+		assert(int(colored_session.carried_items.get(lock_id, 0)) == 1)
 		assert(colored_session.move_by(0, -1))
 		assert(colored_session.move_by(1, 0))
 		assert(int(colored_session.carried_items.get(lock_id, 0)) == 0)
@@ -129,13 +128,40 @@ func _initialize() -> void:
 	assert(mismatched_map.set_door_lock(str(mismatched_map.entities_at(3, 2)[0]["id"]), "key_red"))
 	assert(mismatched_map.set_chest_contents(str(mismatched_map.entities_at(2, 3)[0]["id"]), ["key_blue", "key"]))
 	var mismatch := GameSession.start_for(mismatched_map)
-	assert(not mismatch.move_by(0, 1))
 	assert(mismatch.move_by(0, 1))
 	assert(mismatch.move_by(0, -1))
 	assert(not mismatch.move_by(1, 0))
 	assert(int(mismatch.carried_items.get("key_blue", 0)) == 1)
 	assert(int(mismatch.carried_items.get("key", 0)) == 1)
 	assert(mismatch.player_pos == Vector2i(2, 2))
+
+	# Табличные награды: количество каждого предмета, сохранение, старые карты.
+	var quantities_map := DungeonMap.create_blank(8, 8)
+	assert(quantities_map.place_entity("player_spawn", 2, 2))
+	assert(quantities_map.place_entity("chest", 3, 2))
+	assert(quantities_map.place_entity("monster", 4, 2))
+	var quantity_chest: Dictionary = quantities_map.entities_at(3, 2)[0]
+	var quantity_monster: Dictionary = quantities_map.entities_at(4, 2)[0]
+	var desired: Dictionary = {"key": 3, "potion_health_small": 5, "gold": 71}
+	var selected: Array[String] = ["key", "potion_health_small", "gold"]
+	assert(quantities_map.set_chest_contents(str(quantity_chest["id"]), selected, 71, false, false, desired))
+	assert(not quantities_map.set_chest_contents(str(quantity_chest["id"]), selected, 71, false, false, desired))
+	assert(DungeonMap.chest_item_quantities(quantity_chest) == desired)
+	assert(quantities_map.set_monster_loot(str(quantity_monster["id"]), ["key_red", "potion_health_medium"], 5, false, false, {"key_red": 2, "potion_health_medium": 4}))
+	assert(DungeonMap.monster_item_quantities(quantity_monster)["key_red"] == 2)
+	var quantity_json: String = JSON.stringify(quantities_map.to_dict())
+	var loaded_quantities := DungeonMap.from_dict(JSON.parse_string(quantity_json))
+	assert(loaded_quantities != null)
+	assert(DungeonMap.chest_item_quantities(loaded_quantities.entities_at(3, 2)[0]) == desired)
+	var quantity_session := GameSession.start_for(loaded_quantities)
+	assert(quantity_session.move_by(1, 0))
+	assert(int(quantity_session.carried_items.get("key", 0)) == 3)
+	assert(int(quantity_session.carried_items.get("potion_health_small", 0)) == 5)
+	assert(quantity_session.hero.gold == 71)
+	assert(JSON.stringify(loaded_quantities.to_dict()) == quantity_json)
+	var legacy_quantities := {"properties": {"contents": ["potion", "gold"], "gold_amount": 29}}
+	assert(DungeonMap.chest_item_quantities(legacy_quantities)["potion"] == ItemCatalog.get_item("potion").default_quantity)
+	assert(DungeonMap.chest_item_quantities(legacy_quantities)["gold"] == 29)
 
 	# Выбор вида монстра в палитре сразу задаёт свойства созданной сущности.
 	var monster_palette_map := DungeonMap.create_blank(8, 8)
@@ -159,7 +185,7 @@ func _initialize() -> void:
 	assert(equip_map.set_chest_contents(str(equipment_chest["id"]), ["sword", "shield"]))
 	var equipment_map_json: String = JSON.stringify(equip_map.to_dict())
 	var equipment_session := GameSession.start_for(equip_map)
-	assert(not equipment_session.move_by(1, 0))
+	assert(equipment_session.move_by(1, 0))
 	assert(equipment_session.hero.equipped_weapon_id == "sword")
 	assert(equipment_session.hero.equipped_shield_id == "shield")
 	assert(equipment_session.carried_items["sword"] == 1)
@@ -358,7 +384,7 @@ func _initialize() -> void:
 	legacy_chest["properties"] = {"reward": "key"}
 	assert(DungeonMap.chest_contents(legacy_chest) == ["key"])
 	var legacy_session := GameSession.start_for(legacy_map)
-	assert(not legacy_session.move_by(1, 0))
+	assert(legacy_session.move_by(1, 0))
 	assert(legacy_session.keys == 1)
 	assert(legacy_map.set_chest_contents(str(legacy_chest["id"]), []))
 	assert(DungeonMap.chest_contents(legacy_chest).is_empty())
@@ -403,23 +429,43 @@ func _initialize() -> void:
 	var treasure_restored := DungeonMap.from_dict(JSON.parse_string(treasure_json))
 	assert(treasure_restored != null)
 	var treasure_session := GameSession.start_for(treasure_restored)
-	assert(not treasure_session.move_by(1, 0)) # Открытие сундука занимает ход.
+	assert(treasure_session.move_by(1, 0)) # Сундук открывается при входе в клетку.
+	assert(treasure_session.player_pos == Vector2i(3, 2) and treasure_session.steps == 1)
 	assert(treasure_session.keys == 1 and treasure_session.potions == 1)
 	assert(treasure_session.hero.gold == 5)
-	assert(treasure_session.move_by(1, 0)) # Повторно награда не выдаётся.
+	assert(treasure_session.move_by(-1, 0) and treasure_session.move_by(1, 0)) # Повторно награда не выдаётся.
 	assert(treasure_session.hero.gold == 5)
 	assert(JSON.stringify(treasure_restored.to_dict()) == treasure_json)
 	var treasure_again := GameSession.start_for(treasure_restored)
 	assert(treasure_again.hero.gold == 0)
-	assert(not treasure_again.move_by(1, 0))
+	assert(treasure_again.move_by(1, 0))
 	assert(treasure_again.hero.gold == 5)
 	# Сундук с одним золотом также считается заполненным и открывается один раз.
 	assert(treasure_map.set_chest_contents(treasure_id, ["gold"]))
 	assert(DungeonMap.chest_contents(treasure_chest) == ["gold"])
 	var gold_only := GameSession.start_for(treasure_map)
-	assert(not gold_only.move_by(1, 0))
+	assert(gold_only.move_by(1, 0))
 	assert(gold_only.hero.gold == 5 and gold_only.keys == 0 and gold_only.potions == 0)
-	assert(gold_only.move_by(1, 0) and gold_only.hero.gold == 5)
+	assert(gold_only.move_by(-1, 0) and gold_only.move_by(1, 0) and gold_only.hero.gold == 5)
+	# Сундук не даёт забрать награду через закрытую дверь на той же клетке.
+	var guarded_map := DungeonMap.create_blank(8, 8)
+	assert(guarded_map.place_entity("player_spawn", 2, 2))
+	assert(guarded_map.place_entity("door", 3, 2))
+	assert(guarded_map.place_entity("chest", 3, 2))
+	var guarded_chest: Dictionary = {}
+	for guarded_entity in guarded_map.entities_at(3, 2):
+		if guarded_entity["type"] == "chest":
+			guarded_chest = guarded_entity
+	assert(not guarded_chest.is_empty())
+	assert(guarded_map.set_chest_contents(str(guarded_chest["id"]), ["gold"]))
+	var guarded_game := GameSession.start_for(guarded_map)
+	assert(not guarded_game.move_by(1, 0))
+	assert(guarded_game.hero.gold == 0 and guarded_game.player_pos == Vector2i(2, 2))
+	guarded_game.carried_items["key"] = 1
+	assert(guarded_game.move_by(1, 0))
+	assert(guarded_game.hero.gold == 5 and guarded_game.player_pos == Vector2i(3, 2))
+	assert(guarded_game.steps == 1 and guarded_game.is_chest_open(guarded_chest))
+
 	# DA-2.03.2: меч только из сундука, сумма золота задана автором.
 	var sword_item := ItemCatalog.get_item("sword")
 	assert(sword_item != null)
@@ -442,12 +488,11 @@ func _initialize() -> void:
 	var equip_session := GameSession.start_for(equip_loaded)
 	assert(equip_session.hero.attack == 1)
 	assert(equip_session.hero.equipped_weapon_id.is_empty())
-	assert(not equip_session.move_by(1, 0))
+	assert(equip_session.move_by(1, 0))
 	assert(equip_session.hero.gold == 37)
 	assert(equip_session.carried_items.get("sword", 0) == 1)
 	assert(equip_session.hero.attack == 2)
 	assert(equip_session.hero.equipped_weapon_id == "sword")
-	assert(equip_session.move_by(1, 0))
 	assert(not equip_session.move_by(1, 0)) # Встречаем монстра.
 	assert(equip_session.has_pending_encounter())
 	var equip_combat := CombatSession.new()
@@ -458,7 +503,7 @@ func _initialize() -> void:
 	assert(JSON.stringify(equip_loaded.to_dict()) == equip_json)
 	var equip_again := GameSession.start_for(equip_loaded)
 	assert(equip_again.hero.attack == 1 and equip_again.hero.gold == 0)
-	assert(not equip_again.move_by(1, 0))
+	assert(equip_again.move_by(1, 0))
 	assert(equip_again.hero.attack == 2 and equip_again.hero.gold == 37)
 	# Сняли золото с сундука: размер денежной награды не влияет на остальные предметы.
 	assert(equip_map.set_chest_contents(equip_chest_id, ["sword"]))
@@ -501,7 +546,8 @@ func _initialize() -> void:
 	assert(decorated_chest_map.message_at(3, 2)["properties"]["activation"] == "chest_open")
 	var decorated_json := JSON.stringify(decorated_chest_map.to_dict())
 	var decorated_session := GameSession.start_for(decorated_chest_map)
-	assert(not decorated_session.move_by(1, 0))
+	assert(decorated_session.move_by(1, 0))
+	assert(decorated_session.player_pos == Vector2i(3, 2))
 	var treasure_events := decorated_session.take_message_events()
 	assert(treasure_events.size() == 1)
 	assert(treasure_events[0]["text"] == "Найден тайник!")
@@ -514,7 +560,7 @@ func _initialize() -> void:
 	assert(decorated_session.hero.equipped_shield_id == "shield")
 	assert(decorated_session.hero.take_damage(2) == 1)
 	assert(decorated_session.hero.health == 39)
-	assert(decorated_session.move_by(1, 0))
+	assert(decorated_session.move_by(-1, 0) and decorated_session.move_by(1, 0))
 	assert(decorated_session.take_message_events().is_empty())
 	assert(JSON.stringify(decorated_chest_map.to_dict()) == decorated_json)
 	var decorated_again := GameSession.start_for(decorated_chest_map)
@@ -522,7 +568,7 @@ func _initialize() -> void:
 	# Без авторской реплики сундук всё равно показывает найденные предметы.
 	assert(decorated_chest_map.set_message_at(3, 2, ""))
 	var loot_only_session := GameSession.start_for(decorated_chest_map)
-	assert(not loot_only_session.move_by(1, 0))
+	assert(loot_only_session.move_by(1, 0))
 	var loot_only_events := loot_only_session.take_message_events()
 	assert(loot_only_events.size() == 1)
 	assert(str(loot_only_events[0]["text"]).is_empty() and loot_only_events[0]["loot"].size() == 5)

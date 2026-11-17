@@ -1,31 +1,40 @@
 class_name ChestContentsPopup
 extends MobileKeyboardPopup
 
-## Общая панель настройки наград сундуков и монстров; типы берутся из ItemCatalog.
-signal contents_changed(entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool)
+## Редактор количества наград для сундуков и монстров. Карта хранит ID и количества.
+signal contents_changed(entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary)
 
 @onready var _title: Label = %Title
 @onready var _random_check: CheckBox = %RandomCheck
 @onready var _hidden_check: CheckBox = %HiddenCheck
 @onready var _rows: VBoxContainer = %LootRows
-@onready var _gold_amount: SpinBox = %GoldAmount
-@onready var _gold_row: HBoxContainer = $ContentMargin/Content/GoldRow
+@onready var _scroll: ScrollContainer = %LootScroll
+
+const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Прочее"]
+const CATEGORY_ICONS := {
+	"Ключи": preload("res://assets/icons/key.png"),
+	"Зелья": preload("res://assets/icons/potion.png"),
+	"Оружие": preload("res://assets/icons/sword.png"),
+	"Щиты": preload("res://assets/icons/shield.png"),
+	"Прочее": preload("res://assets/icons/gold.png"),
+}
+const AMOUNT_WIDTH := 94.0
 
 var _entity_id: String = ""
-var _item_checks: Dictionary = {} # item_id -> CheckBox
+var _item_checks: Dictionary = {} # id -> CheckBox
+var _item_amounts: Dictionary = {} # id -> SpinBox
+var _group_buttons: Dictionary = {} # category -> Button
+var _group_contents: Dictionary = {} # category -> VBoxContainer
+var _editing_amount: SpinBox
 
 
 func _ready() -> void:
 	%SaveButton.pressed.connect(_save)
 	%CancelButton.pressed.connect(hide)
+	%KeyboardDoneButton.pressed.connect(_finish_amount)
+	%KeyboardDoneButton.visible = false
 	_random_check.toggled.connect(_refresh_enabled)
 	_build_item_rows()
-	var amount_input := _gold_amount.get_line_edit()
-	amount_input.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
-	amount_input.keep_editing_on_text_submit = false
-	amount_input.text_submitted.connect(_on_amount_submitted)
-	%KeyboardDoneButton.pressed.connect(_finish_amount)
-	%KeyboardDoneButton.visible = OS.has_feature("mobile")
 
 
 func _build_item_rows() -> void:
@@ -41,39 +50,88 @@ func _build_item_rows() -> void:
 	for kind in ["health", "strength", "vitality", "vision"]:
 		for grade in ["small", "medium", "large"]:
 			potions.append("potion_%s_%s" % [kind, grade])
-	var groups: Array = [
-		{"title": "ПРЕДМЕТЫ", "items": LockCatalog.LOCK_IDS + ["gold"]},
-		{"title": "ЗЕЛЬЯ", "items": potions},
-		{"title": "ОРУЖИЕ", "items": weapons},
-		{"title": "ЩИТЫ", "items": shields}
+	var groups: Array[Dictionary] = [
+		{"title": "Ключи", "items": LockCatalog.LOCK_IDS},
+		{"title": "Зелья", "items": potions},
+		{"title": "Оружие", "items": weapons},
+		{"title": "Щиты", "items": shields},
+		{"title": "Прочее", "items": ["gold"]}
 	]
 	for group in groups:
-		var title := Label.new()
-		title.text = str(group["title"])
-		title.add_theme_color_override("font_color", Color(0.84, 0.67, 0.40))
-		_rows.add_child(title)
+		var category: String = str(group["title"])
+		var header := Button.new()
+		header.text = "▸  %s" % category
+		header.icon = CATEGORY_ICONS[category]
+		header.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		header.expand_icon = true
+		header.add_theme_constant_override("icon_max_width", 28)
+		header.add_theme_constant_override("h_separation", 10)
+		header.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		header.custom_minimum_size.y = 44
+		header.focus_mode = Control.FOCUS_NONE
+		_rows.add_child(header)
+		var body := VBoxContainer.new()
+		body.visible = false
+		body.add_theme_constant_override("separation", 4)
+		_rows.add_child(body)
+		_group_buttons[category] = header
+		_group_contents[category] = body
+		header.pressed.connect(_toggle_group.bind(category))
 		for item_id in group["items"]:
-			var item: ItemDefinition = ItemCatalog.get_item(item_id)
-			var row := HBoxContainer.new()
-			row.add_theme_constant_override("separation", 10)
-			var icon := TextureRect.new()
-			icon.texture = item.icon
-			icon.custom_minimum_size = Vector2(34, 34)
-			icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			row.add_child(icon)
-			var check := CheckBox.new()
-			check.mouse_filter = Control.MOUSE_FILTER_PASS
-			check.text = item.display_name
-			check.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			check.toggled.connect(_refresh_enabled)
-			row.add_child(check)
-			_rows.add_child(row)
-			_item_checks[item_id] = check
+			_add_item_row(body, str(item_id))
 
 
-func configure(entity_id: String, contents: Array[String], gold_amount: int = 5, is_monster: bool = false, random_mode: bool = true, hidden: bool = false) -> void:
+func _add_item_row(parent: VBoxContainer, item_id: String) -> void:
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	if item == null:
+		return
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.custom_minimum_size.y = 44
+	parent.add_child(row)
+
+	var icon := TextureRect.new()
+	icon.texture = item.icon
+	icon.custom_minimum_size = Vector2(32, 32)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(icon)
+
+	var check := CheckBox.new()
+	check.text = item.display_name
+	check.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	check.custom_minimum_size.y = 44
+	row.add_child(check)
+	_item_checks[item_id] = check
+
+	var amount := SpinBox.new()
+	amount.custom_minimum_size = Vector2(AMOUNT_WIDTH, 44)
+	amount.min_value = 1
+	amount.max_value = 999999 if item_id == "gold" else 9999
+	amount.step = 1
+	amount.rounded = true
+	amount.value = item.default_quantity
+	amount.tooltip_text = "Количество: %s" % item.display_name
+	row.add_child(amount)
+	_item_amounts[item_id] = amount
+
+	var amount_input := amount.get_line_edit()
+	amount_input.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	amount_input.keep_editing_on_text_submit = false
+	amount_input.text_submitted.connect(_on_amount_submitted.bind(amount))
+	amount_input.focus_entered.connect(_on_amount_focused.bind(amount))
+	check.toggled.connect(_on_item_toggled.bind(item_id))
+
+
+func _toggle_group(category: String) -> void:
+	var body: VBoxContainer = _group_contents[category]
+	body.visible = not body.visible
+	var header: Button = _group_buttons[category]
+	header.text = ("▾  " if body.visible else "▸  ") + category
+
+
+func configure(entity_id: String, contents: Array[String], gold_amount: int = 5, is_monster: bool = false, random_mode: bool = true, hidden: bool = false, quantities: Dictionary = {}) -> void:
 	_entity_id = entity_id
 	_title.text = "Награда за победу" if is_monster else "Содержимое сундука"
 	_random_check.set_pressed_no_signal(random_mode)
@@ -81,37 +139,61 @@ func configure(entity_id: String, contents: Array[String], gold_amount: int = 5,
 	for item_id in _item_checks:
 		var check: CheckBox = _item_checks[item_id]
 		check.set_pressed_no_signal(item_id in contents or (item_id == "key" and "key_yellow" in contents))
-	_gold_amount.value = gold_amount
+		var definition: ItemDefinition = ItemCatalog.get_item(item_id)
+		var fallback: int = gold_amount if item_id == "gold" else definition.default_quantity
+		(_item_amounts[item_id] as SpinBox).value = int(quantities.get(item_id, fallback))
+	for category in CATEGORY_NAMES:
+		var body: VBoxContainer = _group_contents[category]
+		body.visible = false
+		(_group_buttons[category] as Button).text = "▸  " + category
 	_refresh_enabled()
 
 
-func _refresh_enabled(_value: bool = false) -> void:
+func _on_item_toggled(_pressed: bool, item_id: String) -> void:
+	var amount: SpinBox = _item_amounts[item_id]
+	amount.editable = not _random_check.button_pressed and (_item_checks[item_id] as CheckBox).button_pressed
+
+
+func _refresh_enabled(_pressed: bool = false) -> void:
 	var is_random: bool = _random_check.button_pressed
-	for check in _item_checks.values():
-		(check as CheckBox).disabled = is_random
-	_gold_row.visible = not is_random and (_item_checks["gold"] as CheckBox).button_pressed
+	for item_id in _item_checks:
+		var check: CheckBox = _item_checks[item_id]
+		check.disabled = is_random
+		(_item_amounts[item_id] as SpinBox).editable = not is_random and check.button_pressed
+
+
+func _on_amount_focused(amount: SpinBox) -> void:
+	_editing_amount = amount
+	# Поле прокручивается к видимой области после размещения/ресайза окна.
+	_scroll.call_deferred("ensure_control_visible", amount)
 
 
 func _keyboard_layout_changed(open: bool) -> void:
-	# Пока редактируется сумма, список наград уступает место полю и кнопкам.
-	%LootScroll.visible = not open
+	%KeyboardDoneButton.visible = open
+	if open and _editing_amount != null:
+		_scroll.call_deferred("ensure_control_visible", _editing_amount)
 
 
-func _on_amount_submitted(_text: String) -> void:
-	close_soft_keyboard(_gold_amount.get_line_edit())
+func _on_amount_submitted(_text: String, amount: SpinBox) -> void:
+	close_soft_keyboard(amount.get_line_edit())
 
 
 func _finish_amount() -> void:
-	_gold_amount.apply()
-	close_soft_keyboard(_gold_amount.get_line_edit())
+	if _editing_amount != null:
+		_editing_amount.apply()
+		close_soft_keyboard(_editing_amount.get_line_edit())
 
 
 func _save() -> void:
-	_gold_amount.apply()
-	close_soft_keyboard(_gold_amount.get_line_edit())
+	_finish_amount()
 	var contents: Array[String] = []
+	var quantities: Dictionary = {}
 	for item_id in _item_checks:
 		if (_item_checks[item_id] as CheckBox).button_pressed:
+			var amount: SpinBox = _item_amounts[item_id]
+			amount.apply()
 			contents.append(item_id)
-	contents_changed.emit(_entity_id, contents, int(_gold_amount.value), _random_check.button_pressed, _hidden_check.button_pressed)
+			quantities[item_id] = int(amount.value)
+	var gold_amount: int = int(quantities.get("gold", 5))
+	contents_changed.emit(_entity_id, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities)
 	hide()

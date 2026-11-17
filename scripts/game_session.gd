@@ -116,7 +116,8 @@ func win_pending_encounter() -> bool:
 		var rewards: Array[Dictionary] = _resolve_rewards(
 			DungeonMap.monster_loot_contents(defeated),
 			DungeonMap.monster_loot_is_random(defeated),
-			DungeonMap.monster_gold_amount(defeated))
+			DungeonMap.monster_gold_amount(defeated),
+			DungeonMap.monster_item_quantities(defeated))
 		for reward in rewards:
 			_receive_item(str(reward["item_id"]), int(reward["quantity"]))
 		if not rewards.is_empty():
@@ -198,11 +199,6 @@ func move_by(dx: int, dy: int) -> bool:
 		_activate_message_at(target, "monster_encounter", encounter_monster_id)
 		return false
 
-	var chest := _find_active_entity(target, "chest")
-	if not chest.is_empty() and not is_chest_open(chest) and (DungeonMap.chest_is_random(chest) or not DungeonMap.chest_contents(chest).is_empty()):
-		_open_chest(chest)
-		return false # Открытие занимает попытку шага, герой остаётся рядом.
-
 	var door := _find_active_entity(target, "door")
 	var opened_door_id := ""
 	if not door.is_empty():
@@ -214,6 +210,12 @@ func move_by(dx: int, dy: int) -> bool:
 		opened_door_id = str(door["id"])
 		removed_entities[opened_door_id] = true
 		last_event_message = "Ключ использован. Дверь открыта!"
+
+	# Сундук не блокирует клетку: открываем его и завершаем тот же шаг.
+	# Проверяем после замка, чтобы нельзя было получить награду через запертую дверь.
+	var chest := _find_active_entity(target, "chest")
+	if not chest.is_empty() and not is_chest_open(chest) and (DungeonMap.chest_is_random(chest) or not DungeonMap.chest_contents(chest).is_empty()):
+		_open_chest(chest)
 
 	player_pos = target
 	steps += 1
@@ -233,7 +235,7 @@ func move_by(dx: int, dy: int) -> bool:
 
 
 ## Случайная награда разыгрывается в момент открытия и живёт только в GameSession.
-func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: int) -> Array[Dictionary]:
+func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: int, quantities: Dictionary = {}) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
 	if random_mode:
 		rewards.append(ItemCatalog.roll_loot())
@@ -242,7 +244,8 @@ func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: i
 			var item: ItemDefinition = ItemCatalog.get_item(item_id)
 			if item == null:
 				continue
-			var quantity: int = gold_amount if item_id == "gold" else item.default_quantity
+			var fallback: int = gold_amount if item_id == "gold" else item.default_quantity
+			var quantity: int = clampi(int(quantities.get(item_id, fallback)), 1, 999999 if item_id == "gold" else 9999)
 			rewards.append({"item_id": item_id, "quantity": quantity})
 	return rewards
 
@@ -252,7 +255,8 @@ func _open_chest(chest: Dictionary) -> void:
 	var rewards: Array[Dictionary] = _resolve_rewards(
 		DungeonMap.chest_contents(chest),
 		DungeonMap.chest_is_random(chest),
-		DungeonMap.chest_gold_amount(chest))
+		DungeonMap.chest_gold_amount(chest),
+		DungeonMap.chest_item_quantities(chest))
 	for reward in rewards:
 		_receive_item(str(reward["item_id"]), int(reward["quantity"]))
 	_activate_message_at(Vector2i(int(chest["x"]), int(chest["y"])), "chest_open", str(chest["id"]), rewards)

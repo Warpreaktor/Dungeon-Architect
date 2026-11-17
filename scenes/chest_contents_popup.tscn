@@ -1,6 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/chest_contents_popup.gd" id="1_popup_script"]
+
+[ext_resource type="Texture2D" path="res://assets/icons/commands/dice.svg" id="2_dice"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_popup"]
 bg_color = Color(0.105, 0.153, 0.198, 1)
@@ -19,7 +21,7 @@ content_margin_right = 12.0
 content_margin_bottom = 12.0
 
 [node name="ChestContentsPopup" type="PopupPanel"]
-size = Vector2i(460, 530)
+size = Vector2i(510, 590)
 transparent = false
 script = ExtResource("1_popup_script")
 theme_override_styles/panel = SubResource("StyleBoxFlat_popup")
@@ -47,7 +49,8 @@ text = "Содержимое сундука"
 [node name="RandomCheck" type="CheckBox" parent="ContentMargin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Случайная награда"
+text = "Случайно"
+icon = ExtResource("2_dice")
 
 [node name="HiddenCheck" type="CheckBox" parent="ContentMargin/Content"]
 unique_name_in_owner = true
@@ -58,6 +61,7 @@ text = "Скрытый объект"
 layout_mode = 2
 
 [node name="LootScroll" type="ScrollContainer" parent="ContentMargin/Content"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 335)
 layout_mode = 2
 size_flags_vertical = 3
@@ -70,30 +74,12 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 2
 
-[node name="GoldRow" type="HBoxContainer" parent="ContentMargin/Content"]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="GoldLabel" type="Label" parent="ContentMargin/Content/GoldRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Количество монет"
-
-[node name="GoldAmount" type="SpinBox" parent="ContentMargin/Content/GoldRow"]
+[node name="KeyboardDoneButton" type="Button" parent="ContentMargin/Content"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(125, 40)
 layout_mode = 2
-min_value = 1.0
-max_value = 999999.0
-value = 5.0
-step = 1.0
-rounded = true
-
-[node name="KeyboardDoneButton" type="Button" parent="ContentMargin/Content/GoldRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(78, 40)
-layout_mode = 2
+custom_minimum_size = Vector2(0, 42)
 text = "Готово"
+visible = false
 
 [node name="Buttons" type="HBoxContainer" parent="ContentMargin/Content"]
 layout_mode = 2

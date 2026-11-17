@@ -119,6 +119,44 @@ static func chest_gold_amount(chest: Dictionary) -> int:
 	return clampi(int(properties.get("gold_amount", 5)), 1, 999999)
 
 
+## Набор количеств конкретных предметов. Карты до таблицы количеств
+## получают штатное число единиц, а золото — legacy gold_amount.
+static func chest_item_quantities(chest: Dictionary) -> Dictionary:
+	return _reward_quantities(chest_contents(chest), chest.get("properties", {}), "item_quantities", "gold_amount")
+
+
+static func monster_item_quantities(monster: Dictionary) -> Dictionary:
+	return _reward_quantities(monster_loot_contents(monster), monster.get("properties", {}), "loot_item_quantities", "loot_gold_amount")
+
+
+static func _reward_quantities(contents: Array[String], properties: Dictionary, field: String, legacy_gold_field: String) -> Dictionary:
+	var raw: Variant = properties.get(field, {})
+	var stored: Dictionary = raw if raw is Dictionary else {}
+	var result: Dictionary = {}
+	for item_id in contents:
+		var definition: ItemDefinition = ItemCatalog.get_item(item_id)
+		if definition == null:
+			continue
+		var fallback: int = clampi(int(properties.get(legacy_gold_field, 5)), 1, 999999) if item_id == "gold" else definition.default_quantity
+		# Старое имя жёлтого ключа всё ещё может встретиться в данных карты.
+		var raw_value: Variant = stored.get(item_id, stored.get("key_yellow", fallback) if item_id == "key" else fallback)
+		result[item_id] = clampi(int(raw_value), 1, 999999 if item_id == "gold" else 9999)
+	return result
+
+
+static func _normalize_reward_quantities(contents: Array[String], supplied: Dictionary, properties: Dictionary, field: String, gold_field: String, fallback_gold: int) -> Dictionary:
+	var existing: Dictionary = _reward_quantities(contents, properties, field, gold_field)
+	var normalized: Dictionary = {}
+	for item_id in contents:
+		var item: ItemDefinition = ItemCatalog.get_item(item_id)
+		if item == null:
+			continue
+		var fallback: int = fallback_gold if item_id == "gold" else int(existing.get(item_id, item.default_quantity))
+		var count: int = int(supplied.get(item_id, supplied.get("key_yellow", fallback) if item_id == "key" else fallback))
+		normalized[item_id] = clampi(count, 1, 999999 if item_id == "gold" else 9999)
+	return normalized
+
+
 static func chest_is_random(chest: Dictionary) -> bool:
 	var properties: Dictionary = chest.get("properties", {})
 	if properties.has("loot_mode"):
@@ -126,7 +164,7 @@ static func chest_is_random(chest: Dictionary) -> bool:
 	return chest_contents(chest).is_empty()
 
 
-func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amount: int = 5, random_mode: bool = false, hidden: bool = false) -> bool:
+func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amount: int = 5, random_mode: bool = false, hidden: bool = false, quantities: Dictionary = {}) -> bool:
 	var normalized: Array[String] = []
 	for item in new_contents:
 		var item_id: String = "key" if item == "key_yellow" else item
@@ -136,14 +174,19 @@ func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amou
 	for entity in entities:
 		if str(entity.get("id", "")) != chest_id or str(entity.get("type", "")) != "chest":
 			continue
-		if chest_contents(entity) == normalized and chest_is_random(entity) == random_mode and ("gold" not in normalized or chest_gold_amount(entity) == amount) and bool(entity.get("properties", {}).get("hidden", false)) == hidden:
+		var current: Dictionary = entity.get("properties", {})
+		var item_amounts: Dictionary = _normalize_reward_quantities(normalized, quantities, current, "item_quantities", "gold_amount", amount)
+		if chest_contents(entity) == normalized and chest_is_random(entity) == random_mode and chest_item_quantities(entity) == item_amounts and bool(current.get("hidden", false)) == hidden:
 			return false
-		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		var properties: Dictionary = current.duplicate(true)
+		properties["item_quantities"] = item_amounts
 		properties["contents"] = normalized.duplicate()
 		properties["loot_mode"] = "random" if random_mode else "fixed"
 		properties["hidden"] = hidden
 		if "gold" in normalized:
-			properties["gold_amount"] = amount
+			properties["gold_amount"] = int(item_amounts["gold"])
+		else:
+			properties.erase("gold_amount")
 		entity["properties"] = properties
 		return true
 	return false
@@ -175,7 +218,7 @@ static func monster_loot_is_random(monster: Dictionary) -> bool:
 	return monster_loot_contents(monster).is_empty()
 
 
-func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: int = 5, random_mode: bool = false, hidden: bool = false) -> bool:
+func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: int = 5, random_mode: bool = false, hidden: bool = false, quantities: Dictionary = {}) -> bool:
 	var normalized: Array[String] = []
 	for item_id in contents:
 		var canonical_id: String = "key" if item_id == "key_yellow" else item_id
@@ -185,15 +228,18 @@ func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: 
 	for entity in entities:
 		if str(entity.get("id", "")) != monster_id or str(entity.get("type", "")) != "monster":
 			continue
-		if monster_loot_contents(entity) == normalized and monster_loot_is_random(entity) == random_mode and ("gold" not in normalized or monster_gold_amount(entity) == amount) and bool(entity.get("properties", {}).get("hidden", false)) == hidden:
+		var current: Dictionary = entity.get("properties", {})
+		var item_amounts: Dictionary = _normalize_reward_quantities(normalized, quantities, current, "loot_item_quantities", "loot_gold_amount", amount)
+		if monster_loot_contents(entity) == normalized and monster_loot_is_random(entity) == random_mode and monster_item_quantities(entity) == item_amounts and bool(current.get("hidden", false)) == hidden:
 			return false
-		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		var properties: Dictionary = current.duplicate(true)
+		properties["loot_item_quantities"] = item_amounts
 		properties["loot_contents"] = normalized.duplicate()
 		properties["loot_mode"] = "random" if random_mode else "fixed"
 		properties["hidden"] = hidden
 		properties.erase("loot_gold_amount")
 		if "gold" in normalized:
-			properties["loot_gold_amount"] = amount
+			properties["loot_gold_amount"] = int(item_amounts["gold"])
 		entity["properties"] = properties
 		return true
 	return false

@@ -1,44 +1,54 @@
 class_name CombatSession
 extends RefCounted
 
-## Пошаговый поединок. После удара героя выживший враг отвечает.
-## Все изменения здоровья относятся к HeroState текущей GameSession, не к JSON карты.
+## Совместимый фасад существующего боя. Расчёт теперь выполняет BattleState;
+## BattleView продолжает пользоваться прежними полями и hero_attack().
 const ENEMY_MAX_HEALTH: int = 1 # Совместимость с тестами первого поединка.
 const PUNCH_DAMAGE: int = 1
 
 var enemy_definition: MonsterDefinition
-var enemy_health: int = ENEMY_MAX_HEALTH
-var enemy_max_health: int = ENEMY_MAX_HEALTH
-var enemy_damage: int = 1
-var enemy_defense: int = 0
-var is_victory: bool = false
-var is_defeat: bool = false
-var last_counter_damage: int = 0 # Урон после блока щитом.
-var last_blocked_damage: int = 0
 var hero: HeroState
+var battle_state: BattleState
+
+var enemy_health: int:
+	get:
+		return battle_state.get_enemy().health
+var enemy_max_health: int:
+	get:
+		return battle_state.get_enemy().max_health
+var enemy_damage: int:
+	get:
+		return battle_state.get_enemy().attack
+var enemy_defense: int:
+	get:
+		return battle_state.get_enemy().defense
+var is_victory: bool:
+	get:
+		return battle_state.is_victory
+var is_defeat: bool:
+	get:
+		return battle_state.is_defeat
+var last_counter_damage: int:
+	get:
+		return battle_state.last_counter_damage
+var last_blocked_damage: int:
+	get:
+		return battle_state.last_blocked_damage
 
 
 func _init(monster: MonsterDefinition = null, participant: HeroState = null) -> void:
 	enemy_definition = monster if monster != null else MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID)
-	enemy_max_health = enemy_definition.max_health
-	enemy_health = enemy_max_health
-	enemy_damage = enemy_definition.attack_damage
-	enemy_defense = enemy_definition.defense
 	hero = participant
+	battle_state = BattleState.begin(enemy_definition, participant)
 
 
 func hero_attack(attack_damage: int) -> int:
-	if is_victory or is_defeat:
-		return 0
-	var damage: int = maxi(attack_damage - enemy_defense, 0)
-	enemy_health = maxi(enemy_health - damage, 0)
-	is_victory = enemy_health == 0
-	last_counter_damage = 0
-	last_blocked_damage = 0
-	if not is_victory and hero != null:
-		last_counter_damage = hero.take_damage(enemy_damage)
-		last_blocked_damage = maxi(enemy_damage - last_counter_damage, 0)
-		is_defeat = hero.health <= 0
+	var damage: int = battle_state.perform_basic_attack(attack_damage)
+	# Подтверждаем результат на реальном герое после расчёта, чтобы остальная
+	# игровая сессия (инвентарь, HUD, сломанный щит) работала как раньше.
+	var battle_hero: BattleParticipant = battle_state.get_hero()
+	if battle_hero != null:
+		battle_hero.commit_hero_result(hero)
 	return damage
 
 

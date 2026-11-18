@@ -208,3 +208,40 @@ func active_effects_summary() -> String:
 	if vision_steps > 0:
 		parts.append("Всевиденье +%d · %d ш." % [vision_bonus, vision_steps])
 	return "  |  ".join(parts)
+
+
+## Отдельный боевой снимок, чтобы вычисления не меняли героя прохождения.
+## Ресурс HeroDefinition остаётся общим и неизменяемым.
+func copy_for_battle() -> HeroState:
+	var copy := HeroState.new(definition)
+	copy.max_health = max_health
+	copy.health = health
+	copy.base_attack = base_attack
+	copy.base_defense = base_defense
+	copy.attack = attack
+	copy.defense = defense
+	copy.gold = gold
+	copy.equipped_weapon_id = equipped_weapon_id
+	copy.equipped_shield_id = equipped_shield_id
+	copy.shield_durabilities = shield_durabilities.duplicate(true)
+	copy.last_shield_broken = last_shield_broken
+	copy.strength_bonus = strength_bonus
+	copy.strength_steps = strength_steps
+	copy.vitality_percent = vitality_percent
+	copy.vitality_steps = vitality_steps
+	copy.vision_bonus = vision_bonus
+	copy.vision_steps = vision_steps
+	return copy
+
+
+## Переносим из боя только изменяемые боевые поля. Золото, изученные
+## предметы и остальные данные GameSession не должны перезаписываться.
+func apply_battle_result(snapshot: HeroState) -> void:
+	if snapshot == null:
+		return
+	health = snapshot.health
+	equipped_weapon_id = snapshot.equipped_weapon_id
+	equipped_shield_id = snapshot.equipped_shield_id
+	shield_durabilities = snapshot.shield_durabilities.duplicate(true)
+	last_shield_broken = snapshot.last_shield_broken
+	_recalculate_equipment_stats()

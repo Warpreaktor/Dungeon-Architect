@@ -35,24 +35,25 @@ func _initialize() -> void:
 	assert(not flow.start_phase() and not flow.mark_tick() and not flow.can_use_item())
 
 	# Подготовленные приёмы реально исполняются внутри фаз, бонус блока
-	# действует в пределах двух тактов и исчезает к следующей фазе.
+	# сохраняется до следующей атаки даже после границы фазы.
 	var hero := HeroState.new(HeroCatalog.get_hero("petushan"))
 	var enemy: MonsterDefinition = MonsterCatalog.get_monster("lobar")
 	var battle := BattleState.begin(enemy, hero)
-	var hero_chain: Array[String] = ["guard", "basic_strike"]
+	var hero_chain: Array[String] = ["guard", "basic_strike", "guard"]
 	var enemy_chain: Array[String] = ["guard", "basic_strike"]
 	var result: Dictionary = battle.run_phase(hero_chain, enemy_chain)
 	assert(result.success)
 	assert(battle.flow.phase_number == 1)
-	assert(battle.flow.completed_ticks == 2)
+	assert(battle.flow.completed_ticks == 3)
 	assert(battle.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
-	assert(battle.get_hero().block_attack_bonus_percent == 0)
+	assert(battle.get_hero().block_attack_bonus_percent == 25)
 	assert(battle.get_enemy().block_attack_bonus_percent == 0)
 	assert(battle.last_phase_events.size() >= 4)
-	assert(battle.last_phase_events[0].type == "block")
-	assert(battle.last_phase_events[1].type == "block")
-	assert(battle.last_phase_events[2].type == "attack")
-	assert(battle.last_phase_events[3].type == "attack")
+	var effects: Array[String] = []
+	for event in battle.last_phase_events:
+		if event.type in ["block", "attack"]:
+			effects.append(event.type)
+	assert(effects == ["block", "block", "attack", "attack", "block"])
 	# Отдельный запуск фазы, новая пара действий, никакого повторного начала во время исполнения.
 	assert(battle.run_phase(hero_chain, enemy_chain).success)
 	assert(battle.flow.phase_number == 2)
@@ -66,11 +67,15 @@ func _initialize() -> void:
 	# Смертельный удар досрочно завершает фазу, не давая ответить мёртвому врагу.
 	var finisher := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), hero)
 	finisher.get_enemy().health = 1
-	var killing_chain: Array[String] = ["rooster_crush", "basic_strike"]
+	var killing_chain: Array[String] = ["rooster_crush", "basic_strike", "guard"]
 	var killing: Dictionary = finisher.run_phase(killing_chain, enemy_chain)
 	assert(killing.success and finisher.is_victory)
 	assert(finisher.flow.stage == BattleFlow.Stage.FINISHED)
 	assert(finisher.flow.completed_ticks == 1)
 	assert(not finisher.run_phase(killing_chain, enemy_chain).success)
-	assert(finisher.last_phase_events.size() == 1)
+	var attacks: int = 0
+	for event in finisher.last_phase_events:
+		if event.type == "attack":
+			attacks += 1
+	assert(attacks == 1)
 	quit()

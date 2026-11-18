@@ -1,0 +1,1142 @@
+diff --git a/scenes/battle_view.tscn b/scenes/battle_view.tscn
+index d01f663..9fee72d 100644
+--- a/scenes/battle_view.tscn
++++ b/scenes/battle_view.tscn
+@@ -249,14 +249,44 @@ layout_mode = 2
+ mouse_filter = 2
+ theme_override_constants/separation = 12
+ 
+-[node name="SequenceTitle" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader"]
++[node name="HeroChainTitle" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader"]
++unique_name_in_owner = true
+ layout_mode = 2
++size_flags_horizontal = 3
+ mouse_filter = 2
+ theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
+ theme_override_font_sizes/font_size = 15
+-text = "АЛГОРИТМ БОЯ"
++text = "ГЕРОЙ"
++
++[node name="EnemyChainTitle" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader"]
++unique_name_in_owner = true
++layout_mode = 2
++size_flags_horizontal = 3
++mouse_filter = 2
++theme_override_colors/font_color = Color(0.91, 0.50, 0.46, 1)
++theme_override_font_sizes/font_size = 15
++text = "ПРОТИВНИК"
++
++[node name="SequenceSides" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn"]
++layout_mode = 2
++size_flags_horizontal = 3
++theme_override_constants/separation = 14
++
++[node name="SequenceScroll" type="ScrollContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides"]
++layout_mode = 2
++custom_minimum_size = Vector2(0, 80)
++size_flags_horizontal = 3
++mouse_filter = 1
++horizontal_scroll_mode = 1
++vertical_scroll_mode = 3
++
++[node name="SequenceSlots" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides/SequenceScroll"]
++unique_name_in_owner = true
++layout_mode = 2
++mouse_filter = 2
++theme_override_constants/separation = 8
+ 
+-[node name="SequenceScroll" type="ScrollContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn"]
++[node name="EnemySequenceScroll" type="ScrollContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides"]
+ layout_mode = 2
+ custom_minimum_size = Vector2(0, 80)
+ size_flags_horizontal = 3
+@@ -264,7 +294,7 @@ mouse_filter = 1
+ horizontal_scroll_mode = 1
+ vertical_scroll_mode = 3
+ 
+-[node name="SequenceSlots" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceScroll"]
++[node name="EnemySequenceSlots" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides/EnemySequenceScroll"]
+ unique_name_in_owner = true
+ layout_mode = 2
+ mouse_filter = 2
+diff --git a/scripts/ability_executor.gd b/scripts/ability_executor.gd
+index f5a0f1a..d7f8075 100644
+--- a/scripts/ability_executor.gd
++++ b/scripts/ability_executor.gd
+@@ -68,7 +68,8 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
+ 	var taken: int = target.receive_damage(raw)
+ 	return {"type": "attack", "actor_id": actor.participant_id, "target_id": target.participant_id,
+ 		"ability_id": ability_id, "damage": taken, "blocked": maxi(raw - taken, 0),
+-		"shield_blocked": target.last_shield_blocked, "shield_broken": target.last_shield_broken}
++		"shield_blocked": target.last_shield_blocked, "block_absorbed": target.last_block_absorbed,
++		"shield_broken": target.last_shield_broken}
+ 
+ 
+ static func _failure(reason: String) -> Dictionary:
+diff --git a/scripts/battle_ability_slot.gd b/scripts/battle_ability_slot.gd
+index a9c4710..6047836 100644
+--- a/scripts/battle_ability_slot.gd
++++ b/scripts/battle_ability_slot.gd
+@@ -17,6 +17,7 @@ const SPECIAL_ICON: Texture2D = preload("res://assets/hud/fist.png")
+ @onready var _empty_icon: Label = $SlotMargin/Row/EmptyIcon
+ 
+ var slot_index: int = 0
++var _invalid_tween: Tween
+ 
+ 
+ static func visual_icon(ability: AbilityDefinition) -> Texture2D:
+@@ -54,3 +55,36 @@ func configure(index: int, ability: AbilityDefinition, editable: bool, actor: Ba
+ 
+ func _notify_selection() -> void:
+ 	slot_selected.emit(slot_index)
++
++
++func configure_recharge(index: int) -> void:
++	configure(index, null, false)
++	_slot_number.text = "%02d" % (index + 1)
++	_slot_name.text = "Перезарядка"
++	_slot_icon.texture = SPECIAL_ICON
++	_slot_icon.visible = true
++	_empty_icon.visible = false
++	tooltip_text = "Перезарядка: один пропущенный такт"
++
++
++func set_current(active: bool) -> void:
++	if active:
++		var focus := StyleBoxFlat.new()
++		focus.bg_color = Color("#3e3220")
++		focus.border_color = Color("#f7c96b")
++		focus.set_border_width_all(3)
++		focus.set_corner_radius_all(7)
++		add_theme_stylebox_override("normal", focus)
++		add_theme_stylebox_override("disabled", focus)
++	else:
++		remove_theme_stylebox_override("normal")
++		remove_theme_stylebox_override("disabled")
++
++
++func flash_empty() -> void:
++	if _invalid_tween != null and _invalid_tween.is_valid():
++		_invalid_tween.kill()
++	_invalid_tween = create_tween()
++	for i in range(3):
++		_invalid_tween.tween_property(self, "modulate", Color(1.0, 0.22, 0.22), 0.12)
++		_invalid_tween.tween_property(self, "modulate", Color.WHITE, 0.14)
+diff --git a/scripts/battle_ability_tooltip.gd b/scripts/battle_ability_tooltip.gd
+index 619acbb..26e7ed9 100644
+--- a/scripts/battle_ability_tooltip.gd
++++ b/scripts/battle_ability_tooltip.gd
+@@ -26,7 +26,7 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant
+ 					if shield != null and participant._hero_snapshot.current_shield_durability(participant.equipped_shield_id) > 0:
+ 						block = maxi(shield.defense_bonus, 0)
+ 				lines.append("Броня блока: %d (на одно попадание)" % block)
+-				lines.append("+25%% к следующей атаке за каждый блок; до конца фазы")
++				lines.append("+25%% базового урона к следующей атаке за каждый блок (через фазы)")
+ 			AbilityEffectDefinition.Kind.HEAL:
+ 				lines.append("Лечение: %d HP (не выше максимума)" % maxi(effect.amount, 0))
+ 			AbilityEffectDefinition.Kind.APPLY_STATUS:
+diff --git a/scripts/battle_chain_planner.gd b/scripts/battle_chain_planner.gd
+index f7c87a9..99205c5 100644
+--- a/scripts/battle_chain_planner.gd
++++ b/scripts/battle_chain_planner.gd
+@@ -26,16 +26,29 @@ static func validate(chain: Array[String], participant: BattleParticipant, check
+ 	return ""
+ 
+ 
+-static func phase_length(hero_actions: Array[String], enemy_actions: Array[String]) -> int:
+-	if hero_actions.is_empty() or enemy_actions.is_empty():
+-		return 0
+-	return maxi(hero_actions.size(), enemy_actions.size())
++## После каждого полного круга участник один такт перезаряжается.
++## Курсор равный длине цепочки обозначает именно эту перезарядку.
++static func next_step(chain: Array[String], cursor: int) -> Dictionary:
++	if chain.is_empty():
++		return {"action_id": "", "slot_index": -1, "reload": true, "next_cursor": 0}
++	if cursor >= chain.size() or cursor < 0:
++		return {"action_id": "", "slot_index": -1, "reload": true, "next_cursor": 0}
++	return {"action_id": chain[cursor], "slot_index": cursor, "reload": false,
++		"next_cursor": cursor + 1}
++
++
++## Длина цепочки героя задаёт число его действий в фазе. Если перед
++## очередным кругом нужна перезарядка, она добавляет отдельный такт.
++static func phase_length(hero_actions: Array[String], _enemy_actions: Array[String]) -> int:
++	return hero_actions.size()
+ 
+ 
++## Только для предпросмотра одной непрерывной временной шкалы, не modulo N.
+ static func action_at(chain: Array[String], tick: int) -> String:
+ 	if chain.is_empty() or tick < 0:
+ 		return ""
+-	return chain[tick % chain.size()]
++	var cursor: int = tick % (chain.size() + 1)
++	return chain[cursor] if cursor < chain.size() else ""
+ 
+ 
+ static func preview(hero_actions: Array[String], enemy_actions: Array[String]) -> Array[Dictionary]:
+@@ -44,3 +57,18 @@ static func preview(hero_actions: Array[String], enemy_actions: Array[String]) -
+ 		rows.append({"tick": tick + 1, "hero": action_at(hero_actions, tick),
+ 			"enemy": action_at(enemy_actions, tick)})
+ 	return rows
++
++
++## Блок всегда опережает любое другое действие; при равенстве герой первый.
++static func priority(action_id: String) -> int:
++	var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
++	if ability != null:
++		var has_block: bool = false
++		for effect in ability.effects:
++			if effect.kind == AbilityEffectDefinition.Kind.DAMAGE:
++				return 10
++			if effect.kind == AbilityEffectDefinition.Kind.BLOCK:
++				has_block = true
++		if has_block:
++			return 0
++	return 10
+diff --git a/scripts/battle_participant.gd b/scripts/battle_participant.gd
+index 30bf841..8e60cc3 100644
+--- a/scripts/battle_participant.gd
++++ b/scripts/battle_participant.gd
+@@ -16,6 +16,8 @@ var effects: Dictionary = {}
+ var personal_ability_ids: Array[String] = []
+ var learned_ability_ids: Array[String] = []
+ var action_chain: Array[String] = []
++## Следующий слот; значение action_chain.size() означает такт перезарядки.
++var action_cursor: int = 0
+ ## Ограничение участника, независимое от глобального защитного MAX_ACTIONS.
+ var action_slot_capacity: int = 3
+ var tactic_changes_remaining: int = 0
+@@ -23,6 +25,8 @@ var tactic_changes_remaining: int = 0
+ var block_armor: int = 0
+ var block_attack_bonus_percent: int = 0
+ var last_shield_blocked: int = 0
++## Фактическая часть удара, остановленная активным блоком (в т.ч. у монстров).
++var last_block_absorbed: int = 0
+ var last_shield_broken: String = ""
+ var statuses: Dictionary = {}
+ 
+@@ -103,6 +107,7 @@ func restore_health(amount: int) -> int:
+ 
+ func receive_damage(incoming: int) -> int:
+ 	last_shield_blocked = 0
++	last_block_absorbed = 0
+ 	last_shield_broken = ""
+ 	if _hero_snapshot != null:
+ 		_hero_snapshot.last_shield_broken = ""
+@@ -113,6 +118,8 @@ func receive_damage(incoming: int) -> int:
+ 		blocked = _hero_snapshot.consume_shield_block(blocked)
+ 		last_shield_blocked = blocked
+ 		last_shield_broken = _hero_snapshot.last_shield_broken
++	# Показываем поглощение и монстру без физического щита.
++	last_block_absorbed = blocked
+ 	# Блок защищает от одного попадания, даже если оно было нулевым.
+ 	block_armor = 0
+ 	if _hero_snapshot != null:
+@@ -125,8 +132,8 @@ func receive_damage(incoming: int) -> int:
+ 
+ 
+ func end_phase() -> void:
+-	block_attack_bonus_percent = 0
+-	block_armor = 0
++	# Бонус +25% и активный блок живут до следующего соответствующего удара,
++	# даже если между действиями была перезарядка или граница фазы.
+ 	for status_id in statuses.keys():
+ 		var status: Dictionary = statuses[status_id]
+ 		status["ticks"] = int(status.get("ticks", 0)) - 1
+diff --git a/scripts/battle_state.gd b/scripts/battle_state.gd
+index cd0b5b4..92b359a 100644
+--- a/scripts/battle_state.gd
++++ b/scripts/battle_state.gd
+@@ -13,6 +13,7 @@ var last_blocked_damage: int = 0
+ var turn_index: int = 0
+ var events: Array[Dictionary] = []
+ var flow: BattleFlow = BattleFlow.new()
++var tick_policy: BattleTurnPolicy = BattleTurnPolicy.new()
+ var last_phase_events: Array[Dictionary] = []
+ 
+ 
+@@ -46,6 +47,8 @@ func execute_ability(actor_id: String, target_id: String, ability_id: String) ->
+ func configure_hero_chain(actions: Array[String]) -> Dictionary:
+ 	if flow.stage != BattleFlow.Stage.PREPARATION and flow.stage != BattleFlow.Stage.RECONFIGURING:
+ 		return {"success": false, "reason": "Сейчас нельзя изменить тактику"}
++	if get_hero() != null and actions.size() != get_hero().action_slot_capacity:
++		return {"success": false, "reason": "Цепочка содержит незаполненные слоты"}
+ 	var reason: String = BattleChainPlanner.validate(actions, get_hero())
+ 	if not reason.is_empty():
+ 		return {"success": false, "reason": reason}
+@@ -53,45 +56,66 @@ func configure_hero_chain(actions: Array[String]) -> Dictionary:
+ 	return {"success": true, "reason": ""}
+ 
+ 
+-## Каждый такт предоставляет действие обоим бойцам. Короткая цепочка
+-## повторяется циклически, но исходный список не изменяется.
+-## Внутри такта пока действует порядок герой -> противник (DA-4.07).
++## Одна фаза выполняет полную цепочку ГЕРОЯ. Участники имеют независимые
++## курсоры: после последнего приёма следует один такт перезарядки.
++## Все события уже вычислены до визуального воспроизведения.
+ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dictionary:
+ 	var hero_actor: BattleParticipant = get_hero()
+ 	var enemy_actor: BattleParticipant = get_enemy()
+ 	if hero_actor == null or enemy_actor == null:
+ 		return {"success": false, "reason": "Нет участников боя", "events": []}
+ 	var current_hero_chain: Array[String] = hero_actor.action_chain
+-	# Между фазами требования могут измениться (HP, сломанный щит).
+-	# В таком случае конкретный приём даст событие failed, но бой не зависнет.
+ 	var enemy_reason: String = BattleChainPlanner.validate(enemy_actions, enemy_actor, false)
+ 	if not enemy_reason.is_empty():
+ 		return {"success": false, "reason": enemy_reason, "events": []}
+ 	if flow.stage == BattleFlow.Stage.PREPARATION or flow.stage == BattleFlow.Stage.RECONFIGURING:
++		var was_reconfiguring: bool = flow.stage == BattleFlow.Stage.RECONFIGURING
+ 		var configured: Dictionary = configure_hero_chain(hero_actions)
+ 		if not bool(configured.get("success", false)):
+ 			return {"success": false, "reason": configured.get("reason", ""), "events": []}
+ 		current_hero_chain = hero_actor.action_chain
++		if was_reconfiguring:
++			# Новый алгоритм всегда начинается с первого слота.
++			hero_actor.action_cursor = 0
+ 	elif flow.stage == BattleFlow.Stage.BETWEEN_PHASES:
+ 		if not BattleChainPlanner.validate(current_hero_chain, hero_actor, false).is_empty():
+ 			return {"success": false, "reason": "Ошибка сохранённой цепочки", "events": []}
+ 		if current_hero_chain != hero_actions:
+-			return {"success": false, "reason": "Тактика заблокирована до разрешённой перенастройки", "events": []}
++			return {"success": false, "reason": "Тактика заблокирована до перенастройки", "events": []}
+ 	else:
+ 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
+-	var tick_count: int = BattleChainPlanner.phase_length(current_hero_chain, enemy_actions)
+-	if tick_count == 0 or not flow.start_phase():
++	if not flow.start_phase():
+ 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
+-	enemy_actor.action_chain = enemy_actions.duplicate()
++	if enemy_actor.action_chain != enemy_actions:
++		enemy_actor.action_chain = enemy_actions.duplicate()
++		enemy_actor.action_cursor = 0
+ 	var start_event: int = events.size()
+-	for tick in range(tick_count):
+-		if is_victory or is_defeat:
+-			break
+-		for actor_id in [hero_id, enemy_id]:
++	var hero_actions_done: int = 0
++	while hero_actions_done < current_hero_chain.size() and not is_victory and not is_defeat:
++		var hero_step: Dictionary = BattleChainPlanner.next_step(current_hero_chain, hero_actor.action_cursor)
++		var enemy_step: Dictionary = BattleChainPlanner.next_step(enemy_actions, enemy_actor.action_cursor)
++		hero_actor.action_cursor = int(hero_step["next_cursor"])
++		enemy_actor.action_cursor = int(enemy_step["next_cursor"])
++		if not bool(hero_step["reload"]):
++			hero_actions_done += 1
++		var tick: int = flow.completed_ticks + 1
++		events.append({"type": "tick", "tick": tick, "hero_slot": int(hero_step["slot_index"]),
++			"enemy_slot": int(enemy_step["slot_index"]), "hero_reload": bool(hero_step["reload"]),
++			"enemy_reload": bool(enemy_step["reload"])})
++		# Защитное действие имеет приоритет 0, любая другая категория — 10.
++		# При равенстве герой ходит первым; смерть отменяет оставшийся ответ.
++		var order: Array[String] = tick_policy.order(hero_id, hero_step, enemy_id, enemy_step)
++		for actor_id in order:
+ 			if is_victory or is_defeat:
+ 				break
+-			var actions: Array[String] = current_hero_chain if actor_id == hero_id else enemy_actions
+-			var action_id: String = BattleChainPlanner.action_at(actions, tick)
++			var step: Dictionary = hero_step if actor_id == hero_id else enemy_step
++			if bool(step["reload"]):
++				events.append({"type": "reload", "actor_id": actor_id, "tick": tick,
++					"slot_index": -1})
++				continue
++			var action_id: String = str(step["action_id"])
++			events.append({"type": "action_start", "actor_id": actor_id,
++				"ability_id": action_id, "slot_index": int(step["slot_index"]), "tick": tick})
+ 			var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
+ 			var target_id: String = actor_id
+ 			if ability != null and ability.target == AbilityDefinition.Target.ENEMY:
+@@ -144,7 +168,7 @@ func update_outcome() -> void:
+ 	is_defeat = hero != null and not hero.is_alive() and not is_victory
+ 
+ 
+-## Упорядочение фаз появится в DA-4.05–4.06; здесь явный сброс бонуса.
++## Завершение фазы обрабатывает временные эффекты, но не сбрасывает бонус блока.
+ func end_phase() -> void:
+ 	for participant in participants.values():
+ 		(participant as BattleParticipant).end_phase()
+diff --git a/scripts/battle_turn_policy.gd b/scripts/battle_turn_policy.gd
+new file mode 100644
+index 0000000..9f4f28a
+--- /dev/null
++++ b/scripts/battle_turn_policy.gd
+@@ -0,0 +1,41 @@
++class_name BattleTurnPolicy
++extends RefCounted
++
++## DA-4.07. Порядок действий на одном такте, не зависящий от визуализации.
++## Политика принадлежит экземпляру BattleState и может быть заменена в тестах.
++var block_priority: int = 0
++var other_priority: int = 10
++var hero_first_on_tie: bool = true
++
++
++func priority(action_id: String) -> int:
++	var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
++	if ability != null:
++		var has_block: bool = false
++		for effect in ability.effects:
++			# Выпад с последующей защитой остаётся атакой, а не «блоком».
++			if effect.kind == AbilityEffectDefinition.Kind.DAMAGE:
++				return other_priority
++			if effect.kind == AbilityEffectDefinition.Kind.BLOCK:
++				has_block = true
++		if has_block:
++			return block_priority
++	return other_priority
++
++
++func order(hero_id: String, hero_step: Dictionary, enemy_id: String, enemy_step: Dictionary) -> Array[String]:
++	var first: String = hero_id
++	var second: String = enemy_id
++	var hero_reloading: bool = bool(hero_step.get("reload", false))
++	var enemy_reloading: bool = bool(enemy_step.get("reload", false))
++	var enemy_comes_first: bool = false
++	if hero_reloading and not enemy_reloading:
++		enemy_comes_first = true
++	elif not hero_reloading and not enemy_reloading:
++		var hero_priority: int = priority(str(hero_step.get("action_id", "")))
++		var enemy_priority: int = priority(str(enemy_step.get("action_id", "")))
++		enemy_comes_first = enemy_priority < hero_priority or (enemy_priority == hero_priority and not hero_first_on_tie)
++	if enemy_comes_first:
++		first = enemy_id
++		second = hero_id
++	return [first, second]
+diff --git a/scripts/battle_view.gd b/scripts/battle_view.gd
+index cae383e..d34c53b 100644
+--- a/scripts/battle_view.gd
++++ b/scripts/battle_view.gd
+@@ -24,6 +24,10 @@ signal shield_broken(item_id: String)
+ @onready var _guard_button: Button = %GuardButton
+ @onready var _result_text: Label = %ResultText
+ @onready var _sequence_slots: HBoxContainer = %SequenceSlots
++@onready var _enemy_sequence_slots: HBoxContainer = %EnemySequenceSlots
++@onready var _battlefield: HBoxContainer = $OuterMargin/Main/Battlefield
++@onready var _hero_chain_title: Label = %HeroChainTitle
++@onready var _enemy_chain_title: Label = %EnemyChainTitle
+ 
+ const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
+ 
+@@ -43,6 +47,16 @@ var _ability_picker: PanelContainer
+ var _picker_grid: GridContainer
+ var _picker_actions: HBoxContainer
+ var _picker_target: int = -1
++## Два временных портрета поверх поля: движение не меняет настоящие UI-узлы.
++var _impact_layer: Control
++var _impact_portraits: Dictionary = {}
++var _impact_idle: Dictionary = {}
++var _impact_origin: Dictionary = {}
++var _impact_shields: Dictionary = {}
++var _visible_hero_hp: int = 0
++var _visible_enemy_hp: int = 0
++var _visible_block: Dictionary = {"hero": false, "enemy": false}
++
+ 
+ 
+ func _ready() -> void:
+@@ -76,7 +90,9 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
+ 	_hero_defense_value.text = str(shield_item.defense_bonus if shield_item != null else hero.defense)
+ 	_defense_idle_color = Color.WHITE if shield_item != null or hero.defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
+ 	_hero_defense_icon.modulate = _defense_idle_color
++	_hero_chain_title.text = _hero_name.text.to_upper()
+ 	_enemy_name.text = combat.enemy_definition.display_name
++	_enemy_chain_title.text = _enemy_name.text.to_upper()
+ 	_enemy_attack_value.text = str(combat.enemy_damage)
+ 	_enemy_defense_value.text = str(combat.enemy_defense)
+ 	_enemy_defense_icon.modulate = Color.WHITE if combat.enemy_defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
+@@ -84,11 +100,15 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
+ 	_enemy_portrait.modulate = Color.WHITE
+ 	_hero_health_meter.set_health(hero.health, hero.max_health)
+ 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
++	_visible_hero_hp = hero.health
++	_visible_enemy_hp = combat.enemy_health
++	_visible_block = {"hero": false, "enemy": false}
+ 	# В рамках прохождения сохраняем именно позиции, включая пустые слоты.
+ 	_committed_slots = hero.get_saved_action_slots()
+ 	_set_draft_from_chain(_committed_slots)
+ 	_hero_chain = _draft_actions()
+ 	_enemy_chain = _combat.battle_state.default_chain("enemy")
++	_refresh_enemy_slots()
+ 	_result_text.text = ""
+ 	_refresh_phase_controls()
+ 
+@@ -129,6 +149,29 @@ func _refresh_chain_slots() -> void:
+ 		slot.slot_selected.connect(_on_slot_selected)
+ 
+ 
++func _refresh_enemy_slots() -> void:
++	for child in _enemy_sequence_slots.get_children():
++		_enemy_sequence_slots.remove_child(child)
++		child.queue_free()
++	var enemy: BattleParticipant = _combat.battle_state.get_enemy()
++	var capacity: int = maxi(enemy.action_slot_capacity, _enemy_chain.size() + 1)
++	for index in range(capacity):
++		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
++		_enemy_sequence_slots.add_child(slot)
++		if index < _enemy_chain.size():
++			slot.configure(index, AbilityCatalog.get_ability(_enemy_chain[index]), false, enemy)
++		else:
++			slot.configure_recharge(index)
++
++
++func _highlight_slots(hero_index: int, enemy_index: int, hero_reloading: bool = false, enemy_reloading: bool = false) -> void:
++	for index in range(_sequence_slots.get_child_count()):
++		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(not hero_reloading and index == hero_index)
++	for index in range(_enemy_sequence_slots.get_child_count()):
++		var active: bool = index == enemy_index if not enemy_reloading else index == _enemy_chain.size()
++		(_enemy_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(active)
++
++
+ func _build_ability_picker() -> void:
+ 	# Контекстная панель, а не отдельный экран поверх боя.
+ 	_ability_picker = PanelContainer.new()
+@@ -339,10 +382,19 @@ func _input(event: InputEvent) -> void:
+ 
+ 
+ func _commit_draft() -> bool:
++	# Незанятая позиция не считается действием. Показываем ошибку только
++	# красным миганием самих ячеек, без текстовых инструкций.
++	var missing: bool = false
++	for index in range(_planner_editing.size()):
++		if _planner_editing[index].is_empty():
++			missing = true
++			(_sequence_slots.get_child(index) as BattleAbilitySlot).flash_empty()
++	if missing:
++		return false
+ 	var actions: Array[String] = _draft_actions()
+ 	var response: Dictionary = _combat.battle_state.configure_hero_chain(actions)
+ 	if not bool(response.get("success", false)):
+-		_result_text.text = str(response.get("reason", "Проверь алгоритм"))
++		_result_text.text = str(response.get("reason", ""))
+ 		return false
+ 	_hero_chain = actions.duplicate()
+ 	_committed_slots = _planner_editing.duplicate()
+@@ -362,7 +414,7 @@ func _on_punch_pressed() -> void:
+ 			_refresh_phase_controls()
+ 		return
+ 	if flow.stage == BattleFlow.Stage.PREPARATION and not _commit_draft():
+-		_refresh_phase_controls()
++		# Не пересоздаём слоты: иначе Tween красного мигания мгновенно погибнет.
+ 		return
+ 	_hide_ability_picker()
+ 	_is_playing_back = true
+@@ -390,37 +442,234 @@ func _on_guard_pressed() -> void:
+ 	_refresh_phase_controls()
+ 
+ 
++func _create_impact_layer() -> void:
++	_impact_layer = Control.new()
++	_impact_layer.name = "CombatImpacts"
++	_impact_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
++	_impact_layer.z_index = 15
++	add_child(_impact_layer)
++	_impact_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
++	_impact_layer.size = size
++	_impact_portraits.clear()
++	_impact_origin.clear()
++	_impact_idle.clear()
++	_impact_shields.clear()
++	var center: Vector2 = _battlefield.get_global_rect().get_center() - global_position
++	for actor_id in ["hero", "enemy"]:
++		var original: TextureRect = _hero_portrait if actor_id == "hero" else _enemy_portrait
++		var portrait := TextureRect.new()
++		portrait.name = "Impact_" + actor_id
++		portrait.texture = original.texture
++		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
++		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
++		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
++		portrait.size = original.size
++		portrait.pivot_offset = portrait.size * 0.5
++		portrait.position = original.global_position - global_position
++		_impact_origin[actor_id] = portrait.position
++		_impact_idle[actor_id] = Vector2(
++			center.x - portrait.size.x * 1.12 if actor_id == "hero" else center.x + portrait.size.x * 0.12,
++			center.y - portrait.size.y * 0.5)
++		_impact_layer.add_child(portrait)
++		_impact_portraits[actor_id] = portrait
++		var shield_icon := TextureRect.new()
++		shield_icon.texture = BattleAbilitySlot.DEFENSE_ICON
++		shield_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
++		shield_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
++		shield_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
++		shield_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
++		shield_icon.size = portrait.size
++		shield_icon.modulate = Color(0.40, 0.78, 1.0, 0.88)
++		shield_icon.visible = bool(_visible_block.get(actor_id, false))
++		portrait.add_child(shield_icon)
++		_impact_shields[actor_id] = shield_icon
++		# Не hide(): скрытый узел изменил бы расчёт VBoxContainer и сдвинул HUD.
++		original.modulate.a = 0.0
++
++
++func _clear_impact_layer() -> void:
++	if _impact_layer != null and is_instance_valid(_impact_layer):
++		_impact_layer.queue_free()
++	_impact_layer = null
++	_impact_portraits.clear()
++	_impact_shields.clear()
++	_hero_portrait.modulate.a = 1.0
++	_enemy_portrait.modulate.a = 1.0
++	_highlight_slots(-1, -1)
++
++
+ func _play_phase_events(phase_events: Array) -> void:
+-	# События уже вычислены моделью. Этот Tween управляет только показом.
++	# Единственный расчёт уже выполнил BattleState. Здесь только режиссура.
++	_create_impact_layer()
+ 	_playback = create_tween()
++	_playback.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
++	var first_intro: bool = true
++	for actor_id in ["hero", "enemy"]:
++		var portrait: TextureRect = _impact_portraits[actor_id]
++		if first_intro:
++			_playback.tween_property(portrait, "position", _impact_idle[actor_id], 0.56)
++			first_intro = false
++		else:
++			_playback.parallel().tween_property(portrait, "position", _impact_idle[actor_id], 0.56)
++		_playback.parallel().tween_property(portrait, "scale", Vector2(1.5, 1.5), 0.56)
++	_playback.tween_interval(0.16)
+ 	for raw_event in phase_events:
+ 		var event: Dictionary = raw_event
+-		_playback.tween_callback(Callable(self, "_display_phase_event").bind(event))
+-		var actor_id: String = str(event.get("actor_id", ""))
+-		var portrait: TextureRect = _hero_portrait if actor_id == "hero" else _enemy_portrait
+-		_playback.tween_property(portrait, "modulate", Color(1.0, 0.75, 0.48), 0.12)
+-		_playback.tween_property(portrait, "modulate", Color.WHITE, 0.16)
++		var kind: String = str(event.get("type", ""))
++		_playback.tween_callback(_display_phase_event.bind(event))
++		match kind:
++			"tick":
++				_playback.tween_interval(0.20)
++			"action_start":
++				_playback.tween_interval(0.08)
++			"attack":
++				var actor_id: String = str(event.get("actor_id", ""))
++				var target_id: String = str(event.get("target_id", ""))
++				var actor: TextureRect = _impact_portraits.get(actor_id) as TextureRect
++				var target: TextureRect = _impact_portraits.get(target_id) as TextureRect
++				if actor == null or target == null:
++					continue
++				var direction: float = 1.0 if actor_id == "hero" else -1.0
++				var windup: Vector2 = _impact_idle[actor_id] + Vector2(-direction * 30.0, 0)
++				var contact: Vector2 = _impact_idle[target_id] + Vector2(-direction * actor.size.x * 0.84, 0)
++				_playback.tween_property(actor, "position", windup, 0.20).set_trans(Tween.TRANS_QUAD)
++				_playback.parallel().tween_property(actor, "rotation_degrees", -direction * 7.0, 0.20)
++				_playback.tween_property(actor, "rotation_degrees", direction * 4.0, 0.065)
++				_playback.tween_property(actor, "rotation_degrees", -direction * 4.0, 0.065)
++				_playback.tween_property(actor, "position", contact, 0.13).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
++				_playback.parallel().tween_property(actor, "rotation_degrees", 0.0, 0.13)
++				_playback.tween_callback(_impact.bind(event))
++				_playback.tween_property(target, "position", _impact_idle[target_id] + Vector2(direction * 12.0, 0), 0.08)
++				_playback.tween_interval(0.46)
++				_playback.tween_property(actor, "position", _impact_idle[actor_id], 0.27)
++				_playback.parallel().tween_property(target, "position", _impact_idle[target_id], 0.27)
++				_playback.parallel().tween_property(target, "modulate", Color.WHITE, 0.27)
++			"block":
++				_playback.tween_interval(0.40)
++			"reload":
++				_playback.tween_interval(0.42)
++			_:
++				_playback.tween_interval(0.40)
++	var first_return: bool = true
++	for actor_id in ["hero", "enemy"]:
++		var portrait: TextureRect = _impact_portraits[actor_id]
++		if first_return:
++			_playback.tween_property(portrait, "position", _impact_origin[actor_id], 0.42)
++			first_return = false
++		else:
++			_playback.parallel().tween_property(portrait, "position", _impact_origin[actor_id], 0.42)
++		_playback.parallel().tween_property(portrait, "scale", Vector2.ONE, 0.42)
++	_playback.tween_callback(_clear_impact_layer)
+ 	_playback.tween_callback(_after_phase_playback)
+ 
+ 
+ func _display_phase_event(event: Dictionary) -> void:
+ 	var actor_id: String = str(event.get("actor_id", ""))
+-	var actor_name: String = _hero_name.text if actor_id == "hero" else _enemy_name.text
+-	var ability: AbilityDefinition = AbilityCatalog.get_ability(str(event.get("ability_id", "")))
+-	var label_text: String = ability.display_name if ability != null else "Действие"
+-	match str(event.get("type", "")):
+-		"attack":
+-			_result_text.text = "%s: %s (−%d HP)" % [actor_name, label_text, int(event.get("damage", 0))]
++	var kind: String = str(event.get("type", ""))
++	match kind:
++		"tick":
++			_highlight_slots(int(event.get("hero_slot", -1)), int(event.get("enemy_slot", -1)),
++				bool(event.get("hero_reload", false)), bool(event.get("enemy_reload", false)))
++		"action_start":
++			# Надписи не нужны: текущий слот выделен рамкой.
++			pass
+ 		"block":
+-			_result_text.text = "%s: %s (броня %d)" % [actor_name, label_text, int(event.get("armor", 0))]
++			var target_id: String = str(event.get("target_id", ""))
++			_visible_block[target_id] = true
++			var icon: TextureRect = _impact_shields.get(target_id) as TextureRect
++			if icon != null:
++				icon.show()
+ 		"heal":
+-			_result_text.text = "%s: %s (+%d HP)" % [actor_name, label_text, int(event.get("healed", 0))]
++			var healed: int = int(event.get("healed", 0))
++			if actor_id == "hero":
++				_visible_hero_hp += healed
++				_hero_health_meter.set_health(_visible_hero_hp, _combat.hero.max_health, true)
++			else:
++				_visible_enemy_hp += healed
++				_enemy_health_meter.set_health(_visible_enemy_hp, _combat.enemy_max_health, true)
++			if healed > 0:
++				_spawn_number(str(event.get("target_id", "")), "+%d" % healed, Color("#70d994"))
++		"reload":
++			_show_reload_icon(actor_id)
+ 		"failed":
+-			_result_text.text = "%s: %s" % [actor_name, str(event.get("reason", "Приём недоступен"))]
+-		_:
+-			_result_text.text = "%s: %s" % [actor_name, label_text]
++			# Отказ уже рассчитан и сохранён в журнале, показ без модальных подсказок.
++			pass
++
++
++func _impact(event: Dictionary) -> void:
++	var target_id: String = str(event.get("target_id", ""))
++	var target: TextureRect = _impact_portraits.get(target_id) as TextureRect
++	if target == null:
++		return
++	var hp_damage: int = int(event.get("damage", 0))
++	var shield_damage: int = int(event.get("block_absorbed", event.get("shield_blocked", 0)))
++	if shield_damage > 0:
++		_spawn_number(target_id, "−%d" % shield_damage, Color("#67c8ff"), -12)
++	if hp_damage > 0:
++		_spawn_number(target_id, "−%d" % hp_damage, Color("#ff6969"), 18)
++	if hp_damage == 0 and shield_damage == 0:
++		_spawn_number(target_id, "0", Color("#c1cad2"))
++	if target_id == "hero":
++		_visible_hero_hp -= hp_damage
++		_hero_health_meter.set_health(_visible_hero_hp, _combat.hero.max_health, true)
++	else:
++		_visible_enemy_hp -= hp_damage
++		_enemy_health_meter.set_health(_visible_enemy_hp, _combat.enemy_max_health, true)
++	if hp_damage > 0:
++		target.modulate = Color("#ff6464")
++	elif shield_damage > 0:
++		target.modulate = Color("#81c9ff")
++	else:
++		target.modulate = Color("#d0d5de")
++	_visible_block[target_id] = false
++	var shield_icon: TextureRect = _impact_shields.get(target_id) as TextureRect
++	if shield_icon != null:
++		shield_icon.hide()
+ 
+ 
++func _show_reload_icon(actor_id: String) -> void:
++	var portrait: TextureRect = _impact_portraits.get(actor_id) as TextureRect
++	if portrait == null:
++		return
++	var icon := TextureRect.new()
++	icon.texture = BattleAbilitySlot.SPECIAL_ICON
++	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
++	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
++	icon.size = portrait.size * 0.64
++	icon.position = portrait.size * 0.18
++	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
++	icon.modulate = Color(0.75, 0.86, 1.0, 0.92)
++	portrait.add_child(icon)
++	var tween: Tween = create_tween()
++	tween.tween_property(icon, "modulate:a", 0.0, 0.55)
++	tween.tween_callback(icon.queue_free)
++
++
++func _spawn_number(actor_id: String, number: String, ink: Color, x_offset: float = 0) -> void:
++	var portrait: TextureRect = _impact_portraits.get(actor_id) as TextureRect
++	if portrait == null or _impact_layer == null:
++		return
++	var label := Label.new()
++	label.text = number
++	label.add_theme_font_size_override("font_size", 31)
++	label.add_theme_color_override("font_color", ink)
++	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.92))
++	label.add_theme_constant_override("shadow_offset_x", 2)
++	label.add_theme_constant_override("shadow_offset_y", 2)
++	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
++	_impact_layer.add_child(label)
++	label.position = portrait.position + Vector2(portrait.size.x * 0.45 + x_offset, -22.0)
++	var float_tween: Tween = create_tween()
++	float_tween.tween_property(label, "position:y", label.position.y - 54.0, 0.98)
++	float_tween.parallel().tween_property(label, "modulate:a", 0.0, 0.98).set_delay(0.32)
++	float_tween.tween_callback(label.queue_free)
++
++
++func _exit_tree() -> void:
++	if _playback != null and _playback.is_valid():
++		_playback.kill()
++	if _impact_layer != null and is_instance_valid(_impact_layer):
++		_impact_layer.free()
+ func _after_phase_playback() -> void:
+ 	_is_playing_back = false
+ 	_hero_health_meter.set_health(_combat.hero.health, _combat.hero.max_health, true)
+@@ -455,11 +704,8 @@ func _refresh_phase_controls() -> void:
+ 	if not editable and _ability_picker.visible:
+ 		_hide_ability_picker()
+ 	_refresh_chain_slots()
+-	var draft: Array[String] = _draft_actions()
+-	var valid_draft: bool = not draft.is_empty() and BattleChainPlanner.validate(
+-		draft, _combat.battle_state.get_hero()).is_empty()
+-	_punch_button.disabled = (_is_playing_back or stage == BattleFlow.Stage.EXECUTING or stage == BattleFlow.Stage.FINISHED or
+-		(editable and not valid_draft) or (not editable and _hero_chain.is_empty()))
++	# Кнопка остаётся доступной, чтобы по нажатию мигнули пустые слоты.
++	_punch_button.disabled = (_is_playing_back or stage == BattleFlow.Stage.EXECUTING or stage == BattleFlow.Stage.FINISHED)
+ 	match stage:
+ 		BattleFlow.Stage.PREPARATION:
+ 			_punch_button.text = "Начать бой"
+diff --git a/tests/test_ability_executor.gd b/tests/test_ability_executor.gd
+index 9c2064d..3bafce6 100644
+--- a/tests/test_ability_executor.gd
++++ b/tests/test_ability_executor.gd
+@@ -42,10 +42,12 @@ func _initialize() -> void:
+ 	assert(not battle.execute_ability("enemy", "enemy", "hunter_shot").success)
+ 	assert(AbilityCatalog.get_ability("wolf_counter") != null)
+ 
+-	# Эффект блока и его бонус одноразовы в границах фазы.
++	# Блок и его накопленная мощь сохраняются через границу фазы.
+ 	assert(battle.execute_ability("hero", "hero", "guard").success)
+ 	battle.end_phase()
+-	assert(actor.block_attack_bonus_percent == 0 and actor.block_armor == 0)
++	assert(actor.block_attack_bonus_percent == 25 and actor.block_armor > 0)
++	assert(battle.execute_ability("hero", "enemy", "basic_strike").success)
++	assert(actor.block_attack_bonus_percent == 0)
+ 
+ 	# Монстры используют тот же обработчик, могут блокировать и лечиться.
+ 	assert(battle.execute_ability("enemy", "enemy", "guard").success)
+diff --git a/tests/test_battle_chain_planner.gd b/tests/test_battle_chain_planner.gd
+index 966cf34..652dd8a 100644
+--- a/tests/test_battle_chain_planner.gd
++++ b/tests/test_battle_chain_planner.gd
+@@ -1,79 +1,51 @@
+ extends SceneTree
+ 
+-## DA-4.06: разная длина цепочек, повторения, блокировка изменений и безопасность.
++## DA-4.07: перезарядка и фаза по полному кругу действий героя.
+ func _initialize() -> void:
+ 	var hero := HeroState.new(HeroCatalog.get_hero("petushan"))
+ 	var monster: MonsterDefinition = MonsterCatalog.get_monster("lobar")
+ 	var state := BattleState.begin(monster, hero)
+-	var actor: BattleParticipant = state.get_hero()
+-	var enemy: BattleParticipant = state.get_enemy()
+-	assert(actor.action_slot_capacity == 3 and enemy.action_slot_capacity == 3)
+-	# Будущие артефакты могут расширить предел, но без них максимум три.
+-	assert(not BattleChainPlanner.validate(["guard", "guard", "guard", "guard"], actor).is_empty())
+-	enemy.action_slot_capacity = 5
+-	var short_hero: Array[String] = ["guard"]
+-	var long_enemy: Array[String] = ["guard", "lobar_brace", "guard", "lobar_brace", "guard"]
+-	assert(BattleChainPlanner.validate(short_hero, actor).is_empty())
+-	assert(BattleChainPlanner.validate(long_enemy, enemy).is_empty())
+-	assert(BattleChainPlanner.phase_length(short_hero, long_enemy) == 5)
+-	assert(BattleChainPlanner.action_at(short_hero, 4) == "guard")
+-	assert(BattleChainPlanner.preview(short_hero, long_enemy).size() == 5)
+-	var result: Dictionary = state.run_phase(short_hero, long_enemy)
+-	assert(result.success and result.ticks == 5)
+-	assert(state.flow.completed_ticks == 5)
+-	assert(state.last_phase_events.size() == 10)
+-	assert(state.get_hero().action_chain == short_hero)
+-	assert(short_hero.size() == 1 and long_enemy.size() == 5)
+-
+-	# В обратную сторону длинная цепочка героя исполняется полностью.
+-	var second := BattleState.begin(monster, HeroState.new(HeroCatalog.get_hero("petushan")))
+-	var long_hero: Array[String] = ["guard", "guard", "guard", "guard", "guard"]
+-	second.get_hero().action_slot_capacity = 5
+-	var short_enemy: Array[String] = ["lobar_brace", "guard"]
+-	result = second.run_phase(long_hero, short_enemy)
+-	assert(result.success and result.ticks == 5)
+-	assert(second.last_phase_events.size() == 10)
+-	assert(second.last_phase_events[1].ability_id == "lobar_brace")
+-	assert(second.last_phase_events[3].ability_id == "guard")
+-	assert(second.last_phase_events[5].ability_id == "lobar_brace")
+-	assert(second.last_phase_events[7].ability_id == "guard")
+-	assert(second.last_phase_events[9].ability_id == "lobar_brace")
+-
+-	# Во время обычной межфазной паузы изменить цепочку нельзя.
+-	var changed: Array[String] = ["basic_strike", "guard"]
+-	assert(not second.configure_hero_chain(changed).success)
+-	assert(not second.run_phase(changed, short_enemy).success)
+-	assert(second.flow.phase_number == 1)
+-	assert(second.get_hero().action_chain == long_hero)
+-	assert(second.run_phase(long_hero, short_enemy).success)
+-
+-	# Разрешённая перенастройка обновляет цепочку следующей фазы.
+-	second.flow.reconfiguration_tokens = 1
+-	assert(second.flow.request_reconfiguration())
+-	assert(second.configure_hero_chain(changed).success)
+-	assert(second.flow.confirm_reconfiguration())
+-	assert(second.get_hero().action_chain == changed)
+-	assert(second.run_phase(changed, short_enemy).success)
+-
+-	# Неверная или пустая цепочка не запускает фазу.
+-	var invalid := BattleState.begin(monster, HeroState.new(HeroCatalog.get_hero("volcha")))
+-	var missing: Array[String] = []
+-	var stranger: Array[String] = ["rooster_crush"]
+-	assert(not invalid.run_phase(missing, short_enemy).success)
+-	assert(not invalid.run_phase(stranger, short_enemy).success)
+-	assert(invalid.flow.phase_number == 0)
+-	var too_long: Array[String] = ["guard", "guard", "guard", "guard", "guard", "guard", "guard", "guard", "guard"]
+-	assert(not invalid.run_phase(too_long, short_enemy).success)
+-	assert(invalid.flow.stage == BattleFlow.Stage.PREPARATION)
+-	var missing_enemy: Array[String] = []
+-	assert(not invalid.run_phase(["guard"], missing_enemy).success)
+-
+-	# Отмена перенастройки возвращает право на будущую попытку.
+-	var flow := BattleFlow.new()
+-	assert(flow.start_phase() and flow.complete_phase())
+-	flow.reconfiguration_tokens = 1
+-	assert(flow.request_reconfiguration())
+-	assert(flow.cancel_reconfiguration())
+-	assert(flow.reconfiguration_tokens == 1)
+-	assert(flow.request_reconfiguration())
++	var hero_chain: Array[String] = ["basic_strike", "guard", "basic_strike"]
++	var enemy_chain: Array[String] = ["guard", "basic_strike"]
++	assert(BattleChainPlanner.phase_length(hero_chain, enemy_chain) == 3)
++	assert(BattleChainPlanner.action_at(enemy_chain, 0) == "guard")
++	assert(BattleChainPlanner.action_at(enemy_chain, 1) == "basic_strike")
++	assert(BattleChainPlanner.action_at(enemy_chain, 2) == "")
++	assert(BattleChainPlanner.action_at(enemy_chain, 3) == "guard")
++	assert(BattleChainPlanner.priority("guard") == 0)
++	assert(BattleChainPlanner.priority("basic_strike") > 0)
++	var result: Dictionary = state.run_phase(hero_chain, enemy_chain)
++	assert(result.success and result.ticks == 3)
++	assert(state.flow.phase_number == 1)
++	var ticks: Array[Dictionary] = []
++	var actions: Array[String] = []
++	for event in state.last_phase_events:
++		if event.type == "tick":
++			ticks.append(event)
++		if event.type == "action_start":
++			actions.append(str(event.actor_id) + ":" + str(event.ability_id))
++	assert(ticks.size() == 3)
++	assert(ticks[0].enemy_slot == 0 and not ticks[0].enemy_reload)
++	assert(ticks[1].enemy_slot == 1 and not ticks[1].enemy_reload)
++	assert(ticks[2].enemy_reload)
++	assert(actions == ["enemy:guard", "hero:basic_strike", "hero:guard", "enemy:basic_strike", "hero:basic_strike"])
++	# Вторая фаза начинается с перезарядки героя, затем выполняет всю цепочку.
++	var next: Dictionary = state.run_phase(hero_chain, enemy_chain)
++	assert(next.success and next.ticks == 4)
++	ticks.clear()
++	for event in state.last_phase_events:
++		if event.type == "tick":
++			ticks.append(event)
++	assert(ticks.size() == 4 and ticks[0].hero_reload)
++	assert(state.get_hero().action_cursor == hero_chain.size())
++	assert(state.get_enemy().action_cursor >= 0)
++	# Настройку в паузе без токена менять нельзя.
++	assert(not state.configure_hero_chain(["guard"]).success)
++	assert(not state.run_phase(["guard"], enemy_chain).success)
++	# Перенастройка начинает цепочку с начала.
++	state.flow.reconfiguration_tokens = 1
++	assert(state.flow.request_reconfiguration())
++	assert(state.configure_hero_chain(["guard", "basic_strike", "guard"]).success)
++	assert(state.flow.confirm_reconfiguration())
++	assert(state.run_phase(["guard", "basic_strike", "guard"], enemy_chain).success)
+ 	quit()
+diff --git a/tests/test_battle_flow.gd b/tests/test_battle_flow.gd
+index 1abb068..2696220 100644
+--- a/tests/test_battle_flow.gd
++++ b/tests/test_battle_flow.gd
+@@ -35,24 +35,25 @@ func _initialize() -> void:
+ 	assert(not flow.start_phase() and not flow.mark_tick() and not flow.can_use_item())
+ 
+ 	# Подготовленные приёмы реально исполняются внутри фаз, бонус блока
+-	# действует в пределах двух тактов и исчезает к следующей фазе.
++	# сохраняется до следующей атаки даже после границы фазы.
+ 	var hero := HeroState.new(HeroCatalog.get_hero("petushan"))
+ 	var enemy: MonsterDefinition = MonsterCatalog.get_monster("lobar")
+ 	var battle := BattleState.begin(enemy, hero)
+-	var hero_chain: Array[String] = ["guard", "basic_strike"]
++	var hero_chain: Array[String] = ["guard", "basic_strike", "guard"]
+ 	var enemy_chain: Array[String] = ["guard", "basic_strike"]
+ 	var result: Dictionary = battle.run_phase(hero_chain, enemy_chain)
+ 	assert(result.success)
+ 	assert(battle.flow.phase_number == 1)
+-	assert(battle.flow.completed_ticks == 2)
++	assert(battle.flow.completed_ticks == 3)
+ 	assert(battle.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
+-	assert(battle.get_hero().block_attack_bonus_percent == 0)
++	assert(battle.get_hero().block_attack_bonus_percent == 25)
+ 	assert(battle.get_enemy().block_attack_bonus_percent == 0)
+ 	assert(battle.last_phase_events.size() >= 4)
+-	assert(battle.last_phase_events[0].type == "block")
+-	assert(battle.last_phase_events[1].type == "block")
+-	assert(battle.last_phase_events[2].type == "attack")
+-	assert(battle.last_phase_events[3].type == "attack")
++	var effects: Array[String] = []
++	for event in battle.last_phase_events:
++		if event.type in ["block", "attack"]:
++			effects.append(event.type)
++	assert(effects == ["block", "block", "attack", "attack", "block"])
+ 	# Отдельный запуск фазы, новая пара действий, никакого повторного начала во время исполнения.
+ 	assert(battle.run_phase(hero_chain, enemy_chain).success)
+ 	assert(battle.flow.phase_number == 2)
+@@ -66,11 +67,15 @@ func _initialize() -> void:
+ 	# Смертельный удар досрочно завершает фазу, не давая ответить мёртвому врагу.
+ 	var finisher := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), hero)
+ 	finisher.get_enemy().health = 1
+-	var killing_chain: Array[String] = ["rooster_crush", "basic_strike"]
++	var killing_chain: Array[String] = ["rooster_crush", "basic_strike", "guard"]
+ 	var killing: Dictionary = finisher.run_phase(killing_chain, enemy_chain)
+ 	assert(killing.success and finisher.is_victory)
+ 	assert(finisher.flow.stage == BattleFlow.Stage.FINISHED)
+ 	assert(finisher.flow.completed_ticks == 1)
+ 	assert(not finisher.run_phase(killing_chain, enemy_chain).success)
+-	assert(finisher.last_phase_events.size() == 1)
++	var attacks: int = 0
++	for event in finisher.last_phase_events:
++		if event.type == "attack":
++			attacks += 1
++	assert(attacks == 1)
+ 	quit()
+diff --git a/tests/test_battle_inline_planner.gd b/tests/test_battle_inline_planner.gd
+index 7a3bfb7..9982e1e 100644
+--- a/tests/test_battle_inline_planner.gd
++++ b/tests/test_battle_inline_planner.gd
+@@ -16,7 +16,7 @@ func _verify() -> void:
+ 	var slots: HBoxContainer = view.get_node("%SequenceSlots") as HBoxContainer
+ 	var play: Button = view.get_node("%PunchButton") as Button
+ 	assert(slots.get_child_count() == 3)
+-	assert(play.disabled)
++	assert(not play.disabled)
+ 	assert(not view.has_node("%SequenceHint"))
+ 	assert(view.find_children("*", "AcceptDialog", true, false).is_empty())
+ 	assert(hero.get_saved_action_slots() == ["", "", ""])
+@@ -32,9 +32,11 @@ func _verify() -> void:
+ 	assert(view._draft_actions() == ["basic_strike", "wolf_feint"])
+ 	assert((slots.get_child(0) as Button).tooltip_text.contains("Урон:"))
+ 	assert(not (slots.get_child(2) as Button).tooltip_text.is_empty())
++	assert(not view._commit_draft()) # второй слот пуст, запуск запрещён
++	view._choose_ability(1, "guard")
+ 	assert(view._commit_draft())
+-	assert(hero.get_saved_action_slots() == ["basic_strike", "", "wolf_feint"])
+-	assert(combat.battle_state.get_hero().action_chain == ["basic_strike", "wolf_feint"])
++	assert(hero.get_saved_action_slots() == ["basic_strike", "guard", "wolf_feint"])
++	assert(combat.battle_state.get_hero().action_chain == ["basic_strike", "guard", "wolf_feint"])
+ 
+ 	# При повторной встрече тот же HeroState восстанавливает и пустую среднюю позицию.
+ 	view.queue_free()
+@@ -42,17 +44,18 @@ func _verify() -> void:
+ 	root.add_child(repeat)
+ 	var next_combat := CombatSession.new(monster, hero)
+ 	repeat.begin(next_combat, hero)
+-	assert(repeat._planner_editing == ["basic_strike", "", "wolf_feint"])
++	assert(repeat._planner_editing == ["basic_strike", "guard", "wolf_feint"])
+ 	assert(not (repeat.get_node("%PunchButton") as Button).disabled)
+ 	assert((repeat.get_node("%SequenceSlots") as HBoxContainer).get_child_count() == 3)
++	assert((repeat.get_node("%EnemySequenceSlots") as HBoxContainer).get_child_count() == 3)
+ 
+ 	# Изменение без разрешения в обычной паузе невозможно.
+ 	assert(next_combat.battle_state.flow.start_phase())
+ 	assert(next_combat.battle_state.flow.complete_phase())
+ 	repeat._refresh_phase_controls()
+ 	repeat._choose_ability(0, "guard")
+-	assert(repeat._planner_editing == ["basic_strike", "", "wolf_feint"])
+-	assert(hero.get_saved_action_slots() == ["basic_strike", "", "wolf_feint"])
++	assert(repeat._planner_editing == ["basic_strike", "guard", "wolf_feint"])
++	assert(hero.get_saved_action_slots() == ["basic_strike", "guard", "wolf_feint"])
+ 
+ 	# При отмене перенастройки последний утверждённый вариант сохраняется.
+ 	next_combat.battle_state.flow.reconfiguration_tokens = 1
+@@ -63,7 +66,7 @@ func _verify() -> void:
+ 	assert(repeat._planner_editing[0] == "guard")
+ 	repeat._on_guard_pressed()
+ 	assert(next_combat.battle_state.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
+-	assert(hero.get_saved_action_slots() == ["basic_strike", "", "wolf_feint"])
+-	assert(repeat._planner_editing == ["basic_strike", "", "wolf_feint"])
++	assert(hero.get_saved_action_slots() == ["basic_strike", "guard", "wolf_feint"])
++	assert(repeat._planner_editing == ["basic_strike", "guard", "wolf_feint"])
+ 	repeat.queue_free()
+ 	quit()
+diff --git a/tests/test_battle_tick_priority.gd b/tests/test_battle_tick_priority.gd
+new file mode 100644
+index 0000000..a206f41
+--- /dev/null
++++ b/tests/test_battle_tick_priority.gd
+@@ -0,0 +1,86 @@
++extends SceneTree
++
++## DA-4.07: детерминированные такты, блок, перезарядка, накопление бонуса.
++func _fighter(id: String, team: String, hp: int, power: int) -> BattleParticipant:
++	var participant := BattleParticipant.new()
++	participant.participant_id = id
++	participant.team_id = team
++	participant.max_health = hp
++	participant.health = hp
++	participant.attack = power
++	participant.defense = 0
++	participant.personal_ability_ids = ["basic_strike", "guard"]
++	return participant
++
++
++func _battle(hero_hp: int = 100, enemy_hp: int = 100, power: int = 10) -> BattleState:
++	var state := BattleState.new()
++	state.participants["hero"] = _fighter("hero", "heroes", hero_hp, power)
++	state.participants["enemy"] = _fighter("enemy", "enemies", enemy_hp, power)
++	return state
++
++
++func _initialize() -> void:
++	var battle: BattleState = _battle()
++	var hero_chain: Array[String] = ["basic_strike", "guard", "basic_strike"]
++	var enemy_chain: Array[String] = ["guard", "basic_strike"]
++	assert(battle.tick_policy.priority("wolf_feint") == battle.tick_policy.other_priority)
++	var result: Dictionary = battle.run_phase(hero_chain, enemy_chain)
++	assert(result.success and result.ticks == 3)
++	var decisions: Array[String] = []
++	for event in battle.last_phase_events:
++		if event.type in ["block", "attack", "reload"]:
++			decisions.append(str(event.actor_id) + ":" + str(event.type))
++	assert(decisions == ["enemy:block", "hero:attack", "hero:block", "enemy:attack", "hero:attack", "enemy:reload"])
++	var next: Dictionary = battle.run_phase(hero_chain, enemy_chain)
++	assert(next.success and next.ticks == 4) # перезарядка героя не съедает слот фазы
++	assert(battle.last_phase_events[0].hero_reload)
++	assert(battle.last_phase_events[0].enemy_slot == 0)
++
++	# При равном приоритете два блока ставятся в порядке герой -> монстр.
++	var both_guard: BattleState = _battle()
++	assert(both_guard.run_phase(["guard", "guard", "guard"], ["guard"]).success)
++	var first_two: Array[String] = []
++	for event in both_guard.last_phase_events:
++		if event.type == "block" and first_two.size() < 2:
++			first_two.append(str(event.actor_id))
++	assert(first_two == ["hero", "enemy"])
++
++	# Герой убивает монстра первым ударом: у монстра нет ответа.
++	var lethal: BattleState = _battle(100, 1, 10)
++	assert(lethal.run_phase(["basic_strike", "guard", "basic_strike"], ["basic_strike"]).success)
++	assert(lethal.is_victory and not lethal.is_defeat and lethal.flow.completed_ticks == 1)
++	var enemy_attacks: int = 0
++	for event in lethal.last_phase_events:
++		if event.type == "attack" and event.actor_id == "enemy":
++			enemy_attacks += 1
++	assert(enemy_attacks == 0)
++
++	# Процент накапливается от БАЗЫ, без округления дроби вверх.
++	var arithmetic: BattleState = _battle(100, 100, 10)
++	var fighter: BattleParticipant = arithmetic.get_hero()
++	assert(arithmetic.execute_ability("hero", "hero", "guard").success)
++	assert(fighter.block_attack_bonus_percent == 25)
++	arithmetic.end_phase()
++	assert(fighter.block_attack_bonus_percent == 25)
++	var hit: Dictionary = arithmetic.execute_ability("hero", "enemy", "basic_strike")
++	assert(hit.success and hit.events[0].damage == 12) # 10 * 1.25 = 12.5 -> 12
++	assert(fighter.block_attack_bonus_percent == 0)
++	assert(arithmetic.execute_ability("hero", "hero", "guard").success)
++	assert(arithmetic.execute_ability("hero", "hero", "guard").success)
++	assert(fighter.block_attack_bonus_percent == 50)
++	arithmetic.end_phase()
++	hit = arithmetic.execute_ability("hero", "enemy", "basic_strike")
++	assert(hit.success and hit.events[0].damage == 15) # 10 * 1.5
++	assert(fighter.block_attack_bonus_percent == 0)
++
++	# Перезарядки существуют у обоих и не запускают никакого приёма.
++	var rests: BattleState = _battle(200, 200, 1)
++	for i in range(4):
++		assert(rests.run_phase(["guard", "guard", "guard"], ["guard", "guard"]).success)
++	var both_reloading: bool = false
++	for event in rests.last_phase_events:
++		if event.type == "tick" and event.hero_reload and event.enemy_reload:
++			both_reloading = true
++	assert(both_reloading)
++	quit()

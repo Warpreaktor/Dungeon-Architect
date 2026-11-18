@@ -249,14 +249,30 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 12
 
-[node name="SequenceTitle" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader"]
+[node name="HeroChainTitle" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader"]
+unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 15
-text = "АЛГОРИТМ БОЯ"
+text = "ГЕРОЙ"
 
-[node name="SequenceScroll" type="ScrollContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn"]
+[node name="EnemyChainTitle" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.91, 0.50, 0.46, 1)
+theme_override_font_sizes/font_size = 15
+text = "ПРОТИВНИК"
+
+[node name="SequenceSides" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="SequenceScroll" type="ScrollContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 80)
 size_flags_horizontal = 3
@@ -264,7 +280,21 @@ mouse_filter = 1
 horizontal_scroll_mode = 1
 vertical_scroll_mode = 3
 
-[node name="SequenceSlots" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceScroll"]
+[node name="SequenceSlots" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides/SequenceScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="EnemySequenceScroll" type="ScrollContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 80)
+size_flags_horizontal = 3
+mouse_filter = 1
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 3
+
+[node name="EnemySequenceSlots" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides/EnemySequenceScroll"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2

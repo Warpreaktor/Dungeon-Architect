@@ -16,6 +16,8 @@ var effects: Dictionary = {}
 var personal_ability_ids: Array[String] = []
 var learned_ability_ids: Array[String] = []
 var action_chain: Array[String] = []
+## Следующий слот; значение action_chain.size() означает такт перезарядки.
+var action_cursor: int = 0
 ## Ограничение участника, независимое от глобального защитного MAX_ACTIONS.
 var action_slot_capacity: int = 3
 var tactic_changes_remaining: int = 0
@@ -23,6 +25,8 @@ var tactic_changes_remaining: int = 0
 var block_armor: int = 0
 var block_attack_bonus_percent: int = 0
 var last_shield_blocked: int = 0
+## Фактическая часть удара, остановленная активным блоком (в т.ч. у монстров).
+var last_block_absorbed: int = 0
 var last_shield_broken: String = ""
 var statuses: Dictionary = {}
 
@@ -103,6 +107,7 @@ func restore_health(amount: int) -> int:
 
 func receive_damage(incoming: int) -> int:
 	last_shield_blocked = 0
+	last_block_absorbed = 0
 	last_shield_broken = ""
 	if _hero_snapshot != null:
 		_hero_snapshot.last_shield_broken = ""
@@ -113,6 +118,8 @@ func receive_damage(incoming: int) -> int:
 		blocked = _hero_snapshot.consume_shield_block(blocked)
 		last_shield_blocked = blocked
 		last_shield_broken = _hero_snapshot.last_shield_broken
+	# Показываем поглощение и монстру без физического щита.
+	last_block_absorbed = blocked
 	# Блок защищает от одного попадания, даже если оно было нулевым.
 	block_armor = 0
 	if _hero_snapshot != null:
@@ -125,8 +132,8 @@ func receive_damage(incoming: int) -> int:
 
 
 func end_phase() -> void:
-	block_attack_bonus_percent = 0
-	block_armor = 0
+	# Бонус +25% и активный блок живут до следующего соответствующего удара,
+	# даже если между действиями была перезарядка или граница фазы.
 	for status_id in statuses.keys():
 		var status: Dictionary = statuses[status_id]
 		status["ticks"] = int(status.get("ticks", 0)) - 1

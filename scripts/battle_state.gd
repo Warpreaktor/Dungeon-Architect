@@ -13,6 +13,7 @@ var last_blocked_damage: int = 0
 var turn_index: int = 0
 var events: Array[Dictionary] = []
 var flow: BattleFlow = BattleFlow.new()
+var tick_policy: BattleTurnPolicy = BattleTurnPolicy.new()
 var last_phase_events: Array[Dictionary] = []
 
 
@@ -46,6 +47,8 @@ func execute_ability(actor_id: String, target_id: String, ability_id: String) ->
 func configure_hero_chain(actions: Array[String]) -> Dictionary:
 	if flow.stage != BattleFlow.Stage.PREPARATION and flow.stage != BattleFlow.Stage.RECONFIGURING:
 		return {"success": false, "reason": "Сейчас нельзя изменить тактику"}
+	if get_hero() != null and actions.size() != get_hero().action_slot_capacity:
+		return {"success": false, "reason": "Цепочка содержит незаполненные слоты"}
 	var reason: String = BattleChainPlanner.validate(actions, get_hero())
 	if not reason.is_empty():
 		return {"success": false, "reason": reason}
@@ -53,45 +56,66 @@ func configure_hero_chain(actions: Array[String]) -> Dictionary:
 	return {"success": true, "reason": ""}
 
 
-## Каждый такт предоставляет действие обоим бойцам. Короткая цепочка
-## повторяется циклически, но исходный список не изменяется.
-## Внутри такта пока действует порядок герой -> противник (DA-4.07).
+## Одна фаза выполняет полную цепочку ГЕРОЯ. Участники имеют независимые
+## курсоры: после последнего приёма следует один такт перезарядки.
+## Все события уже вычислены до визуального воспроизведения.
 func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dictionary:
 	var hero_actor: BattleParticipant = get_hero()
 	var enemy_actor: BattleParticipant = get_enemy()
 	if hero_actor == null or enemy_actor == null:
 		return {"success": false, "reason": "Нет участников боя", "events": []}
 	var current_hero_chain: Array[String] = hero_actor.action_chain
-	# Между фазами требования могут измениться (HP, сломанный щит).
-	# В таком случае конкретный приём даст событие failed, но бой не зависнет.
 	var enemy_reason: String = BattleChainPlanner.validate(enemy_actions, enemy_actor, false)
 	if not enemy_reason.is_empty():
 		return {"success": false, "reason": enemy_reason, "events": []}
 	if flow.stage == BattleFlow.Stage.PREPARATION or flow.stage == BattleFlow.Stage.RECONFIGURING:
+		var was_reconfiguring: bool = flow.stage == BattleFlow.Stage.RECONFIGURING
 		var configured: Dictionary = configure_hero_chain(hero_actions)
 		if not bool(configured.get("success", false)):
 			return {"success": false, "reason": configured.get("reason", ""), "events": []}
 		current_hero_chain = hero_actor.action_chain
+		if was_reconfiguring:
+			# Новый алгоритм всегда начинается с первого слота.
+			hero_actor.action_cursor = 0
 	elif flow.stage == BattleFlow.Stage.BETWEEN_PHASES:
 		if not BattleChainPlanner.validate(current_hero_chain, hero_actor, false).is_empty():
 			return {"success": false, "reason": "Ошибка сохранённой цепочки", "events": []}
 		if current_hero_chain != hero_actions:
-			return {"success": false, "reason": "Тактика заблокирована до разрешённой перенастройки", "events": []}
+			return {"success": false, "reason": "Тактика заблокирована до перенастройки", "events": []}
 	else:
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
-	var tick_count: int = BattleChainPlanner.phase_length(current_hero_chain, enemy_actions)
-	if tick_count == 0 or not flow.start_phase():
+	if not flow.start_phase():
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
-	enemy_actor.action_chain = enemy_actions.duplicate()
+	if enemy_actor.action_chain != enemy_actions:
+		enemy_actor.action_chain = enemy_actions.duplicate()
+		enemy_actor.action_cursor = 0
 	var start_event: int = events.size()
-	for tick in range(tick_count):
-		if is_victory or is_defeat:
-			break
-		for actor_id in [hero_id, enemy_id]:
+	var hero_actions_done: int = 0
+	while hero_actions_done < current_hero_chain.size() and not is_victory and not is_defeat:
+		var hero_step: Dictionary = BattleChainPlanner.next_step(current_hero_chain, hero_actor.action_cursor)
+		var enemy_step: Dictionary = BattleChainPlanner.next_step(enemy_actions, enemy_actor.action_cursor)
+		hero_actor.action_cursor = int(hero_step["next_cursor"])
+		enemy_actor.action_cursor = int(enemy_step["next_cursor"])
+		if not bool(hero_step["reload"]):
+			hero_actions_done += 1
+		var tick: int = flow.completed_ticks + 1
+		events.append({"type": "tick", "tick": tick, "hero_slot": int(hero_step["slot_index"]),
+			"enemy_slot": int(enemy_step["slot_index"]), "hero_reload": bool(hero_step["reload"]),
+			"enemy_reload": bool(enemy_step["reload"])})
+		# Защитное действие имеет приоритет 0, любая другая категория — 10.
+		# При равенстве герой ходит первым; смерть отменяет оставшийся ответ.
+		var order: Array[String] = tick_policy.order(hero_id, hero_step, enemy_id, enemy_step)
+		for actor_id in order:
 			if is_victory or is_defeat:
 				break
-			var actions: Array[String] = current_hero_chain if actor_id == hero_id else enemy_actions
-			var action_id: String = BattleChainPlanner.action_at(actions, tick)
+			var step: Dictionary = hero_step if actor_id == hero_id else enemy_step
+			if bool(step["reload"]):
+				events.append({"type": "reload", "actor_id": actor_id, "tick": tick,
+					"slot_index": -1})
+				continue
+			var action_id: String = str(step["action_id"])
+			events.append({"type": "action_start", "actor_id": actor_id,
+				"ability_id": action_id, "slot_index": int(step["slot_index"]), "tick": tick})
 			var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
 			var target_id: String = actor_id
 			if ability != null and ability.target == AbilityDefinition.Target.ENEMY:
@@ -144,7 +168,7 @@ func update_outcome() -> void:
 	is_defeat = hero != null and not hero.is_alive() and not is_victory
 
 
-## Упорядочение фаз появится в DA-4.05–4.06; здесь явный сброс бонуса.
+## Завершение фазы обрабатывает временные эффекты, но не сбрасывает бонус блока.
 func end_phase() -> void:
 	for participant in participants.values():
 		(participant as BattleParticipant).end_phase()

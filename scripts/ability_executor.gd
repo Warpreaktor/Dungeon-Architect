@@ -68,7 +68,8 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 	var taken: int = target.receive_damage(raw)
 	return {"type": "attack", "actor_id": actor.participant_id, "target_id": target.participant_id,
 		"ability_id": ability_id, "damage": taken, "blocked": maxi(raw - taken, 0),
-		"shield_blocked": target.last_shield_blocked, "shield_broken": target.last_shield_broken}
+		"shield_blocked": target.last_shield_blocked, "block_absorbed": target.last_block_absorbed,
+		"shield_broken": target.last_shield_broken}
 
 
 static func _failure(reason: String) -> Dictionary:

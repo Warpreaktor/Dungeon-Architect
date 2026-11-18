@@ -26,7 +26,7 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 					if shield != null and participant._hero_snapshot.current_shield_durability(participant.equipped_shield_id) > 0:
 						block = maxi(shield.defense_bonus, 0)
 				lines.append("Броня блока: %d (на одно попадание)" % block)
-				lines.append("+25%% к следующей атаке за каждый блок; до конца фазы")
+				lines.append("+25%% базового урона к следующей атаке за каждый блок (через фазы)")
 			AbilityEffectDefinition.Kind.HEAL:
 				lines.append("Лечение: %d HP (не выше максимума)" % maxi(effect.amount, 0))
 			AbilityEffectDefinition.Kind.APPLY_STATUS:

@@ -42,10 +42,12 @@ func _initialize() -> void:
 	assert(not battle.execute_ability("enemy", "enemy", "hunter_shot").success)
 	assert(AbilityCatalog.get_ability("wolf_counter") != null)
 
-	# Эффект блока и его бонус одноразовы в границах фазы.
+	# Блок и его накопленная мощь сохраняются через границу фазы.
 	assert(battle.execute_ability("hero", "hero", "guard").success)
 	battle.end_phase()
-	assert(actor.block_attack_bonus_percent == 0 and actor.block_armor == 0)
+	assert(actor.block_attack_bonus_percent == 25 and actor.block_armor > 0)
+	assert(battle.execute_ability("hero", "enemy", "basic_strike").success)
+	assert(actor.block_attack_bonus_percent == 0)
 
 	# Монстры используют тот же обработчик, могут блокировать и лечиться.
 	assert(battle.execute_ability("enemy", "enemy", "guard").success)

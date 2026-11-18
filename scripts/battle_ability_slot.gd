@@ -17,6 +17,7 @@ const SPECIAL_ICON: Texture2D = preload("res://assets/hud/fist.png")
 @onready var _empty_icon: Label = $SlotMargin/Row/EmptyIcon
 
 var slot_index: int = 0
+var _invalid_tween: Tween
 
 
 static func visual_icon(ability: AbilityDefinition) -> Texture2D:
@@ -54,3 +55,36 @@ func configure(index: int, ability: AbilityDefinition, editable: bool, actor: Ba
 
 func _notify_selection() -> void:
 	slot_selected.emit(slot_index)
+
+
+func configure_recharge(index: int) -> void:
+	configure(index, null, false)
+	_slot_number.text = "%02d" % (index + 1)
+	_slot_name.text = "Перезарядка"
+	_slot_icon.texture = SPECIAL_ICON
+	_slot_icon.visible = true
+	_empty_icon.visible = false
+	tooltip_text = "Перезарядка: один пропущенный такт"
+
+
+func set_current(active: bool) -> void:
+	if active:
+		var focus := StyleBoxFlat.new()
+		focus.bg_color = Color("#3e3220")
+		focus.border_color = Color("#f7c96b")
+		focus.set_border_width_all(3)
+		focus.set_corner_radius_all(7)
+		add_theme_stylebox_override("normal", focus)
+		add_theme_stylebox_override("disabled", focus)
+	else:
+		remove_theme_stylebox_override("normal")
+		remove_theme_stylebox_override("disabled")
+
+
+func flash_empty() -> void:
+	if _invalid_tween != null and _invalid_tween.is_valid():
+		_invalid_tween.kill()
+	_invalid_tween = create_tween()
+	for i in range(3):
+		_invalid_tween.tween_property(self, "modulate", Color(1.0, 0.22, 0.22), 0.12)
+		_invalid_tween.tween_property(self, "modulate", Color.WHITE, 0.14)

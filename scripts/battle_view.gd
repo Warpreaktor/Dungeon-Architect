@@ -24,6 +24,10 @@ signal shield_broken(item_id: String)
 @onready var _guard_button: Button = %GuardButton
 @onready var _result_text: Label = %ResultText
 @onready var _sequence_slots: HBoxContainer = %SequenceSlots
+@onready var _enemy_sequence_slots: HBoxContainer = %EnemySequenceSlots
+@onready var _battlefield: HBoxContainer = $OuterMargin/Main/Battlefield
+@onready var _hero_chain_title: Label = %HeroChainTitle
+@onready var _enemy_chain_title: Label = %EnemyChainTitle
 
 const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 
@@ -43,6 +47,16 @@ var _ability_picker: PanelContainer
 var _picker_grid: GridContainer
 var _picker_actions: HBoxContainer
 var _picker_target: int = -1
+## Два временных портрета поверх поля: движение не меняет настоящие UI-узлы.
+var _impact_layer: Control
+var _impact_portraits: Dictionary = {}
+var _impact_idle: Dictionary = {}
+var _impact_origin: Dictionary = {}
+var _impact_shields: Dictionary = {}
+var _visible_hero_hp: int = 0
+var _visible_enemy_hp: int = 0
+var _visible_block: Dictionary = {"hero": false, "enemy": false}
+
 
 
 func _ready() -> void:
@@ -76,7 +90,9 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_hero_defense_value.text = str(shield_item.defense_bonus if shield_item != null else hero.defense)
 	_defense_idle_color = Color.WHITE if shield_item != null or hero.defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
 	_hero_defense_icon.modulate = _defense_idle_color
+	_hero_chain_title.text = _hero_name.text.to_upper()
 	_enemy_name.text = combat.enemy_definition.display_name
+	_enemy_chain_title.text = _enemy_name.text.to_upper()
 	_enemy_attack_value.text = str(combat.enemy_damage)
 	_enemy_defense_value.text = str(combat.enemy_defense)
 	_enemy_defense_icon.modulate = Color.WHITE if combat.enemy_defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
@@ -84,11 +100,15 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_enemy_portrait.modulate = Color.WHITE
 	_hero_health_meter.set_health(hero.health, hero.max_health)
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
+	_visible_hero_hp = hero.health
+	_visible_enemy_hp = combat.enemy_health
+	_visible_block = {"hero": false, "enemy": false}
 	# В рамках прохождения сохраняем именно позиции, включая пустые слоты.
 	_committed_slots = hero.get_saved_action_slots()
 	_set_draft_from_chain(_committed_slots)
 	_hero_chain = _draft_actions()
 	_enemy_chain = _combat.battle_state.default_chain("enemy")
+	_refresh_enemy_slots()
 	_result_text.text = ""
 	_refresh_phase_controls()
 
@@ -127,6 +147,29 @@ func _refresh_chain_slots() -> void:
 		_sequence_slots.add_child(slot)
 		slot.configure(index, ability, editable, _combat.battle_state.get_hero())
 		slot.slot_selected.connect(_on_slot_selected)
+
+
+func _refresh_enemy_slots() -> void:
+	for child in _enemy_sequence_slots.get_children():
+		_enemy_sequence_slots.remove_child(child)
+		child.queue_free()
+	var enemy: BattleParticipant = _combat.battle_state.get_enemy()
+	var capacity: int = maxi(enemy.action_slot_capacity, _enemy_chain.size() + 1)
+	for index in range(capacity):
+		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
+		_enemy_sequence_slots.add_child(slot)
+		if index < _enemy_chain.size():
+			slot.configure(index, AbilityCatalog.get_ability(_enemy_chain[index]), false, enemy)
+		else:
+			slot.configure_recharge(index)
+
+
+func _highlight_slots(hero_index: int, enemy_index: int, hero_reloading: bool = false, enemy_reloading: bool = false) -> void:
+	for index in range(_sequence_slots.get_child_count()):
+		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(not hero_reloading and index == hero_index)
+	for index in range(_enemy_sequence_slots.get_child_count()):
+		var active: bool = index == enemy_index if not enemy_reloading else index == _enemy_chain.size()
+		(_enemy_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(active)
 
 
 func _build_ability_picker() -> void:
@@ -339,10 +382,19 @@ func _input(event: InputEvent) -> void:
 
 
 func _commit_draft() -> bool:
+	# Незанятая позиция не считается действием. Показываем ошибку только
+	# красным миганием самих ячеек, без текстовых инструкций.
+	var missing: bool = false
+	for index in range(_planner_editing.size()):
+		if _planner_editing[index].is_empty():
+			missing = true
+			(_sequence_slots.get_child(index) as BattleAbilitySlot).flash_empty()
+	if missing:
+		return false
 	var actions: Array[String] = _draft_actions()
 	var response: Dictionary = _combat.battle_state.configure_hero_chain(actions)
 	if not bool(response.get("success", false)):
-		_result_text.text = str(response.get("reason", "Проверь алгоритм"))
+		_result_text.text = str(response.get("reason", ""))
 		return false
 	_hero_chain = actions.duplicate()
 	_committed_slots = _planner_editing.duplicate()
@@ -362,7 +414,7 @@ func _on_punch_pressed() -> void:
 			_refresh_phase_controls()
 		return
 	if flow.stage == BattleFlow.Stage.PREPARATION and not _commit_draft():
-		_refresh_phase_controls()
+		# Не пересоздаём слоты: иначе Tween красного мигания мгновенно погибнет.
 		return
 	_hide_ability_picker()
 	_is_playing_back = true
@@ -390,37 +442,234 @@ func _on_guard_pressed() -> void:
 	_refresh_phase_controls()
 
 
+func _create_impact_layer() -> void:
+	_impact_layer = Control.new()
+	_impact_layer.name = "CombatImpacts"
+	_impact_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_impact_layer.z_index = 15
+	add_child(_impact_layer)
+	_impact_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_impact_layer.size = size
+	_impact_portraits.clear()
+	_impact_origin.clear()
+	_impact_idle.clear()
+	_impact_shields.clear()
+	var center: Vector2 = _battlefield.get_global_rect().get_center() - global_position
+	for actor_id in ["hero", "enemy"]:
+		var original: TextureRect = _hero_portrait if actor_id == "hero" else _enemy_portrait
+		var portrait := TextureRect.new()
+		portrait.name = "Impact_" + actor_id
+		portrait.texture = original.texture
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		portrait.size = original.size
+		portrait.pivot_offset = portrait.size * 0.5
+		portrait.position = original.global_position - global_position
+		_impact_origin[actor_id] = portrait.position
+		_impact_idle[actor_id] = Vector2(
+			center.x - portrait.size.x * 1.12 if actor_id == "hero" else center.x + portrait.size.x * 0.12,
+			center.y - portrait.size.y * 0.5)
+		_impact_layer.add_child(portrait)
+		_impact_portraits[actor_id] = portrait
+		var shield_icon := TextureRect.new()
+		shield_icon.texture = BattleAbilitySlot.DEFENSE_ICON
+		shield_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		shield_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		shield_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		shield_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		shield_icon.size = portrait.size
+		shield_icon.modulate = Color(0.40, 0.78, 1.0, 0.88)
+		shield_icon.visible = bool(_visible_block.get(actor_id, false))
+		portrait.add_child(shield_icon)
+		_impact_shields[actor_id] = shield_icon
+		# Не hide(): скрытый узел изменил бы расчёт VBoxContainer и сдвинул HUD.
+		original.modulate.a = 0.0
+
+
+func _clear_impact_layer() -> void:
+	if _impact_layer != null and is_instance_valid(_impact_layer):
+		_impact_layer.queue_free()
+	_impact_layer = null
+	_impact_portraits.clear()
+	_impact_shields.clear()
+	_hero_portrait.modulate.a = 1.0
+	_enemy_portrait.modulate.a = 1.0
+	_highlight_slots(-1, -1)
+
+
 func _play_phase_events(phase_events: Array) -> void:
-	# События уже вычислены моделью. Этот Tween управляет только показом.
+	# Единственный расчёт уже выполнил BattleState. Здесь только режиссура.
+	_create_impact_layer()
 	_playback = create_tween()
+	_playback.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	var first_intro: bool = true
+	for actor_id in ["hero", "enemy"]:
+		var portrait: TextureRect = _impact_portraits[actor_id]
+		if first_intro:
+			_playback.tween_property(portrait, "position", _impact_idle[actor_id], 0.56)
+			first_intro = false
+		else:
+			_playback.parallel().tween_property(portrait, "position", _impact_idle[actor_id], 0.56)
+		_playback.parallel().tween_property(portrait, "scale", Vector2(1.5, 1.5), 0.56)
+	_playback.tween_interval(0.16)
 	for raw_event in phase_events:
 		var event: Dictionary = raw_event
-		_playback.tween_callback(Callable(self, "_display_phase_event").bind(event))
-		var actor_id: String = str(event.get("actor_id", ""))
-		var portrait: TextureRect = _hero_portrait if actor_id == "hero" else _enemy_portrait
-		_playback.tween_property(portrait, "modulate", Color(1.0, 0.75, 0.48), 0.12)
-		_playback.tween_property(portrait, "modulate", Color.WHITE, 0.16)
+		var kind: String = str(event.get("type", ""))
+		_playback.tween_callback(_display_phase_event.bind(event))
+		match kind:
+			"tick":
+				_playback.tween_interval(0.20)
+			"action_start":
+				_playback.tween_interval(0.08)
+			"attack":
+				var actor_id: String = str(event.get("actor_id", ""))
+				var target_id: String = str(event.get("target_id", ""))
+				var actor: TextureRect = _impact_portraits.get(actor_id) as TextureRect
+				var target: TextureRect = _impact_portraits.get(target_id) as TextureRect
+				if actor == null or target == null:
+					continue
+				var direction: float = 1.0 if actor_id == "hero" else -1.0
+				var windup: Vector2 = _impact_idle[actor_id] + Vector2(-direction * 30.0, 0)
+				var contact: Vector2 = _impact_idle[target_id] + Vector2(-direction * actor.size.x * 0.84, 0)
+				_playback.tween_property(actor, "position", windup, 0.20).set_trans(Tween.TRANS_QUAD)
+				_playback.parallel().tween_property(actor, "rotation_degrees", -direction * 7.0, 0.20)
+				_playback.tween_property(actor, "rotation_degrees", direction * 4.0, 0.065)
+				_playback.tween_property(actor, "rotation_degrees", -direction * 4.0, 0.065)
+				_playback.tween_property(actor, "position", contact, 0.13).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+				_playback.parallel().tween_property(actor, "rotation_degrees", 0.0, 0.13)
+				_playback.tween_callback(_impact.bind(event))
+				_playback.tween_property(target, "position", _impact_idle[target_id] + Vector2(direction * 12.0, 0), 0.08)
+				_playback.tween_interval(0.46)
+				_playback.tween_property(actor, "position", _impact_idle[actor_id], 0.27)
+				_playback.parallel().tween_property(target, "position", _impact_idle[target_id], 0.27)
+				_playback.parallel().tween_property(target, "modulate", Color.WHITE, 0.27)
+			"block":
+				_playback.tween_interval(0.40)
+			"reload":
+				_playback.tween_interval(0.42)
+			_:
+				_playback.tween_interval(0.40)
+	var first_return: bool = true
+	for actor_id in ["hero", "enemy"]:
+		var portrait: TextureRect = _impact_portraits[actor_id]
+		if first_return:
+			_playback.tween_property(portrait, "position", _impact_origin[actor_id], 0.42)
+			first_return = false
+		else:
+			_playback.parallel().tween_property(portrait, "position", _impact_origin[actor_id], 0.42)
+		_playback.parallel().tween_property(portrait, "scale", Vector2.ONE, 0.42)
+	_playback.tween_callback(_clear_impact_layer)
 	_playback.tween_callback(_after_phase_playback)
 
 
 func _display_phase_event(event: Dictionary) -> void:
 	var actor_id: String = str(event.get("actor_id", ""))
-	var actor_name: String = _hero_name.text if actor_id == "hero" else _enemy_name.text
-	var ability: AbilityDefinition = AbilityCatalog.get_ability(str(event.get("ability_id", "")))
-	var label_text: String = ability.display_name if ability != null else "Действие"
-	match str(event.get("type", "")):
-		"attack":
-			_result_text.text = "%s: %s (−%d HP)" % [actor_name, label_text, int(event.get("damage", 0))]
+	var kind: String = str(event.get("type", ""))
+	match kind:
+		"tick":
+			_highlight_slots(int(event.get("hero_slot", -1)), int(event.get("enemy_slot", -1)),
+				bool(event.get("hero_reload", false)), bool(event.get("enemy_reload", false)))
+		"action_start":
+			# Надписи не нужны: текущий слот выделен рамкой.
+			pass
 		"block":
-			_result_text.text = "%s: %s (броня %d)" % [actor_name, label_text, int(event.get("armor", 0))]
+			var target_id: String = str(event.get("target_id", ""))
+			_visible_block[target_id] = true
+			var icon: TextureRect = _impact_shields.get(target_id) as TextureRect
+			if icon != null:
+				icon.show()
 		"heal":
-			_result_text.text = "%s: %s (+%d HP)" % [actor_name, label_text, int(event.get("healed", 0))]
+			var healed: int = int(event.get("healed", 0))
+			if actor_id == "hero":
+				_visible_hero_hp += healed
+				_hero_health_meter.set_health(_visible_hero_hp, _combat.hero.max_health, true)
+			else:
+				_visible_enemy_hp += healed
+				_enemy_health_meter.set_health(_visible_enemy_hp, _combat.enemy_max_health, true)
+			if healed > 0:
+				_spawn_number(str(event.get("target_id", "")), "+%d" % healed, Color("#70d994"))
+		"reload":
+			_show_reload_icon(actor_id)
 		"failed":
-			_result_text.text = "%s: %s" % [actor_name, str(event.get("reason", "Приём недоступен"))]
-		_:
-			_result_text.text = "%s: %s" % [actor_name, label_text]
+			# Отказ уже рассчитан и сохранён в журнале, показ без модальных подсказок.
+			pass
 
 
+func _impact(event: Dictionary) -> void:
+	var target_id: String = str(event.get("target_id", ""))
+	var target: TextureRect = _impact_portraits.get(target_id) as TextureRect
+	if target == null:
+		return
+	var hp_damage: int = int(event.get("damage", 0))
+	var shield_damage: int = int(event.get("block_absorbed", event.get("shield_blocked", 0)))
+	if shield_damage > 0:
+		_spawn_number(target_id, "−%d" % shield_damage, Color("#67c8ff"), -12)
+	if hp_damage > 0:
+		_spawn_number(target_id, "−%d" % hp_damage, Color("#ff6969"), 18)
+	if hp_damage == 0 and shield_damage == 0:
+		_spawn_number(target_id, "0", Color("#c1cad2"))
+	if target_id == "hero":
+		_visible_hero_hp -= hp_damage
+		_hero_health_meter.set_health(_visible_hero_hp, _combat.hero.max_health, true)
+	else:
+		_visible_enemy_hp -= hp_damage
+		_enemy_health_meter.set_health(_visible_enemy_hp, _combat.enemy_max_health, true)
+	if hp_damage > 0:
+		target.modulate = Color("#ff6464")
+	elif shield_damage > 0:
+		target.modulate = Color("#81c9ff")
+	else:
+		target.modulate = Color("#d0d5de")
+	_visible_block[target_id] = false
+	var shield_icon: TextureRect = _impact_shields.get(target_id) as TextureRect
+	if shield_icon != null:
+		shield_icon.hide()
+
+
+func _show_reload_icon(actor_id: String) -> void:
+	var portrait: TextureRect = _impact_portraits.get(actor_id) as TextureRect
+	if portrait == null:
+		return
+	var icon := TextureRect.new()
+	icon.texture = BattleAbilitySlot.SPECIAL_ICON
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.size = portrait.size * 0.64
+	icon.position = portrait.size * 0.18
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.modulate = Color(0.75, 0.86, 1.0, 0.92)
+	portrait.add_child(icon)
+	var tween: Tween = create_tween()
+	tween.tween_property(icon, "modulate:a", 0.0, 0.55)
+	tween.tween_callback(icon.queue_free)
+
+
+func _spawn_number(actor_id: String, number: String, ink: Color, x_offset: float = 0) -> void:
+	var portrait: TextureRect = _impact_portraits.get(actor_id) as TextureRect
+	if portrait == null or _impact_layer == null:
+		return
+	var label := Label.new()
+	label.text = number
+	label.add_theme_font_size_override("font_size", 31)
+	label.add_theme_color_override("font_color", ink)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.92))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_impact_layer.add_child(label)
+	label.position = portrait.position + Vector2(portrait.size.x * 0.45 + x_offset, -22.0)
+	var float_tween: Tween = create_tween()
+	float_tween.tween_property(label, "position:y", label.position.y - 54.0, 0.98)
+	float_tween.parallel().tween_property(label, "modulate:a", 0.0, 0.98).set_delay(0.32)
+	float_tween.tween_callback(label.queue_free)
+
+
+func _exit_tree() -> void:
+	if _playback != null and _playback.is_valid():
+		_playback.kill()
+	if _impact_layer != null and is_instance_valid(_impact_layer):
+		_impact_layer.free()
 func _after_phase_playback() -> void:
 	_is_playing_back = false
 	_hero_health_meter.set_health(_combat.hero.health, _combat.hero.max_health, true)
@@ -455,11 +704,8 @@ func _refresh_phase_controls() -> void:
 	if not editable and _ability_picker.visible:
 		_hide_ability_picker()
 	_refresh_chain_slots()
-	var draft: Array[String] = _draft_actions()
-	var valid_draft: bool = not draft.is_empty() and BattleChainPlanner.validate(
-		draft, _combat.battle_state.get_hero()).is_empty()
-	_punch_button.disabled = (_is_playing_back or stage == BattleFlow.Stage.EXECUTING or stage == BattleFlow.Stage.FINISHED or
-		(editable and not valid_draft) or (not editable and _hero_chain.is_empty()))
+	# Кнопка остаётся доступной, чтобы по нажатию мигнули пустые слоты.
+	_punch_button.disabled = (_is_playing_back or stage == BattleFlow.Stage.EXECUTING or stage == BattleFlow.Stage.FINISHED)
 	match stage:
 		BattleFlow.Stage.PREPARATION:
 			_punch_button.text = "Начать бой"

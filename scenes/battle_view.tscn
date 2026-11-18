@@ -251,6 +251,13 @@ layout_mode = 2
 focus_mode = 2
 text = "Удар кулаком  ·  1"
 
+[node name="GuardButton" type="Button" parent="OuterMargin/Main/BottomPanel/ActionsMargin/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 54)
+layout_mode = 2
+focus_mode = 2
+text = "Блок"
+
 [node name="ResultText" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/Actions"]
 unique_name_in_owner = true
 layout_mode = 2

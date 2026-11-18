@@ -59,7 +59,8 @@ func _refresh_contents() -> void:
 	var hero: HeroState = _session.hero
 	_gold_label.text = "Золото: %d" % hero.gold
 	_attack_label.text = "Атака: %d" % hero.attack
-	_defense_label.text = "Блок: %d" % hero.defense
+	var shield_item: ItemDefinition = ItemCatalog.get_item(hero.equipped_shield_id)
+	_defense_label.text = "Блок: %d" % (shield_item.defense_bonus if shield_item != null else hero.defense)
 	_set_equipment(_weapon_icon, _weapon_name, hero.equipped_weapon_id, "Оружие: не найдено")
 	_set_equipment(_shield_icon, _shield_name, hero.equipped_shield_id, "Щит: не найден")
 

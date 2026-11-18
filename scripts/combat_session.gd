@@ -52,5 +52,14 @@ func hero_attack(attack_damage: int) -> int:
 	return damage
 
 
+func hero_block() -> Dictionary:
+	var result: Dictionary = battle_state.perform_guard()
+	if bool(result.get("success", false)):
+		var battle_hero: BattleParticipant = battle_state.get_hero()
+		if battle_hero != null:
+			battle_hero.commit_hero_result(hero)
+	return result
+
+
 func hero_punch() -> int:
 	return hero_attack(PUNCH_DAMAGE)

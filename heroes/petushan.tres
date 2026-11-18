@@ -14,4 +14,4 @@ map_icon = ExtResource("3_map")
 max_health = 40
 base_attack = 8
 base_defense = 0
-personal_ability_ids = Array[String](["basic_strike", "guard", "rooster_crush"])
+personal_ability_ids = Array[String](["basic_strike", "guard", "rooster_crush", "rooster_windup"])

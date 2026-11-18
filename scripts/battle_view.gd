@@ -21,6 +21,7 @@ signal shield_broken(item_id: String)
 @onready var _enemy_name: Label = %EnemyName
 @onready var _enemy_portrait: TextureRect = %EnemyPortrait
 @onready var _punch_button: Button = %PunchButton
+@onready var _guard_button: Button = %GuardButton
 @onready var _result_text: Label = %ResultText
 
 var _combat: CombatSession
@@ -32,7 +33,10 @@ var _default_attack_icon: Texture2D
 
 func _ready() -> void:
 	_punch_button.pressed.connect(_on_punch_pressed)
+	_guard_button.pressed.connect(_on_guard_pressed)
+	_guard_button.icon = _hero_defense_icon.texture
 	_punch_button.disabled = true
+	_guard_button.disabled = true
 	_default_attack_icon = _hero_attack_icon.texture
 	_result_text.text = "Твой ход"
 	modulate.a = 0.0
@@ -53,8 +57,9 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_punch_button.icon = weapon.icon if weapon != null else null
 	_hero_attack_icon.texture = weapon_icon
 	_hero_attack_value.text = str(hero.attack)
-	_hero_defense_value.text = str(hero.defense)
-	_defense_idle_color = Color.WHITE if hero.defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
+	var shield_item: ItemDefinition = ItemCatalog.get_item(hero.equipped_shield_id)
+	_hero_defense_value.text = str(shield_item.defense_bonus if shield_item != null else hero.defense)
+	_defense_idle_color = Color.WHITE if shield_item != null or hero.defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
 	_hero_defense_icon.modulate = _defense_idle_color
 	_enemy_name.text = combat.enemy_definition.display_name
 	_enemy_attack_value.text = str(combat.enemy_damage)
@@ -65,6 +70,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_hero_health_meter.set_health(hero.health, hero.max_health)
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
 	_punch_button.disabled = false
+	_guard_button.disabled = false
 	_punch_button.grab_focus()
 
 
@@ -72,6 +78,7 @@ func _on_punch_pressed() -> void:
 	if _combat == null or _combat.is_victory or _combat.is_defeat or _punch_button.disabled:
 		return
 	_punch_button.disabled = true
+	_guard_button.disabled = true
 	var damage: int = _combat.hero_attack(_hero_attack_damage)
 	_enemy_health_meter.set_health(_combat.enemy_health, _combat.enemy_max_health, true)
 	_result_text.text = "%s: %d урона" % [_attack_name, damage]
@@ -85,6 +92,24 @@ func _on_punch_pressed() -> void:
 		impact.tween_callback(_show_victory)
 	else:
 		impact.tween_callback(_show_enemy_reply)
+
+
+func _on_guard_pressed() -> void:
+	if _combat == null or _combat.is_victory or _combat.is_defeat or _guard_button.disabled:
+		return
+	_punch_button.disabled = true
+	_guard_button.disabled = true
+	var result: Dictionary = _combat.hero_block()
+	if not bool(result.get("success", false)):
+		_result_text.text = str(result.get("reason", "Блок недоступен"))
+		_restore_controls()
+		return
+	var hero_actor: BattleParticipant = _combat.battle_state.get_hero()
+	_result_text.text = "Блок! Следующий удар +%d%%" % hero_actor.block_attack_bonus_percent
+	var shield_flash: Tween = create_tween()
+	shield_flash.tween_property(_hero_defense_icon, "modulate", Color(0.35, 0.85, 1.0), 0.14)
+	shield_flash.tween_property(_hero_defense_icon, "modulate", _defense_idle_color, 0.20)
+	shield_flash.tween_callback(_show_enemy_reply)
 
 
 func _show_enemy_reply() -> void:
@@ -129,6 +154,7 @@ func _show_enemy_reply() -> void:
 func _restore_controls() -> void:
 	_result_text.text += "   ·   Твой ход"
 	_punch_button.disabled = false
+	_guard_button.disabled = false
 	_punch_button.grab_focus()
 
 

@@ -34,7 +34,7 @@ func _initialize() -> void:
 	assert(battle.get_enemy().personal_ability_ids.has("hunter_shot"))
 	assert(AbilityCatalog.can_prepare(battle.get_enemy(), "hunter_shot"))
 	var rooster_actor: BattleParticipant = BattleParticipant.from_hero(rooster)
-	assert(not AbilityCatalog.can_prepare(rooster_actor, "rooster_crush")) # Нужен меч.
+	assert(AbilityCatalog.can_prepare(rooster_actor, "rooster_crush")) # Приём не требует обязательного меча.
 	rooster.equip_weapon(ItemCatalog.get_item("sword"))
 	rooster_actor = BattleParticipant.from_hero(rooster)
 	assert(AbilityCatalog.can_prepare(rooster_actor, "rooster_crush"))
@@ -42,10 +42,10 @@ func _initialize() -> void:
 	wolf.learned_ability_ids.append("hunter_shot")
 	var learned_actor: BattleParticipant = BattleParticipant.from_hero(wolf)
 	assert(AbilityCatalog.can_prepare(learned_actor, "hunter_shot"))
-	assert(AbilityCatalog.available_abilities(learned_actor).size() == 4)
+	assert(AbilityCatalog.available_abilities(learned_actor).size() == 6)
 	learned_actor.learned_ability_ids.append("unknown")
 	learned_actor.learned_ability_ids.append("hunter_shot")
-	assert(AbilityCatalog.available_abilities(learned_actor).size() == 4)
+	assert(AbilityCatalog.available_abilities(learned_actor).size() == 6)
 	assert(not AbilityCatalog.can_prepare(learned_actor, "unknown"))
 	assert(not rooster.learned_ability_ids.has("hunter_shot"))
 	assert(not wolf.definition.personal_ability_ids.has("hunter_shot"))

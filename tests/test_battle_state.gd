@@ -32,7 +32,8 @@ func _initialize() -> void:
 	assert(shield_fight.get_hero().equipped_shield_id == "shield")
 	shield_fight.perform_basic_attack(1)
 	assert(guarded.current_shield_durability("shield") == before_durability)
-	assert(shield_fight.get_hero()._hero_snapshot.current_shield_durability("shield") <= before_durability)
+	# По новым правилам щит без блока вообще не изнашивается.
+	assert(shield_fight.get_hero()._hero_snapshot.current_shield_durability("shield") == before_durability)
 	shield_fight.get_hero().commit_hero_result(guarded)
 	assert(guarded.health == shield_fight.get_hero().health)
 	assert(guarded.current_shield_durability("shield") == shield_fight.get_hero()._hero_snapshot.current_shield_durability("shield"))

@@ -8,7 +8,20 @@ const DEFINITIONS := {
 	"guard": preload("res://abilities/guard.tres"),
 	"rooster_crush": preload("res://abilities/rooster_crush.tres"),
 	"wolf_feint": preload("res://abilities/wolf_feint.tres"),
-	"hunter_shot": preload("res://abilities/hunter_shot.tres")
+	"hunter_shot": preload("res://abilities/hunter_shot.tres"),
+	"rooster_windup": preload("res://abilities/rooster_windup.tres"),
+	"wolf_dodge": preload("res://abilities/wolf_dodge.tres"),
+	"wolf_counter": preload("res://abilities/wolf_counter.tres"),
+	"hunter_aim": preload("res://abilities/hunter_aim.tres"),
+	"lobar_charge": preload("res://abilities/lobar_charge.tres"),
+	"lobar_brace": preload("res://abilities/lobar_brace.tres"),
+	"crab_pincer": preload("res://abilities/crab_pincer.tres"),
+	"kadavr_regen": preload("res://abilities/kadavr_regen.tres"),
+	"kadavr_curse": preload("res://abilities/kadavr_curse.tres"),
+	"rabbit_bite": preload("res://abilities/rabbit_bite.tres"),
+	"rabbit_hide": preload("res://abilities/rabbit_hide.tres"),
+	"rest": preload("res://abilities/rest.tres"),
+	"wait": preload("res://abilities/wait.tres")
 }
 
 

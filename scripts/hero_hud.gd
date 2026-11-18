@@ -25,7 +25,8 @@ func set_hero(hero: HeroState) -> void:
 	_attack_value.text = str(hero.attack)
 	var weapon := ItemCatalog.get_item(hero.equipped_weapon_id)
 	_attack_icon.texture = weapon.icon if weapon != null else _default_attack_icon
-	_defense_value.text = str(hero.defense)
+	var shield_item: ItemDefinition = ItemCatalog.get_item(hero.equipped_shield_id)
+	_defense_value.text = str(shield_item.defense_bonus if shield_item != null else hero.defense)
 	_defense_icon.modulate = Color.WHITE if not hero.equipped_shield_id.is_empty() else Color(0.55, 0.60, 0.67, 0.65)
 	_gold_value.text = str(hero.gold)
 	_effects_value.text = hero.active_effects_summary()

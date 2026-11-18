@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
@@ -8,11 +8,7 @@
 script = ExtResource("2_effect")
 kind = 0
 recipient = 1
-amount = 3
-
-[sub_resource type="Resource" id="Requirement0"]
-script = ExtResource("3_requirement")
-kind = 0
+amount = 4
 
 [resource]
 script = ExtResource("1_script")
@@ -20,5 +16,4 @@ ability_id = "rooster_crush"
 display_name = "Сокрушение Петушана"
 category = 0
 target = 1
-requirements = Array[Resource]([SubResource("Requirement0")])
 effects = Array[Resource]([SubResource("Effect0")])

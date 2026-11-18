@@ -11,3 +11,4 @@ icon = ExtResource("2_icon")
 max_health = 16
 attack_damage = 3
 defense = 0
+personal_ability_ids = Array[String](["basic_strike", "guard", "rabbit_bite", "rabbit_hide"])

@@ -15,6 +15,10 @@ enum Recipient { SELF, TARGET }
 func validation_error() -> String:
 	if amount < 0 or duration_ticks < 0:
 		return "Отрицательные параметры эффекта"
+	if kind < Kind.DAMAGE or kind > Kind.WAIT:
+		return "Неизвестный тип эффекта"
+	if recipient < Recipient.SELF or recipient > Recipient.TARGET:
+		return "Некорректная цель эффекта"
 	if kind in [Kind.APPLY_STATUS, Kind.REMOVE_STATUS] and status_id.strip_edges().is_empty():
 		return "Для эффекта состояния нужен status_id"
 	if kind == Kind.APPLY_STATUS and duration_ticks == 0:

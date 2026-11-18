@@ -2,7 +2,7 @@ class_name BattleState
 extends RefCounted
 
 ## Независимое от сцены состояние боя. Не управляет камерой и кнопками.
-## Правила автоматических цепочек появятся в DA-4.03–DA-4.08.
+## Фазы управляются BattleFlow; планировщик произвольных цепочек — DA-4.06.
 var participants: Dictionary = {} # participant_id -> BattleParticipant
 var hero_id: String = "hero"
 var enemy_id: String = "enemy"
@@ -12,6 +12,8 @@ var last_counter_damage: int = 0
 var last_blocked_damage: int = 0
 var turn_index: int = 0
 var events: Array[Dictionary] = []
+var flow: BattleFlow = BattleFlow.new()
+var last_phase_events: Array[Dictionary] = []
 
 
 static func begin(monster: MonsterDefinition, hero: HeroState = null) -> BattleState:
@@ -37,6 +39,71 @@ func get_hero() -> BattleParticipant:
 ## Полный результат действия с отдельными событиями для будущих анимаций.
 func execute_ability(actor_id: String, target_id: String, ability_id: String) -> Dictionary:
 	return AbilityExecutor.execute(self, actor_id, target_id, ability_id)
+
+
+## Пробный фазовый исполнитель для имеющихся .tres. Полный редактор и
+## планировщик цепочек разной длины появятся отдельно (DA-4.06/DA-4.14).
+## Одно действие каждого участника в каждом такте; сначала герой, затем враг.
+func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dictionary:
+	if hero_actions.is_empty() or enemy_actions.is_empty():
+		return {"success": false, "reason": "Последовательность не задана", "events": []}
+	if not flow.start_phase():
+		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
+	var start_event: int = events.size()
+	# DA-4.05: обе цепочки пока имеют одну и ту же длину; повторение короткой
+	# последовательности и конфликты приоритетов — отдельная DA-4.06/07.
+	var tick_count: int = mini(hero_actions.size(), enemy_actions.size())
+	for tick in range(tick_count):
+		if is_victory or is_defeat:
+			break
+		for actor_id in [hero_id, enemy_id]:
+			if is_victory or is_defeat:
+				break
+			var action_id: String = hero_actions[tick] if actor_id == hero_id else enemy_actions[tick]
+			var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
+			var target_id: String = actor_id
+			if ability != null and ability.target == AbilityDefinition.Target.ENEMY:
+				target_id = enemy_id if actor_id == hero_id else hero_id
+			var outcome: Dictionary = execute_ability(actor_id, target_id, action_id)
+			if not bool(outcome.get("success", false)):
+				events.append({"type": "failed", "actor_id": actor_id, "ability_id": action_id,
+					"reason": outcome.get("reason", "Недоступно")})
+		flow.mark_tick()
+		flow.grant_half_health_reconfiguration(get_hero().health, get_hero().max_health)
+	if not is_victory and not is_defeat:
+		end_phase()
+		flow.complete_phase()
+	else:
+		flow.finish_battle()
+	last_phase_events = events.slice(start_event)
+	var battle_hero: BattleParticipant = get_hero()
+	return {"success": true, "events": last_phase_events, "finished": flow.stage == BattleFlow.Stage.FINISHED,
+		"phase_number": flow.phase_number, "hero_hp": battle_hero.health}
+
+
+func default_chain(participant_id: String) -> Array[String]:
+	var participant: BattleParticipant = get_participant(participant_id)
+	if participant == null:
+		return []
+	var defense_id: String = ""
+	var attack_id: String = ""
+	for action_id in participant.personal_ability_ids + participant.learned_ability_ids:
+		if not AbilityCatalog.can_prepare(participant, action_id):
+			continue
+		var definition: AbilityDefinition = AbilityCatalog.get_ability(action_id)
+		if definition.category == AbilityDefinition.Category.DEFENSE and defense_id.is_empty():
+			defense_id = action_id
+		if definition.category == AbilityDefinition.Category.ATTACK:
+			attack_id = action_id
+	if attack_id.is_empty():
+		attack_id = "basic_strike" if AbilityCatalog.can_prepare(participant, "basic_strike") else ""
+	if defense_id.is_empty():
+		defense_id = attack_id
+	if attack_id.is_empty():
+		attack_id = defense_id
+	if attack_id.is_empty():
+		return []
+	return [defense_id, attack_id]
 
 
 func update_outcome() -> void:

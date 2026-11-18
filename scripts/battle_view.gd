@@ -29,6 +29,9 @@ var _hero_attack_damage: int = CombatSession.PUNCH_DAMAGE
 var _attack_name: String = "Удар кулаком"
 var _defense_idle_color: Color = Color.WHITE
 var _default_attack_icon: Texture2D
+var _hero_chain: Array[String] = []
+var _enemy_chain: Array[String] = []
+var _playback: Tween
 
 
 func _ready() -> void:
@@ -69,93 +72,121 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_enemy_portrait.modulate = Color.WHITE
 	_hero_health_meter.set_health(hero.health, hero.max_health)
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
-	_punch_button.disabled = false
-	_guard_button.disabled = false
+	_hero_chain = _combat.battle_state.default_chain("hero")
+	_enemy_chain = _combat.battle_state.default_chain("enemy")
+	_punch_button.text = "Начать фазу"
+	_guard_button.text = "Поменять порядок"
+	_result_text.text = "Твоя цепочка: " + _chain_caption()
+	_punch_button.disabled = _hero_chain.is_empty() or _enemy_chain.is_empty()
+	_guard_button.disabled = _hero_chain.size() < 2
 	_punch_button.grab_focus()
+
+
+func _chain_caption() -> String:
+	var names: Array[String] = []
+	for action_id in _hero_chain:
+		var definition: AbilityDefinition = AbilityCatalog.get_ability(action_id)
+		names.append(definition.display_name if definition != null else action_id)
+	return " → ".join(names)
 
 
 func _on_punch_pressed() -> void:
-	if _combat == null or _combat.is_victory or _combat.is_defeat or _punch_button.disabled:
+	if _combat == null or _punch_button.disabled:
 		return
 	_punch_button.disabled = true
 	_guard_button.disabled = true
-	var damage: int = _combat.hero_attack(_hero_attack_damage)
-	_enemy_health_meter.set_health(_combat.enemy_health, _combat.enemy_max_health, true)
-	_result_text.text = "%s: %d урона" % [_attack_name, damage]
-	var impact: Tween = create_tween()
-	impact.tween_property(_enemy_portrait, "modulate", Color(1.0, 0.53, 0.53), 0.12)
-	impact.parallel().tween_property(_enemy_portrait, "scale", Vector2(0.93, 0.93), 0.12)
-	impact.tween_property(_enemy_portrait, "modulate", Color.WHITE, 0.15)
-	impact.parallel().tween_property(_enemy_portrait, "scale", Vector2.ONE, 0.15)
-	if _combat.is_victory:
-		impact.tween_property(_enemy_portrait, "modulate:a", 0.0, 0.24)
-		impact.tween_callback(_show_victory)
-	else:
-		impact.tween_callback(_show_enemy_reply)
+	var result: Dictionary = _combat.play_phase(_hero_chain, _enemy_chain)
+	if not bool(result.get("success", false)):
+		_result_text.text = str(result.get("reason", "Фаза недоступна"))
+		_refresh_phase_controls()
+		return
+	_play_phase_events(result.get("events", []))
 
 
 func _on_guard_pressed() -> void:
-	if _combat == null or _combat.is_victory or _combat.is_defeat or _guard_button.disabled:
+	if _combat == null or _guard_button.disabled:
 		return
-	_punch_button.disabled = true
-	_guard_button.disabled = true
-	var result: Dictionary = _combat.hero_block()
-	if not bool(result.get("success", false)):
-		_result_text.text = str(result.get("reason", "Блок недоступен"))
-		_restore_controls()
+	var flow: BattleFlow = _combat.battle_state.flow
+	if flow.stage == BattleFlow.Stage.PREPARATION:
+		_hero_chain.reverse()
+	elif flow.stage == BattleFlow.Stage.BETWEEN_PHASES:
+		if not _combat.request_tactic_change():
+			return
+		_hero_chain.reverse()
+		_combat.confirm_tactic_change()
+	else:
 		return
-	var hero_actor: BattleParticipant = _combat.battle_state.get_hero()
-	_result_text.text = "Блок! Следующий удар +%d%%" % hero_actor.block_attack_bonus_percent
-	var shield_flash: Tween = create_tween()
-	shield_flash.tween_property(_hero_defense_icon, "modulate", Color(0.35, 0.85, 1.0), 0.14)
-	shield_flash.tween_property(_hero_defense_icon, "modulate", _defense_idle_color, 0.20)
-	shield_flash.tween_callback(_show_enemy_reply)
+	_result_text.text = "Новая тактика: " + _chain_caption()
+	_refresh_phase_controls()
 
 
-func _show_enemy_reply() -> void:
-	# Урон уже посчитан моделью; обновляем UI в момент ответного удара.
+func _play_phase_events(phase_events: Array) -> void:
+	# События уже вычислены моделью. Этот Tween управляет только показом.
+	_playback = create_tween()
+	for raw_event in phase_events:
+		var event: Dictionary = raw_event
+		_playback.tween_callback(Callable(self, "_display_phase_event").bind(event))
+		var actor_id: String = str(event.get("actor_id", ""))
+		var portrait: TextureRect = _hero_portrait if actor_id == "hero" else _enemy_portrait
+		_playback.tween_property(portrait, "modulate", Color(1.0, 0.75, 0.48), 0.12)
+		_playback.tween_property(portrait, "modulate", Color.WHITE, 0.16)
+	_playback.tween_callback(_after_phase_playback)
+
+
+func _display_phase_event(event: Dictionary) -> void:
+	var actor_id: String = str(event.get("actor_id", ""))
+	var actor_name: String = _hero_name.text if actor_id == "hero" else _enemy_name.text
+	var ability: AbilityDefinition = AbilityCatalog.get_ability(str(event.get("ability_id", "")))
+	var label_text: String = ability.display_name if ability != null else "Действие"
+	match str(event.get("type", "")):
+		"attack":
+			_result_text.text = "%s: %s (−%d HP)" % [actor_name, label_text, int(event.get("damage", 0))]
+		"block":
+			_result_text.text = "%s: %s (броня %d)" % [actor_name, label_text, int(event.get("armor", 0))]
+		"heal":
+			_result_text.text = "%s: %s (+%d HP)" % [actor_name, label_text, int(event.get("healed", 0))]
+		"failed":
+			_result_text.text = "%s: %s" % [actor_name, str(event.get("reason", "Приём недоступен"))]
+		_:
+			_result_text.text = "%s: %s" % [actor_name, label_text]
+
+
+func _after_phase_playback() -> void:
 	_hero_health_meter.set_health(_combat.hero.health, _combat.hero.max_health, true)
-	var taken: int = _combat.last_counter_damage
-	var blocked: int = _combat.last_blocked_damage
-	if taken == 0 and blocked > 0:
-		_result_text.text = "Щит поглотил %d урона" % blocked
+	_enemy_health_meter.set_health(_combat.enemy_health, _combat.enemy_max_health, true)
+	# При нескольких ударах за фазу щит мог сломаться не на последнем.
+	# Берём ID из событий, а не из состояния последнего попадания.
+	for event in _combat.battle_state.last_phase_events:
+		var broken_id: String = str(event.get("shield_broken", ""))
+		if not broken_id.is_empty():
+			_combat.hero.last_shield_broken = broken_id
+			_hero_defense_value.text = str(_combat.hero.defense)
+			shield_broken.emit(broken_id)
+			_combat.hero.last_shield_broken = ""
+			var hero_actor: BattleParticipant = _combat.battle_state.get_hero()
+			if hero_actor != null and hero_actor._hero_snapshot != null:
+				hero_actor._hero_snapshot.last_shield_broken = ""
+	if _combat.is_victory:
+		_show_victory()
+	elif _combat.is_defeat:
+		_show_defeat()
 	else:
-		_result_text.text = "%s: −%d HP" % [_enemy_name.text, taken]
-		if blocked > 0:
-			_result_text.text += "  ·  блок: %d" % blocked
-
-	if not _combat.hero.last_shield_broken.is_empty():
-		var broken_id: String = _combat.hero.last_shield_broken
-		_result_text.text += "  ·  Щит разбит"
-		_hero_defense_value.text = str(_combat.hero.defense)
-		_hero_defense_icon.modulate = Color(0.55, 0.60, 0.67, 0.65)
-		_defense_idle_color = _hero_defense_icon.modulate
-		shield_broken.emit(broken_id)
-	if blocked > 0:
-		var shield_flash: Tween = create_tween()
-		shield_flash.tween_property(_hero_defense_icon, "modulate", Color(0.35, 0.85, 1.0), 0.15)
-		shield_flash.tween_property(_hero_defense_icon, "modulate", _defense_idle_color, 0.22)
-
-	var recoil: Tween = create_tween()
-	if taken > 0:
-		recoil.tween_property(_hero_portrait, "modulate", Color(1.0, 0.53, 0.53), 0.15)
-	elif blocked > 0:
-		recoil.tween_property(_hero_portrait, "modulate", Color(0.65, 0.84, 1.0), 0.15)
-	else:
-		recoil.tween_interval(0.15)
-	if taken > 0 or blocked > 0:
-		recoil.tween_property(_hero_portrait, "modulate", Color.WHITE, 0.22)
-	if _combat.is_defeat:
-		recoil.tween_callback(_show_defeat)
-	else:
-		recoil.tween_callback(_restore_controls)
+		_result_text.text = "Фаза %d завершена. %s" % [_combat.battle_state.flow.phase_number, _chain_caption()]
+		_refresh_phase_controls()
 
 
-func _restore_controls() -> void:
-	_result_text.text += "   ·   Твой ход"
-	_punch_button.disabled = false
-	_guard_button.disabled = false
-	_punch_button.grab_focus()
+func _refresh_phase_controls() -> void:
+	if _combat == null:
+		return
+	var flow: BattleFlow = _combat.battle_state.flow
+	var allowed: bool = flow.stage == BattleFlow.Stage.PREPARATION or flow.stage == BattleFlow.Stage.BETWEEN_PHASES
+	_punch_button.disabled = not allowed
+	_punch_button.text = "Начать фазу" if flow.stage == BattleFlow.Stage.PREPARATION else "Следующая фаза"
+	_guard_button.disabled = not (flow.stage == BattleFlow.Stage.PREPARATION or
+		(flow.stage == BattleFlow.Stage.BETWEEN_PHASES and flow.reconfiguration_tokens > 0))
+	_guard_button.text = "Поменять порядок" if flow.stage == BattleFlow.Stage.PREPARATION else "Изменить тактику"
+	if allowed:
+		_punch_button.grab_focus()
 
 
 func _show_victory() -> void:

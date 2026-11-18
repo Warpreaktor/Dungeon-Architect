@@ -63,3 +63,22 @@ func hero_block() -> Dictionary:
 
 func hero_punch() -> int:
 	return hero_attack(PUNCH_DAMAGE)
+
+
+## DA-4.05: пробная двухтактовая фаза на уже имеющихся приёмах.
+## Старые hero_attack()/hero_block() сохраняются для регрессионных тестов.
+func play_phase(hero_chain: Array[String], enemy_chain: Array[String]) -> Dictionary:
+	var result: Dictionary = battle_state.run_phase(hero_chain, enemy_chain)
+	if bool(result.get("success", false)):
+		var battle_hero: BattleParticipant = battle_state.get_hero()
+		if battle_hero != null:
+			battle_hero.commit_hero_result(hero)
+	return result
+
+
+func request_tactic_change() -> bool:
+	return battle_state.flow.request_reconfiguration()
+
+
+func confirm_tactic_change() -> bool:
+	return battle_state.flow.confirm_reconfiguration()

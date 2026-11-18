@@ -6,6 +6,18 @@ extends RefCounted
 
 const FORMAT_VERSION := 1
 const MAX_SIZE := 256
+# Пары слов образуют названия без грамматических несоответствий.
+const NAME_PLACES := [
+	"Катакомбы", "Чертоги", "Лабиринт", "Руины", "Крипта", "Склеп",
+	"Пещеры", "Подземелье", "Залы", "Святилище", "Хранилище", "Шахты"
+]
+const NAME_SECRETS := [
+	"забытого короля", "пепельной короны", "семи печатей", "лунного камня",
+	"чёрного пламени", "старого смотрителя", "спящего дракона", "вечного шёпота",
+	"последнего стража", "проклятого рыцаря", "потерянных имён", "каменного сердца",
+	"алой луны", "железных теней", "безмолвных духов", "серебряного ключа",
+	"древнего пророчества", "разбитой звезды", "погасших факелов", "тайного ордена"
+]
 const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "gold", "trigger", "player_spawn", "message"]
 static var CHEST_REWARDS: Array = LockCatalog.LOCK_IDS + ["potion", "gold"] + ItemCatalog.consumable_ids() + ItemCatalog.equipment_ids()
 
@@ -18,11 +30,22 @@ var entities: Array = [] # [{"id", "type", "x", "y", "properties"}, ...]
 var metadata: Dictionary = {"theme": "stone_dungeon"}
 
 
+## Генератор названий для новых карт и кнопки с кубиком.
+## exclude гарантирует новое название при повторном броске.
+static func random_display_name(exclude: String = "") -> String:
+	var count: int = NAME_PLACES.size() * NAME_SECRETS.size()
+	var index: int = randi_range(0, count - 1)
+	if exclude == "%s %s" % [NAME_PLACES[int(index / NAME_SECRETS.size())], NAME_SECRETS[index % NAME_SECRETS.size()]]:
+		index = (index + randi_range(1, count - 1)) % count
+	return "%s %s" % [NAME_PLACES[int(index / NAME_SECRETS.size())], NAME_SECRETS[index % NAME_SECRETS.size()]]
+
+
 static func create_blank(w: int = 16, h: int = 16) -> DungeonMap:
 	var result := DungeonMap.new()
 	result.width = clampi(w, 1, MAX_SIZE)
 	result.height = clampi(h, 1, MAX_SIZE)
 	result.map_id = "map_%s_%05d" % [Time.get_datetime_string_from_system().replace("-", "").replace(":", "").replace("T", "_"), randi_range(0, 99999)]
+	result.display_name = random_display_name()
 	for y in range(result.height):
 		var row: Array = []
 		for x in range(result.width):

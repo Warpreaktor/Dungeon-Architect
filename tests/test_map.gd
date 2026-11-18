@@ -3,6 +3,11 @@ extends SceneTree
 ## Минимальный smoke-test модели. Запускается через Godot --headless --script.
 func _initialize() -> void:
 	var model := DungeonMap.create_blank(12, 12)
+	assert(model.display_name != "Безымянное подземелье")
+	assert(not model.display_name.is_empty())
+	var second_name := DungeonMap.random_display_name(model.display_name)
+	assert(second_name != model.display_name)
+	assert(DungeonMap.from_dict(JSON.parse_string(JSON.stringify(model.to_dict()))).display_name == model.display_name)
 	assert(model.get_terrain(0, 0) == "wall")
 	assert(model.get_terrain(1, 1) == "floor")
 	assert(model.place_entity("chest", 3, 3))

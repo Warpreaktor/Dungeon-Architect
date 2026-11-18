@@ -45,7 +45,8 @@ const COMMAND_ICONS := {
 	"file": preload("res://assets/icons/commands/file.png"),
 	"layers": preload("res://assets/icons/commands/layers.png"),
 	"settings": preload("res://assets/icons/commands/settings.png"),
-	"inspector": preload("res://assets/icons/commands/inspector.png")
+	"inspector": preload("res://assets/icons/commands/inspector.png"),
+	"dice": preload("res://assets/icons/commands/dice.svg")
 }
 const TOOLS := [
 	{"id": "hand", "label": "Рука", "hint": "Безопасно перемещать и масштабировать карту одним или двумя пальцами"},
@@ -522,6 +523,10 @@ func _create_dialogs() -> void:
 	var name_caption := _label("Название карты", 15, Color("#d5e0e7"))
 	name_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
 	map_properties.add_child(name_caption)
+	var name_row := HBoxContainer.new()
+	name_row.name = "MapNameRow"
+	name_row.add_theme_constant_override("separation", 8)
+	map_properties.add_child(name_row)
 	_name_input = LineEdit.new()
 	_name_input.name = "MapName"
 	_name_input.placeholder_text = "Название карты"
@@ -531,8 +536,17 @@ func _create_dialogs() -> void:
 	_name_input.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	_name_input.keep_editing_on_text_submit = false
 	_name_input.text_changed.connect(_on_name_changed)
-	map_properties.add_child(_name_input)
+	name_row.add_child(_name_input)
 	_register_editor_control(_name_input)
+	var random_name_button := Button.new()
+	random_name_button.name = "RandomMapName"
+	random_name_button.icon = COMMAND_ICONS["dice"]
+	random_name_button.expand_icon = true
+	random_name_button.custom_minimum_size = Vector2(44, 44)
+	random_name_button.tooltip_text = "Придумать другое название карты"
+	random_name_button.pressed.connect(_generate_map_name)
+	name_row.add_child(random_name_button)
+	_register_editor_control(random_name_button)
 	var size_caption := _label("Размер карты", 15, Color("#d5e0e7"))
 	size_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
 	map_properties.add_child(size_caption)
@@ -1291,6 +1305,14 @@ func _toggle_grid(value: bool) -> void:
 
 func _fit_map() -> void:
 	_canvas.fit_to_view()
+
+
+func _generate_map_name() -> void:
+	if is_play_mode or map_data == null:
+		return
+	var new_name := DungeonMap.random_display_name(map_data.display_name)
+	_name_input.text = new_name
+	_on_name_changed(new_name)
 
 
 func _on_name_changed(value: String) -> void:

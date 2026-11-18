@@ -47,7 +47,11 @@ func _run() -> void:
 	assert(properties != null and properties.get_child_count() == 4)
 	var name_caption := properties.get_child(0) as Label
 	var size_caption := properties.get_child(2) as Label
-	var name_input := properties.get_node("MapName") as LineEdit
+	var name_row := properties.get_node("MapNameRow") as HBoxContainer
+	assert(name_row != null and name_row.get_child_count() == 2)
+	var name_input := name_row.get_node("MapName") as LineEdit
+	var random_button := name_row.get_node("RandomMapName") as Button
+	assert(random_button != null and random_button.icon != null)
 	var size_label := properties.get_node("MapSize") as Label
 	assert(name_input != null and size_label != null)
 	assert(name_caption.text == "Название карты" and size_caption.text == "Размер карты")
@@ -66,6 +70,13 @@ func _run() -> void:
 	name_input.text = "Карта из окна настроек"
 	name_input.text_changed.emit(name_input.text)
 	assert(current_map.display_name == name_input.text)
+	assert(bool(editor.get("is_dirty")))
+	var old_name := name_input.text
+	var old_id: String = current_map.map_id
+	random_button.pressed.emit()
+	assert(name_input.text != old_name)
+	assert(current_map.display_name == name_input.text)
+	assert(current_map.map_id == old_id)
 	assert(bool(editor.get("is_dirty")))
 
 	var reach_index := layers_menu.get_popup().get_item_index(1)

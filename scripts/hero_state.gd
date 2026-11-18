@@ -18,6 +18,11 @@ var defense: int = START_DEFENSE
 var gold: int = 0
 ## Общие способности, изученные в ходе приключения (не меняют HeroDefinition).
 var learned_ability_ids: Array[String] = []
+## Последняя подтверждённая раскладка алгоритма в текущем прохождении.
+## Пустые слоты сохраняются на месте. Данные принадлежат экземпляру героя.
+var saved_action_slots: Array[String] = []
+## Будущие артефакты и эффекты смогут изменять число доступных слотов.
+var bonus_action_slots: int = 0
 var equipped_weapon_id: String = ""
 var equipped_shield_id: String = ""
 ## Состояние экземпляров щитов: каждый найденный щит имеет собственную прочность.
@@ -41,6 +46,25 @@ func _init(hero_definition: HeroDefinition = null) -> void:
 	base_attack = definition.base_attack
 	base_defense = definition.base_defense
 	_recalculate_equipment_stats()
+
+
+func action_slot_capacity() -> int:
+	return clampi(definition.base_action_slots + bonus_action_slots, 1, BattleChainPlanner.MAX_ACTIONS)
+
+
+func get_saved_action_slots() -> Array[String]:
+	## Выдаём копию: редактор боя не должен править сохранённый алгоритм до подтверждения.
+	var result: Array[String] = []
+	for index in range(action_slot_capacity()):
+		result.append(saved_action_slots[index] if index < saved_action_slots.size() else "")
+	return result
+
+
+func save_action_slots(slots: Array[String]) -> bool:
+	if slots.size() != action_slot_capacity():
+		return false
+	saved_action_slots = slots.duplicate()
+	return true
 
 
 ## Экипируем предмет в заданный ресурсом слот, не расходуя его из рюкзака.
@@ -233,6 +257,8 @@ func copy_for_battle() -> HeroState:
 	copy.defense = defense
 	copy.gold = gold
 	copy.learned_ability_ids = learned_ability_ids.duplicate()
+	copy.saved_action_slots = saved_action_slots.duplicate()
+	copy.bonus_action_slots = bonus_action_slots
 	copy.equipped_weapon_id = equipped_weapon_id
 	copy.equipped_shield_id = equipped_shield_id
 	copy.shield_durabilities = shield_durabilities.duplicate(true)

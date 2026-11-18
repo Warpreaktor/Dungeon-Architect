@@ -16,6 +16,8 @@ var effects: Dictionary = {}
 var personal_ability_ids: Array[String] = []
 var learned_ability_ids: Array[String] = []
 var action_chain: Array[String] = []
+## Ограничение участника, независимое от глобального защитного MAX_ACTIONS.
+var action_slot_capacity: int = 3
 var tactic_changes_remaining: int = 0
 # Броня блока действует только на следующее попадание.
 var block_armor: int = 0
@@ -39,6 +41,7 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant._hero_snapshot = source.copy_for_battle()
 	participant.personal_ability_ids = source.definition.personal_ability_ids.duplicate() if source.definition != null else []
 	participant.learned_ability_ids = source.learned_ability_ids.duplicate()
+	participant.action_slot_capacity = source.action_slot_capacity()
 	participant.refresh_from_hero()
 	return participant
 
@@ -55,6 +58,7 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 	participant.attack = source.attack_damage
 	participant.defense = source.defense
 	participant.personal_ability_ids = source.personal_ability_ids.duplicate()
+	participant.action_slot_capacity = clampi(source.base_action_slots, 1, BattleChainPlanner.MAX_ACTIONS)
 	return participant
 
 

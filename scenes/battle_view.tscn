@@ -239,30 +239,62 @@ theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 14
 theme_override_constants/margin_bottom = 10
 
-[node name="Actions" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin"]
+[node name="ActionsColumn" type="VBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="SequenceHeader" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="SequenceTitle" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
+theme_override_font_sizes/font_size = 15
+text = "АЛГОРИТМ БОЯ"
+
+[node name="SequenceScroll" type="ScrollContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 80)
+size_flags_horizontal = 3
+mouse_filter = 1
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 3
+
+[node name="SequenceSlots" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Actions" type="HBoxContainer" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 14
 
-[node name="PunchButton" type="Button" parent="OuterMargin/Main/BottomPanel/ActionsMargin/Actions"]
+[node name="PunchButton" type="Button" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(180, 54)
 layout_mode = 2
 focus_mode = 2
 text = "Удар кулаком  ·  1"
 
-[node name="GuardButton" type="Button" parent="OuterMargin/Main/BottomPanel/ActionsMargin/Actions"]
+[node name="GuardButton" type="Button" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(130, 54)
+custom_minimum_size = Vector2(180, 54)
 layout_mode = 2
 focus_mode = 2
 text = "Блок"
 
-[node name="ResultText" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/Actions"]
+[node name="ResultText" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
+clip_text = true
 theme_override_font_sizes/font_size = 18
 text = "Твой ход"
 horizontal_alignment = 1

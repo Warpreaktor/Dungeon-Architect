@@ -70,3 +70,11 @@ func confirm_reconfiguration() -> bool:
 		return false
 	stage = Stage.BETWEEN_PHASES
 	return true
+
+
+func cancel_reconfiguration() -> bool:
+	if stage != Stage.RECONFIGURING:
+		return false
+	stage = Stage.BETWEEN_PHASES
+	reconfiguration_tokens += 1
+	return true

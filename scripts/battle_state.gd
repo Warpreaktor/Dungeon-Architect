@@ -41,25 +41,57 @@ func execute_ability(actor_id: String, target_id: String, ability_id: String) ->
 	return AbilityExecutor.execute(self, actor_id, target_id, ability_id)
 
 
-## Пробный фазовый исполнитель для имеющихся .tres. Полный редактор и
-## планировщик цепочек разной длины появятся отдельно (DA-4.06/DA-4.14).
-## Одно действие каждого участника в каждом такте; сначала герой, затем враг.
+## Редактировать цепочку героя разрешено только до первого удара или
+## в специальном состоянии перенастройки. Межфазная пауза её не меняет.
+func configure_hero_chain(actions: Array[String]) -> Dictionary:
+	if flow.stage != BattleFlow.Stage.PREPARATION and flow.stage != BattleFlow.Stage.RECONFIGURING:
+		return {"success": false, "reason": "Сейчас нельзя изменить тактику"}
+	var reason: String = BattleChainPlanner.validate(actions, get_hero())
+	if not reason.is_empty():
+		return {"success": false, "reason": reason}
+	get_hero().action_chain = actions.duplicate()
+	return {"success": true, "reason": ""}
+
+
+## Каждый такт предоставляет действие обоим бойцам. Короткая цепочка
+## повторяется циклически, но исходный список не изменяется.
+## Внутри такта пока действует порядок герой -> противник (DA-4.07).
 func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dictionary:
-	if hero_actions.is_empty() or enemy_actions.is_empty():
-		return {"success": false, "reason": "Последовательность не задана", "events": []}
-	if not flow.start_phase():
+	var hero_actor: BattleParticipant = get_hero()
+	var enemy_actor: BattleParticipant = get_enemy()
+	if hero_actor == null or enemy_actor == null:
+		return {"success": false, "reason": "Нет участников боя", "events": []}
+	var current_hero_chain: Array[String] = hero_actor.action_chain
+	# Между фазами требования могут измениться (HP, сломанный щит).
+	# В таком случае конкретный приём даст событие failed, но бой не зависнет.
+	var enemy_reason: String = BattleChainPlanner.validate(enemy_actions, enemy_actor, false)
+	if not enemy_reason.is_empty():
+		return {"success": false, "reason": enemy_reason, "events": []}
+	if flow.stage == BattleFlow.Stage.PREPARATION or flow.stage == BattleFlow.Stage.RECONFIGURING:
+		var configured: Dictionary = configure_hero_chain(hero_actions)
+		if not bool(configured.get("success", false)):
+			return {"success": false, "reason": configured.get("reason", ""), "events": []}
+		current_hero_chain = hero_actor.action_chain
+	elif flow.stage == BattleFlow.Stage.BETWEEN_PHASES:
+		if not BattleChainPlanner.validate(current_hero_chain, hero_actor, false).is_empty():
+			return {"success": false, "reason": "Ошибка сохранённой цепочки", "events": []}
+		if current_hero_chain != hero_actions:
+			return {"success": false, "reason": "Тактика заблокирована до разрешённой перенастройки", "events": []}
+	else:
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
+	var tick_count: int = BattleChainPlanner.phase_length(current_hero_chain, enemy_actions)
+	if tick_count == 0 or not flow.start_phase():
+		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
+	enemy_actor.action_chain = enemy_actions.duplicate()
 	var start_event: int = events.size()
-	# DA-4.05: обе цепочки пока имеют одну и ту же длину; повторение короткой
-	# последовательности и конфликты приоритетов — отдельная DA-4.06/07.
-	var tick_count: int = mini(hero_actions.size(), enemy_actions.size())
 	for tick in range(tick_count):
 		if is_victory or is_defeat:
 			break
 		for actor_id in [hero_id, enemy_id]:
 			if is_victory or is_defeat:
 				break
-			var action_id: String = hero_actions[tick] if actor_id == hero_id else enemy_actions[tick]
+			var actions: Array[String] = current_hero_chain if actor_id == hero_id else enemy_actions
+			var action_id: String = BattleChainPlanner.action_at(actions, tick)
 			var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
 			var target_id: String = actor_id
 			if ability != null and ability.target == AbilityDefinition.Target.ENEMY:
@@ -69,16 +101,15 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 				events.append({"type": "failed", "actor_id": actor_id, "ability_id": action_id,
 					"reason": outcome.get("reason", "Недоступно")})
 		flow.mark_tick()
-		flow.grant_half_health_reconfiguration(get_hero().health, get_hero().max_health)
+		flow.grant_half_health_reconfiguration(hero_actor.health, hero_actor.max_health)
 	if not is_victory and not is_defeat:
 		end_phase()
 		flow.complete_phase()
 	else:
 		flow.finish_battle()
 	last_phase_events = events.slice(start_event)
-	var battle_hero: BattleParticipant = get_hero()
 	return {"success": true, "events": last_phase_events, "finished": flow.stage == BattleFlow.Stage.FINISHED,
-		"phase_number": flow.phase_number, "hero_hp": battle_hero.health}
+		"phase_number": flow.phase_number, "hero_hp": hero_actor.health, "ticks": flow.completed_ticks}
 
 
 func default_chain(participant_id: String) -> Array[String]:

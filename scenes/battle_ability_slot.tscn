@@ -1,0 +1,115 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/battle_ability_slot.gd" id="1_slot"]
+
+
+[sub_resource type="StyleBoxFlat" id="SlotNormal"]
+bg_color = Color(0.065, 0.10, 0.14, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.38, 0.46, 0.51, 0.88)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[sub_resource type="StyleBoxFlat" id="SlotHover"]
+bg_color = Color(0.12, 0.17, 0.21, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.88, 0.70, 0.41, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[sub_resource type="StyleBoxFlat" id="SlotPressed"]
+bg_color = Color(0.19, 0.17, 0.12, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.96, 0.80, 0.48, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[sub_resource type="StyleBoxFlat" id="SlotDisabled"]
+bg_color = Color(0.063, 0.09, 0.12, 0.86)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.26, 0.32, 0.36, 0.7)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[node name="BattleAbilitySlot" type="Button"]
+custom_minimum_size = Vector2(176, 64)
+focus_mode = 2
+theme_override_styles/normal = SubResource("SlotNormal")
+theme_override_styles/hover = SubResource("SlotHover")
+theme_override_styles/pressed = SubResource("SlotPressed")
+theme_override_styles/disabled = SubResource("SlotDisabled")
+text = ""
+script = ExtResource("1_slot")
+
+[node name="SlotMargin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 6
+
+[node name="Row" type="HBoxContainer" parent="SlotMargin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 7
+
+[node name="SlotIcon" type="TextureRect" parent="SlotMargin/Row"]
+custom_minimum_size = Vector2(34, 34)
+layout_mode = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="EmptyIcon" type="Label" parent="SlotMargin/Row"]
+custom_minimum_size = Vector2(34, 34)
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
+theme_override_font_sizes/font_size = 28
+text = "+"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Labels" type="VBoxContainer" parent="SlotMargin/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="SlotNumber" type="Label" parent="SlotMargin/Row/Labels"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.77, 0.65, 0.49, 1)
+theme_override_font_sizes/font_size = 12
+text = "01"
+
+[node name="SlotName" type="Label" parent="SlotMargin/Row/Labels"]
+layout_mode = 2
+mouse_filter = 2
+clip_text = true
+theme_override_font_sizes/font_size = 14
+text = "Выбрать приём"

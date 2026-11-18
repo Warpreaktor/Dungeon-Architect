@@ -16,6 +16,8 @@ var base_defense: int = START_DEFENSE
 var attack: int = START_ATTACK
 var defense: int = START_DEFENSE
 var gold: int = 0
+## Общие способности, изученные в ходе приключения (не меняют HeroDefinition).
+var learned_ability_ids: Array[String] = []
 var equipped_weapon_id: String = ""
 var equipped_shield_id: String = ""
 ## Состояние экземпляров щитов: каждый найденный щит имеет собственную прочность.
@@ -221,6 +223,7 @@ func copy_for_battle() -> HeroState:
 	copy.attack = attack
 	copy.defense = defense
 	copy.gold = gold
+	copy.learned_ability_ids = learned_ability_ids.duplicate()
 	copy.equipped_weapon_id = equipped_weapon_id
 	copy.equipped_shield_id = equipped_shield_id
 	copy.shield_durabilities = shield_durabilities.duplicate(true)

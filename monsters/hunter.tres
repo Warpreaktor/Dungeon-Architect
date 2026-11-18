@@ -11,3 +11,4 @@ icon = ExtResource("2_icon")
 max_health = 22
 attack_damage = 4
 defense = 0
+personal_ability_ids = Array[String](["hunter_shot"])

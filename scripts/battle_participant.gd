@@ -31,6 +31,8 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant.team_id = "heroes"
 	participant.definition_id = source.definition.hero_id if source.definition != null else ""
 	participant._hero_snapshot = source.copy_for_battle()
+	participant.personal_ability_ids = source.definition.personal_ability_ids.duplicate() if source.definition != null else []
+	participant.learned_ability_ids = source.learned_ability_ids.duplicate()
 	participant.refresh_from_hero()
 	return participant
 
@@ -46,6 +48,7 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 	participant.health = source.max_health
 	participant.attack = source.attack_damage
 	participant.defense = source.defense
+	participant.personal_ability_ids = source.personal_ability_ids.duplicate()
 	return participant
 
 

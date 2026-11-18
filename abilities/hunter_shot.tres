@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Script" path="res://scripts/ability_requirement_definition.gd" id="3_requirement"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+kind = 0
+recipient = 1
+amount = 2
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "hunter_shot"
+display_name = "Выстрел охотника"
+category = 0
+target = 1
+effects = Array[Resource]([SubResource("Effect0")])

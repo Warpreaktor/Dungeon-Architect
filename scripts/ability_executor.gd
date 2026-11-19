@@ -55,6 +55,9 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
 				var raw_damage: int = preview_damage(actor, ability, effect, recipient)
+				# Атака опускает собственный поднятый блок, но не меняет
+				# уклонение: оно тратится только при входящей атаке.
+				actor.block_armor = 0
 				actor.block_attack_bonus_percent = 0
 				for hit_index in range(effect.hit_count):
 					last_hit = apply_damage(actor, recipient, raw_damage, ability_id, state.rng)
@@ -100,7 +103,7 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 ## Общая формула для движка и подсказок. Урон приёма = урон
 ## подходящего оружия + (Сила или Ловкость) / 2 + мощность эффекта.
 ## Бонус блока считается от суммы, дроби обрезаются один раз в самом конце.
-static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition, effect: AbilityEffectDefinition, target: BattleParticipant = null) -> int:
+static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition, effect: AbilityEffectDefinition, target: BattleParticipant = null, slot_index: int = -1) -> int:
 	if actor == null or ability == null or effect == null or effect.kind != AbilityEffectDefinition.Kind.DAMAGE:
 		return 0
 	var equipment_and_stat: float = 0.0
@@ -112,9 +115,13 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 		# Для магии пока нет характеристики, применяем только мощность эффекта.
 	var base: float = equipment_and_stat + float(effect.amount)
 	var multiplier: float = effect.damage_multiplier
-	if effect.first_slot_multiplier > 0.0 and actor.action_cursor == 1:
-		# Cursor advances before execution; verify the selected chain slot as well.
-		if not actor.action_chain.is_empty() and actor.action_chain[0] == ability.ability_id:
+	if effect.first_slot_multiplier > 0.0:
+		# В редакторе раскладки пользуемся позицией предпросмотра.
+		# В ходе исполнения курсор уже сдвинут на следующий слот.
+		var first_in_draft: bool = slot_index == 0
+		var first_in_execution: bool = slot_index < 0 and actor.action_cursor == 1 \
+			and not actor.action_chain.is_empty() and actor.action_chain[0] == ability.ability_id
+		if first_in_draft or first_in_execution:
 			multiplier = effect.first_slot_multiplier
 	if target != null:
 		if target.block_armor > 0 and effect.vs_block_multiplier > 0.0:

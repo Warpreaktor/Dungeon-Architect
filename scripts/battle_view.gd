@@ -407,7 +407,7 @@ func _populate_ability_picker(index: int) -> void:
 		choice.expand_icon = true
 		choice.text = ability.display_name
 		choice.icon = BattleAbilitySlot.visual_icon(ability)
-		choice.tooltip_text = BattleAbilityTooltip.describe(ability, actor)
+		choice.tooltip_text = BattleAbilityTooltip.describe(ability, actor, index)
 		var reason: String = AbilityCatalog.unavailable_reason(actor, ability.ability_id)
 		if not reason.is_empty() and not choice.tooltip_text.contains(reason):
 			choice.tooltip_text += "\nНедоступно: " + reason

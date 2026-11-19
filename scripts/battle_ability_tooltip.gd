@@ -2,8 +2,8 @@ class_name BattleAbilityTooltip
 extends RefCounted
 
 ## Текст подсказок собирается из реальных данных способности и участника.
-## Урон показан до сопротивлений цели и временного бонуса от блока.
-static func describe(ability: AbilityDefinition, participant: BattleParticipant = null) -> String:
+## Урон показан до защиты цели, с текущим бонусом блока атакующего.
+static func describe(ability: AbilityDefinition, participant: BattleParticipant = null, slot_index: int = -1) -> String:
 	if ability == null:
 		return ""
 	var lines: Array[String] = [ability.display_name]
@@ -17,7 +17,11 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 					lines.append("Попаданий: %d" % effect.hit_count)
 				var type_name: String = "ближний" if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else ("дальний" if ability.damage_delivery == AbilityDefinition.DamageDelivery.RANGED else "магический")
 				if participant != null:
-					lines.append("Урон: %d (%s, до защиты)" % [AbilityExecutor.preview_damage(participant, ability, effect), type_name])
+					var hit_damage: int = AbilityExecutor.preview_damage(participant, ability, effect, null, slot_index)
+					if effect.hit_count > 1:
+						lines.append("Урон: %d × %d удара (%s, до защиты)" % [hit_damage, effect.hit_count, type_name])
+					else:
+						lines.append("Урон: %d (%s, до защиты)" % [hit_damage, type_name])
 				else:
 					lines.append("Мощность приёма: %d (%s) + оружие и характеристика" % [effect.amount, type_name])
 			AbilityEffectDefinition.Kind.BLOCK:

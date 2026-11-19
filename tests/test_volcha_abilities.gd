@@ -43,6 +43,44 @@ func _initialize() -> void:
 	AbilityExecutor.apply_damage(enemy, hero, 1, "test_attack", battle.rng)
 	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == 0)
 
+	# Защитные эффекты остаются после отдыха и собственного бафа.
+	assert(AbilityExecutor.execute_definition(battle, "hero", "hero", instinct).success)
+	var dodge_before_rest: int = hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT)
+	hero.end_phase()
+	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == dodge_before_rest)
+	# Блок сохраняется через отдых и поддержку, но опускается при собственной атаке.
+	hero.prepare_block(BattleParticipant.BASE_BLOCK_ARMOR)
+	var block_before_rest: int = hero.block_armor
+	hero.end_phase()
+	assert(hero.block_armor == block_before_rest)
+	var self_heal := AbilityDefinition.new()
+	self_heal.ability_id = "test_self_heal"
+	self_heal.display_name = "Test heal"
+	self_heal.target = AbilityDefinition.Target.SELF
+	var healing := AbilityEffectDefinition.new()
+	healing.kind = AbilityEffectDefinition.Kind.HEAL
+	healing.recipient = AbilityEffectDefinition.Recipient.SELF
+	healing.amount = 1
+	self_heal.effects.append(healing)
+	hero.personal_ability_ids.append(self_heal.ability_id)
+	assert(AbilityExecutor.execute_definition(battle, "hero", "hero", self_heal).success)
+	assert(hero.block_armor == block_before_rest)
+	assert(AbilityExecutor.execute_definition(battle, "hero", "enemy", lunge).success)
+	assert(hero.block_armor == 0)
+	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == dodge_before_rest)
+	# Следующая входящая атака потратит уклонение, независимо от исхода броска.
+	AbilityExecutor.apply_damage(enemy, hero, 0, "test_attack", battle.rng)
+	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == 0)
+	# Уклонение от вражеского удара не расходует поднятый блок.
+	hero.prepare_block(BattleParticipant.BASE_BLOCK_ARMOR)
+	hero.base_dodge_percent = 100
+	var avoided: Dictionary = AbilityExecutor.apply_damage(enemy, hero, 1, "test_miss", battle.rng)
+	assert(bool(avoided.get("dodged", false)))
+	assert(hero.block_armor > 0)
+	hero.base_dodge_percent = 0
+	AbilityExecutor.apply_damage(enemy, hero, 1, "test_hit", battle.rng)
+	assert(hero.block_armor == 0)
+
 	var rhythm: AbilityDefinition = AbilityCatalog.get_ability(expected[3])
 	var rhythm_effect: AbilityEffectDefinition = rhythm.effects[0]
 	assert(rhythm_effect.hit_count == 3)

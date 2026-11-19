@@ -49,7 +49,7 @@ func configure(index: int, ability: AbilityDefinition, editable: bool, actor: Ba
 	_slot_icon.visible = _slot_icon.texture != null
 	_empty_icon.visible = not _slot_icon.visible
 	_empty_icon.text = "+"
-	tooltip_text = BattleAbilityTooltip.describe(ability, actor)
+	tooltip_text = BattleAbilityTooltip.describe(ability, actor, index)
 	disabled = not editable
 
 

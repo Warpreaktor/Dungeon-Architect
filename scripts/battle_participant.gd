@@ -44,6 +44,8 @@ var resource_amounts: Dictionary = {}
 const BASE_BLOCK_ARMOR: int = 2
 ## Одна сотня процентов является определением процентной шкалы, не балансом.
 const PERCENT_SCALE: int = 100
+## Базовая меткость всех участников: регулируемый параметр баланса.
+const BASE_ACCURACY_PERCENT: int = 90
 
 # Для совместимости существующих щитов их логика пока выполняется на
 # изолированной копии HeroState, а не на реальном герое прохождения.
@@ -209,8 +211,10 @@ func dodge_percent() -> int:
 
 
 func accuracy_percent() -> int:
-	# Основные 100% попадания не входят в бонус меткости.
-	return maxi(PERCENT_SCALE + effective_agility() + accuracy_bonus + status_modifier(AbilityEffectDefinition.Stat.ACCURACY), 0) - PERCENT_SCALE
+	# Возвращаем поправку к 100%: учитываем базовые 90%, Ловкость и эффекты.
+	# Итоговая меткость не может быть отрицательной.
+	return maxi(BASE_ACCURACY_PERCENT + effective_agility() + accuracy_bonus
+		+ status_modifier(AbilityEffectDefinition.Stat.ACCURACY), 0) - PERCENT_SCALE
 
 
 func dodge_chance_against(attacker: BattleParticipant) -> int:

@@ -36,6 +36,8 @@ var statuses: Dictionary = {}
 ## Number of completed own cycles (including the non-editable rest).
 var completed_phases: int = 0
 var is_resting: bool = false
+## Для совпадения наложения статуса и отдыха в одном такте.
+var last_rest_tick: int = -1
 ## Неиспользуемые пока в контенте запасы будущих ресурсов (ярость, мана и т.д.).
 ## Это изменяемые данные конкретного участника боя, не .tres.
 var resource_amounts: Dictionary = {}
@@ -208,7 +210,7 @@ func dodge_percent() -> int:
 
 func accuracy_percent() -> int:
 	# Основные 100% попадания не входят в бонус меткости.
-	return maxi(effective_agility() + accuracy_bonus + status_modifier(AbilityEffectDefinition.Stat.ACCURACY), 0)
+	return maxi(PERCENT_SCALE + effective_agility() + accuracy_bonus + status_modifier(AbilityEffectDefinition.Stat.ACCURACY), 0) - PERCENT_SCALE
 
 
 func dodge_chance_against(attacker: BattleParticipant) -> int:
@@ -226,19 +228,59 @@ func status_modifier(stat: int) -> int:
 func apply_status(effect: AbilityEffectDefinition, tick: int) -> void:
 	var previous: Dictionary = statuses.get(effect.status_id, {})
 	var stacks: int = 1
-	if effect.stack_policy == AbilityEffectDefinition.Stack.ADD:
+	if effect.effective_stack_policy() == AbilityEffectDefinition.Stack.ADD:
 		stacks = int(previous.get("stacks", 0)) + 1
-	elif effect.stack_policy == AbilityEffectDefinition.Stack.ONCE and not previous.is_empty():
+	elif effect.effective_stack_policy() == AbilityEffectDefinition.Stack.ONCE and not previous.is_empty():
 		# Multiple uses of the same non-stacking dodge grant no extra chance.
 		return
 	statuses[effect.status_id] = {
-		"amount": effect.amount, "modifier": effect.status_modifier,
-		"stat": effect.status_stat, "clock": effect.status_clock,
+		"amount": effect.amount, "modifier": effect.effective_status_modifier(),
+		"stat": effect.effective_status_stat(), "clock": effect.effective_status_clock(),
 		"ticks": effect.duration_ticks, "stacks": stacks, "applied_tick": tick,
+		"tick_damage": effect.tick_damage,
 		# A partly completed current cycle is not a full phase of this effect.
-		"skip_partial_phase": effect.status_clock == AbilityEffectDefinition.Clock.OWNER_PHASE
+		"skip_partial_phase": effect.tick_damage <= 0
+			and effect.effective_status_clock() == AbilityEffectDefinition.Clock.OWNER_PHASE
 			and not is_resting and action_cursor > 0
 	}
+
+
+func has_damaged_armor() -> bool:
+	if _hero_snapshot == null or equipped_shield_id.is_empty():
+		return false
+	var shield: ItemDefinition = ItemCatalog.get_item(equipped_shield_id)
+	if shield == null:
+		return false
+	var full: int = maxi(shield.max_durability, shield.defense_bonus)
+	var remaining: int = _hero_snapshot.current_shield_durability(equipped_shield_id)
+	return remaining > 0 and remaining < full
+
+
+## Кровотечение обходит блок: в этот момент это не атака противника.
+## Возвращаем фактические снимки HP для последовательного воспроизведения.
+func owner_phase_status_damage_events(actor_id: String) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	for status_id in statuses.keys():
+		var status: Dictionary = statuses[status_id]
+		if int(status.get("clock", -1)) != AbilityEffectDefinition.Clock.OWNER_PHASE:
+			continue
+		if bool(status.get("skip_partial_phase", false)):
+			continue
+		var amount: int = int(status.get("tick_damage", 0)) * maxi(int(status.get("stacks", 1)), 1)
+		if amount <= 0:
+			continue
+		var before: int = health
+		if _hero_snapshot != null:
+			_hero_snapshot.health = maxi(_hero_snapshot.health - amount, 0)
+			refresh_from_hero()
+		else:
+			health = maxi(health - amount, 0)
+		events.append({"type": "status_tick", "actor_id": actor_id,
+			"target_id": actor_id, "status_id": str(status_id), "damage": before - health,
+			"hp_after": health, "hp_max": max_health})
+		if not is_alive():
+			break
+	return events
 
 
 func advance_status_clock(clock: int, current_tick: int = -1) -> Array[String]:
@@ -247,7 +289,9 @@ func advance_status_clock(clock: int, current_tick: int = -1) -> Array[String]:
 		var status: Dictionary = statuses[status_id]
 		if int(status.get("clock", AbilityEffectDefinition.Clock.LEGACY_HERO_PHASE)) != clock:
 			continue
-		if current_tick >= 0 and int(status.get("applied_tick", -1)) == current_tick:
+		# Периодический урон начинается с первого отдыха, даже если
+		# кровь была наложена в том же самом такте.
+		if current_tick >= 0 and int(status.get("applied_tick", -1)) == current_tick and int(status.get("tick_damage", 0)) <= 0:
 			continue
 		if clock == AbilityEffectDefinition.Clock.OWNER_PHASE and bool(status.get("skip_partial_phase", false)):
 			status["skip_partial_phase"] = false

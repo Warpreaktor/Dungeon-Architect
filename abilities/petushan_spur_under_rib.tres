@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/petushan/spur_under_rib.png" id="3_icon"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+kind = 3
+recipient = 1
+status_id = "bleeding"
+duration_ticks = 2
+status_clock = 1
+tick_damage = 2
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "petushan_spur_under_rib"
+display_name = "Шпора под ребро"
+description = "Накладывает кровотечение: цель теряет здоровье в свои фазы отдыха."
+icon = ExtResource("3_icon")
+category = 0
+target = 1
+effects = Array[Resource]([SubResource("Effect0")])

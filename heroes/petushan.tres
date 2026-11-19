@@ -15,4 +15,4 @@ max_health = 40
 strength = 8
 agility = 4
 base_defense = 0
-personal_ability_ids = Array[String](["basic_strike", "guard", "rooster_crush", "rooster_windup"])
+personal_ability_ids = Array[String](["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib"])

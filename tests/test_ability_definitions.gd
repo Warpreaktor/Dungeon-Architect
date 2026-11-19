@@ -34,10 +34,10 @@ func _initialize() -> void:
 	assert(battle.get_enemy().personal_ability_ids.has("hunter_shot"))
 	assert(AbilityCatalog.can_prepare(battle.get_enemy(), "hunter_shot"))
 	var rooster_actor: BattleParticipant = BattleParticipant.from_hero(rooster)
-	assert(AbilityCatalog.can_prepare(rooster_actor, "rooster_crush")) # Приём не требует обязательного меча.
+	assert(AbilityCatalog.can_prepare(rooster_actor, "petushan_peck_while_hot")) # Приём не требует обязательного меча.
 	rooster.equip_weapon(ItemCatalog.get_item("sword"))
 	rooster_actor = BattleParticipant.from_hero(rooster)
-	assert(AbilityCatalog.can_prepare(rooster_actor, "rooster_crush"))
+	assert(AbilityCatalog.can_prepare(rooster_actor, "petushan_peck_while_hot"))
 
 	wolf.learned_ability_ids.append("hunter_shot")
 	var learned_actor: BattleParticipant = BattleParticipant.from_hero(wolf)

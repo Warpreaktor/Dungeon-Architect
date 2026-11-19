@@ -39,6 +39,7 @@ func _initialize() -> void:
 	# Подготовленные приёмы реально исполняются внутри фаз, бонус блока
 	# сохраняется до следующей атаки даже после границы фазы.
 	var hero := HeroState.new(HeroCatalog.get_hero("petushan"))
+	hero.learned_ability_ids.append_array(["guard", "basic_strike"])
 	var enemy: MonsterDefinition = MonsterCatalog.get_monster("lobar")
 	var battle := BattleState.begin(enemy, hero)
 	var hero_chain: Array[String] = ["guard", "basic_strike", "guard"]
@@ -69,7 +70,7 @@ func _initialize() -> void:
 	# Смертельный удар досрочно завершает фазу, не давая ответить мёртвому врагу.
 	var finisher := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), hero)
 	finisher.get_enemy().health = 1
-	var killing_chain: Array[String] = ["rooster_crush", "basic_strike", "guard"]
+	var killing_chain: Array[String] = ["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib"]
 	var killing: Dictionary = finisher.run_phase(killing_chain, enemy_chain)
 	assert(killing.success and finisher.is_victory)
 	assert(finisher.flow.stage == BattleFlow.Stage.FINISHED)

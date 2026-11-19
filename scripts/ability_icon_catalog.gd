@@ -13,6 +13,11 @@ const ICON_PATHS := {
 	"volcha_broken_rhythm": "res://assets/abilities/volcha/broken_rhythm.png",
 	"volcha_cut_tendons": "res://assets/abilities/volcha/cut_tendons.png",
 
+	# Петушан: стартовый набор.
+	"petushan_peck_while_hot": "res://assets/abilities/petushan/peck_while_hot.png",
+	"petushan_not_in_brow_but_eye": "res://assets/abilities/petushan/not_in_brow_but_eye.png",
+	"petushan_spur_under_rib": "res://assets/abilities/petushan/spur_under_rib.png",
+
 	# Нарезанные запасные иконки Волчи на будущее.
 	"volcha_extra_01": "res://assets/abilities/volcha/extra_01.png",
 	"volcha_extra_02": "res://assets/abilities/volcha/extra_02.png",

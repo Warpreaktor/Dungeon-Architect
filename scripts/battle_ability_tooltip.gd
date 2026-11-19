@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Текст подсказок собирается из реальных данных способности и участника.
 ## Показываем правила и параметры способности, но не прогноз урона.
-static func describe(ability: AbilityDefinition, participant: BattleParticipant = null, _slot_index: int = -1) -> String:
+static func describe(ability: AbilityDefinition, participant: BattleParticipant = null, slot_index: int = -1) -> String:
 	if ability == null:
 		return ""
 	var lines: Array[String] = [ability.display_name]
@@ -15,6 +15,11 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 			AbilityEffectDefinition.Kind.DAMAGE:
 				var type_name: String = "ближняя" if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else ("дальняя" if ability.damage_delivery == AbilityDefinition.DamageDelivery.RANGED else "магическая")
 				lines.append("Атака: %s" % type_name)
+				if participant != null:
+					var damage: int = AbilityExecutor.preview_damage(participant, ability, effect, null, slot_index)
+					lines.append("Урон: %d" % damage)
+				if effect.bonus_vs_damaged_armor_percent > 0:
+					lines.append("Усиление против повреждённой брони")
 				if effect.hit_count > 1:
 					lines.append("Ударов: %d" % effect.hit_count)
 			AbilityEffectDefinition.Kind.BLOCK:
@@ -23,7 +28,14 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 			AbilityEffectDefinition.Kind.HEAL:
 				lines.append("Лечение: %d HP (не выше максимума)" % maxi(effect.amount, 0))
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
-				lines.append("Эффект «%s»: %d на %d ед. времени" % [effect.status_id, effect.status_modifier, effect.duration_ticks])
+				if effect.tick_damage > 0:
+					lines.append("Кровотечение: −%d HP за отдых цели, %d фазы" % [effect.tick_damage, effect.duration_ticks])
+				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.ACCURACY:
+					lines.append("Меткость цели: %d%% на %d фазы" % [effect.effective_status_modifier(), effect.duration_ticks])
+				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.DODGE_PERCENT:
+					lines.append("Уклонение: %+d%% до следующей входящей атаки" % effect.effective_status_modifier())
+				else:
+					lines.append("Эффект «%s»: %d на %d ед. времени" % [effect.status_id, effect.effective_status_modifier(), effect.duration_ticks])
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:
 				lines.append("Снимает эффект «%s»" % effect.status_id)
 			AbilityEffectDefinition.Kind.WAIT:

@@ -21,6 +21,10 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY }
 @export_range(0.0, 10.0, 0.01) var vs_rest_multiplier: float = 0.0
 @export_range(0.0, 10.0, 0.01) var vs_block_multiplier: float = 0.0
 @export_range(1, 20, 1) var hit_count: int = 1
+## Параметры боевых ресурсов выражены через проценты от динамической базы.
+## 0 = использовать legacy damage_multiplier; положительное значение = процент базы.
+@export_range(0, 1000, 1) var damage_scale_percent: int = 0
+@export_range(0, 1000, 1) var bonus_vs_damaged_armor_percent: int = 0
 ## APPLY_STATUS metadata: positive percentages, signed attribute changes.
 @export var status_stat: Stat = Stat.NONE
 @export var status_modifier: int = 0
@@ -28,10 +32,40 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY }
 @export var stack_policy: Stack = Stack.REFRESH
 @export var requires_unblocked_hit: bool = false
 @export_range(0, 999, 1) var duration_ticks: int = 0
+## Периодический урон раз в собственный отдых владельца эффекта.
+@export_range(0, 9999, 1) var tick_damage: int = 0
+## Дебафф после атаки требует попадания (обычное попадание или через блок).
+@export var requires_hit: bool = false
+## Совместимость ресурсов стартовых способностей Волчи.
+@export var modifier_kind: Stat = Stat.NONE
+@export var stack_mode: Stack = Stack.REFRESH
+@export var expires_on_incoming_attack: bool = false
+
+
+func effective_damage_multiplier() -> float:
+	return float(damage_scale_percent) / 100.0 if damage_scale_percent > 0 else damage_multiplier
+
+
+func effective_status_stat() -> int:
+	return modifier_kind if modifier_kind != Stat.NONE else status_stat
+
+
+func effective_status_modifier() -> int:
+	if status_modifier != 0:
+		return status_modifier
+	return amount if effective_status_stat() != Stat.NONE else 0
+
+
+func effective_status_clock() -> int:
+	return Clock.INCOMING_ATTACK if expires_on_incoming_attack else status_clock
+
+
+func effective_stack_policy() -> int:
+	return stack_policy if stack_policy != Stack.REFRESH else stack_mode
 
 
 func validation_error() -> String:
-	if amount < 0 or duration_ticks < 0 or hit_count <= 0 or damage_multiplier < 0.0:
+	if amount < 0 or duration_ticks < 0 or hit_count <= 0 or damage_multiplier < 0.0 or tick_damage < 0:
 		return "Отрицательные параметры эффекта"
 	if kind < Kind.DAMAGE or kind > Kind.WAIT:
 		return "Неизвестный тип эффекта"

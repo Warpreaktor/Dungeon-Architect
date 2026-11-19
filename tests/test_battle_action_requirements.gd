@@ -4,6 +4,7 @@ extends SceneTree
 func _initialize() -> void:
 	# Без щита блок всегда работает и выдаёт +25%.
 	var wolf := HeroState.new(HeroCatalog.get_hero("petushan"))
+	wolf.learned_ability_ids.append_array(["guard", "basic_strike"])
 	var battle := BattleState.begin(MonsterCatalog.get_monster("lobar"), wolf)
 	var actor: BattleParticipant = battle.get_hero()
 	assert(AbilityCatalog.can_prepare(actor, "guard"))

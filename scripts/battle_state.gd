@@ -133,6 +133,12 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 			if bool(step["reload"]):
 				var resting: BattleParticipant = get_participant(actor_id)
 				resting.completed_phases += 1
+				resting.last_rest_tick = tick
+				var status_ticks: Array[Dictionary] = resting.owner_phase_status_damage_events(actor_id)
+				events.append_array(status_ticks)
+				update_outcome()
+				if is_victory or is_defeat:
+					break
 				for expired_id in resting.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, tick):
 					events.append({"type": "status_removed", "actor_id": actor_id,
 						"target_id": actor_id, "status_id": expired_id, "removed": true})

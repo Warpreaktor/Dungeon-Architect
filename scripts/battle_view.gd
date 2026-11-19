@@ -47,6 +47,15 @@ const PICKER_CHOICE_HEIGHT: float = 70.0
 const PICKER_ROW_SPACING: float = 6.0
 const PICKER_MAX_LIST_HEIGHT: float = 260.0
 
+# Графика статуса крови: числовые значения настраивают только анимацию.
+const BLEED_ICON: Texture2D = preload("res://assets/abilities/statuses/bleeding.png")
+const BLEED_FLASH_IN_SECONDS: float = 0.18
+const BLEED_FLASH_OUT_SECONDS: float = 1.00
+const BLEED_FLASH_START_SCALE: float = 0.85
+const BLEED_FLASH_PEAK_SCALE: float = 1.05
+const BLEED_MARKER_SCALE: float = 0.28
+const BLEED_MARKER_OFFSET: Vector2 = Vector2(0.02, 0.70)
+
 const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 
 var _combat: CombatSession
@@ -74,6 +83,10 @@ var _impact_idle: Dictionary = {}
 var _impact_origin: Dictionary = {}
 var _impact_shields: Dictionary = {}
 var _shield_flash_tweens: Dictionary = {}
+var _bleed_markers: Dictionary = {}
+var _impact_bleed_markers: Dictionary = {}
+var _bleed_tweens: Dictionary = {}
+var _visible_bleeding: Dictionary = {"hero": false, "enemy": false}
 var _visible_hero_hp: int = 0
 var _visible_enemy_hp: int = 0
 
@@ -100,6 +113,7 @@ func _ready() -> void:
 	_build_ability_picker()
 	_build_combat_item_picker()
 	_default_attack_icon = _hero_attack_icon.texture
+	_setup_bleed_markers()
 	_result_text.text = "Твой ход"
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.24)
@@ -108,6 +122,69 @@ func _ready() -> void:
 ## Единственный расчёт: тот же метод, что использует обработчик способности.
 func _basic_strike_damage(actor: BattleParticipant) -> int:
 	return actor.melee_attack() if actor != null else 0
+
+
+func _setup_bleed_markers() -> void:
+	_bleed_markers["hero"] = _make_bleed_marker(_hero_portrait)
+	_bleed_markers["enemy"] = _make_bleed_marker(_enemy_portrait)
+
+
+func _make_bleed_marker(parent: TextureRect) -> TextureRect:
+	var icon := TextureRect.new()
+	icon.texture = BLEED_ICON
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	icon.size = parent.size * BLEED_MARKER_SCALE
+	icon.position = parent.size * BLEED_MARKER_OFFSET
+	icon.visible = false
+	parent.add_child(icon)
+	return icon
+
+
+func _set_bleeding_visible(actor_id: String, visible: bool) -> void:
+	_visible_bleeding[actor_id] = visible
+	var normal: TextureRect = _bleed_markers.get(actor_id) as TextureRect
+	if normal != null:
+		normal.visible = visible
+	var impact: TextureRect = _impact_bleed_markers.get(actor_id) as TextureRect
+	if impact != null:
+		impact.visible = visible
+
+
+func _flash_bleeding(actor_id: String) -> void:
+	var portrait: TextureRect = _impact_portraits.get(actor_id) as TextureRect
+	if portrait == null:
+		_set_bleeding_visible(actor_id, true)
+		return
+	var previous: Tween = _bleed_tweens.get(actor_id) as Tween
+	if previous != null and previous.is_valid():
+		previous.kill()
+	var icon: TextureRect = _impact_bleed_markers.get(actor_id) as TextureRect
+	if icon == null:
+		icon = _make_bleed_marker(portrait)
+		_impact_bleed_markers[actor_id] = icon
+	icon.visible = true
+	icon.size = portrait.size * BLEED_FLASH_START_SCALE
+	icon.position = (portrait.size - icon.size) * 0.5
+	icon.modulate = Color(1.0, 0.35, 0.35, 1.0)
+	icon.pivot_offset = Vector2.ZERO
+	icon.scale = Vector2.ONE
+	var tween: Tween = create_tween()
+	_bleed_tweens[actor_id] = tween
+	var peak_size: Vector2 = portrait.size * BLEED_FLASH_PEAK_SCALE
+	tween.tween_property(icon, "size", peak_size, BLEED_FLASH_IN_SECONDS)
+	tween.parallel().tween_property(icon, "position", (portrait.size - peak_size) * 0.5, BLEED_FLASH_IN_SECONDS)
+	tween.tween_property(icon, "size", portrait.size * BLEED_MARKER_SCALE, BLEED_FLASH_OUT_SECONDS)
+	tween.parallel().tween_property(icon, "position", portrait.size * BLEED_MARKER_OFFSET, BLEED_FLASH_OUT_SECONDS)
+	tween.parallel().tween_property(icon, "modulate", Color.WHITE, BLEED_FLASH_OUT_SECONDS)
+	tween.tween_callback(_finish_bleed_flash.bind(actor_id))
+	_set_bleeding_visible(actor_id, true)
+
+
+func _finish_bleed_flash(actor_id: String) -> void:
+	_bleed_tweens.erase(actor_id)
 
 
 func begin(combat: CombatSession, hero: HeroState) -> void:
@@ -144,6 +221,8 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
 	_visible_hero_hp = hero.health
 	_visible_enemy_hp = combat.enemy_health
+	_set_bleeding_visible("hero", false)
+	_set_bleeding_visible("enemy", false)
 	# В рамках прохождения сохраняем именно позиции, включая пустые слоты.
 	_committed_slots = hero.get_saved_action_slots()
 	# Preserve positions but discard obsolete skills after a character's tree changed.
@@ -617,6 +696,8 @@ func _create_impact_layer() -> void:
 	_impact_idle.clear()
 	_impact_shields.clear()
 	_shield_flash_tweens.clear()
+	_impact_bleed_markers.clear()
+	_bleed_tweens.clear()
 	var center: Vector2 = _battlefield.get_global_rect().get_center() - global_position
 	for actor_id in ["hero", "enemy"]:
 		var original: TextureRect = _hero_portrait if actor_id == "hero" else _enemy_portrait
@@ -649,6 +730,10 @@ func _create_impact_layer() -> void:
 		shield_icon.hide()
 		portrait.add_child(shield_icon)
 		_impact_shields[actor_id] = shield_icon
+		if bool(_visible_bleeding.get(actor_id, false)):
+			var bleed_marker: TextureRect = _make_bleed_marker(portrait)
+			bleed_marker.show()
+			_impact_bleed_markers[actor_id] = bleed_marker
 		# Не hide(): скрытый узел изменил бы расчёт VBoxContainer и сдвинул HUD.
 		original.modulate.a = 0.0
 
@@ -659,6 +744,12 @@ func _clear_impact_layer() -> void:
 		if tween != null and tween.is_valid():
 			tween.kill()
 	_shield_flash_tweens.clear()
+	for running in _bleed_tweens.values():
+		var tween: Tween = running as Tween
+		if tween != null and tween.is_valid():
+			tween.kill()
+	_bleed_tweens.clear()
+	_impact_bleed_markers.clear()
 	if _impact_layer != null and is_instance_valid(_impact_layer):
 		_impact_layer.queue_free()
 	_impact_layer = null
@@ -769,6 +860,22 @@ func _display_phase_event(event: Dictionary) -> void:
 				_spawn_number(str(event.get("target_id", "")), "+%d" % healed, Color("#70d994"))
 		"status_applied":
 			_set_accuracy_and_dodge_from_event(event)
+			if str(event.get("status_id", "")) == "bleeding":
+				_flash_bleeding(str(event.get("target_id", "")))
+		"status_removed":
+			if str(event.get("status_id", "")) == "bleeding":
+				_set_bleeding_visible(str(event.get("target_id", "")), false)
+		"status_tick":
+			var target_id: String = str(event.get("target_id", ""))
+			var amount: int = int(event.get("damage", 0))
+			if target_id == "hero":
+				_visible_hero_hp -= amount
+				_hero_health_meter.set_health(_visible_hero_hp, _combat.hero.max_health, true)
+			else:
+				_visible_enemy_hp -= amount
+				_enemy_health_meter.set_health(_visible_enemy_hp, _combat.enemy_max_health, true)
+			if amount > 0:
+				_spawn_number(target_id, "−%d" % amount, Color("#ed4444"), 18.0)
 		"reload":
 			_show_reload_icon(actor_id)
 		"failed":
@@ -892,6 +999,8 @@ func _exit_tree() -> void:
 func _after_phase_playback() -> void:
 	_is_playing_back = false
 	_refresh_accuracy_and_dodge()
+	_set_bleeding_visible("hero", _combat.battle_state.get_hero().statuses.has("bleeding"))
+	_set_bleeding_visible("enemy", _combat.battle_state.get_enemy().statuses.has("bleeding"))
 	_set_block_display("hero", _combat.battle_state.get_hero().block_armor)
 	_set_block_display("enemy", _combat.battle_state.get_enemy().block_armor)
 	_conceal_enemy_actions()

@@ -80,6 +80,8 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
 				if not recipient.is_alive():
 					continue
+				if effect.requires_hit and (last_hit.is_empty() or bool(last_hit.get("dodged", false))):
+					continue
 				if effect.requires_unblocked_hit and (last_hit.is_empty() or bool(last_hit.get("dodged", false)) or bool(last_hit.get("was_blocking", false))):
 					continue
 				recipient.apply_status(effect, state.flow.completed_ticks + 1)
@@ -90,6 +92,15 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 					"effective_dodge_after": recipient.dodge_chance_against(
 						state.get_enemy() if recipient.participant_id == state.hero_id else state.get_hero()),
 					"accuracy_after": recipient.accuracy_percent()})
+				# Если цель уже отдыхала ранее в этом же такте, кровь тоже
+				# должна снять HP за эту фазу. Другой порядок покрыт BattleState.
+				if effect.tick_damage > 0 and recipient.last_rest_tick == state.flow.completed_ticks + 1:
+					var instant: Array[Dictionary] = recipient.owner_phase_status_damage_events(recipient.participant_id)
+					event_list.append_array(instant)
+					var expired: Array[String] = recipient.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, state.flow.completed_ticks + 1)
+					for expired_id in expired:
+						event_list.append({"type": "status_removed", "actor_id": recipient.participant_id,
+							"target_id": recipient.participant_id, "status_id": expired_id, "removed": true})
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:
 				var removed: bool = recipient.statuses.has(effect.status_id)
 				recipient.statuses.erase(effect.status_id)
@@ -118,7 +129,7 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 			equipment_and_stat = actor.ranged_attack_value()
 		# Для магии пока нет характеристики, применяем только мощность эффекта.
 	var base: float = equipment_and_stat + float(effect.amount)
-	var multiplier: float = effect.damage_multiplier
+	var multiplier: float = effect.effective_damage_multiplier()
 	if effect.first_slot_multiplier > 0.0:
 		# В редакторе раскладки пользуемся позицией предпросмотра.
 		# В ходе исполнения курсор уже сдвинут на следующий слот.
@@ -132,7 +143,10 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 			multiplier = effect.vs_block_multiplier
 		elif target.is_resting and effect.vs_rest_multiplier > 0.0:
 			multiplier = effect.vs_rest_multiplier
-	return floori(maxf(base * (multiplier + float(actor.block_attack_bonus_percent) / 100.0), 0.0))
+	var total: float = maxf(base * (multiplier + float(actor.block_attack_bonus_percent) / 100.0), 0.0)
+	if target != null and effect.bonus_vs_damaged_armor_percent > 0 and target.has_damaged_armor():
+		total *= 1.0 + float(effect.bonus_vs_damaged_armor_percent) / float(BattleParticipant.PERCENT_SCALE)
+	return floori(total)
 
 
 static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "", rng: RandomNumberGenerator = null, armor_pierce_fraction: float = 0.0) -> Dictionary:

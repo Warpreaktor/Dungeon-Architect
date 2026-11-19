@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/petushan/not_in_brow_but_eye.png" id="3_icon"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+kind = 0
+recipient = 1
+amount = 0
+damage_scale_percent = 40
+
+[sub_resource type="Resource" id="Effect1"]
+script = ExtResource("2_effect")
+kind = 3
+recipient = 1
+status_id = "petushan_accuracy_down"
+requires_hit = true
+status_stat = 3
+status_modifier = -10
+duration_ticks = 2
+status_clock = 1
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "petushan_not_in_brow_but_eye"
+display_name = "Не в бровь, а в глаз"
+description = "Слабее бьёт, зато сбивает противнику меткость."
+icon = ExtResource("3_icon")
+category = 0
+target = 1
+effects = Array[Resource]([SubResource("Effect0"), SubResource("Effect1")])

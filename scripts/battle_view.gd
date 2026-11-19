@@ -73,9 +73,17 @@ var _impact_portraits: Dictionary = {}
 var _impact_idle: Dictionary = {}
 var _impact_origin: Dictionary = {}
 var _impact_shields: Dictionary = {}
+var _shield_flash_tweens: Dictionary = {}
 var _visible_hero_hp: int = 0
 var _visible_enemy_hp: int = 0
-var _visible_block: Dictionary = {"hero": false, "enemy": false}
+
+# Длительность визуальной вспышки совпадает с паузой события «Блок».
+# Эти параметры меняют только анимацию, не время действия защиты.
+const SHIELD_FLASH_IN_SECONDS: float = 0.18
+const SHIELD_FLASH_OUT_SECONDS: float = 1.00
+const SHIELD_FLASH_START_SCALE: float = 0.25
+const SHIELD_FLASH_PEAK_SCALE: float = 1.08
+const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 
 
 
@@ -136,7 +144,6 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
 	_visible_hero_hp = hero.health
 	_visible_enemy_hp = combat.enemy_health
-	_visible_block = {"hero": false, "enemy": false}
 	# В рамках прохождения сохраняем именно позиции, включая пустые слоты.
 	_committed_slots = hero.get_saved_action_slots()
 	# Preserve positions but discard obsolete skills after a character's tree changed.
@@ -609,6 +616,7 @@ func _create_impact_layer() -> void:
 	_impact_origin.clear()
 	_impact_idle.clear()
 	_impact_shields.clear()
+	_shield_flash_tweens.clear()
 	var center: Vector2 = _battlefield.get_global_rect().get_center() - global_position
 	for actor_id in ["hero", "enemy"]:
 		var original: TextureRect = _hero_portrait if actor_id == "hero" else _enemy_portrait
@@ -632,10 +640,13 @@ func _create_impact_layer() -> void:
 		shield_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		shield_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		shield_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		shield_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		shield_icon.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		shield_icon.size = portrait.size
-		shield_icon.modulate = Color(0.40, 0.78, 1.0, 0.88)
-		shield_icon.visible = bool(_visible_block.get(actor_id, false))
+		shield_icon.position = Vector2.ZERO
+		shield_icon.pivot_offset = shield_icon.size * 0.5
+		shield_icon.modulate = SHIELD_FLASH_COLOR
+		shield_icon.modulate.a = 0.0
+		shield_icon.hide()
 		portrait.add_child(shield_icon)
 		_impact_shields[actor_id] = shield_icon
 		# Не hide(): скрытый узел изменил бы расчёт VBoxContainer и сдвинул HUD.
@@ -643,6 +654,11 @@ func _create_impact_layer() -> void:
 
 
 func _clear_impact_layer() -> void:
+	for flash in _shield_flash_tweens.values():
+		var tween: Tween = flash as Tween
+		if tween != null and tween.is_valid():
+			tween.kill()
+	_shield_flash_tweens.clear()
 	if _impact_layer != null and is_instance_valid(_impact_layer):
 		_impact_layer.queue_free()
 	_impact_layer = null
@@ -740,10 +756,7 @@ func _display_phase_event(event: Dictionary) -> void:
 		"block":
 			var target_id: String = str(event.get("target_id", ""))
 			_set_block_display(target_id, int(event.get("armor", 0)))
-			_visible_block[target_id] = true
-			var icon: TextureRect = _impact_shields.get(target_id) as TextureRect
-			if icon != null:
-				icon.show()
+			_flash_shield(target_id)
 		"heal":
 			var healed: int = int(event.get("healed", 0))
 			if actor_id == "hero":
@@ -804,10 +817,26 @@ func _impact(event: Dictionary) -> void:
 		_spawn_number(target_id, "УКЛОНЕНИЕ", Color("#83e7bb"))
 	_set_accuracy_and_dodge_from_event(event)
 	_set_block_display(target_id, int(event.get("active_block_after", 0)))
-	_visible_block[target_id] = false if not bool(event.get("dodged", false)) else bool(_visible_block.get(target_id, false))
-	var shield_icon: TextureRect = _impact_shields.get(target_id) as TextureRect
-	if shield_icon != null and not bool(event.get("dodged", false)):
-		shield_icon.hide()
+
+
+func _flash_shield(actor_id: String) -> void:
+	var icon: TextureRect = _impact_shields.get(actor_id) as TextureRect
+	if icon == null or not is_instance_valid(icon):
+		return
+	var previous: Tween = _shield_flash_tweens.get(actor_id) as Tween
+	if previous != null and previous.is_valid():
+		previous.kill()
+	icon.modulate = SHIELD_FLASH_COLOR
+	icon.modulate.a = 0.0
+	icon.scale = Vector2.ONE * SHIELD_FLASH_START_SCALE
+	icon.show()
+	var flash: Tween = create_tween()
+	_shield_flash_tweens[actor_id] = flash
+	flash.tween_property(icon, "modulate:a", 1.0, SHIELD_FLASH_IN_SECONDS)
+	flash.parallel().tween_property(icon, "scale", Vector2.ONE * SHIELD_FLASH_PEAK_SCALE, SHIELD_FLASH_IN_SECONDS)
+	flash.tween_property(icon, "modulate:a", 0.0, SHIELD_FLASH_OUT_SECONDS).set_trans(Tween.TRANS_CUBIC)
+	flash.parallel().tween_property(icon, "scale", Vector2.ONE, SHIELD_FLASH_OUT_SECONDS)
+	flash.tween_callback(icon.hide)
 
 
 func _set_block_display(actor_id: String, amount: int) -> void:

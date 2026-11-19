@@ -21,7 +21,11 @@ var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 static func begin(monster: MonsterDefinition, hero: HeroState = null) -> BattleState:
 	var state := BattleState.new()
-	state.participants[state.enemy_id] = BattleParticipant.from_monster(monster)
+	state.rng.randomize()
+	var enemy: BattleParticipant = BattleParticipant.from_monster(monster)
+	state.participants[state.enemy_id] = enemy
+	if enemy != null:
+		enemy.action_chain = MonsterCardDraw.draw(monster, enemy, state.rng)
 	if hero != null:
 		state.participants[state.hero_id] = BattleParticipant.from_hero(hero)
 	return state
@@ -78,7 +82,12 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		return {"success": false, "reason": "Нет участников боя", "events": []}
 	var current_hero_chain: Array[String] = hero_actor.action_chain
 	# Устаревший или временно недоступный приём врага даст ранний отдых,
-	# не разрушая всю фазу. Здесь проверяем только форму цепочки.
+	# не разрушая всю фазу. Колода уже выбрана при создании боя.
+	# В ручных тестах состояние может создаваться без MonsterDefinition.
+	# В этом случае разрешаем однократную установку колоды перед первым тактом.
+	if enemy_actor.action_chain.is_empty() and flow.stage == BattleFlow.Stage.PREPARATION:
+		enemy_actor.action_chain = enemy_actions.duplicate()
+	enemy_actions = enemy_actor.action_chain.duplicate()
 	if enemy_actions.is_empty() or enemy_actions.size() > enemy_actor.action_slot_capacity or enemy_actions.size() > BattleChainPlanner.MAX_ACTIONS:
 		return {"success": false, "reason": "Некорректная цепочка противника", "events": []}
 	if flow.stage == BattleFlow.Stage.PREPARATION or flow.stage == BattleFlow.Stage.RECONFIGURING:
@@ -101,9 +110,6 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
 	if not flow.start_phase():
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
-	if enemy_actor.action_chain != enemy_actions:
-		enemy_actor.action_chain = enemy_actions.duplicate()
-		enemy_actor.action_cursor = 0
 	var start_event: int = events.size()
 	var hero_actions_done: int = 0
 	var hero_rest_finished: bool = false
@@ -179,6 +185,8 @@ func default_chain(participant_id: String) -> Array[String]:
 	var participant: BattleParticipant = get_participant(participant_id)
 	if participant == null:
 		return []
+	if participant_id == enemy_id and not participant.action_chain.is_empty():
+		return participant.action_chain.duplicate()
 	var defense_id: String = ""
 	var attack_id: String = ""
 	for action_id in AbilityCatalog.known_ability_ids(participant):

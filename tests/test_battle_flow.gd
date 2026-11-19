@@ -44,6 +44,7 @@ func _initialize() -> void:
 	var battle := BattleState.begin(enemy, hero)
 	var hero_chain: Array[String] = ["guard", "basic_strike", "guard"]
 	var enemy_chain: Array[String] = ["guard", "basic_strike"]
+	battle.get_enemy().action_chain = enemy_chain.duplicate()
 	var result: Dictionary = battle.run_phase(hero_chain, enemy_chain)
 	assert(result.success)
 	assert(battle.flow.phase_number == 1)

@@ -7,6 +7,7 @@ func _initialize() -> void:
 	var state := BattleState.begin(monster, hero)
 	var hero_chain: Array[String] = ["basic_strike", "guard", "basic_strike"]
 	var enemy_chain: Array[String] = ["guard", "basic_strike"]
+	state.get_enemy().action_chain = enemy_chain.duplicate()
 	assert(BattleChainPlanner.phase_length(hero_chain, enemy_chain) == 4)
 	assert(BattleChainPlanner.action_at(enemy_chain, 0) == "guard")
 	assert(BattleChainPlanner.action_at(enemy_chain, 1) == "basic_strike")

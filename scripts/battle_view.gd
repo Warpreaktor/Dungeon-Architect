@@ -65,6 +65,8 @@ var _defense_idle_color: Color = Color.WHITE
 var _default_attack_icon: Texture2D
 var _hero_chain: Array[String] = []
 var _enemy_chain: Array[String] = []
+## Карты врага раскрываются навсегда в рамках одной встречи.
+var _enemy_revealed: Dictionary = {}
 var _playback: Tween
 var _is_playing_back: bool = false
 var _planner_editing: Array[String] = []
@@ -234,6 +236,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	hero.save_action_slots(_committed_slots)
 	_hero_chain = _draft_actions()
 	_enemy_chain = _combat.battle_state.default_chain("enemy")
+	_enemy_revealed.clear()
 	_refresh_enemy_slots()
 	_result_text.text = ""
 	_refresh_phase_controls()
@@ -278,6 +281,7 @@ func _refresh_chain_slots() -> void:
 	var rest_slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 	_sequence_slots.add_child(rest_slot)
 	rest_slot.configure_recharge(_planner_editing.size())
+	_highlight_next_actions()
 
 
 func _refresh_enemy_slots() -> void:
@@ -290,14 +294,20 @@ func _refresh_enemy_slots() -> void:
 		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_enemy_sequence_slots.add_child(slot)
 		if index < _enemy_chain.size():
-			slot.configure_hidden(index)
+			if _enemy_revealed.has(index):
+				slot.reveal_enemy_action(AbilityCatalog.get_ability(_enemy_chain[index]), enemy)
+			else:
+				slot.configure_hidden(index)
 		else:
 			slot.configure_recharge(index)
+	_highlight_next_actions()
 
 
 func _conceal_enemy_actions() -> void:
+	# Скрывать можно только ещё не сыгранные позиции.
 	for index in range(_enemy_chain.size()):
-		(_enemy_sequence_slots.get_child(index) as BattleAbilitySlot).configure_hidden(index)
+		if not _enemy_revealed.has(index):
+			(_enemy_sequence_slots.get_child(index) as BattleAbilitySlot).configure_hidden(index)
 
 
 func _highlight_slots(hero_index: int, enemy_index: int, hero_reloading: bool = false, enemy_reloading: bool = false) -> void:
@@ -307,6 +317,19 @@ func _highlight_slots(hero_index: int, enemy_index: int, hero_reloading: bool = 
 	for index in range(_enemy_sequence_slots.get_child_count()):
 		var active: bool = index == enemy_index if not enemy_reloading else index == _enemy_chain.size()
 		(_enemy_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(active)
+
+
+func _highlight_next_actions() -> void:
+	if _combat == null:
+		return
+	var hero: BattleParticipant = _combat.battle_state.get_hero()
+	var enemy: BattleParticipant = _combat.battle_state.get_enemy()
+	if hero == null or enemy == null:
+		return
+	# После завершения отдыха курсор героя уже на первом слоте.
+	var hero_index: int = hero.action_cursor
+	var enemy_index: int = enemy.action_cursor
+	_highlight_slots(hero_index, enemy_index)
 
 
 func current_battle_state() -> BattleState:
@@ -757,7 +780,7 @@ func _clear_impact_layer() -> void:
 	_impact_shields.clear()
 	_hero_portrait.modulate.a = 1.0
 	_enemy_portrait.modulate.a = 1.0
-	_highlight_slots(-1, -1)
+	_highlight_next_actions()
 
 
 func _play_phase_events(phase_events: Array) -> void:
@@ -840,7 +863,8 @@ func _display_phase_event(event: Dictionary) -> void:
 			# Враг показывает только исполняемый сейчас приём, не будущие.
 			if actor_id == "enemy":
 				var index: int = int(event.get("slot_index", -1))
-				if index >= 0 and index < _enemy_sequence_slots.get_child_count():
+				if index >= 0 and index < _enemy_chain.size():
+					_enemy_revealed[index] = true
 					var slot: BattleAbilitySlot = _enemy_sequence_slots.get_child(index) as BattleAbilitySlot
 					slot.reveal_enemy_action(AbilityCatalog.get_ability(str(event.get("ability_id", ""))),
 						_combat.battle_state.get_enemy())
@@ -1004,7 +1028,7 @@ func _after_phase_playback() -> void:
 	_set_block_display("hero", _combat.battle_state.get_hero().block_armor)
 	_set_block_display("enemy", _combat.battle_state.get_enemy().block_armor)
 	_conceal_enemy_actions()
-	_highlight_slots(-1, -1)
+	_highlight_next_actions()
 	_hero_health_meter.set_health(_combat.hero.health, _combat.hero.max_health, true)
 	_enemy_health_meter.set_health(_combat.enemy_health, _combat.enemy_max_health, true)
 	# При нескольких ударах за фазу щит мог сломаться не на последнем.

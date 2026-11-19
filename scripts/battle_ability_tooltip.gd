@@ -20,11 +20,9 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 				else:
 					lines.append("Урон: атака бойца − %d" % (1 - effect.amount))
 			AbilityEffectDefinition.Kind.BLOCK:
-				var block: int = maxi(effect.amount, 0)
-				if participant != null and participant._hero_snapshot != null:
-					var shield: ItemDefinition = ItemCatalog.get_item(participant.equipped_shield_id)
-					if shield != null and participant._hero_snapshot.current_shield_durability(participant.equipped_shield_id) > 0:
-						block = maxi(shield.defense_bonus, 0)
+				var block: int = maxi(BattleParticipant.BASE_BLOCK_ARMOR, effect.amount)
+				if participant != null:
+					block = participant.preview_block_armor(block)
 				lines.append("Броня блока: %d (на одно попадание)" % block)
 				lines.append("+25%% базового урона к следующей атаке за каждый блок (через фазы)")
 			AbilityEffectDefinition.Kind.HEAL:
@@ -45,4 +43,10 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 				lines.append("Требуется двуручное оружие")
 			AbilityRequirementDefinition.Kind.HEALTH_AT_LEAST_PERCENT:
 				lines.append("Требуется минимум %d%% HP" % requirement.min_health_percent)
+	if participant != null:
+		var unavailable: String = ability.unavailable_reason(participant)
+		if not unavailable.is_empty():
+			lines.append("Недоступно: " + unavailable)
+	for resource_id in ability.resource_costs:
+		lines.append("Стоимость: %d × %s" % [int(ability.resource_costs[resource_id]), resource_id])
 	return "\n".join(lines)

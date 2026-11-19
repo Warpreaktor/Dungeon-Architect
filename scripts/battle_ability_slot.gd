@@ -60,11 +60,11 @@ func _notify_selection() -> void:
 func configure_recharge(index: int) -> void:
 	configure(index, null, false)
 	_slot_number.text = "%02d" % (index + 1)
-	_slot_name.text = "Перезарядка"
+	_slot_name.text = "Отдых"
 	_slot_icon.texture = SPECIAL_ICON
 	_slot_icon.visible = true
 	_empty_icon.visible = false
-	tooltip_text = "Перезарядка: один пропущенный такт"
+	tooltip_text = "Отдых: один пропущенный такт"
 
 
 func set_current(active: bool) -> void:
@@ -88,3 +88,15 @@ func flash_empty() -> void:
 	for i in range(3):
 		_invalid_tween.tween_property(self, "modulate", Color(1.0, 0.22, 0.22), 0.12)
 		_invalid_tween.tween_property(self, "modulate", Color.WHITE, 0.14)
+
+
+## Вражеские приёмы скрыты до момента исполнения, но сам слот виден.
+func configure_hidden(index: int) -> void:
+	configure(index, null, false)
+	_slot_name.text = "???"
+	_empty_icon.text = "?"
+	tooltip_text = ""
+
+
+func reveal_enemy_action(ability: AbilityDefinition, participant: BattleParticipant) -> void:
+	configure(slot_index, ability, false, participant)

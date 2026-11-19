@@ -151,21 +151,21 @@ func current_shield_durability(item_id: String) -> int:
 	return int(values[0]) if not values.is_empty() else 0
 
 
-## Возвращает реально полученный HP-урон. Щит расходует прочность на заблокированный
-## урон и сообщает GameSession, какой экземпляр требуется удалить из рюкзака.
-func consume_shield_block(requested: int) -> int:
+## Удар по щиту уменьшает прочность на ВСЮ силу удара после пассивной
+## защиты, а не только на поглощённую часть. Даже щит с 1 прочности
+## защищает этим ударом на полную величину брони, затем разрушается.
+## Возвращает поглощённые HP; ID сломанного экземпляра сохраняется отдельно.
+func consume_shield_block(incoming: int, maximum_absorption: int = -1) -> int:
 	last_shield_broken = ""
-	if equipped_shield_id.is_empty() or requested <= 0:
+	if equipped_shield_id.is_empty() or incoming <= 0:
 		return 0
 	var item: ItemDefinition = ItemCatalog.get_item(equipped_shield_id)
-	if item == null:
-		return 0
 	var durability: int = current_shield_durability(equipped_shield_id)
-	var blocked: int = mini(requested, mini(item.defense_bonus, durability))
-	if blocked <= 0:
+	if item == null or durability <= 0:
 		return 0
+	var blocked: int = mini(incoming, maxi(item.defense_bonus, 0))
 	var values: Array = shield_durabilities.get(equipped_shield_id, [])
-	values[0] = durability - blocked
+	values[0] = durability - incoming
 	if int(values[0]) <= 0:
 		last_shield_broken = equipped_shield_id
 		values.remove_at(0)
@@ -180,7 +180,7 @@ func consume_shield_block(requested: int) -> int:
 func take_damage(incoming: int) -> int:
 	var remaining: int = maxi(incoming - base_defense, 0)
 	if vitality_steps > 0 and vitality_percent > 0 and remaining > 0:
-		remaining = maxi(1, ceili(float(remaining) * float(100 - vitality_percent) / 100.0))
+		remaining = maxi(1, int(float(remaining) * float(100 - vitality_percent) / 100.0))
 	health = maxi(health - remaining, 0)
 	return remaining
 

@@ -42,22 +42,32 @@ func execute_ability(actor_id: String, target_id: String, ability_id: String) ->
 	return AbilityExecutor.execute(self, actor_id, target_id, ability_id)
 
 
-## Редактировать цепочку героя разрешено только до первого удара или
-## в специальном состоянии перенастройки. Межфазная пауза её не меняет.
+## После каждой законченной фазы игрок может изменить тактику.
+## При неизменной цепочке личный курсор продолжает прежний цикл.
 func configure_hero_chain(actions: Array[String]) -> Dictionary:
-	if flow.stage != BattleFlow.Stage.PREPARATION and flow.stage != BattleFlow.Stage.RECONFIGURING:
+	if not (flow.stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.RECONFIGURING]):
 		return {"success": false, "reason": "Сейчас нельзя изменить тактику"}
 	if get_hero() != null and actions.size() != get_hero().action_slot_capacity:
 		return {"success": false, "reason": "Цепочка содержит незаполненные слоты"}
-	var reason: String = BattleChainPlanner.validate(actions, get_hero())
+	var hero: BattleParticipant = get_hero()
+	# Сохранённую цепочку не выкидываем при временной потере маны,
+	# щита или изученного приёма. Такой слот отдохнёт при исполнении.
+	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES and hero.action_chain == actions:
+		return {"success": true, "reason": ""}
+	var reason: String = BattleChainPlanner.validate(actions, hero, false)
 	if not reason.is_empty():
 		return {"success": false, "reason": reason}
-	get_hero().action_chain = actions.duplicate()
+	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES and hero.action_chain != actions:
+		# Перенастройка не должна отменять обязательный отдых после круга.
+		# После отдыха новый порядок начинается с первого слота.
+		var rest_pending: bool = hero.action_cursor >= hero.action_chain.size()
+		hero.action_cursor = actions.size() if rest_pending else 0
+	hero.action_chain = actions.duplicate()
 	return {"success": true, "reason": ""}
 
 
 ## Одна фаза выполняет полную цепочку ГЕРОЯ. Участники имеют независимые
-## курсоры: после последнего приёма следует один такт перезарядки.
+## курсоры: после последнего приёма следует один такт отдыха.
 ## Все события уже вычислены до визуального воспроизведения.
 func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dictionary:
 	var hero_actor: BattleParticipant = get_hero()
@@ -65,23 +75,26 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 	if hero_actor == null or enemy_actor == null:
 		return {"success": false, "reason": "Нет участников боя", "events": []}
 	var current_hero_chain: Array[String] = hero_actor.action_chain
-	var enemy_reason: String = BattleChainPlanner.validate(enemy_actions, enemy_actor, false)
-	if not enemy_reason.is_empty():
-		return {"success": false, "reason": enemy_reason, "events": []}
+	# Устаревший или временно недоступный приём врага даст ранний отдых,
+	# не разрушая всю фазу. Здесь проверяем только форму цепочки.
+	if enemy_actions.is_empty() or enemy_actions.size() > enemy_actor.action_slot_capacity or enemy_actions.size() > BattleChainPlanner.MAX_ACTIONS:
+		return {"success": false, "reason": "Некорректная цепочка противника", "events": []}
 	if flow.stage == BattleFlow.Stage.PREPARATION or flow.stage == BattleFlow.Stage.RECONFIGURING:
 		var was_reconfiguring: bool = flow.stage == BattleFlow.Stage.RECONFIGURING
 		var configured: Dictionary = configure_hero_chain(hero_actions)
 		if not bool(configured.get("success", false)):
 			return {"success": false, "reason": configured.get("reason", ""), "events": []}
 		current_hero_chain = hero_actor.action_chain
-		if was_reconfiguring:
-			# Новый алгоритм всегда начинается с первого слота.
+		if was_reconfiguring and hero_actor.action_cursor < current_hero_chain.size():
+			# Старое разрешённое окно: вне обязательного отдыха начинаем заново.
 			hero_actor.action_cursor = 0
 	elif flow.stage == BattleFlow.Stage.BETWEEN_PHASES:
-		if not BattleChainPlanner.validate(current_hero_chain, hero_actor, false).is_empty():
-			return {"success": false, "reason": "Ошибка сохранённой цепочки", "events": []}
-		if current_hero_chain != hero_actions:
-			return {"success": false, "reason": "Тактика заблокирована до перенастройки", "events": []}
+		# После каждой фазы разрешена новая раскладка; отказ при пустых
+		# слотах остаётся за тем же валидатором, что и на старте боя.
+		var configured: Dictionary = configure_hero_chain(hero_actions)
+		if not bool(configured.get("success", false)):
+			return {"success": false, "reason": configured.get("reason", ""), "events": []}
+		current_hero_chain = hero_actor.action_chain
 	else:
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
 	if not flow.start_phase():
@@ -122,8 +135,13 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 				target_id = enemy_id if actor_id == hero_id else hero_id
 			var outcome: Dictionary = execute_ability(actor_id, target_id, action_id)
 			if not bool(outcome.get("success", false)):
+				# Неисполненный приём = досрочный отдых. Такт НЕ повторяется,
+				# его стоимость не списывается и автоматический блок не даётся.
 				events.append({"type": "failed", "actor_id": actor_id, "ability_id": action_id,
+					"slot_index": int(step["slot_index"]), "tick": tick,
 					"reason": outcome.get("reason", "Недоступно")})
+				events.append({"type": "rest", "actor_id": actor_id,
+					"slot_index": int(step["slot_index"]), "tick": tick, "premature": true})
 		flow.mark_tick()
 		flow.grant_half_health_reconfiguration(hero_actor.health, hero_actor.max_health)
 	if not is_victory and not is_defeat:

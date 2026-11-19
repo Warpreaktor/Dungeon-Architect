@@ -6,21 +6,47 @@ extends RefCounted
 
 
 static func execute(state, actor_id: String, target_id: String, ability_id: String) -> Dictionary:
+	return execute_definition(state, actor_id, target_id, AbilityCatalog.get_ability(ability_id))
+
+
+## Прямое исполнение ресурса полезно для тестов и будущих изучаемых приёмов.
+## Владение приёмом и все ограничения проверяются так же, как при вызове по ID.
+static func execute_definition(state, actor_id: String, target_id: String, ability: AbilityDefinition) -> Dictionary:
 	var actor: BattleParticipant = state.get_participant(actor_id)
 	var target: BattleParticipant = state.get_participant(target_id)
-	var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
+	var ability_id: String = ability.ability_id if ability != null else ""
 	if state.is_victory or state.is_defeat:
 		return _failure("Бой уже завершён")
 	if actor == null or not actor.is_alive():
 		return _failure("Участник недоступен")
-	if ability == null or not AbilityCatalog.can_prepare(actor, ability_id):
-		return _failure("Способность недоступна")
+	if ability == null:
+		return _failure("Неизвестный приём")
+	if not (ability_id in actor.personal_ability_ids or ability_id in actor.learned_ability_ids):
+		return _failure("Приём не изучен")
+	var ability_problem: String = ability.validation_error()
+	if ability_problem.is_empty():
+		ability_problem = ability.unavailable_reason(actor)
+	if not ability_problem.is_empty():
+		return _failure(ability_problem)
 	if ability.target == AbilityDefinition.Target.SELF:
 		if target != actor:
 			return _failure("Требуется цель: сам участник")
 	elif target == null or target == actor or not target.is_alive() or target.team_id == actor.team_id:
 		return _failure("Недопустимая цель")
+	# Валидация всей операции до первого изменения HP, статуса или запаса.
+	for effect in ability.effects:
+		if effect == null or effect.validation_error() != "":
+			return _failure("Некорректный эффект")
+		if effect.recipient == AbilityEffectDefinition.Recipient.TARGET and target == null:
+			return _failure("Нет цели эффекта")
+	# Атомарное списание: одна стоимость на всё действие, а не на каждый эффект.
 	var event_list: Array[Dictionary] = []
+	for resource_id in ability.resource_costs:
+		var cost: int = int(ability.resource_costs[resource_id])
+		var remaining: int = int(actor.resource_amounts.get(resource_id, 0)) - cost
+		actor.resource_amounts[resource_id] = remaining
+		event_list.append({"type": "resource_spent", "actor_id": actor_id,
+			"ability_id": ability_id, "resource_id": resource_id, "amount": cost, "remaining": remaining})
 	for effect in ability.effects:
 		var recipient: BattleParticipant = actor if effect.recipient == AbilityEffectDefinition.Recipient.SELF else target
 		if recipient == null:

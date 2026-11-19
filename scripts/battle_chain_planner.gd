@@ -21,13 +21,15 @@ static func validate(chain: Array[String], participant: BattleParticipant, check
 			return "Недоступный приём: %s" % action_id
 		if not ability.validation_error().is_empty():
 			return "Некорректный приём: %s" % action_id
-		if check_requirements and not ability.requirements_met(participant):
-			return "Не выполнены требования приёма: %s" % action_id
+		if check_requirements:
+			var unavailable: String = ability.unavailable_reason(participant)
+			if not unavailable.is_empty():
+				return "Приём %s недоступен: %s" % [action_id, unavailable]
 	return ""
 
 
-## После каждого полного круга участник один такт перезаряжается.
-## Курсор равный длине цепочки обозначает именно эту перезарядку.
+## После каждого полного круга участник один такт отдыхает.
+## Курсор равный длине цепочки обозначает именно этот отдых.
 static func next_step(chain: Array[String], cursor: int) -> Dictionary:
 	if chain.is_empty():
 		return {"action_id": "", "slot_index": -1, "reload": true, "next_cursor": 0}

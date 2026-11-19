@@ -57,10 +57,11 @@ func grant_half_health_reconfiguration(current_hp: int, maximum_hp: int) -> void
 		reconfiguration_tokens += 1
 
 
+## Прототип DA-4.08: после любой завершённой фазы менять тактику можно
+## бесплатно. Система жетонов сохранена для будущих испытаний баланса.
 func request_reconfiguration() -> bool:
-	if stage != Stage.BETWEEN_PHASES or reconfiguration_tokens <= 0:
+	if stage != Stage.BETWEEN_PHASES:
 		return false
-	reconfiguration_tokens -= 1
 	stage = Stage.RECONFIGURING
 	return true
 
@@ -76,5 +77,4 @@ func cancel_reconfiguration() -> bool:
 	if stage != Stage.RECONFIGURING:
 		return false
 	stage = Stage.BETWEEN_PHASES
-	reconfiguration_tokens += 1
 	return true

@@ -16,7 +16,9 @@ func _initialize() -> void:
 	assert(flow.complete_phase())
 	assert(not flow.complete_phase())
 	assert(flow.can_use_item())
+	assert(flow.request_reconfiguration()) # Бесплатная перестановка после каждой фазы.
 	assert(not flow.request_reconfiguration())
+	assert(flow.cancel_reconfiguration())
 	flow.grant_half_health_reconfiguration(20, 40) # Ровно 50% не даёт разрешение.
 	assert(flow.reconfiguration_tokens == 0)
 	flow.grant_half_health_reconfiguration(19, 40)
@@ -26,7 +28,7 @@ func _initialize() -> void:
 	assert(flow.request_reconfiguration())
 	assert(not flow.request_reconfiguration())
 	assert(flow.stage == BattleFlow.Stage.RECONFIGURING)
-	assert(flow.can_use_item())
+	assert(not flow.can_use_item()) # Только в обычной паузе.
 	assert(flow.confirm_reconfiguration())
 	assert(not flow.confirm_reconfiguration())
 	assert(flow.start_phase() and flow.phase_number == 2)

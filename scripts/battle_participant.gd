@@ -29,6 +29,10 @@ var last_shield_blocked: int = 0
 var last_block_absorbed: int = 0
 var last_shield_broken: String = ""
 var statuses: Dictionary = {}
+## Неиспользуемые пока в контенте запасы будущих ресурсов (ярость, мана и т.д.).
+## Это изменяемые данные конкретного участника боя, не .tres.
+var resource_amounts: Dictionary = {}
+const BASE_BLOCK_ARMOR: int = 2
 
 # Для совместимости существующих щитов их логика пока выполняется на
 # изолированной копии HeroState, а не на реальном герое прохождения.
@@ -86,13 +90,17 @@ func refresh_from_hero() -> void:
 
 
 func prepare_block(base_armor: int) -> void:
-	# Надетый щит даёт броню лишь при выполнении приёма «Блок».
+	# Блок доступен без щита. С щитом используем ЕГО броню, а не сумму
+	# с базовой; остаток прочности влияет только на последующие удары.
+	block_armor = preview_block_armor(base_armor)
+	block_attack_bonus_percent += 25
+
+
+func preview_block_armor(base_armor: int = BASE_BLOCK_ARMOR) -> int:
 	var shield: ItemDefinition = ItemCatalog.get_item(equipped_shield_id)
 	if shield != null and _hero_snapshot != null and _hero_snapshot.current_shield_durability(equipped_shield_id) > 0:
-		block_armor = maxi(shield.defense_bonus, 0)
-	else:
-		block_armor = maxi(base_armor, 0)
-	block_attack_bonus_percent += 25
+		return maxi(shield.defense_bonus, 0)
+	return maxi(BASE_BLOCK_ARMOR, base_armor)
 
 
 func restore_health(amount: int) -> int:
@@ -112,10 +120,18 @@ func receive_damage(incoming: int) -> int:
 	if _hero_snapshot != null:
 		_hero_snapshot.last_shield_broken = ""
 	var raw: int = maxi(incoming, 0)
-	var armor_after_base: int = maxi(raw - (_hero_snapshot.base_defense if _hero_snapshot != null else defense), 0)
-	var blocked: int = mini(armor_after_base, block_armor)
-	if blocked > 0 and _hero_snapshot != null and not equipped_shield_id.is_empty():
-		blocked = _hero_snapshot.consume_shield_block(blocked)
+	var passive_armor: int = _hero_snapshot.base_defense if _hero_snapshot != null else defense
+	var armor_after_base: int = maxi(raw - passive_armor, 0)
+	var active_shield: bool = (_hero_snapshot != null
+		and not equipped_shield_id.is_empty()
+		and _hero_snapshot.current_shield_durability(equipped_shield_id) > 0)
+	# При активном щите общая защита не складывается сверх показателя
+	# щита: из 5 брони максимум (5 - пассивная броня) даёт сам блок.
+	var extra_armor: int = maxi(block_armor - passive_armor, 0) if active_shield else block_armor
+	var blocked: int = mini(armor_after_base, extra_armor)
+	if blocked > 0 and active_shield:
+		# Износ от всей силы удара по щиту, не только от поглощённых HP.
+		blocked = _hero_snapshot.consume_shield_block(armor_after_base, blocked)
 		last_shield_blocked = blocked
 		last_shield_broken = _hero_snapshot.last_shield_broken
 	# Показываем поглощение и монстру без физического щита.

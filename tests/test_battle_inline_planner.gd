@@ -49,24 +49,22 @@ func _verify() -> void:
 	assert((repeat.get_node("%SequenceSlots") as HBoxContainer).get_child_count() == 3)
 	assert((repeat.get_node("%EnemySequenceSlots") as HBoxContainer).get_child_count() == 3)
 
-	# Изменение без разрешения в обычной паузе невозможно.
+	# Между фазами три слота доступны без жетона и без второго окна.
 	assert(next_combat.battle_state.flow.start_phase())
 	assert(next_combat.battle_state.flow.complete_phase())
 	repeat._refresh_phase_controls()
 	repeat._choose_ability(0, "guard")
-	assert(repeat._planner_editing == ["basic_strike", "guard", "wolf_feint"])
-	assert(hero.get_saved_action_slots() == ["basic_strike", "guard", "wolf_feint"])
-
-	# При отмене перенастройки последний утверждённый вариант сохраняется.
-	next_combat.battle_state.flow.reconfiguration_tokens = 1
-	repeat._refresh_phase_controls()
-	repeat._on_guard_pressed()
-	assert(next_combat.battle_state.flow.stage == BattleFlow.Stage.RECONFIGURING)
-	repeat._choose_ability(0, "guard")
 	assert(repeat._planner_editing[0] == "guard")
-	repeat._on_guard_pressed()
-	assert(next_combat.battle_state.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
-	assert(hero.get_saved_action_slots() == ["basic_strike", "guard", "wolf_feint"])
-	assert(repeat._planner_editing == ["basic_strike", "guard", "wolf_feint"])
+	assert(repeat._commit_draft())
+	assert(hero.get_saved_action_slots() == ["guard", "guard", "wolf_feint"])
+	assert(next_combat.battle_state.get_hero().action_chain == ["guard", "guard", "wolf_feint"])
+	# Скрытые приёмы врага: без иконки и тултипа до события action_start.
+	var enemy_slots: HBoxContainer = repeat.get_node("%EnemySequenceSlots") as HBoxContainer
+	for slot in enemy_slots.get_children():
+		assert((slot as BattleAbilitySlot).tooltip_text.is_empty())
+	repeat._display_phase_event({"type": "action_start", "actor_id": "enemy", "slot_index": 0, "ability_id": "lobar_charge"})
+	assert(not (enemy_slots.get_child(0) as BattleAbilitySlot).tooltip_text.is_empty())
+	repeat._conceal_enemy_actions()
+	assert((enemy_slots.get_child(0) as BattleAbilitySlot).tooltip_text.is_empty())
 	repeat.queue_free()
 	quit()

@@ -25,7 +25,7 @@ func _initialize() -> void:
 	var guard_damage: Dictionary = AbilityExecutor.apply_damage(enemy, actor, shield.defense_bonus + 1)
 	assert(guard_damage.shield_blocked == mini(shield.defense_bonus, initial_durability))
 	assert(actor.block_armor == 0)
-	assert(actor._hero_snapshot.current_shield_durability("shield") == initial_durability - guard_damage.shield_blocked)
+	assert(actor._hero_snapshot.current_shield_durability("shield") == maxi(initial_durability - (shield.defense_bonus + 1 - hero.base_defense), 0))
 	assert(actor.block_attack_bonus_percent == 25)
 
 	# Блоки копят бонус. Следующая атака его получает и расходует.

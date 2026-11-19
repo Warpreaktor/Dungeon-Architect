@@ -81,4 +81,14 @@ static func can_prepare(participant: BattleParticipant, ability_id: String) -> b
 	if not (ability_id in participant.personal_ability_ids or ability_id in participant.learned_ability_ids):
 		return false
 	var ability: AbilityDefinition = get_ability(ability_id)
-	return ability != null and ability.validation_error().is_empty() and ability.requirements_met(participant)
+	return ability != null and ability.validation_error().is_empty() and ability.unavailable_reason(participant).is_empty()
+
+
+static func unavailable_reason(participant: BattleParticipant, ability_id: String) -> String:
+	if participant == null or not (ability_id in participant.personal_ability_ids or ability_id in participant.learned_ability_ids):
+		return "Приём не изучен"
+	var ability: AbilityDefinition = get_ability(ability_id)
+	if ability == null:
+		return "Неизвестный приём"
+	var problem: String = ability.validation_error()
+	return problem if not problem.is_empty() else ability.unavailable_reason(participant)

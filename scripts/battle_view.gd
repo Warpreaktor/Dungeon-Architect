@@ -87,14 +87,14 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_hero_attack_icon.texture = weapon_icon
 	_hero_attack_value.text = str(hero.attack)
 	var shield_item: ItemDefinition = ItemCatalog.get_item(hero.equipped_shield_id)
-	_hero_defense_value.text = str(shield_item.defense_bonus if shield_item != null else hero.defense)
-	_defense_idle_color = Color.WHITE if shield_item != null or hero.defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
+	_hero_defense_value.text = str(_combat.battle_state.get_hero().preview_block_armor())
+	_defense_idle_color = Color.WHITE
 	_hero_defense_icon.modulate = _defense_idle_color
 	_hero_chain_title.text = _hero_name.text.to_upper()
 	_enemy_name.text = combat.enemy_definition.display_name
 	_enemy_chain_title.text = _enemy_name.text.to_upper()
 	_enemy_attack_value.text = str(combat.enemy_damage)
-	_enemy_defense_value.text = str(combat.enemy_defense)
+	_enemy_defense_value.text = str(_combat.battle_state.get_enemy().preview_block_armor())
 	_enemy_defense_icon.modulate = Color.WHITE if combat.enemy_defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
 	_enemy_portrait.texture = combat.enemy_definition.icon
 	_enemy_portrait.modulate = Color.WHITE
@@ -117,7 +117,7 @@ func _editing_allowed() -> bool:
 	if _combat == null or _is_playing_back:
 		return false
 	var stage: int = _combat.battle_state.flow.stage
-	return stage == BattleFlow.Stage.PREPARATION or stage == BattleFlow.Stage.RECONFIGURING
+	return stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.RECONFIGURING]
 
 
 func _set_draft_from_chain(slots: Array[String]) -> void:
@@ -159,9 +159,14 @@ func _refresh_enemy_slots() -> void:
 		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_enemy_sequence_slots.add_child(slot)
 		if index < _enemy_chain.size():
-			slot.configure(index, AbilityCatalog.get_ability(_enemy_chain[index]), false, enemy)
+			slot.configure_hidden(index)
 		else:
-			slot.configure_recharge(index)
+			slot.configure_hidden(index)
+
+
+func _conceal_enemy_actions() -> void:
+	for index in range(_enemy_sequence_slots.get_child_count()):
+		(_enemy_sequence_slots.get_child(index) as BattleAbilitySlot).configure_hidden(index)
 
 
 func _highlight_slots(hero_index: int, enemy_index: int, hero_reloading: bool = false, enemy_reloading: bool = false) -> void:
@@ -279,7 +284,10 @@ func _populate_ability_picker(index: int) -> void:
 		choice.text = ability.display_name
 		choice.icon = BattleAbilitySlot.visual_icon(ability)
 		choice.tooltip_text = BattleAbilityTooltip.describe(ability, actor)
-		choice.disabled = not AbilityCatalog.can_prepare(actor, ability.ability_id)
+		var reason: String = AbilityCatalog.unavailable_reason(actor, ability.ability_id)
+		if not reason.is_empty() and not choice.tooltip_text.contains(reason):
+			choice.tooltip_text += "\nНедоступно: " + reason
+		choice.disabled = not reason.is_empty()
 		_style_picker_button(choice)
 		choice.pressed.connect(_choose_ability.bind(index, ability.ability_id))
 		_picker_grid.add_child(choice)
@@ -413,7 +421,7 @@ func _on_punch_pressed() -> void:
 			_result_text.text = "Алгоритм сохранён."
 			_refresh_phase_controls()
 		return
-	if flow.stage == BattleFlow.Stage.PREPARATION and not _commit_draft():
+	if flow.stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES] and not _commit_draft():
 		# Не пересоздаём слоты: иначе Tween красного мигания мгновенно погибнет.
 		return
 	_hide_ability_picker()
@@ -568,11 +576,17 @@ func _display_phase_event(event: Dictionary) -> void:
 	var kind: String = str(event.get("type", ""))
 	match kind:
 		"tick":
+			_conceal_enemy_actions()
 			_highlight_slots(int(event.get("hero_slot", -1)), int(event.get("enemy_slot", -1)),
 				bool(event.get("hero_reload", false)), bool(event.get("enemy_reload", false)))
 		"action_start":
-			# Надписи не нужны: текущий слот выделен рамкой.
-			pass
+			# Враг показывает только исполняемый сейчас приём, не будущие.
+			if actor_id == "enemy":
+				var index: int = int(event.get("slot_index", -1))
+				if index >= 0 and index < _enemy_sequence_slots.get_child_count():
+					var slot: BattleAbilitySlot = _enemy_sequence_slots.get_child(index) as BattleAbilitySlot
+					slot.reveal_enemy_action(AbilityCatalog.get_ability(str(event.get("ability_id", ""))),
+						_combat.battle_state.get_enemy())
 		"block":
 			var target_id: String = str(event.get("target_id", ""))
 			_visible_block[target_id] = true
@@ -592,8 +606,13 @@ func _display_phase_event(event: Dictionary) -> void:
 		"reload":
 			_show_reload_icon(actor_id)
 		"failed":
-			# Отказ уже рассчитан и сохранён в журнале, показ без модальных подсказок.
-			pass
+			# Текущий слот коротко вспыхивает красным, без текстовых предупреждений.
+			var slot_index: int = int(event.get("slot_index", -1))
+			var row: HBoxContainer = _sequence_slots if actor_id == "hero" else _enemy_sequence_slots
+			if slot_index >= 0 and slot_index < row.get_child_count():
+				(row.get_child(slot_index) as BattleAbilitySlot).flash_empty()
+		"rest":
+			_show_reload_icon(actor_id)
 
 
 func _impact(event: Dictionary) -> void:
@@ -672,6 +691,8 @@ func _exit_tree() -> void:
 		_impact_layer.free()
 func _after_phase_playback() -> void:
 	_is_playing_back = false
+	_conceal_enemy_actions()
+	_highlight_slots(-1, -1)
 	_hero_health_meter.set_health(_combat.hero.health, _combat.hero.max_health, true)
 	_enemy_health_meter.set_health(_combat.enemy_health, _combat.enemy_max_health, true)
 	# При нескольких ударах за фазу щит мог сломаться не на последнем.
@@ -680,7 +701,7 @@ func _after_phase_playback() -> void:
 		var broken_id: String = str(event.get("shield_broken", ""))
 		if not broken_id.is_empty():
 			_combat.hero.last_shield_broken = broken_id
-			_hero_defense_value.text = str(_combat.hero.defense)
+			_hero_defense_value.text = str(_combat.battle_state.get_hero().preview_block_armor())
 			shield_broken.emit(broken_id)
 			_combat.hero.last_shield_broken = ""
 			var hero_actor: BattleParticipant = _combat.battle_state.get_hero()
@@ -713,8 +734,8 @@ func _refresh_phase_controls() -> void:
 			_punch_button.text = "Сохранить алгоритм"
 		_:
 			_punch_button.text = "Следующая фаза"
-	_guard_button.visible = not _is_playing_back and (stage == BattleFlow.Stage.RECONFIGURING or
-		(stage == BattleFlow.Stage.BETWEEN_PHASES and flow.reconfiguration_tokens > 0))
+	# Свободная перестановка доступна прямо в слотах между фазами.
+	_guard_button.visible = false
 	_guard_button.disabled = _is_playing_back or stage == BattleFlow.Stage.EXECUTING or stage == BattleFlow.Stage.FINISHED
 	_guard_button.text = "Отмена" if stage == BattleFlow.Stage.RECONFIGURING else "Изменить тактику"
 

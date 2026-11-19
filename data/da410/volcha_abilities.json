@@ -6,7 +6,7 @@
     {
       "id": "volcha_wolf_lunge", "display_name": "Волчий выпад", "kind": "melee_attack",
       "hits": 1, "base_multiplier": 1.0,
-      "conditional_multipliers": [{"when": "first_configured_slot", "value": 1.25}]
+      "armor_pierce_fraction": 0.25
     },
     {
       "id": "volcha_strike_and_rebound", "display_name": "Удар и отскок", "kind": "melee_attack",

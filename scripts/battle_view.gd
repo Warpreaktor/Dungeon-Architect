@@ -16,12 +16,16 @@ signal item_use_requested(item_id: String)
 @onready var _hero_attack_value: Label = %HeroAttackValue
 @onready var _hero_strength_value: Label = %HeroStrengthValue
 @onready var _hero_agility_value: Label = %HeroAgilityValue
+@onready var _hero_dodge_value: Label = %HeroDodgeValue
+@onready var _hero_accuracy_value: Label = %HeroAccuracyValue
 @onready var _hero_defense_icon: TextureRect = %HeroDefenseIcon
 @onready var _hero_defense_value: Label = %HeroDefenseValue
 @onready var _hero_name: Label = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroName
 @onready var _enemy_attack_value: Label = %EnemyAttackValue
 @onready var _enemy_strength_value: Label = %EnemyStrengthValue
 @onready var _enemy_agility_value: Label = %EnemyAgilityValue
+@onready var _enemy_dodge_value: Label = %EnemyDodgeValue
+@onready var _enemy_accuracy_value: Label = %EnemyAccuracyValue
 @onready var _enemy_defense_value: Label = %EnemyDefenseValue
 @onready var _enemy_defense_icon: TextureRect = %EnemyDefenseIcon
 @onready var _enemy_name: Label = %EnemyName
@@ -35,6 +39,13 @@ signal item_use_requested(item_id: String)
 @onready var _battlefield: HBoxContainer = $OuterMargin/Main/Battlefield
 @onready var _hero_chain_title: Label = %HeroChainTitle
 @onready var _enemy_chain_title: Label = %EnemyChainTitle
+
+# Pixel sizes for the combat ability chooser; keep icon/row/scroll sizes in sync.
+const PICKER_ICON_WIDTH: int = 54
+const PICKER_CHOICE_WIDTH: float = 306.0
+const PICKER_CHOICE_HEIGHT: float = 70.0
+const PICKER_ROW_SPACING: float = 6.0
+const PICKER_MAX_LIST_HEIGHT: float = 260.0
 
 const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 
@@ -107,6 +118,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_hero_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_hero()))
 	_hero_strength_value.text = "СИЛ %d" % hero.strength
 	_hero_agility_value.text = "ЛОВ %d" % hero.agility
+	_refresh_accuracy_and_dodge()
 	_hero_defense_value.text = str(_combat.battle_state.get_hero().block_armor)
 	_defense_idle_color = Color(0.55, 0.60, 0.67, 0.65)
 	_hero_defense_icon.modulate = _defense_idle_color
@@ -130,7 +142,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	# Preserve positions but discard obsolete skills after a character's tree changed.
 	var playable: BattleParticipant = _combat.battle_state.get_hero()
 	for i in range(_committed_slots.size()):
-		if not _committed_slots[i].is_empty() and not (_committed_slots[i] in playable.personal_ability_ids or _committed_slots[i] in playable.learned_ability_ids):
+		if not _committed_slots[i].is_empty() and not AbilityCatalog.knows_ability(playable, _committed_slots[i]):
 			_committed_slots[i] = ""
 	_set_draft_from_chain(_committed_slots)
 	hero.save_action_slots(_committed_slots)
@@ -343,7 +355,7 @@ func _build_ability_picker() -> void:
 	_picker_grid = GridContainer.new()
 	_picker_grid.columns = 1
 	_picker_grid.add_theme_constant_override("h_separation", 6)
-	_picker_grid.add_theme_constant_override("v_separation", 6)
+	_picker_grid.add_theme_constant_override("v_separation", int(PICKER_ROW_SPACING))
 	scroll.add_child(_picker_grid)
 	_picker_actions = HBoxContainer.new()
 	_picker_actions.add_theme_constant_override("separation", 6)
@@ -372,7 +384,7 @@ func _style_picker_button(button: Button) -> void:
 	disabled.border_color = Color("#303e49")
 	button.add_theme_stylebox_override("disabled", disabled)
 	button.add_theme_font_size_override("font_size", 14)
-	button.add_theme_constant_override("icon_max_width", 30)
+	button.add_theme_constant_override("icon_max_width", PICKER_ICON_WIDTH)
 
 
 func _on_slot_selected(index: int) -> void:
@@ -402,7 +414,7 @@ func _populate_ability_picker(index: int) -> void:
 	var shown: int = 0
 	for ability in available:
 		var choice := Button.new()
-		choice.custom_minimum_size = Vector2(306, 48)
+		choice.custom_minimum_size = Vector2(PICKER_CHOICE_WIDTH, PICKER_CHOICE_HEIGHT)
 		choice.clip_text = true
 		choice.expand_icon = true
 		choice.text = ability.display_name
@@ -417,7 +429,7 @@ func _populate_ability_picker(index: int) -> void:
 		_picker_grid.add_child(choice)
 		shown += 1
 	var scroll: ScrollContainer = _picker_grid.get_parent() as ScrollContainer
-	scroll.custom_minimum_size.y = minf(228.0, maxf(52.0, float(shown) * 52.0))
+	scroll.custom_minimum_size.y = minf(PICKER_MAX_LIST_HEIGHT, maxf(PICKER_CHOICE_HEIGHT, float(shown) * (PICKER_CHOICE_HEIGHT + PICKER_ROW_SPACING)))
 	if not _planner_editing[index].is_empty():
 		_add_picker_action("←", "Сдвинуть приём влево", index > 0, _move_draft.bind(index, -1))
 		_add_picker_action("→", "Сдвинуть приём вправо", index + 1 < _planner_editing.size(), _move_draft.bind(index, 1))
@@ -742,6 +754,8 @@ func _display_phase_event(event: Dictionary) -> void:
 				_enemy_health_meter.set_health(_visible_enemy_hp, _combat.enemy_max_health, true)
 			if healed > 0:
 				_spawn_number(str(event.get("target_id", "")), "+%d" % healed, Color("#70d994"))
+		"status_applied":
+			_set_accuracy_and_dodge_from_event(event)
 		"reload":
 			_show_reload_icon(actor_id)
 		"failed":
@@ -788,6 +802,7 @@ func _impact(event: Dictionary) -> void:
 		target.modulate = Color("#d0d5de")
 	if bool(event.get("dodged", false)):
 		_spawn_number(target_id, "УКЛОНЕНИЕ", Color("#83e7bb"))
+	_set_accuracy_and_dodge_from_event(event)
 	_set_block_display(target_id, int(event.get("active_block_after", 0)))
 	_visible_block[target_id] = false if not bool(event.get("dodged", false)) else bool(_visible_block.get(target_id, false))
 	var shield_icon: TextureRect = _impact_shields.get(target_id) as TextureRect
@@ -847,6 +862,7 @@ func _exit_tree() -> void:
 		_impact_layer.free()
 func _after_phase_playback() -> void:
 	_is_playing_back = false
+	_refresh_accuracy_and_dodge()
 	_set_block_display("hero", _combat.battle_state.get_hero().block_armor)
 	_set_block_display("enemy", _combat.battle_state.get_enemy().block_armor)
 	_conceal_enemy_actions()
@@ -877,9 +893,39 @@ func _after_phase_playback() -> void:
 		_refresh_phase_controls()
 
 
+## При проигрывании показываем снимок результата события, а не конечное
+## состояние уже рассчитанной фазы.
+func _set_accuracy_and_dodge_from_event(event: Dictionary) -> void:
+	if not event.has("dodge_after"):
+		return
+	var target_id: String = str(event.get("target_id", ""))
+	var dodge_label: Label = _hero_dodge_value if target_id == "hero" else _enemy_dodge_value
+	var accuracy_label: Label = _hero_accuracy_value if target_id == "hero" else _enemy_accuracy_value
+	dodge_label.text = "УКЛ %d%%" % int(event.get("dodge_after", 0))
+	accuracy_label.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + int(event.get("accuracy_after", 0)))
+
+
+func _refresh_accuracy_and_dodge() -> void:
+	if _combat == null:
+		return
+	var hero: BattleParticipant = _combat.battle_state.get_hero()
+	var enemy: BattleParticipant = _combat.battle_state.get_enemy()
+	if hero == null or enemy == null:
+		return
+	_hero_agility_value.text = "ЛОВ %d" % hero.effective_agility()
+	_enemy_agility_value.text = "ЛОВ %d" % enemy.effective_agility()
+	_hero_dodge_value.text = "УКЛ %d%%" % hero.dodge_percent()
+	_hero_accuracy_value.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + hero.accuracy_percent())
+	_enemy_dodge_value.text = "УКЛ %d%%" % enemy.dodge_percent()
+	_enemy_accuracy_value.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + enemy.accuracy_percent())
+	_hero_dodge_value.tooltip_text = "Собственное уклонение, без учёта меткости противника"
+	_enemy_dodge_value.tooltip_text = "Собственное уклонение, без учёта меткости противника"
+
+
 func _refresh_phase_controls() -> void:
 	if _combat == null:
 		return
+	_refresh_accuracy_and_dodge()
 	var flow: BattleFlow = _combat.battle_state.flow
 	var stage: int = flow.stage
 	var editable: bool = _editing_allowed()

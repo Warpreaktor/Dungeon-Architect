@@ -52,7 +52,7 @@ corner_radius_bottom_right = 7
 corner_radius_bottom_left = 7
 
 [node name="BattleAbilitySlot" type="Button"]
-custom_minimum_size = Vector2(108, 64)
+custom_minimum_size = Vector2(128, 76)
 focus_mode = 2
 theme_override_styles/normal = SubResource("SlotNormal")
 theme_override_styles/hover = SubResource("SlotHover")
@@ -78,14 +78,14 @@ mouse_filter = 2
 theme_override_constants/separation = 4
 
 [node name="SlotIcon" type="TextureRect" parent="SlotMargin/Row"]
-custom_minimum_size = Vector2(27, 34)
+custom_minimum_size = Vector2(46, 50)
 layout_mode = 2
 mouse_filter = 2
 expand_mode = 1
 stretch_mode = 5
 
 [node name="EmptyIcon" type="Label" parent="SlotMargin/Row"]
-custom_minimum_size = Vector2(27, 34)
+custom_minimum_size = Vector2(46, 50)
 layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)

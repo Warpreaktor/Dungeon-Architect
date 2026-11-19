@@ -2,8 +2,8 @@ class_name BattleAbilityTooltip
 extends RefCounted
 
 ## Текст подсказок собирается из реальных данных способности и участника.
-## Урон показан до защиты цели, с текущим бонусом блока атакующего.
-static func describe(ability: AbilityDefinition, participant: BattleParticipant = null, slot_index: int = -1) -> String:
+## Показываем правила и параметры способности, но не прогноз урона.
+static func describe(ability: AbilityDefinition, participant: BattleParticipant = null, _slot_index: int = -1) -> String:
 	if ability == null:
 		return ""
 	var lines: Array[String] = [ability.display_name]
@@ -13,22 +13,12 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 	for effect in ability.effects:
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
+				var type_name: String = "ближняя" if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else ("дальняя" if ability.damage_delivery == AbilityDefinition.DamageDelivery.RANGED else "магическая")
+				lines.append("Атака: %s" % type_name)
 				if effect.hit_count > 1:
-					lines.append("Попаданий: %d" % effect.hit_count)
-				var type_name: String = "ближний" if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else ("дальний" if ability.damage_delivery == AbilityDefinition.DamageDelivery.RANGED else "магический")
-				if participant != null:
-					var hit_damage: int = AbilityExecutor.preview_damage(participant, ability, effect, null, slot_index)
-					if effect.hit_count > 1:
-						lines.append("Урон: %d × %d удара (%s, до защиты)" % [hit_damage, effect.hit_count, type_name])
-					else:
-						lines.append("Урон: %d (%s, до защиты)" % [hit_damage, type_name])
-				else:
-					lines.append("Мощность приёма: %d (%s) + оружие и характеристика" % [effect.amount, type_name])
+					lines.append("Ударов: %d" % effect.hit_count)
 			AbilityEffectDefinition.Kind.BLOCK:
-				var block: int = maxi(BattleParticipant.BASE_BLOCK_ARMOR, effect.amount)
-				if participant != null:
-					block = participant.preview_block_armor(block)
-				lines.append("Броня блока: %d (на одно попадание)" % block)
+				lines.append("Защищает от следующего попадания; сила блока зависит от щита")
 				lines.append("+25%% базового урона к следующей атаке за каждый блок (через фазы)")
 			AbilityEffectDefinition.Kind.HEAL:
 				lines.append("Лечение: %d HP (не выше максимума)" % maxi(effect.amount, 0))

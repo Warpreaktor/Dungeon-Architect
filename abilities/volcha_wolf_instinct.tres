@@ -8,18 +8,18 @@
 script = ExtResource("2_effect")
 kind = 3
 recipient = 0
-status_id = "volcha_instinct"
-status_stat = 1
-status_modifier = 20
+amount = 20
+status_id = "volcha_instinct_dodge"
 duration_ticks = 1
-status_clock = 2
-stack_policy = 1
+modifier_kind = 1
+stack_mode = 1
+expires_on_incoming_attack = true
 
 [resource]
 script = ExtResource("1_script")
 ability_id = "volcha_wolf_instinct"
 display_name = "Волчье чутьё"
-description = "+20% уклонения от следующей атаки. Складывается с собой."
+description = "Каждое применение даёт +20% уклонения до следующей входящей атаки. Складывается с любыми бонусами уклонения."
 icon = ExtResource("3_icon")
 category = 1
 target = 0

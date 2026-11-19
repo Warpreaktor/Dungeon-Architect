@@ -9,13 +9,14 @@ script = ExtResource("2_effect")
 kind = 0
 recipient = 1
 amount = 0
-first_slot_multiplier = 1.25
+damage_scale_percent = 100
+armor_pierce_fraction = 0.25
 
 [resource]
 script = ExtResource("1_script")
 ability_id = "volcha_wolf_lunge"
 display_name = "Волчий выпад"
-description = "×1,0 базы; первый в цепочке ×1,25."
+description = "Стремительный удар с 25% пробитием блока и брони."
 icon = ExtResource("3_icon")
 category = 0
 target = 1

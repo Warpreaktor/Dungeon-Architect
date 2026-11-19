@@ -12,6 +12,8 @@ var strength: int = 0
 var agility: int = 0
 var defense: int = 0
 var base_dodge_percent: int = 0
+## Редактируемый дополнительный бонус меткости; Ловкость даёт основной.
+var accuracy_bonus: int = 0
 var equipped_weapon_id: String = ""
 var equipped_shield_id: String = ""
 var effects: Dictionary = {}
@@ -38,6 +40,8 @@ var is_resting: bool = false
 ## Это изменяемые данные конкретного участника боя, не .tres.
 var resource_amounts: Dictionary = {}
 const BASE_BLOCK_ARMOR: int = 2
+## Одна сотня процентов является определением процентной шкалы, не балансом.
+const PERCENT_SCALE: int = 100
 
 # Для совместимости существующих щитов их логика пока выполняется на
 # изолированной копии HeroState, а не на реальном герое прохождения.
@@ -54,6 +58,7 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant._hero_snapshot = source.copy_for_battle()
 	participant.personal_ability_ids = source.definition.personal_ability_ids.duplicate() if source.definition != null else []
 	participant.base_dodge_percent = source.definition.base_dodge_percent if source.definition != null else 0
+	participant.accuracy_bonus = source.definition.accuracy_bonus if source.definition != null else 0
 	participant.learned_ability_ids = source.learned_ability_ids.duplicate()
 	participant.action_slot_capacity = source.action_slot_capacity()
 	participant.refresh_from_hero()
@@ -73,6 +78,7 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 	participant.agility = source.agility
 	participant.defense = 0 # Passive armor is not implemented yet.
 	participant.base_dodge_percent = source.base_dodge_percent
+	participant.accuracy_bonus = source.accuracy_bonus
 	participant.personal_ability_ids = source.personal_ability_ids.duplicate()
 	participant.action_slot_capacity = clampi(source.base_action_slots, 1, BattleChainPlanner.MAX_ACTIONS)
 	return participant
@@ -153,14 +159,17 @@ func restore_health(amount: int) -> int:
 	return healed
 
 
-func receive_damage(incoming: int) -> int:
+func receive_damage(incoming: int, armor_pierce_fraction: float = 0.0) -> int:
 	last_shield_blocked = 0
 	last_block_absorbed = 0
 	last_shield_broken = ""
 	if _hero_snapshot != null:
 		_hero_snapshot.last_shield_broken = ""
 	var raw: int = maxi(incoming, 0)
-	var armor_after_base: int = raw
+	# Расщепляем повреждение ДО активного блока. Пока отдельной брони нет.
+	# ceili обеспечивает минимум 1 пробивающего урона при ненулевом пробитии.
+	var pierced: int = ceili(float(raw) * clampf(armor_pierce_fraction, 0.0, 1.0))
+	var armor_after_base: int = maxi(raw - pierced, 0)
 	var active_shield: bool = (_hero_snapshot != null
 		and not equipped_shield_id.is_empty()
 		and _hero_snapshot.current_shield_durability(equipped_shield_id) > 0)
@@ -177,12 +186,33 @@ func receive_damage(incoming: int) -> int:
 	# Блок защищает от одного попадания, даже если оно было нулевым.
 	block_armor = 0
 	if _hero_snapshot != null:
-		var taken: int = _hero_snapshot.take_damage(raw - blocked)
+		var taken: int = _hero_snapshot.take_damage(pierced + armor_after_base - blocked)
 		refresh_from_hero()
 		return taken
-	var taken: int = maxi(armor_after_base - blocked, 0)
+	var taken: int = pierced + maxi(armor_after_base - blocked, 0)
 	health = maxi(health - taken, 0)
 	return taken
+
+
+## Все значения в процентных пунктах. Фактическое уклонение зависит от противника.
+func effective_agility() -> int:
+	return maxi(agility + status_modifier(AbilityEffectDefinition.Stat.AGILITY), 0)
+
+
+func dodge_percent() -> int:
+	# Не обрезаем до 100 до вычитания меткости: её бонусы могут
+	# противодействовать даже суммарному уклонению свыше 100%.
+	return maxi(base_dodge_percent + effective_agility()
+		+ status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT), 0)
+
+
+func accuracy_percent() -> int:
+	# Основные 100% попадания не входят в бонус меткости.
+	return maxi(effective_agility() + accuracy_bonus + status_modifier(AbilityEffectDefinition.Stat.ACCURACY), 0)
+
+
+func dodge_chance_against(attacker: BattleParticipant) -> int:
+	return clampi(dodge_percent() - (attacker.accuracy_percent() if attacker != null else 0), 0, PERCENT_SCALE)
 
 
 func status_modifier(stat: int) -> int:

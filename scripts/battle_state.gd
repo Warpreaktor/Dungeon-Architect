@@ -175,7 +175,7 @@ func default_chain(participant_id: String) -> Array[String]:
 		return []
 	var defense_id: String = ""
 	var attack_id: String = ""
-	for action_id in participant.personal_ability_ids + participant.learned_ability_ids:
+	for action_id in AbilityCatalog.known_ability_ids(participant):
 		if not AbilityCatalog.can_prepare(participant, action_id):
 			continue
 		var definition: AbilityDefinition = AbilityCatalog.get_ability(action_id)

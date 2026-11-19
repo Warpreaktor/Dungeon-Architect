@@ -9,23 +9,24 @@ script = ExtResource("2_effect")
 kind = 0
 recipient = 1
 amount = 0
+damage_scale_percent = 100
 
 [sub_resource type="Resource" id="Effect1"]
 script = ExtResource("2_effect")
 kind = 3
 recipient = 0
-status_id = "volcha_rebound"
-status_stat = 1
-status_modifier = 10
+amount = 10
+status_id = "volcha_rebound_dodge"
 duration_ticks = 1
-status_clock = 2
-stack_policy = 2
+modifier_kind = 1
+stack_mode = 2
+expires_on_incoming_attack = true
 
 [resource]
 script = ExtResource("1_script")
 ability_id = "volcha_strike_and_rebound"
 display_name = "Удар и отскок"
-description = "×1,0 базы; +10% уклонения от следующей атаки. Не суммируется с собой."
+description = "Удар и +10% уклонения до следующей входящей атаки. Одинаковые эффекты не складываются."
 icon = ExtResource("3_icon")
 category = 0
 target = 1

@@ -6,7 +6,7 @@ enum Kind { DAMAGE, BLOCK, HEAL, APPLY_STATUS, REMOVE_STATUS, WAIT }
 enum Recipient { SELF, TARGET }
 enum Clock { LEGACY_HERO_PHASE, OWNER_PHASE, INCOMING_ATTACK }
 enum Stack { REFRESH, ADD, ONCE }
-enum Stat { NONE, DODGE_PERCENT, AGILITY }
+enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY }
 
 
 @export var kind: Kind = Kind.DAMAGE
@@ -16,6 +16,8 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY }
 ## Configurable damage rules. Only meaningful for DAMAGE.
 @export_range(0.0, 10.0, 0.01) var damage_multiplier: float = 1.0
 @export_range(0.0, 10.0, 0.01) var first_slot_multiplier: float = 0.0
+## Доля урона, проходящая сквозь активный блок и будущую броню.
+@export_range(0.0, 1.0, 0.01) var armor_pierce_fraction: float = 0.0
 @export_range(0.0, 10.0, 0.01) var vs_rest_multiplier: float = 0.0
 @export_range(0.0, 10.0, 0.01) var vs_block_multiplier: float = 0.0
 @export_range(1, 20, 1) var hit_count: int = 1

@@ -14,5 +14,7 @@ extends Resource
 @export_range(0, 999, 1) var agility: int = 0
 ## Base probability of avoiding an attack, without active buffs.
 @export_range(0, 100, 1) var base_dodge_percent: int = 0
+## Дополнительные очки меткости сверх бонуса +1 за Ловкость.
+@export_range(0, 999, 1) var accuracy_bonus: int = 0
 ## Legacy unused field; armor will be modeled independently.
 @export_range(0, 999, 1) var defense: int = 0

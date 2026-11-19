@@ -27,6 +27,43 @@ const DEFINITIONS := {
 }
 
 
+## Общий приём выдаётся только при выполнении условия экипировки.
+## Список расширяется новыми правилами без особых веток для героев.
+const COMMON_EQUIPMENT_ABILITIES: Dictionary = {
+	"guard": ItemDefinition.EquipmentSlot.SHIELD
+}
+
+
+static func known_ability_ids(participant: BattleParticipant) -> Array[String]:
+	var ids: Array[String] = []
+	if participant == null:
+		return ids
+	for id in participant.personal_ability_ids + participant.learned_ability_ids:
+		if DEFINITIONS.has(id) and not ids.has(id):
+			ids.append(id)
+	for id in COMMON_EQUIPMENT_ABILITIES:
+		if not ids.has(id) and _has_equipment(participant, int(COMMON_EQUIPMENT_ABILITIES[id])):
+			ids.append(id)
+	return ids
+
+
+static func knows_ability(participant: BattleParticipant, ability_id: String) -> bool:
+	return ability_id in known_ability_ids(participant)
+
+
+static func _has_equipment(participant: BattleParticipant, slot: int) -> bool:
+	if participant == null:
+		return false
+	match slot:
+		ItemDefinition.EquipmentSlot.SHIELD:
+			if participant.equipped_shield_id.is_empty():
+				return false
+			if participant._hero_snapshot != null:
+				return participant._hero_snapshot.current_shield_durability(participant.equipped_shield_id) > 0
+			return true
+	return false
+
+
 static func get_ability(ability_id: String) -> AbilityDefinition:
 	return DEFINITIONS.get(ability_id) as AbilityDefinition
 
@@ -66,11 +103,7 @@ static func available_abilities(participant: BattleParticipant) -> Array[Ability
 	var result: Array[AbilityDefinition] = []
 	if participant == null:
 		return result
-	var seen: Dictionary = {}
-	for ability_id in participant.personal_ability_ids + participant.learned_ability_ids:
-		if seen.has(ability_id):
-			continue
-		seen[ability_id] = true
+	for ability_id in known_ability_ids(participant):
 		var ability: AbilityDefinition = get_ability(ability_id)
 		if ability != null:
 			result.append(ability)
@@ -80,14 +113,14 @@ static func available_abilities(participant: BattleParticipant) -> Array[Ability
 static func can_prepare(participant: BattleParticipant, ability_id: String) -> bool:
 	if participant == null:
 		return false
-	if not (ability_id in participant.personal_ability_ids or ability_id in participant.learned_ability_ids):
+	if not knows_ability(participant, ability_id):
 		return false
 	var ability: AbilityDefinition = get_ability(ability_id)
 	return ability != null and ability.validation_error().is_empty() and ability.unavailable_reason(participant).is_empty()
 
 
 static func unavailable_reason(participant: BattleParticipant, ability_id: String) -> String:
-	if participant == null or not (ability_id in participant.personal_ability_ids or ability_id in participant.learned_ability_ids):
+	if participant == null or not knows_ability(participant, ability_id):
 		return "Приём не изучен"
 	var ability: AbilityDefinition = get_ability(ability_id)
 	if ability == null:

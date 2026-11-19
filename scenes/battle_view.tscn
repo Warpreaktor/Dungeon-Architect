@@ -88,7 +88,7 @@ theme_override_constants/separation = 10
 
 [node name="HeroPortrait" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(90, 104)
+custom_minimum_size = Vector2(128, 148)
 layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
@@ -163,6 +163,31 @@ mouse_filter = 2
 theme_override_font_sizes/font_size = 18
 text = "0"
 
+[node name="HeroPrecisionStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="HeroDodgeValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.52, 0.89, 0.76, 1)
+theme_override_font_sizes/font_size = 12
+text = "УКЛ 0%"
+tooltip_text = "Уклонение: Ловкость + эффекты, минус меткость атакующего"
+
+[node name="HeroAccuracyValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
+theme_override_font_sizes/font_size = 12
+text = "МЕТ 100%"
+tooltip_text = "Меткость: +1% за каждое очко Ловкости"
+
 [node name="EnemyCard" type="PanelContainer" parent="OuterMargin/Main/Battlefield"]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -186,14 +211,14 @@ theme_override_constants/separation = 10
 
 [node name="EnemyPortrait" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(90, 104)
+custom_minimum_size = Vector2(128, 148)
 layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
 texture = ExtResource("5_enemy")
 expand_mode = 1
 stretch_mode = 5
-pivot_offset = Vector2(45, 52)
+pivot_offset = Vector2(64, 74)
 
 [node name="EnemyName" type="Label" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn"]
 unique_name_in_owner = true
@@ -261,6 +286,31 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 18
 text = "0"
+
+[node name="EnemyPrecisionStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn"]
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="EnemyDodgeValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyPrecisionStats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.52, 0.89, 0.76, 1)
+theme_override_font_sizes/font_size = 12
+text = "УКЛ 0%"
+tooltip_text = "Уклонение: Ловкость + эффекты, минус меткость атакующего"
+
+[node name="EnemyAccuracyValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyPrecisionStats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
+theme_override_font_sizes/font_size = 12
+text = "МЕТ 100%"
+tooltip_text = "Меткость: +1% за каждое очко Ловкости"
 
 [node name="BottomPanel" type="PanelContainer" parent="OuterMargin/Main"]
 layout_mode = 2

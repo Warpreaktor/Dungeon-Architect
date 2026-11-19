@@ -21,7 +21,7 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 		return _failure("Участник недоступен")
 	if ability == null:
 		return _failure("Неизвестный приём")
-	if not (ability_id in actor.personal_ability_ids or ability_id in actor.learned_ability_ids):
+	if not AbilityCatalog.knows_ability(actor, ability_id):
 		return _failure("Приём не изучен")
 	var ability_problem: String = ability.validation_error()
 	if ability_problem.is_empty():
@@ -60,7 +60,7 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 				actor.block_armor = 0
 				actor.block_attack_bonus_percent = 0
 				for hit_index in range(effect.hit_count):
-					last_hit = apply_damage(actor, recipient, raw_damage, ability_id, state.rng)
+					last_hit = apply_damage(actor, recipient, raw_damage, ability_id, state.rng, effect.armor_pierce_fraction)
 					last_hit["hit_index"] = hit_index
 					last_hit["hit_count"] = effect.hit_count
 					event_list.append(last_hit)
@@ -85,7 +85,11 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 				recipient.apply_status(effect, state.flow.completed_ticks + 1)
 				event_list.append({"type": "status_applied", "actor_id": actor_id,
 					"target_id": recipient.participant_id, "ability_id": ability_id, "status_id": effect.status_id,
-					"duration_ticks": effect.duration_ticks})
+					"duration_ticks": effect.duration_ticks,
+					"dodge_after": recipient.dodge_percent(),
+					"effective_dodge_after": recipient.dodge_chance_against(
+						state.get_enemy() if recipient.participant_id == state.hero_id else state.get_hero()),
+					"accuracy_after": recipient.accuracy_percent()})
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:
 				var removed: bool = recipient.statuses.has(effect.status_id)
 				recipient.statuses.erase(effect.status_id)
@@ -131,7 +135,7 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 	return floori(maxf(base * (multiplier + float(actor.block_attack_bonus_percent) / 100.0), 0.0))
 
 
-static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "", rng: RandomNumberGenerator = null) -> Dictionary:
+static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "", rng: RandomNumberGenerator = null, armor_pierce_fraction: float = 0.0) -> Dictionary:
 	var raw: int = maxi(amount, 0)
 	# Статусы задают изменения чисел общими эффектами, а не отдельной логикой монстров.
 	if actor.statuses.has("attack_down"):
@@ -140,17 +144,22 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 	# прочность уже могут быть другими после следующих действий.
 	var shield_before: String = target.equipped_shield_id
 	var was_blocking: bool = target.block_armor > 0
-	var dodge_percent: int = clampi(target.base_dodge_percent + target.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT), 0, 100)
-	var dodged: bool = rng != null and dodge_percent > 0 and rng.randf() < float(dodge_percent) / 100.0
+	var dodge_percent: int = target.dodge_chance_against(actor)
+	var dodged: bool = rng != null and dodge_percent > 0 and rng.randf() < float(dodge_percent) / float(BattleParticipant.PERCENT_SCALE)
 	# Even an avoided attack spends 'next incoming attack' dodge bonuses.
 	target.advance_status_clock(AbilityEffectDefinition.Clock.INCOMING_ATTACK)
-	var taken: int = 0 if dodged else target.receive_damage(raw)
+	var taken: int = 0 if dodged else target.receive_damage(raw, armor_pierce_fraction)
 	var shield_durability_after: int = -1
 	if not shield_before.is_empty() and target._hero_snapshot != null:
 		shield_durability_after = target._hero_snapshot.current_shield_durability(shield_before)
 	return {"type": "attack", "actor_id": actor.participant_id, "target_id": target.participant_id,
 		"ability_id": ability_id, "raw_damage": raw, "damage": taken,
-		"dodged": dodged, "was_blocking": was_blocking,
+		"dodged": dodged, "dodge_chance": dodge_percent,
+		"attacker_accuracy": actor.accuracy_percent(), "target_dodge": target.dodge_percent(),
+		"dodge_after": target.dodge_percent(),
+		"effective_dodge_after": target.dodge_chance_against(actor),
+		"accuracy_after": target.accuracy_percent(),
+		"was_blocking": was_blocking,
 		"blocked": 0 if dodged else maxi(raw - taken, 0), "hp_after": target.health,
 		"hp_max": target.max_health, "armor_after": target.defense,
 		"active_block_after": target.block_armor,

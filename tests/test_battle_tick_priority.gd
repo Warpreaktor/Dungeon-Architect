@@ -27,16 +27,17 @@ func _initialize() -> void:
 	var enemy_chain: Array[String] = ["guard", "basic_strike"]
 	assert(battle.tick_policy.priority("wolf_feint") == battle.tick_policy.other_priority)
 	var result: Dictionary = battle.run_phase(hero_chain, enemy_chain)
-	assert(result.success and result.ticks == 3)
+	assert(result.success and result.ticks == 4)
 	var decisions: Array[String] = []
 	for event in battle.last_phase_events:
 		if event.type in ["block", "attack", "reload"]:
 			decisions.append(str(event.actor_id) + ":" + str(event.type))
-	assert(decisions == ["enemy:block", "hero:attack", "hero:block", "enemy:attack", "hero:attack", "enemy:reload"])
+	assert(decisions == ["enemy:block", "hero:attack", "hero:block", "enemy:attack", "hero:attack", "enemy:reload", "enemy:block", "hero:reload"])
 	var next: Dictionary = battle.run_phase(hero_chain, enemy_chain)
-	assert(next.success and next.ticks == 4) # перезарядка героя не съедает слот фазы
-	assert(battle.last_phase_events[0].hero_reload)
-	assert(battle.last_phase_events[0].enemy_slot == 0)
+	assert(next.success and next.ticks == 4) # каждый круг заканчивается отдыхом
+	assert(not battle.last_phase_events[0].hero_reload)
+	assert(battle.last_phase_events[-1].type == "reload" and battle.last_phase_events[-1].actor_id == "hero")
+	assert(battle.last_phase_events[0].enemy_slot == 1)
 
 	# При равном приоритете два блока ставятся в порядке герой -> монстр.
 	var both_guard: BattleState = _battle()
@@ -80,7 +81,7 @@ func _initialize() -> void:
 	for i in range(4):
 		assert(rests.run_phase(["guard", "guard", "guard"], ["guard", "guard"]).success)
 	var both_reloading: bool = false
-	for event in rests.last_phase_events:
+	for event in rests.events:
 		if event.type == "tick" and event.hero_reload and event.enemy_reload:
 			both_reloading = true
 	assert(both_reloading)

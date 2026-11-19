@@ -66,8 +66,8 @@ func configure_hero_chain(actions: Array[String]) -> Dictionary:
 	return {"success": true, "reason": ""}
 
 
-## Одна фаза выполняет полную цепочку ГЕРОЯ. Участники имеют независимые
-## курсоры: после последнего приёма следует один такт отдыха.
+## Одна фаза включает полную цепочку ГЕРОЯ И его обязательный отдых.
+## Курсоры участников независимы, отдых всегда завершает круг героя.
 ## Все события уже вычислены до визуального воспроизведения.
 func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dictionary:
 	var hero_actor: BattleParticipant = get_hero()
@@ -104,12 +104,16 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		enemy_actor.action_cursor = 0
 	var start_event: int = events.size()
 	var hero_actions_done: int = 0
-	while hero_actions_done < current_hero_chain.size() and not is_victory and not is_defeat:
+	var hero_rest_finished: bool = false
+	while (hero_actions_done < current_hero_chain.size() or not hero_rest_finished) and not is_victory and not is_defeat:
 		var hero_step: Dictionary = BattleChainPlanner.next_step(current_hero_chain, hero_actor.action_cursor)
 		var enemy_step: Dictionary = BattleChainPlanner.next_step(enemy_actions, enemy_actor.action_cursor)
 		hero_actor.action_cursor = int(hero_step["next_cursor"])
 		enemy_actor.action_cursor = int(enemy_step["next_cursor"])
-		if not bool(hero_step["reload"]):
+		if bool(hero_step["reload"]):
+			# Отдых до завершения круга (старый курсор) не закрывает фазу.
+			hero_rest_finished = hero_actions_done >= current_hero_chain.size()
+		else:
 			hero_actions_done += 1
 		var tick: int = flow.completed_ticks + 1
 		events.append({"type": "tick", "tick": tick, "hero_slot": int(hero_step["slot_index"]),

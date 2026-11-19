@@ -46,7 +46,7 @@ func _initialize() -> void:
 	var result: Dictionary = battle.run_phase(hero_chain, enemy_chain)
 	assert(result.success)
 	assert(battle.flow.phase_number == 1)
-	assert(battle.flow.completed_ticks == 3)
+	assert(battle.flow.completed_ticks == 4)
 	assert(battle.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
 	assert(battle.get_hero().block_attack_bonus_percent == 25)
 	assert(battle.get_enemy().block_attack_bonus_percent == 0)
@@ -55,7 +55,7 @@ func _initialize() -> void:
 	for event in battle.last_phase_events:
 		if event.type in ["block", "attack"]:
 			effects.append(event.type)
-	assert(effects == ["block", "block", "attack", "attack", "block"])
+	assert(effects == ["block", "block", "attack", "attack", "block", "block"])
 	# Отдельный запуск фазы, новая пара действий, никакого повторного начала во время исполнения.
 	assert(battle.run_phase(hero_chain, enemy_chain).success)
 	assert(battle.flow.phase_number == 2)

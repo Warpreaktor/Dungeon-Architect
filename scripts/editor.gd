@@ -14,6 +14,7 @@ const FILE_LOAD := 3
 const FILE_IMPORT := 4
 const FILE_EXPORT := 5
 const SETTINGS_MAP_PROPERTIES := 1
+const SETTINGS_TEST_HERO := 2
 const VIEW_REACHABILITY := 1
 const VIEW_GRID := 2
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
@@ -77,6 +78,8 @@ var map_data: DungeonMap
 var standalone_game: bool = false
 var _startup_game_map: DungeonMap
 var _startup_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
+## Герой исключительно для тестового прохождения из редактора.
+var _test_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
 var _editor_header: PanelContainer
 var _console_row: HBoxContainer
 var _game_command_bar: GameCommandBar
@@ -102,6 +105,8 @@ var _settings_menu: MenuButton
 var _layers_menu: MenuButton
 var _issues_toggle: Button
 var _settings_dialog: AcceptDialog
+var _settings_tabs: TabContainer
+var _test_hero_select: OptionButton
 var _issues_dialog: PopupPanel
 var _palette_toggle: Button
 var _palette_panel: PanelContainer
@@ -186,6 +191,7 @@ func _ready() -> void:
 	_reachability_refresh_timer.wait_time = 0.15
 	_reachability_refresh_timer.timeout.connect(_refresh_reachability)
 	add_child(_reachability_refresh_timer)
+	_load_test_hero_selection()
 	_build_interface()
 	_create_dialogs()
 	get_viewport().size_changed.connect(_on_editor_viewport_resized)
@@ -249,6 +255,7 @@ func _build_interface() -> void:
 	_settings_menu.tooltip_text = "Настройки редактора и текущей карты"
 	var settings_popup := _settings_menu.get_popup()
 	settings_popup.add_icon_item(COMMAND_ICONS["inspector"], "Свойства карты", SETTINGS_MAP_PROPERTIES)
+	settings_popup.add_item("Тестовый герой", SETTINGS_TEST_HERO)
 	settings_popup.id_pressed.connect(_on_settings_option_selected)
 	toolbar.add_child(_settings_menu)
 	_register_editor_control(_settings_menu)
@@ -509,6 +516,7 @@ func _create_dialogs() -> void:
 	settings_tabs.name = "SettingsTabs"
 	settings_tabs.custom_minimum_size = Vector2(430, 188)
 	_settings_dialog.add_child(settings_tabs)
+	_settings_tabs = settings_tabs
 	var map_tab := MarginContainer.new()
 	map_tab.name = "Свойства карты"
 	for margin_side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
@@ -555,6 +563,34 @@ func _create_dialogs() -> void:
 	_stats_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_stats_label.tooltip_text = "Размер задаётся при создании карты и здесь не меняется"
 	map_properties.add_child(_stats_label)
+
+	# Тестовый герой принадлежит настройкам редактора, а не карте.
+	var test_tab := MarginContainer.new()
+	test_tab.name = "Тестирование"
+	for margin_side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		test_tab.add_theme_constant_override(margin_side, 12)
+	settings_tabs.add_child(test_tab)
+	var test_properties := VBoxContainer.new()
+	test_properties.name = "TestProperties"
+	test_properties.add_theme_constant_override("separation", 12)
+	test_tab.add_child(test_properties)
+	test_properties.add_child(_label("Тестовый герой", 15, Color("#d5e0e7")))
+	_test_hero_select = OptionButton.new()
+	_test_hero_select.name = "TestHeroSelect"
+	_test_hero_select.custom_minimum_size.y = 44
+	_test_hero_select.tooltip_text = "Герой для временного тестового прохождения карты"
+	var hero_ids: Array[String] = []
+	for hero_id in HeroCatalog.DEFINITIONS.keys():
+		hero_ids.append(str(hero_id))
+	hero_ids.sort()
+	for hero_id in hero_ids:
+		var hero_definition: HeroDefinition = HeroCatalog.get_hero(hero_id)
+		_test_hero_select.add_item(hero_definition.display_name)
+		_test_hero_select.set_item_metadata(_test_hero_select.item_count - 1, hero_id)
+	_test_hero_select.select(_test_hero_option_index())
+	_test_hero_select.item_selected.connect(_on_test_hero_selected)
+	test_properties.add_child(_test_hero_select)
+	test_properties.add_child(_label("Выбор действует только при запуске «Тест» и не сохраняется в карте.", 13, Color("#9ab0bf")))
 
 	# Диагностика остаётся доступной по запросу, но не забирает ширину у карты.
 	_issues_dialog = PopupPanel.new()
@@ -932,10 +968,54 @@ func _apply_editor_panels() -> void:
 
 
 func _on_settings_option_selected(id: int) -> void:
-	if id == SETTINGS_MAP_PROPERTIES and map_data != null and not is_play_mode:
-		_name_input.text = map_data.display_name
-		_refresh_stats()
-		_settings_dialog.popup_centered_clamped(Vector2i(490, 240))
+	if is_play_mode or standalone_game:
+		return
+	match id:
+		SETTINGS_MAP_PROPERTIES:
+			if map_data == null:
+				return
+			_name_input.text = map_data.display_name
+			_refresh_stats()
+			_settings_tabs.current_tab = 0
+			_settings_dialog.popup_centered_clamped(Vector2i(490, 260))
+		SETTINGS_TEST_HERO:
+			_settings_tabs.current_tab = 1
+			_test_hero_select.select(_test_hero_option_index())
+			_settings_dialog.popup_centered_clamped(Vector2i(490, 260))
+
+
+func _test_hero_option_index() -> int:
+	if _test_hero_select == null:
+		return 0
+	for index in range(_test_hero_select.item_count):
+		if str(_test_hero_select.get_item_metadata(index)) == _test_hero_id:
+			return index
+	return 0
+
+
+func _on_test_hero_selected(index: int) -> void:
+	if _test_hero_select == null or index < 0 or index >= _test_hero_select.item_count:
+		return
+	var selected_id: String = str(_test_hero_select.get_item_metadata(index))
+	if not HeroCatalog.DEFINITIONS.has(selected_id):
+		return
+	_test_hero_id = selected_id
+	var config := ConfigFile.new()
+	config.load(EDITOR_SETTINGS_PATH)
+	config.set_value("editor", "test_hero_id", _test_hero_id)
+	if config.save(EDITOR_SETTINGS_PATH) != OK:
+		_set_status("Не удалось сохранить тестового героя")
+
+
+func _load_test_hero_selection() -> void:
+	if standalone_game:
+		return
+	var config := ConfigFile.new()
+	if config.load(EDITOR_SETTINGS_PATH) != OK:
+		return
+	var saved_id: String = str(config.get_value("editor", "test_hero_id", HeroCatalog.DEFAULT_HERO_ID))
+	if HeroCatalog.DEFINITIONS.has(saved_id):
+		_test_hero_id = saved_id
 
 
 func _open_issues_dialog() -> void:
@@ -1780,7 +1860,7 @@ func _start_play_mode() -> void:
 	_pending_next_map = null
 	var session := GameSession.start_for(
 		map_data,
-		_startup_hero_id if standalone_game else HeroCatalog.DEFAULT_HERO_ID,
+		_startup_hero_id if standalone_game else _test_hero_id,
 		_test_open_map and not standalone_game
 	)
 	if session == null:

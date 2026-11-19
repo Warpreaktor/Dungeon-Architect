@@ -41,7 +41,11 @@ func _run() -> void:
 
 	var settings_dialog := editor.get_node("MapSettingsDialog") as AcceptDialog
 	var tabs := settings_dialog.get_node("SettingsTabs") as TabContainer
-	assert(tabs.get_tab_count() == 1)
+	assert(tabs.get_tab_count() == 2)
+	assert(tabs.get_tab_title(1) == "Тестирование")
+	var test_hero_select := tabs.get_node("Тестирование/TestProperties/TestHeroSelect") as OptionButton
+	assert(test_hero_select != null and test_hero_select.item_count == HeroCatalog.DEFINITIONS.size())
+	assert(settings_menu.get_popup().get_item_index(2) >= 0)
 	assert(tabs.get_tab_title(0) == "Свойства карты")
 	var properties := tabs.get_node("Свойства карты/MapProperties") as VBoxContainer
 	assert(properties != null and properties.get_child_count() == 4)

@@ -2,7 +2,7 @@ extends SceneTree
 
 ## DA-4.02: независимое состояние боя без создания сцены или Canvas.
 func _initialize() -> void:
-	var hero := HeroState.new(HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID))
+	var hero := HeroState.new(HeroCatalog.get_hero("petushan"))
 	var monster: MonsterDefinition = MonsterCatalog.get_monster("hunter")
 	var original_hp: int = hero.health
 	var definition_hp: int = monster.max_health
@@ -25,7 +25,7 @@ func _initialize() -> void:
 	assert(monster.max_health == definition_hp) # Resource — определение, не состояние.
 
 	var shield: ItemDefinition = ItemCatalog.get_item("shield")
-	var guarded := HeroState.new(HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID))
+	var guarded := HeroState.new(HeroCatalog.get_hero("petushan"))
 	guarded.register_shield(shield)
 	assert(guarded.equip_item(shield))
 	var before_durability: int = guarded.current_shield_durability("shield")
@@ -40,7 +40,7 @@ func _initialize() -> void:
 	assert(guarded.current_shield_durability("shield") == shield_fight.get_hero()._hero_snapshot.current_shield_durability("shield"))
 
 	# Старый интерфейс CombatSession сохраняет работу и сразу передаёт HP герою.
-	var legacy_hero := HeroState.new(HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID))
+	var legacy_hero := HeroState.new(HeroCatalog.get_hero("petushan"))
 	var old_hp: int = legacy_hero.health
 	var combat := CombatSession.new(monster, legacy_hero)
 	assert(combat.battle_state.get_hero() != null)
@@ -50,14 +50,14 @@ func _initialize() -> void:
 	assert(combat.battle_state.get_hero().health == legacy_hero.health)
 	assert(combat.hero == legacy_hero)
 
-	var doomed := HeroState.new(HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID))
+	var doomed := HeroState.new(HeroCatalog.get_hero("petushan"))
 	doomed.health = 1
 	var defeat := CombatSession.new(monster, doomed)
 	defeat.hero_attack(1)
 	assert(defeat.is_defeat and doomed.health == 0)
 	assert(defeat.hero_attack(1) == 0)
 
-	var finisher := CombatSession.new(monster, HeroState.new(HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID)))
+	var finisher := CombatSession.new(monster, HeroState.new(HeroCatalog.get_hero("petushan")))
 	for index in range(30):
 		if finisher.is_victory or finisher.is_defeat:
 			break

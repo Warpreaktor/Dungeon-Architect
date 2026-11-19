@@ -2,24 +2,31 @@
 
 [ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
-[ext_resource type="Script" path="res://scripts/ability_requirement_definition.gd" id="3_requirement"]
+[ext_resource type="Texture2D" path="res://assets/abilities/volcha/strike_and_rebound.png" id="3_icon"]
 
 [sub_resource type="Resource" id="Effect0"]
 script = ExtResource("2_effect")
 kind = 0
 recipient = 1
-amount = 1
+amount = 0
 
 [sub_resource type="Resource" id="Effect1"]
 script = ExtResource("2_effect")
-kind = 1
+kind = 3
 recipient = 0
-amount = 1
+status_id = "volcha_rebound"
+status_stat = 1
+status_modifier = 10
+duration_ticks = 1
+status_clock = 2
+stack_policy = 2
 
 [resource]
 script = ExtResource("1_script")
-ability_id = "wolf_feint"
-display_name = "Ложный выпад Волчи"
-category = 3
+ability_id = "volcha_strike_and_rebound"
+display_name = "Удар и отскок"
+description = "×1,0 базы; +10% уклонения от следующей атаки. Не суммируется с собой."
+icon = ExtResource("3_icon")
+category = 0
 target = 1
 effects = Array[Resource]([SubResource("Effect0"), SubResource("Effect1")])

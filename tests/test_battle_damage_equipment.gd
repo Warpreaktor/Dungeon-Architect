@@ -2,7 +2,7 @@ extends SceneTree
 
 ## DA-4.09: damage is derived from current equipment, stats, ability and block.
 func _initialize() -> void:
-	var wolf := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var wolf := HeroState.new(HeroCatalog.get_hero("petushan"))
 	var strike: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
 	var hero: BattleParticipant = BattleParticipant.from_hero(wolf)
 	var unarmed: int = AbilityExecutor.preview_damage(hero, strike, strike.effects[0])
@@ -52,7 +52,7 @@ func _initialize() -> void:
 	# A two-handed weapon forbids an equipped shield. A shield never adds weapon damage.
 	var shield: ItemDefinition = ItemCatalog.get_item("spiked_shield")
 	var twohand: ItemDefinition = ItemCatalog.get_item("warhammer")
-	var equip_test := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var equip_test := HeroState.new(HeroCatalog.get_hero("petushan"))
 	equip_test.register_shield(shield)
 	assert(equip_test.equip_item(shield))
 	assert(equip_test.equip_item(twohand))
@@ -60,8 +60,8 @@ func _initialize() -> void:
 	assert(not equip_test.equip_item(shield))
 	assert(equip_test.weapon_damage(ItemDefinition.WeaponKind.MELEE) == twohand.weapon_damage)
 
-	# Shield receives the complete hit after passive armor, and never weakens mid-hit.
-	var guarded := HeroState.new(HeroCatalog.get_hero("volcha"))
+	# Shield takes full damage only on an active block, never passive armor.
+	var guarded := HeroState.new(HeroCatalog.get_hero("petushan"))
 	guarded.register_shield(shield)
 	assert(guarded.equip_item(shield))
 	var protected: BattleParticipant = BattleParticipant.from_hero(guarded)
@@ -69,13 +69,13 @@ func _initialize() -> void:
 	protected.refresh_from_hero()
 	protected.prepare_block(2)
 	var hit: int = protected.receive_damage(10)
-	assert(hit == 5) # Passive 3 + max 2 from shield = 5, not 3 + 5.
-	assert(protected.last_shield_blocked == 2)
-	assert(protected._hero_snapshot.current_shield_durability(shield.item_id) == shield.max_durability - 7)
+	assert(hit == 10 - shield.defense_bonus)
+	assert(protected.last_shield_blocked == shield.defense_bonus)
+	assert(protected._hero_snapshot.current_shield_durability(shield.item_id) == shield.max_durability - 10)
 	protected._hero_snapshot.shield_durabilities[shield.item_id] = [1]
 	protected.refresh_from_hero()
 	protected.prepare_block(2)
-	assert(protected.receive_damage(10) == 5)
+	assert(protected.receive_damage(10) == 10 - shield.defense_bonus)
 	assert(protected.equipped_shield_id.is_empty())
 	protected.prepare_block(2)
 	assert(protected.block_armor == 2)

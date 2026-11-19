@@ -47,15 +47,22 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 		actor.resource_amounts[resource_id] = remaining
 		event_list.append({"type": "resource_spent", "actor_id": actor_id,
 			"ability_id": ability_id, "resource_id": resource_id, "amount": cost, "remaining": remaining})
+	var last_hit: Dictionary = {}
 	for effect in ability.effects:
 		var recipient: BattleParticipant = actor if effect.recipient == AbilityEffectDefinition.Recipient.SELF else target
 		if recipient == null:
 			return _failure("Нет цели эффекта")
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
-				var raw_damage: int = preview_damage(actor, ability, effect)
+				var raw_damage: int = preview_damage(actor, ability, effect, recipient)
 				actor.block_attack_bonus_percent = 0
-				event_list.append(apply_damage(actor, recipient, raw_damage, ability_id))
+				for hit_index in range(effect.hit_count):
+					last_hit = apply_damage(actor, recipient, raw_damage, ability_id, state.rng)
+					last_hit["hit_index"] = hit_index
+					last_hit["hit_count"] = effect.hit_count
+					event_list.append(last_hit)
+					if not recipient.is_alive():
+						break
 			AbilityEffectDefinition.Kind.BLOCK:
 				recipient.prepare_block(effect.amount)
 				event_list.append({"type": "block", "actor_id": actor_id, "target_id": recipient.participant_id,
@@ -68,7 +75,11 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 					"ability_id": ability_id, "healed": healed,
 					"hp_after": recipient.health, "hp_max": recipient.max_health})
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
-				recipient.statuses[effect.status_id] = {"amount": effect.amount, "ticks": effect.duration_ticks}
+				if not recipient.is_alive():
+					continue
+				if effect.requires_unblocked_hit and (last_hit.is_empty() or bool(last_hit.get("dodged", false)) or bool(last_hit.get("was_blocking", false))):
+					continue
+				recipient.apply_status(effect, state.flow.completed_ticks + 1)
 				event_list.append({"type": "status_applied", "actor_id": actor_id,
 					"target_id": recipient.participant_id, "ability_id": ability_id, "status_id": effect.status_id,
 					"duration_ticks": effect.duration_ticks})
@@ -89,7 +100,7 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 ## Общая формула для движка и подсказок. Урон приёма = урон
 ## подходящего оружия + (Сила или Ловкость) / 2 + мощность эффекта.
 ## Бонус блока считается от суммы, дроби обрезаются один раз в самом конце.
-static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition, effect: AbilityEffectDefinition) -> int:
+static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition, effect: AbilityEffectDefinition, target: BattleParticipant = null) -> int:
 	if actor == null or ability == null or effect == null or effect.kind != AbilityEffectDefinition.Kind.DAMAGE:
 		return 0
 	var equipment_and_stat: float = 0.0
@@ -100,10 +111,20 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 			equipment_and_stat = actor.ranged_attack_value()
 		# Для магии пока нет характеристики, применяем только мощность эффекта.
 	var base: float = equipment_and_stat + float(effect.amount)
-	return floori(maxf(base * float(100 + actor.block_attack_bonus_percent) / 100.0, 0.0))
+	var multiplier: float = effect.damage_multiplier
+	if effect.first_slot_multiplier > 0.0 and actor.action_cursor == 1:
+		# Cursor advances before execution; verify the selected chain slot as well.
+		if not actor.action_chain.is_empty() and actor.action_chain[0] == ability.ability_id:
+			multiplier = effect.first_slot_multiplier
+	if target != null:
+		if target.block_armor > 0 and effect.vs_block_multiplier > 0.0:
+			multiplier = effect.vs_block_multiplier
+		elif target.is_resting and effect.vs_rest_multiplier > 0.0:
+			multiplier = effect.vs_rest_multiplier
+	return floori(maxf(base * (multiplier + float(actor.block_attack_bonus_percent) / 100.0), 0.0))
 
 
-static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "") -> Dictionary:
+static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "", rng: RandomNumberGenerator = null) -> Dictionary:
 	var raw: int = maxi(amount, 0)
 	# Статусы задают изменения чисел общими эффектами, а не отдельной логикой монстров.
 	if actor.statuses.has("attack_down"):
@@ -111,13 +132,19 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 	# Снимок делаем непосредственно в момент удара. В конце фазы HP и
 	# прочность уже могут быть другими после следующих действий.
 	var shield_before: String = target.equipped_shield_id
-	var taken: int = target.receive_damage(raw)
+	var was_blocking: bool = target.block_armor > 0
+	var dodge_percent: int = clampi(target.base_dodge_percent + target.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT), 0, 100)
+	var dodged: bool = rng != null and dodge_percent > 0 and rng.randf() < float(dodge_percent) / 100.0
+	# Even an avoided attack spends 'next incoming attack' dodge bonuses.
+	target.advance_status_clock(AbilityEffectDefinition.Clock.INCOMING_ATTACK)
+	var taken: int = 0 if dodged else target.receive_damage(raw)
 	var shield_durability_after: int = -1
 	if not shield_before.is_empty() and target._hero_snapshot != null:
 		shield_durability_after = target._hero_snapshot.current_shield_durability(shield_before)
 	return {"type": "attack", "actor_id": actor.participant_id, "target_id": target.participant_id,
 		"ability_id": ability_id, "raw_damage": raw, "damage": taken,
-		"blocked": maxi(raw - taken, 0), "hp_after": target.health,
+		"dodged": dodged, "was_blocking": was_blocking,
+		"blocked": 0 if dodged else maxi(raw - taken, 0), "hp_after": target.health,
 		"hp_max": target.max_health, "armor_after": target.defense,
 		"active_block_after": target.block_armor,
 		"shield_durability_after": shield_durability_after,

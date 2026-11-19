@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "actor": "Волча",
-  "status": "design_fixture_not_yet_wired_into_battle",
+  "status": "implemented_in_ability_resources",
   "abilities": [
     {
       "id": "volcha_wolf_lunge", "display_name": "Волчий выпад", "kind": "melee_attack",
@@ -39,7 +39,7 @@
     }
   ],
   "notes": [
-    "This JSON is a design and test fixture, NOT an alternative runtime ability registry.",
+    "This JSON is a design fixture and not an alternative runtime ability registry; the five attacks are implemented in .tres resources.",
     "Engine .tres resources and current AbilityDefinition remain the gameplay source of truth.",
     "Unassigned character level bonuses and unlock levels are tracked in Google Sheets."
   ]

@@ -13,6 +13,8 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 	for effect in ability.effects:
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
+				if effect.hit_count > 1:
+					lines.append("Попаданий: %d" % effect.hit_count)
 				var type_name: String = "ближний" if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else ("дальний" if ability.damage_delivery == AbilityDefinition.DamageDelivery.RANGED else "магический")
 				if participant != null:
 					lines.append("Урон: %d (%s, до защиты)" % [AbilityExecutor.preview_damage(participant, ability, effect), type_name])
@@ -27,7 +29,7 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 			AbilityEffectDefinition.Kind.HEAL:
 				lines.append("Лечение: %d HP (не выше максимума)" % maxi(effect.amount, 0))
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
-				lines.append("Эффект «%s»: %d на %d фаз(ы)" % [effect.status_id, effect.amount, effect.duration_ticks])
+				lines.append("Эффект «%s»: %d на %d ед. времени" % [effect.status_id, effect.status_modifier, effect.duration_ticks])
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:
 				lines.append("Снимает эффект «%s»" % effect.status_id)
 			AbilityEffectDefinition.Kind.WAIT:

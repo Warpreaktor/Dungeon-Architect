@@ -135,10 +135,9 @@ func unequip_item(item_id: String) -> bool:
 ## Пассивная защита не включает щит; тот работает только через «Блок».
 ## Постоянной атаки нет: урон вычисляется на момент применения способности.
 func _recalculate_equipment_stats() -> void:
-	defense = base_defense
-	var weapon: ItemDefinition = ItemCatalog.get_item(equipped_weapon_id)
-	if weapon != null and weapon.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON:
-		defense += weapon.defense_bonus
+	# No passive block, including defensive bonuses on weapons.
+	# Future armor will have a separate dedicated calculation.
+	defense = 0
 
 
 ## Совместимые методы для уже существующей игровой логики.
@@ -202,7 +201,7 @@ func consume_shield_block(incoming: int, maximum_absorption: int = -1) -> int:
 
 ## Щит не защищает пассивно, но базовая броня и зелья работают по-прежнему.
 func take_damage(incoming: int) -> int:
-	var remaining: int = maxi(incoming - base_defense, 0)
+	var remaining: int = maxi(incoming, 0)
 	if vitality_steps > 0 and vitality_percent > 0 and remaining > 0:
 		remaining = maxi(1, int(float(remaining) * float(100 - vitality_percent) / 100.0))
 	health = maxi(health - remaining, 0)

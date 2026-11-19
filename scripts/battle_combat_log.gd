@@ -27,6 +27,9 @@ static func format_event(event: Dictionary, hero_name: String, enemy_name: Strin
 		"tick":
 			return "  Такт %d" % int(event.get("tick", 0))
 		"attack":
+			if bool(event.get("dodged", false)):
+				return "    %s → %s: %s, уклонение" % [actor, target,
+					ability_name(str(event.get("ability_id", "")))]
 			var parts: Array[String] = []
 			parts.append("HP −%d (%d/%d)" % [int(event.get("damage", 0)),
 				int(event.get("hp_after", 0)), int(event.get("hp_max", 0))])

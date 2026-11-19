@@ -88,10 +88,7 @@ func _ready() -> void:
 
 ## Единственный расчёт: тот же метод, что использует обработчик способности.
 func _basic_strike_damage(actor: BattleParticipant) -> int:
-	var ability: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
-	if ability == null or ability.effects.is_empty():
-		return 0
-	return AbilityExecutor.preview_damage(actor, ability, ability.effects[0])
+	return actor.melee_attack() if actor != null else 0
 
 
 func begin(combat: CombatSession, hero: HeroState) -> void:
@@ -110,9 +107,8 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_hero_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_hero()))
 	_hero_strength_value.text = "СИЛ %d" % hero.strength
 	_hero_agility_value.text = "ЛОВ %d" % hero.agility
-	var shield_item: ItemDefinition = ItemCatalog.get_item(hero.equipped_shield_id)
-	_hero_defense_value.text = str(_combat.battle_state.get_hero().preview_block_armor())
-	_defense_idle_color = Color.WHITE
+	_hero_defense_value.text = str(_combat.battle_state.get_hero().block_armor)
+	_defense_idle_color = Color(0.55, 0.60, 0.67, 0.65)
 	_hero_defense_icon.modulate = _defense_idle_color
 	_hero_chain_title.text = _hero_name.text.to_upper()
 	_enemy_name.text = combat.enemy_definition.display_name
@@ -120,8 +116,8 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_enemy_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_enemy()))
 	_enemy_strength_value.text = "СИЛ %d" % _combat.battle_state.get_enemy().strength
 	_enemy_agility_value.text = "ЛОВ %d" % _combat.battle_state.get_enemy().agility
-	_enemy_defense_value.text = str(_combat.battle_state.get_enemy().preview_block_armor())
-	_enemy_defense_icon.modulate = Color.WHITE if combat.enemy_defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
+	_enemy_defense_value.text = str(_combat.battle_state.get_enemy().block_armor)
+	_enemy_defense_icon.modulate = Color(0.55, 0.60, 0.67, 0.65)
 	_enemy_portrait.texture = combat.enemy_definition.icon
 	_enemy_portrait.modulate = Color.WHITE
 	_hero_health_meter.set_health(hero.health, hero.max_health)
@@ -131,7 +127,13 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_visible_block = {"hero": false, "enemy": false}
 	# В рамках прохождения сохраняем именно позиции, включая пустые слоты.
 	_committed_slots = hero.get_saved_action_slots()
+	# Preserve positions but discard obsolete skills after a character's tree changed.
+	var playable: BattleParticipant = _combat.battle_state.get_hero()
+	for i in range(_committed_slots.size()):
+		if not _committed_slots[i].is_empty() and not (_committed_slots[i] in playable.personal_ability_ids or _committed_slots[i] in playable.learned_ability_ids):
+			_committed_slots[i] = ""
 	_set_draft_from_chain(_committed_slots)
+	hero.save_action_slots(_committed_slots)
 	_hero_chain = _draft_actions()
 	_enemy_chain = _combat.battle_state.default_chain("enemy")
 	_refresh_enemy_slots()
@@ -725,6 +727,7 @@ func _display_phase_event(event: Dictionary) -> void:
 						_combat.battle_state.get_enemy())
 		"block":
 			var target_id: String = str(event.get("target_id", ""))
+			_set_block_display(target_id, int(event.get("armor", 0)))
 			_visible_block[target_id] = true
 			var icon: TextureRect = _impact_shields.get(target_id) as TextureRect
 			if icon != null:
@@ -769,7 +772,7 @@ func _impact(event: Dictionary) -> void:
 		_spawn_number(target_id, "−%d" % shield_damage, Color("#67c8ff"), -12)
 	if hp_damage > 0:
 		_spawn_number(target_id, "−%d" % hp_damage, Color("#ff6969"), 18)
-	if hp_damage == 0 and shield_damage == 0:
+	if hp_damage == 0 and shield_damage == 0 and not bool(event.get("dodged", false)):
 		_spawn_number(target_id, "0", Color("#c1cad2"))
 	if target_id == "hero":
 		_visible_hero_hp -= hp_damage
@@ -783,10 +786,20 @@ func _impact(event: Dictionary) -> void:
 		target.modulate = Color("#81c9ff")
 	else:
 		target.modulate = Color("#d0d5de")
-	_visible_block[target_id] = false
+	if bool(event.get("dodged", false)):
+		_spawn_number(target_id, "УКЛОНЕНИЕ", Color("#83e7bb"))
+	_set_block_display(target_id, int(event.get("active_block_after", 0)))
+	_visible_block[target_id] = false if not bool(event.get("dodged", false)) else bool(_visible_block.get(target_id, false))
 	var shield_icon: TextureRect = _impact_shields.get(target_id) as TextureRect
-	if shield_icon != null:
+	if shield_icon != null and not bool(event.get("dodged", false)):
 		shield_icon.hide()
+
+
+func _set_block_display(actor_id: String, amount: int) -> void:
+	var value: Label = _hero_defense_value if actor_id == "hero" else _enemy_defense_value
+	var icon: TextureRect = _hero_defense_icon if actor_id == "hero" else _enemy_defense_icon
+	value.text = str(amount)
+	icon.modulate = Color.WHITE if amount > 0 else _defense_idle_color
 
 
 func _show_reload_icon(actor_id: String) -> void:
@@ -834,6 +847,8 @@ func _exit_tree() -> void:
 		_impact_layer.free()
 func _after_phase_playback() -> void:
 	_is_playing_back = false
+	_set_block_display("hero", _combat.battle_state.get_hero().block_armor)
+	_set_block_display("enemy", _combat.battle_state.get_enemy().block_armor)
 	_conceal_enemy_actions()
 	_highlight_slots(-1, -1)
 	_hero_health_meter.set_health(_combat.hero.health, _combat.hero.max_health, true)
@@ -844,7 +859,7 @@ func _after_phase_playback() -> void:
 		var broken_id: String = str(event.get("shield_broken", ""))
 		if not broken_id.is_empty():
 			_combat.hero.last_shield_broken = broken_id
-			_hero_defense_value.text = str(_combat.battle_state.get_hero().preview_block_armor())
+			_set_block_display("hero", _combat.battle_state.get_hero().block_armor)
 			shield_broken.emit(broken_id)
 			_combat.hero.last_shield_broken = ""
 			var hero_actor: BattleParticipant = _combat.battle_state.get_hero()

@@ -15,4 +15,4 @@ max_health = 48
 strength = 6
 agility = 6
 base_defense = 0
-personal_ability_ids = Array[String](["basic_strike", "guard", "wolf_feint", "wolf_dodge", "wolf_counter"])
+personal_ability_ids = Array[String](["volcha_wolf_lunge", "volcha_strike_and_rebound", "volcha_wolf_instinct", "volcha_broken_rhythm", "volcha_cut_tendons"])

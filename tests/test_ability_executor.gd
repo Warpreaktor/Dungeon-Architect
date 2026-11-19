@@ -40,7 +40,7 @@ func _initialize() -> void:
 	assert(not battle.execute_ability("hero", "enemy", "not_registered").success)
 	assert(not battle.execute_ability("hero", "hero", "basic_strike").success)
 	assert(not battle.execute_ability("enemy", "enemy", "hunter_shot").success)
-	assert(AbilityCatalog.get_ability("wolf_counter") != null)
+	assert(AbilityCatalog.get_ability("wolf_counter") == null)
 
 	# Блок и его накопленная мощь сохраняются через границу фазы.
 	assert(battle.execute_ability("hero", "hero", "guard").success)

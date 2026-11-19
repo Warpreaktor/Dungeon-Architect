@@ -24,19 +24,19 @@ func _verify() -> void:
 	view._on_slot_selected(0)
 	var picker: PanelContainer = view.get_node("AbilityPicker") as PanelContainer
 	assert(picker.visible)
-	view._choose_ability(0, "basic_strike")
+	view._choose_ability(0, "volcha_strike_and_rebound")
 	assert(not picker.visible)
 	assert(not play.disabled)
-	view._choose_ability(2, "wolf_feint")
+	view._choose_ability(2, "volcha_wolf_lunge")
 	assert(slots.get_child_count() == 4)
-	assert(view._draft_actions() == ["basic_strike", "wolf_feint"])
+	assert(view._draft_actions() == ["volcha_strike_and_rebound", "volcha_wolf_lunge"])
 	assert((slots.get_child(0) as Button).tooltip_text.contains("Урон:"))
 	assert(not (slots.get_child(2) as Button).tooltip_text.is_empty())
 	assert(not view._commit_draft()) # второй слот пуст, запуск запрещён
-	view._choose_ability(1, "guard")
+	view._choose_ability(1, "volcha_wolf_instinct")
 	assert(view._commit_draft())
-	assert(hero.get_saved_action_slots() == ["basic_strike", "guard", "wolf_feint"])
-	assert(combat.battle_state.get_hero().action_chain == ["basic_strike", "guard", "wolf_feint"])
+	assert(hero.get_saved_action_slots() == ["volcha_strike_and_rebound", "volcha_wolf_instinct", "volcha_wolf_lunge"])
+	assert(combat.battle_state.get_hero().action_chain == ["volcha_strike_and_rebound", "volcha_wolf_instinct", "volcha_wolf_lunge"])
 
 	# При повторной встрече тот же HeroState восстанавливает и пустую среднюю позицию.
 	view.queue_free()
@@ -44,7 +44,7 @@ func _verify() -> void:
 	root.add_child(repeat)
 	var next_combat := CombatSession.new(monster, hero)
 	repeat.begin(next_combat, hero)
-	assert(repeat._planner_editing == ["basic_strike", "guard", "wolf_feint"])
+	assert(repeat._planner_editing == ["volcha_strike_and_rebound", "volcha_wolf_instinct", "volcha_wolf_lunge"])
 	assert(not (repeat.get_node("%PunchButton") as Button).disabled)
 	assert((repeat.get_node("%SequenceSlots") as HBoxContainer).get_child_count() == 4)
 	assert((repeat.get_node("%EnemySequenceSlots") as HBoxContainer).get_child_count() == 3)
@@ -53,11 +53,11 @@ func _verify() -> void:
 	assert(next_combat.battle_state.flow.start_phase())
 	assert(next_combat.battle_state.flow.complete_phase())
 	repeat._refresh_phase_controls()
-	repeat._choose_ability(0, "guard")
-	assert(repeat._planner_editing[0] == "guard")
+	repeat._choose_ability(0, "volcha_wolf_instinct")
+	assert(repeat._planner_editing[0] == "volcha_wolf_instinct")
 	assert(repeat._commit_draft())
-	assert(hero.get_saved_action_slots() == ["guard", "guard", "wolf_feint"])
-	assert(next_combat.battle_state.get_hero().action_chain == ["guard", "guard", "wolf_feint"])
+	assert(hero.get_saved_action_slots() == ["volcha_wolf_instinct", "volcha_wolf_instinct", "volcha_wolf_lunge"])
+	assert(next_combat.battle_state.get_hero().action_chain == ["volcha_wolf_instinct", "volcha_wolf_instinct", "volcha_wolf_lunge"])
 	# Скрытые приёмы врага: без иконки и тултипа до события action_start.
 	var enemy_slots: HBoxContainer = repeat.get_node("%EnemySequenceSlots") as HBoxContainer
 	for index in range(enemy_slots.get_child_count() - 1):

@@ -25,7 +25,7 @@ func _initialize() -> void:
 	var battle: BattleState = _battle()
 	var hero_chain: Array[String] = ["basic_strike", "guard", "basic_strike"]
 	var enemy_chain: Array[String] = ["guard", "basic_strike"]
-	assert(battle.tick_policy.priority("wolf_feint") == battle.tick_policy.other_priority)
+	assert(battle.tick_policy.priority("volcha_wolf_lunge") == battle.tick_policy.other_priority)
 	var result: Dictionary = battle.run_phase(hero_chain, enemy_chain)
 	assert(result.success and result.ticks == 4)
 	var decisions: Array[String] = []

@@ -3,7 +3,7 @@ extends SceneTree
 ## DA-4.08: базовый блок, разрушение щита, досрочный отдых, резервирование.
 func _initialize() -> void:
 	# Без щита блок всегда работает и выдаёт +25%.
-	var wolf := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var wolf := HeroState.new(HeroCatalog.get_hero("petushan"))
 	var battle := BattleState.begin(MonsterCatalog.get_monster("lobar"), wolf)
 	var actor: BattleParticipant = battle.get_hero()
 	assert(AbilityCatalog.can_prepare(actor, "guard"))
@@ -17,7 +17,7 @@ func _initialize() -> void:
 	# Щит с бронёй 5 и остатком прочности 1 полностью защищает ЭТОТ
 	# удар, но разрушен для следующего блока.
 	var item: ItemDefinition = ItemCatalog.get_item("spiked_shield")
-	var shield_hero := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var shield_hero := HeroState.new(HeroCatalog.get_hero("petushan"))
 	shield_hero.register_shield(item)
 	assert(shield_hero.equip_item(item))
 	shield_hero.shield_durabilities[item.item_id] = [1]
@@ -34,7 +34,7 @@ func _initialize() -> void:
 
 	# Прочность уходит на полную силу удара по щиту, а не только на 5
 	# поглощённых HP. Блок без щита после разрушения не исчезает.
-	var shield2 := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var shield2 := HeroState.new(HeroCatalog.get_hero("petushan"))
 	shield2.register_shield(item)
 	assert(shield2.equip_item(item))
 	var wear := BattleState.begin(MonsterCatalog.get_monster("lobar"), shield2)
@@ -45,8 +45,8 @@ func _initialize() -> void:
 	assert(hit.shield_blocked == 5 and hit.damage == 2)
 	assert(defender._hero_snapshot.current_shield_durability(item.item_id) == initial - 7)
 
-	# Пассивная защита и блок щита не суммируются выше защиты щита.
-	var armored := HeroState.new(HeroCatalog.get_hero("volcha"))
+	# Даже если в старых данных есть базовая защита, она не применяется.
+	var armored := HeroState.new(HeroCatalog.get_hero("petushan"))
 	armored.base_defense = 3
 	armored.register_shield(item)
 	assert(armored.equip_item(item))
@@ -54,9 +54,9 @@ func _initialize() -> void:
 	var capped_actor: BattleParticipant = capped.get_hero()
 	assert(capped.execute_ability("hero", "hero", "guard").success)
 	var capped_hit: Dictionary = AbilityExecutor.apply_damage(capped.get_enemy(), capped_actor, 10)
-	assert(capped_hit.block_absorbed == 2) # 3 постоянных + 2 щитом = 5.
-	assert(capped_hit.damage == 5)
-	assert(capped_actor._hero_snapshot.current_shield_durability(item.item_id) == item.max_durability - 7)
+	assert(capped_hit.block_absorbed == item.defense_bonus)
+	assert(capped_hit.damage == 10 - item.defense_bonus)
+	assert(capped_actor._hero_snapshot.current_shield_durability(item.item_id) == item.max_durability - 10)
 
 	# Несколько эффектов оплачиваются единожды, не хватает запаса —
 	# ни HP, ни эффекты и ни ресурсы не меняются.

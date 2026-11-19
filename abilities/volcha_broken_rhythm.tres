@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/volcha/broken_rhythm.png" id="3_icon"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+kind = 0
+recipient = 1
+amount = 0
+damage_multiplier = 0.25
+vs_rest_multiplier = 0.4
+vs_block_multiplier = 0.15
+hit_count = 3
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "volcha_broken_rhythm"
+display_name = "Рваный ритм"
+description = "Три удара: ×0,25; в отдых ×0,4; в блок ×0,15."
+icon = ExtResource("3_icon")
+category = 0
+target = 1
+effects = Array[Resource]([SubResource("Effect0")])

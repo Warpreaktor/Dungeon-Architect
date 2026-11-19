@@ -11,6 +11,7 @@ var health: int = 0
 var strength: int = 0
 var agility: int = 0
 var defense: int = 0
+var base_dodge_percent: int = 0
 var equipped_weapon_id: String = ""
 var equipped_shield_id: String = ""
 var effects: Dictionary = {}
@@ -30,6 +31,9 @@ var last_shield_blocked: int = 0
 var last_block_absorbed: int = 0
 var last_shield_broken: String = ""
 var statuses: Dictionary = {}
+## Number of completed own cycles (including the non-editable rest).
+var completed_phases: int = 0
+var is_resting: bool = false
 ## Неиспользуемые пока в контенте запасы будущих ресурсов (ярость, мана и т.д.).
 ## Это изменяемые данные конкретного участника боя, не .tres.
 var resource_amounts: Dictionary = {}
@@ -49,6 +53,7 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant.definition_id = source.definition.hero_id if source.definition != null else ""
 	participant._hero_snapshot = source.copy_for_battle()
 	participant.personal_ability_ids = source.definition.personal_ability_ids.duplicate() if source.definition != null else []
+	participant.base_dodge_percent = source.definition.base_dodge_percent if source.definition != null else 0
 	participant.learned_ability_ids = source.learned_ability_ids.duplicate()
 	participant.action_slot_capacity = source.action_slot_capacity()
 	participant.refresh_from_hero()
@@ -66,7 +71,8 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 	participant.health = source.max_health
 	participant.strength = source.strength
 	participant.agility = source.agility
-	participant.defense = source.defense
+	participant.defense = 0 # Passive armor is not implemented yet.
+	participant.base_dodge_percent = source.base_dodge_percent
 	participant.personal_ability_ids = source.personal_ability_ids.duplicate()
 	participant.action_slot_capacity = clampi(source.base_action_slots, 1, BattleChainPlanner.MAX_ACTIONS)
 	return participant
@@ -79,7 +85,7 @@ func refresh_from_hero() -> void:
 	health = _hero_snapshot.health
 	strength = _hero_snapshot.strength
 	agility = _hero_snapshot.agility
-	defense = _hero_snapshot.defense
+	defense = 0 # Shield/weapon equipment is not passive blocking.
 	equipped_weapon_id = _hero_snapshot.equipped_weapon_id
 	equipped_shield_id = _hero_snapshot.equipped_shield_id
 	effects = {
@@ -103,7 +109,7 @@ func melee_attack_value() -> float:
 
 
 func ranged_attack_value() -> float:
-	return float(weapon_damage(ItemDefinition.WeaponKind.RANGED) + int(effects.get("strength_bonus", 0))) + float(maxi(agility, 0)) * 0.5
+	return float(weapon_damage(ItemDefinition.WeaponKind.RANGED) + int(effects.get("strength_bonus", 0))) + float(maxi(agility + status_modifier(AbilityEffectDefinition.Stat.AGILITY), 0)) * 0.5
 
 
 func melee_attack() -> int:
@@ -154,14 +160,12 @@ func receive_damage(incoming: int) -> int:
 	if _hero_snapshot != null:
 		_hero_snapshot.last_shield_broken = ""
 	var raw: int = maxi(incoming, 0)
-	var passive_armor: int = _hero_snapshot.base_defense if _hero_snapshot != null else defense
-	var armor_after_base: int = maxi(raw - passive_armor, 0)
+	var armor_after_base: int = raw
 	var active_shield: bool = (_hero_snapshot != null
 		and not equipped_shield_id.is_empty()
 		and _hero_snapshot.current_shield_durability(equipped_shield_id) > 0)
-	# При активном щите общая защита не складывается сверх показателя
-	# щита: из 5 брони максимум (5 - пассивная броня) даёт сам блок.
-	var extra_armor: int = maxi(block_armor - passive_armor, 0) if active_shield else block_armor
+	# Пассивного блока нет. Щит лишь задаёт силу выполненного блока.
+	var extra_armor: int = block_armor
 	var blocked: int = mini(armor_after_base, extra_armor)
 	if blocked > 0 and active_shield:
 		# Износ от всей силы удара по щиту, не только от поглощённых HP.
@@ -181,16 +185,57 @@ func receive_damage(incoming: int) -> int:
 	return taken
 
 
-func end_phase() -> void:
-	# Бонус +25% и активный блок живут до следующего соответствующего удара,
-	# даже если между действиями была перезарядка или граница фазы.
+func status_modifier(stat: int) -> int:
+	var total: int = 0
+	for active in statuses.values():
+		if int(active.get("stat", AbilityEffectDefinition.Stat.NONE)) == stat:
+			total += int(active.get("modifier", 0)) * int(active.get("stacks", 1))
+	return total
+
+
+func apply_status(effect: AbilityEffectDefinition, tick: int) -> void:
+	var previous: Dictionary = statuses.get(effect.status_id, {})
+	var stacks: int = 1
+	if effect.stack_policy == AbilityEffectDefinition.Stack.ADD:
+		stacks = int(previous.get("stacks", 0)) + 1
+	elif effect.stack_policy == AbilityEffectDefinition.Stack.ONCE and not previous.is_empty():
+		# Multiple uses of the same non-stacking dodge grant no extra chance.
+		return
+	statuses[effect.status_id] = {
+		"amount": effect.amount, "modifier": effect.status_modifier,
+		"stat": effect.status_stat, "clock": effect.status_clock,
+		"ticks": effect.duration_ticks, "stacks": stacks, "applied_tick": tick,
+		# A partly completed current cycle is not a full phase of this effect.
+		"skip_partial_phase": effect.status_clock == AbilityEffectDefinition.Clock.OWNER_PHASE
+			and not is_resting and action_cursor > 0
+	}
+
+
+func advance_status_clock(clock: int, current_tick: int = -1) -> Array[String]:
+	var expired: Array[String] = []
 	for status_id in statuses.keys():
 		var status: Dictionary = statuses[status_id]
+		if int(status.get("clock", AbilityEffectDefinition.Clock.LEGACY_HERO_PHASE)) != clock:
+			continue
+		if current_tick >= 0 and int(status.get("applied_tick", -1)) == current_tick:
+			continue
+		if clock == AbilityEffectDefinition.Clock.OWNER_PHASE and bool(status.get("skip_partial_phase", false)):
+			status["skip_partial_phase"] = false
+			statuses[status_id] = status
+			continue
 		status["ticks"] = int(status.get("ticks", 0)) - 1
 		if int(status["ticks"]) <= 0:
 			statuses.erase(status_id)
+			expired.append(str(status_id))
 		else:
 			statuses[status_id] = status
+	return expired
+
+
+func end_phase() -> void:
+	# Бонус +25% и активный блок живут до следующего соответствующего удара,
+	# даже если между действиями была перезарядка или граница фазы.
+	advance_status_clock(AbilityEffectDefinition.Clock.LEGACY_HERO_PHASE)
 
 
 func is_alive() -> bool:

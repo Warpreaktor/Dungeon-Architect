@@ -15,6 +15,8 @@ var events: Array[Dictionary] = []
 var flow: BattleFlow = BattleFlow.new()
 var tick_policy: BattleTurnPolicy = BattleTurnPolicy.new()
 var last_phase_events: Array[Dictionary] = []
+## One RNG for reproducible dodge decisions. Seed can be supplied by a test.
+var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
 static func begin(monster: MonsterDefinition, hero: HeroState = null) -> BattleState:
@@ -110,6 +112,8 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		var enemy_step: Dictionary = BattleChainPlanner.next_step(enemy_actions, enemy_actor.action_cursor)
 		hero_actor.action_cursor = int(hero_step["next_cursor"])
 		enemy_actor.action_cursor = int(enemy_step["next_cursor"])
+		hero_actor.is_resting = bool(hero_step["reload"])
+		enemy_actor.is_resting = bool(enemy_step["reload"])
 		if bool(hero_step["reload"]):
 			# Отдых до завершения круга (старый курсор) не закрывает фазу.
 			hero_rest_finished = hero_actions_done >= current_hero_chain.size()
@@ -127,6 +131,11 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 				break
 			var step: Dictionary = hero_step if actor_id == hero_id else enemy_step
 			if bool(step["reload"]):
+				var resting: BattleParticipant = get_participant(actor_id)
+				resting.completed_phases += 1
+				for expired_id in resting.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, tick):
+					events.append({"type": "status_removed", "actor_id": actor_id,
+						"target_id": actor_id, "status_id": expired_id, "removed": true})
 				events.append({"type": "reload", "actor_id": actor_id, "tick": tick,
 					"slot_index": -1})
 				continue
@@ -153,6 +162,8 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		flow.complete_phase()
 	else:
 		flow.finish_battle()
+	hero_actor.is_resting = false
+	enemy_actor.is_resting = false
 	last_phase_events = events.slice(start_event)
 	return {"success": true, "events": last_phase_events, "finished": flow.stage == BattleFlow.Stage.FINISHED,
 		"phase_number": flow.phase_number, "hero_hp": hero_actor.health, "ticks": flow.completed_ticks}
@@ -203,7 +214,15 @@ func perform_basic_attack(_legacy_attack_damage: int = 0) -> int:
 		return 0
 	last_counter_damage = 0
 	last_blocked_damage = 0
-	var result: Dictionary = execute_ability(hero_id, enemy_id, "basic_strike")
+	var attack_id: String = ""
+	for id in get_hero().personal_ability_ids + get_hero().learned_ability_ids:
+		var definition: AbilityDefinition = AbilityCatalog.get_ability(id)
+		if definition != null and definition.category == AbilityDefinition.Category.ATTACK:
+			attack_id = id
+			break
+	if attack_id.is_empty():
+		return 0
+	var result: Dictionary = execute_ability(hero_id, enemy_id, attack_id)
 	if not bool(result.get("success", false)):
 		return 0
 	var damage: int = 0

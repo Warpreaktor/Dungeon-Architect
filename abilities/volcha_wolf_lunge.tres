@@ -1,18 +1,22 @@
-[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/volcha/wolf_lunge.png" id="3_icon"]
 
 [sub_resource type="Resource" id="Effect0"]
 script = ExtResource("2_effect")
 kind = 0
 recipient = 1
-amount = 3
+amount = 0
+first_slot_multiplier = 1.25
 
 [resource]
 script = ExtResource("1_script")
-ability_id = "wolf_counter"
-display_name = "Ответный выпад Волчи"
+ability_id = "volcha_wolf_lunge"
+display_name = "Волчий выпад"
+description = "×1,0 базы; первый в цепочке ×1,25."
+icon = ExtResource("3_icon")
 category = 0
 target = 1
 effects = Array[Resource]([SubResource("Effect0")])

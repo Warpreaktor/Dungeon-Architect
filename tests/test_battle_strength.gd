@@ -18,11 +18,11 @@ func _initialize() -> void:
 		assert(actor.melee_attack_value() == float(monster.strength) * 0.5)
 		assert(actor.ranged_attack_value() == float(monster.agility) * 0.5)
 
-	var state: BattleState = BattleState.begin(MonsterCatalog.get_monster("hunter"), wolf)
+	var state: BattleState = BattleState.begin(MonsterCatalog.get_monster("hunter"), rooster)
 	var actor: BattleParticipant = state.get_hero()
 	var enemy: BattleParticipant = state.get_enemy()
 	var strike: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
-	assert(AbilityExecutor.preview_damage(actor, strike, strike.effects[0]) == floori(float(wolf.strength) * 0.5 + 1))
+	assert(AbilityExecutor.preview_damage(actor, strike, strike.effects[0]) == floori(float(rooster.strength) * 0.5 + 1))
 	var punch: Dictionary = state.execute_ability("hero", "enemy", "basic_strike")
 	assert(punch.success and punch.events[0].damage == maxi(floori(actor.melee_attack_value() + 1) - enemy.defense, 0))
 	var shot_definition: AbilityDefinition = AbilityCatalog.get_ability("hunter_shot")
@@ -34,7 +34,7 @@ func _initialize() -> void:
 	assert(AbilityExecutor.preview_damage(enemy, shot_definition, shot_definition.effects[0]) == floori(float(enemy.agility) * 0.5 + 2))
 
 	# Дробь обрезается только после % бонуса: 2.5 + 1 = 3.5, затем ×1.25 -> 4.
-	var fractional: BattleState = BattleState.begin(MonsterCatalog.get_monster("kadavr"), wolf)
+	var fractional: BattleState = BattleState.begin(MonsterCatalog.get_monster("kadavr"), rooster)
 	var f: BattleParticipant = fractional.get_hero()
 	f.strength = 5
 	assert(fractional.execute_ability("hero", "hero", "guard").success)

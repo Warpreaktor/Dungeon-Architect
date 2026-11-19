@@ -14,4 +14,7 @@ extends Resource
 @export_range(0, 999, 1) var strength: int = 0
 ## Каждое очко ловкости добавляет 0,5 к урону дальних действий.
 @export_range(0, 999, 1) var agility: int = 0
+## Base probability of avoiding an incoming attack. Status bonuses add percentage points.
+@export_range(0, 100, 1) var base_dodge_percent: int = 0
+## Legacy unused field, retained for old .tres compatibility; not passive block.
 @export_range(0, 999, 1) var base_defense: int = 0

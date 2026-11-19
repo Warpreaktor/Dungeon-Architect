@@ -4,7 +4,7 @@ extends RefCounted
 ## Совместимый фасад существующего боя. Расчёт теперь выполняет BattleState;
 ## BattleView продолжает пользоваться прежними полями и hero_attack().
 const ENEMY_MAX_HEALTH: int = 1 # Совместимость с тестами первого поединка.
-const PUNCH_DAMAGE: int = 1
+const PUNCH_DAMAGE: int = 0 # Урон никогда не берётся из константы.
 
 var enemy_definition: MonsterDefinition
 var hero: HeroState
@@ -18,7 +18,9 @@ var enemy_max_health: int:
 		return battle_state.get_enemy().max_health
 var enemy_damage: int:
 	get:
-		return battle_state.get_enemy().attack
+		var enemy: BattleParticipant = battle_state.get_enemy()
+		var strike: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
+		return AbilityExecutor.preview_damage(enemy, strike, strike.effects[0])
 var enemy_defense: int:
 	get:
 		return battle_state.get_enemy().defense
@@ -38,12 +40,12 @@ var last_blocked_damage: int:
 
 func _init(monster: MonsterDefinition = null, participant: HeroState = null) -> void:
 	enemy_definition = monster if monster != null else MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID)
-	hero = participant
-	battle_state = BattleState.begin(enemy_definition, participant)
+	hero = participant if participant != null else HeroState.new()
+	battle_state = BattleState.begin(enemy_definition, hero)
 
 
-func hero_attack(attack_damage: int) -> int:
-	var damage: int = battle_state.perform_basic_attack(attack_damage)
+func hero_attack(_legacy_attack_damage: int = 0) -> int:
+	var damage: int = battle_state.perform_basic_attack()
 	# Подтверждаем результат на реальном герое после расчёта, чтобы остальная
 	# игровая сессия (инвентарь, HUD, сломанный щит) работала как раньше.
 	var battle_hero: BattleParticipant = battle_state.get_hero()
@@ -62,7 +64,7 @@ func hero_block() -> Dictionary:
 
 
 func hero_punch() -> int:
-	return hero_attack(PUNCH_DAMAGE)
+	return hero_attack()
 
 
 ## DA-4.05: пробная двухтактовая фаза на уже имеющихся приёмах.

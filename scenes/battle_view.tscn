@@ -138,6 +138,15 @@ theme_override_font_sizes/font_size = 13
 text = "СИЛ 0"
 tooltip_text = "Сила: +0,5 урона ближнего боя за очко"
 
+[node name="HeroAgilityValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
+theme_override_font_sizes/font_size = 13
+text = "ЛОВ 0"
+tooltip_text = "Ловкость: +0,5 урона дальнего боя за очко"
+
 [node name="HeroDefenseIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
@@ -227,6 +236,15 @@ theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "СИЛ 0"
 tooltip_text = "Сила: +0,5 урона ближнего боя за очко"
+
+[node name="EnemyAgilityValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyStats"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
+theme_override_font_sizes/font_size = 13
+text = "ЛОВ 0"
+tooltip_text = "Ловкость: +0,5 урона дальнего боя за очко"
 
 [node name="EnemyDefenseIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyStats"]
 unique_name_in_owner = true

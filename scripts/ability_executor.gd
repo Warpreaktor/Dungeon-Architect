@@ -53,10 +53,7 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 			return _failure("Нет цели эффекта")
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
-				var attack_base: float = actor.melee_attack_value() if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else float(actor.attack)
-				var bonus_percent: int = actor.block_attack_bonus_percent
-				var raw_damage: int = floori(maxf(0.0,
-					(attack_base + float(effect.amount - 1)) * float(100 + bonus_percent) / 100.0))
+				var raw_damage: int = preview_damage(actor, ability, effect)
 				actor.block_attack_bonus_percent = 0
 				event_list.append(apply_damage(actor, recipient, raw_damage, ability_id))
 			AbilityEffectDefinition.Kind.BLOCK:
@@ -85,6 +82,23 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 	state.events.append_array(event_list)
 	state.update_outcome()
 	return {"success": true, "reason": "", "events": event_list}
+
+
+## Общая формула для движка и подсказок. Урон приёма = урон
+## подходящего оружия + (Сила или Ловкость) / 2 + мощность эффекта.
+## Бонус блока считается от суммы, дроби обрезаются один раз в самом конце.
+static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition, effect: AbilityEffectDefinition) -> int:
+	if actor == null or ability == null or effect == null or effect.kind != AbilityEffectDefinition.Kind.DAMAGE:
+		return 0
+	var equipment_and_stat: float = 0.0
+	match ability.damage_delivery:
+		AbilityDefinition.DamageDelivery.MELEE:
+			equipment_and_stat = actor.melee_attack_value()
+		AbilityDefinition.DamageDelivery.RANGED:
+			equipment_and_stat = actor.ranged_attack_value()
+		# Для магии пока нет характеристики, применяем только мощность эффекта.
+	var base: float = equipment_and_stat + float(effect.amount)
+	return floori(maxf(base * float(100 + actor.block_attack_bonus_percent) / 100.0, 0.0))
 
 
 static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "") -> Dictionary:

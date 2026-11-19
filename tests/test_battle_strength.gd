@@ -1,46 +1,42 @@
 extends SceneTree
 
-## Сила добавляет половину очка к ближней базе, не к выстрелам.
+## DA-4.09: характеристики считаются вместе с оружием, без постоянной атаки.
 func _initialize() -> void:
 	var wolf := HeroState.new(HeroCatalog.get_hero("volcha"))
 	var rooster := HeroState.new(HeroCatalog.get_hero("petushan"))
-	assert(wolf.strength == 6 and rooster.strength == 8)
-	assert(wolf.melee_attack() == wolf.attack + 3)
-	assert(rooster.melee_attack() == rooster.attack + 4)
+	assert(wolf.strength == wolf.definition.strength and wolf.agility == wolf.definition.agility)
+	assert(rooster.strength == rooster.definition.strength and rooster.agility == rooster.definition.agility)
+	assert(wolf.melee_attack_value() == float(wolf.strength) * 0.5)
+	assert(wolf.ranged_attack_value() == float(wolf.agility) * 0.5)
 	var copy: HeroState = wolf.copy_for_battle()
-	assert(copy.strength == wolf.strength and copy.melee_attack() == wolf.melee_attack())
+	assert(copy.strength == wolf.strength and copy.agility == wolf.agility)
+	assert(copy.melee_attack_value() == wolf.melee_attack_value())
 
-	var enemies: Dictionary = {
-		"rabbit_symbiont": 4, "hunter": 4, "giant_crab": 6,
-		"lobar": 8, "kadavr": 10
-	}
-	for id in enemies:
+	for id in MonsterCatalog.DEFINITIONS:
 		var monster: MonsterDefinition = MonsterCatalog.get_monster(id)
-		assert(monster.strength == int(enemies[id]))
 		var actor: BattleParticipant = BattleParticipant.from_monster(monster)
-		assert(actor.melee_attack() == monster.attack_damage + floori(float(monster.strength) * 0.5))
+		assert(actor.melee_attack_value() == float(monster.strength) * 0.5)
+		assert(actor.ranged_attack_value() == float(monster.agility) * 0.5)
 
 	var state: BattleState = BattleState.begin(MonsterCatalog.get_monster("hunter"), wolf)
 	var actor: BattleParticipant = state.get_hero()
-	assert(actor.strength == wolf.strength)
+	var enemy: BattleParticipant = state.get_enemy()
+	var strike: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
+	assert(AbilityExecutor.preview_damage(actor, strike, strike.effects[0]) == floori(float(wolf.strength) * 0.5 + 1))
 	var punch: Dictionary = state.execute_ability("hero", "enemy", "basic_strike")
-	assert(punch.success and punch.events[0].damage == wolf.melee_attack())
+	assert(punch.success and punch.events[0].damage == maxi(floori(actor.melee_attack_value() + 1) - enemy.defense, 0))
 	var shot_definition: AbilityDefinition = AbilityCatalog.get_ability("hunter_shot")
 	assert(shot_definition.damage_delivery == AbilityDefinition.DamageDelivery.RANGED)
-	var hunter: BattleParticipant = state.get_enemy()
-	var shot: Dictionary = state.execute_ability("enemy", "hero", "hunter_shot")
-	assert(shot.success)
-	assert(shot.events[0].damage == hunter.attack + 1)
-	assert(shot.events[0].damage != hunter.melee_attack() + 1)
-	# Нечётное значение Силы не округляется вверх.
-	actor.strength = 5
-	assert(actor.melee_attack() == actor.attack + 2)
-	# База 10, сила 1 -> 10,5; один блок => 13,125, итог 13.
+	assert(AbilityExecutor.preview_damage(enemy, shot_definition, shot_definition.effects[0]) == floori(float(enemy.agility) * 0.5 + 2))
+	var other_base: float = enemy.melee_attack_value()
+	enemy.agility += 2
+	assert(enemy.melee_attack_value() == other_base)
+	assert(AbilityExecutor.preview_damage(enemy, shot_definition, shot_definition.effects[0]) == floori(float(enemy.agility) * 0.5 + 2))
+
+	# Дробь обрезается только после % бонуса: 2.5 + 1 = 3.5, затем ×1.25 -> 4.
 	var fractional: BattleState = BattleState.begin(MonsterCatalog.get_monster("kadavr"), wolf)
 	var f: BattleParticipant = fractional.get_hero()
-	f.attack = 10
-	f.strength = 1
+	f.strength = 5
 	assert(fractional.execute_ability("hero", "hero", "guard").success)
-	var powered: Dictionary = fractional.execute_ability("hero", "enemy", "basic_strike")
-	assert(powered.success and powered.events[0].damage == 13)
+	assert(AbilityExecutor.preview_damage(f, strike, strike.effects[0]) == 4)
 	quit()

@@ -10,7 +10,8 @@ extends Resource
 ## Сколько действий в алгоритме доступно без артефактов и усилений.
 @export_range(1, 8, 1) var base_action_slots: int = 3
 @export_range(1, 999, 1) var max_health: int = 40
-@export_range(1, 999, 1) var base_attack: int = 6
-## Каждые две единицы силы добавляют 1 к базовому урону ближнего боя.
+## Каждое очко силы добавляет 0,5 к урону ближних действий.
 @export_range(0, 999, 1) var strength: int = 0
+## Каждое очко ловкости добавляет 0,5 к урону дальних действий.
+@export_range(0, 999, 1) var agility: int = 0
 @export_range(0, 999, 1) var base_defense: int = 0

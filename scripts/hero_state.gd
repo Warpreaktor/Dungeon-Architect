@@ -5,16 +5,14 @@ extends RefCounted
 ## Не относятся к исходной карте и пока не сохраняются на диск.
 
 const START_HEALTH: int = 40
-const START_ATTACK: int = 1
 const START_DEFENSE: int = 0
 
 var definition: HeroDefinition
 var max_health: int = START_HEALTH
 var health: int = START_HEALTH
-var base_attack: int = START_ATTACK
 var strength: int = 0
+var agility: int = 0
 var base_defense: int = START_DEFENSE
-var attack: int = START_ATTACK
 var defense: int = START_DEFENSE
 var gold: int = 0
 ## Общие способности, изученные в ходе приключения (не меняют HeroDefinition).
@@ -44,14 +42,36 @@ func _init(hero_definition: HeroDefinition = null) -> void:
 	definition = hero_definition if hero_definition != null else HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID)
 	max_health = definition.max_health
 	health = max_health
-	base_attack = definition.base_attack
 	strength = definition.strength
+	agility = definition.agility
 	base_defense = definition.base_defense
 	_recalculate_equipment_stats()
 
 
+## Ближний и дальний урон: собственная мощность оружия нужного типа +
+## половина соответствующей характеристики + временное усиление атаки.
+## Число из эффекта способности прибавляется в AbilityExecutor.
+func weapon_damage(kind: int) -> int:
+	var item: ItemDefinition = ItemCatalog.get_item(equipped_weapon_id)
+	if item == null or item.equipment_slot != ItemDefinition.EquipmentSlot.WEAPON or item.weapon_kind != kind:
+		return 0
+	return maxi(item.weapon_damage, 0)
+
+
+func melee_attack_value() -> float:
+	return float(weapon_damage(ItemDefinition.WeaponKind.MELEE) + strength_bonus) + float(maxi(strength, 0)) * 0.5
+
+
+func ranged_attack_value() -> float:
+	return float(weapon_damage(ItemDefinition.WeaponKind.RANGED) + strength_bonus) + float(maxi(agility, 0)) * 0.5
+
+
 func melee_attack() -> int:
-	return attack + floori(float(maxi(strength, 0)) * 0.5)
+	return floori(melee_attack_value())
+
+
+func ranged_attack() -> int:
+	return floori(ranged_attack_value())
 
 
 func action_slot_capacity() -> int:
@@ -112,17 +132,13 @@ func unequip_item(item_id: String) -> bool:
 	return true
 
 
-## Статистика вычисляется из базовых значений и бонусов реально надетых предметов.
+## Пассивная защита не включает щит; тот работает только через «Блок».
+## Постоянной атаки нет: урон вычисляется на момент применения способности.
 func _recalculate_equipment_stats() -> void:
-	attack = base_attack + strength_bonus
 	defense = base_defense
-	for item_id in [equipped_weapon_id, equipped_shield_id]:
-		var item: ItemDefinition = ItemCatalog.get_item(item_id)
-		if item != null:
-			attack += item.attack_bonus
-			# Щит даёт защиту лишь через действие «Блок».
-			if item.equipment_slot != ItemDefinition.EquipmentSlot.SHIELD:
-				defense += item.defense_bonus
+	var weapon: ItemDefinition = ItemCatalog.get_item(equipped_weapon_id)
+	if weapon != null and weapon.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON:
+		defense += weapon.defense_bonus
 
 
 ## Совместимые методы для уже существующей игровой логики.
@@ -170,6 +186,8 @@ func consume_shield_block(incoming: int, maximum_absorption: int = -1) -> int:
 	if item == null or durability <= 0:
 		return 0
 	var blocked: int = mini(incoming, maxi(item.defense_bonus, 0))
+	if maximum_absorption >= 0:
+		blocked = mini(blocked, maximum_absorption)
 	var values: Array = shield_durabilities.get(equipped_shield_id, [])
 	values[0] = durability - incoming
 	if int(values[0]) <= 0:
@@ -257,10 +275,9 @@ func copy_for_battle() -> HeroState:
 	var copy := HeroState.new(definition)
 	copy.max_health = max_health
 	copy.health = health
-	copy.base_attack = base_attack
 	copy.strength = strength
+	copy.agility = agility
 	copy.base_defense = base_defense
-	copy.attack = attack
 	copy.defense = defense
 	copy.gold = gold
 	copy.learned_ability_ids = learned_ability_ids.duplicate()

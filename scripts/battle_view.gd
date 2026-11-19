@@ -14,11 +14,13 @@ signal item_use_requested(item_id: String)
 @onready var _hero_attack_icon: TextureRect = %HeroAttackIcon
 @onready var _hero_attack_value: Label = %HeroAttackValue
 @onready var _hero_strength_value: Label = %HeroStrengthValue
+@onready var _hero_agility_value: Label = %HeroAgilityValue
 @onready var _hero_defense_icon: TextureRect = %HeroDefenseIcon
 @onready var _hero_defense_value: Label = %HeroDefenseValue
 @onready var _hero_name: Label = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroName
 @onready var _enemy_attack_value: Label = %EnemyAttackValue
 @onready var _enemy_strength_value: Label = %EnemyStrengthValue
+@onready var _enemy_agility_value: Label = %EnemyAgilityValue
 @onready var _enemy_defense_value: Label = %EnemyDefenseValue
 @onready var _enemy_defense_icon: TextureRect = %EnemyDefenseIcon
 @onready var _enemy_name: Label = %EnemyName
@@ -83,12 +85,20 @@ func _ready() -> void:
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.24)
 
 
+## Единственный расчёт: тот же метод, что использует обработчик способности.
+func _basic_strike_damage(actor: BattleParticipant) -> int:
+	var ability: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
+	if ability == null or ability.effects.is_empty():
+		return 0
+	return AbilityExecutor.preview_damage(actor, ability, ability.effects[0])
+
+
 func begin(combat: CombatSession, hero: HeroState) -> void:
 	_combat = combat
 	if hero.definition != null:
 		_hero_name.text = hero.definition.display_name
 		_hero_portrait.texture = hero.definition.portrait
-	_hero_attack_damage = hero.melee_attack()
+	_hero_attack_damage = _basic_strike_damage(_combat.battle_state.get_hero())
 	var equipped_weapon: ItemDefinition = ItemCatalog.get_item(hero.equipped_weapon_id)
 	_attack_name = "Удар: " + equipped_weapon.display_name if equipped_weapon != null else "Удар кулаком"
 	var weapon: ItemDefinition = ItemCatalog.get_item(hero.equipped_weapon_id)
@@ -96,8 +106,9 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_punch_button.text = "%s  ·  %d" % [_attack_name, _hero_attack_damage]
 	_punch_button.icon = weapon_icon
 	_hero_attack_icon.texture = weapon_icon
-	_hero_attack_value.text = str(hero.melee_attack())
+	_hero_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_hero()))
 	_hero_strength_value.text = "СИЛ %d" % hero.strength
+	_hero_agility_value.text = "ЛОВ %d" % hero.agility
 	var shield_item: ItemDefinition = ItemCatalog.get_item(hero.equipped_shield_id)
 	_hero_defense_value.text = str(_combat.battle_state.get_hero().preview_block_armor())
 	_defense_idle_color = Color.WHITE
@@ -105,8 +116,9 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_hero_chain_title.text = _hero_name.text.to_upper()
 	_enemy_name.text = combat.enemy_definition.display_name
 	_enemy_chain_title.text = _enemy_name.text.to_upper()
-	_enemy_attack_value.text = str(_combat.battle_state.get_enemy().melee_attack())
+	_enemy_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_enemy()))
 	_enemy_strength_value.text = "СИЛ %d" % _combat.battle_state.get_enemy().strength
+	_enemy_agility_value.text = "ЛОВ %d" % _combat.battle_state.get_enemy().agility
 	_enemy_defense_value.text = str(_combat.battle_state.get_enemy().preview_block_armor())
 	_enemy_defense_icon.modulate = Color.WHITE if combat.enemy_defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
 	_enemy_portrait.texture = combat.enemy_definition.icon
@@ -272,7 +284,7 @@ func show_combat_item_result(result: Dictionary, session: GameSession) -> void:
 	if bool(result.get("used", false)):
 		_visible_hero_hp = session.hero.health
 		_hero_health_meter.set_health(_visible_hero_hp, session.hero.max_health, true)
-		_hero_attack_value.text = str(session.hero.melee_attack())
+		_hero_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_hero()))
 		_result_text.text = str(result.get("message", ""))
 	elif not str(result.get("message", "")).is_empty():
 		_result_text.text = str(result["message"])

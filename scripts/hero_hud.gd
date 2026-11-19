@@ -22,7 +22,8 @@ func set_hero(hero: HeroState) -> void:
 	if hero == null:
 		return
 	_health_meter.set_health(hero.health, hero.max_health)
-	_attack_value.text = str(hero.attack)
+	_attack_value.text = str(hero.melee_attack())
+	_attack_value.tooltip_text = "Ближняя мощь без бонуса конкретного приёма"
 	var weapon := ItemCatalog.get_item(hero.equipped_weapon_id)
 	_attack_icon.texture = weapon.icon if weapon != null else _default_attack_icon
 	var shield_item: ItemDefinition = ItemCatalog.get_item(hero.equipped_shield_id)

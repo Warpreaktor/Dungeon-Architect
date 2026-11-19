@@ -11,4 +11,4 @@ icon = ExtResource("2_icon")
 category = 3
 stackable = false
 equipment_slot = 1
-attack_bonus = 1
+weapon_damage = 1

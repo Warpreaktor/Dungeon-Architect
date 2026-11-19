@@ -436,7 +436,7 @@ func _build_interface() -> void:
 		_add_tool_button(monster_tools, {
 			"id": "monster:" + monster.monster_id,
 			"label": monster.display_name,
-			"hint": "Здоровье: %d · Урон: %d" % [monster.max_health, monster.attack_damage],
+			"hint": "Здоровье: %d · Сила: %d · Ловкость: %d" % [monster.max_health, monster.strength, monster.agility],
 			"icon": monster.icon
 		})
 

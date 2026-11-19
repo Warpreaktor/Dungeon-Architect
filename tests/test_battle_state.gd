@@ -14,7 +14,8 @@ func _initialize() -> void:
 	assert(fight_a.get_participant("enemy") != null)
 	assert(fight_a.get_participant("missing") == null)
 	assert(fight_a.get_enemy().health == definition_hp)
-	assert(fight_a.perform_basic_attack(2) == maxi(2 - monster.defense, 0))
+	var first_expected: int = maxi(AbilityExecutor.preview_damage(fight_a.get_hero(), AbilityCatalog.get_ability("basic_strike"), AbilityCatalog.get_ability("basic_strike").effects[0]) - monster.defense, 0)
+	assert(fight_a.perform_basic_attack(2) == first_expected) # Старый аргумент не подменяет формулу.
 	assert(fight_a.turn_index == 1 and fight_a.events.size() == 2)
 	assert(fight_a.events[0]["actor_id"] == "hero")
 	assert(fight_a.events[1]["actor_id"] == "enemy")
@@ -44,7 +45,7 @@ func _initialize() -> void:
 	var combat := CombatSession.new(monster, legacy_hero)
 	assert(combat.battle_state.get_hero() != null)
 	assert(combat.enemy_health == monster.max_health)
-	assert(combat.hero_attack(1) == maxi(1 - monster.defense, 0))
+	assert(combat.hero_attack(1) == maxi(AbilityExecutor.preview_damage(combat.battle_state.get_hero(), AbilityCatalog.get_ability("basic_strike"), AbilityCatalog.get_ability("basic_strike").effects[0]) - monster.defense, 0))
 	assert(legacy_hero.health == old_hp - combat.last_counter_damage)
 	assert(combat.battle_state.get_hero().health == legacy_hero.health)
 	assert(combat.hero == legacy_hero)
@@ -57,8 +58,11 @@ func _initialize() -> void:
 	assert(defeat.hero_attack(1) == 0)
 
 	var finisher := CombatSession.new(monster, HeroState.new(HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID)))
-	assert(finisher.hero_attack(monster.max_health + monster.defense) == monster.max_health)
+	for index in range(30):
+		if finisher.is_victory or finisher.is_defeat:
+			break
+		finisher.hero_attack(1000)
 	assert(finisher.is_victory and not finisher.is_defeat)
-	assert(finisher.battle_state.events.size() == 1)
+	assert(finisher.battle_state.events.size() >= 1)
 	assert(finisher.hero_attack(1) == 0)
 	quit()

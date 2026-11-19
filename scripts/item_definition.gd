@@ -5,6 +5,7 @@ extends Resource
 
 enum Category { QUEST, CONSUMABLE, CURRENCY, EQUIPMENT }
 enum EquipmentSlot { NONE, WEAPON, SHIELD }
+enum WeaponKind { MELEE, RANGED }
 enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 
 @export var item_id: String = ""
@@ -16,7 +17,9 @@ enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 @export var stackable: bool = true
 @export var equipment_slot: EquipmentSlot = EquipmentSlot.NONE
 @export var two_handed: bool = false
-@export var attack_bonus: int = 0
+## Собственный урон оружия, без скрытой атаки персонажа.
+@export_range(0, 999, 1) var weapon_damage: int = 0
+@export var weapon_kind: WeaponKind = WeaponKind.MELEE
 @export var defense_bonus: int = 0
 @export_range(0, 999, 1) var max_durability: int = 0
 @export_range(0, 9999, 1) var healing_amount: int = 0

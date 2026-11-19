@@ -13,13 +13,11 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 	for effect in ability.effects:
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
+				var type_name: String = "ближний" if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else ("дальний" if ability.damage_delivery == AbilityDefinition.DamageDelivery.RANGED else "магический")
 				if participant != null:
-					var attack_base: int = participant.melee_attack() if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else participant.attack
-					lines.append("Урон: %d (до защиты и бонуса блока)" % maxi(attack_base + effect.amount - 1, 0))
-				elif effect.amount >= 1:
-					lines.append("Урон: атака бойца + %d" % (effect.amount - 1))
+					lines.append("Урон: %d (%s, до защиты)" % [AbilityExecutor.preview_damage(participant, ability, effect), type_name])
 				else:
-					lines.append("Урон: атака бойца − %d" % (1 - effect.amount))
+					lines.append("Мощность приёма: %d (%s) + оружие и характеристика" % [effect.amount, type_name])
 			AbilityEffectDefinition.Kind.BLOCK:
 				var block: int = maxi(BattleParticipant.BASE_BLOCK_ARMOR, effect.amount)
 				if participant != null:

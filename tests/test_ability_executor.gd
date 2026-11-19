@@ -34,7 +34,7 @@ func _initialize() -> void:
 	var hp_before: int = enemy.health
 	var hit: Dictionary = battle.execute_ability("hero", "enemy", "basic_strike")
 	assert(hit.success and hit.events.size() == 1)
-	assert(hit.events[0].damage == maxi(hero.melee_attack() * 150 / 100 - enemy.defense, 0))
+	assert(hit.events[0].damage == maxi(floori((hero.melee_attack_value() + 1.0) * 1.5) - enemy.defense, 0))
 	assert(enemy.health == hp_before - hit.events[0].damage)
 	assert(actor.block_attack_bonus_percent == 0)
 	assert(not battle.execute_ability("hero", "enemy", "not_registered").success)

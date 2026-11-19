@@ -13,4 +13,4 @@ category = 3
 stackable = false
 equipment_slot = 1
 two_handed = true
-attack_bonus = 5
+weapon_damage = 5

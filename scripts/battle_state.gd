@@ -194,34 +194,25 @@ func end_phase() -> void:
 
 ## Совместимость текущего экрана: удар героя, затем один ответ врага.
 ## Оба урона рассчитываются тем же обработчиком, что и способности из .tres.
-func perform_basic_attack(attack_damage: int) -> int:
-	if is_victory or is_defeat:
-		return 0
-	var hero: BattleParticipant = get_hero()
-	var enemy: BattleParticipant = get_enemy()
-	if enemy == null or not enemy.is_alive():
+func perform_basic_attack(_legacy_attack_damage: int = 0) -> int:
+	if is_victory or is_defeat or get_hero() == null:
 		return 0
 	last_counter_damage = 0
 	last_blocked_damage = 0
-	var bonus_percent: int = hero.block_attack_bonus_percent if hero != null else 0
-	var damage_amount: int = maxi(attack_damage, 0) * (100 + bonus_percent) / 100
-	if hero != null:
-		hero.block_attack_bonus_percent = 0
-	var source: BattleParticipant = hero
-	if source == null:
-		source = BattleParticipant.new()
-		source.participant_id = hero_id
-	var hit: Dictionary = AbilityExecutor.apply_damage(source, enemy, damage_amount, "basic_strike")
+	var result: Dictionary = execute_ability(hero_id, enemy_id, "basic_strike")
+	if not bool(result.get("success", false)):
+		return 0
+	var damage: int = 0
+	for event in result["events"]:
+		if event["type"] == "attack":
+			damage = int(event["damage"])
 	turn_index += 1
-	hit["turn"] = turn_index
-	events.append(hit)
-	update_outcome()
 	if not is_victory:
 		_counterattack()
-	return int(hit["damage"])
+	return damage
 
 
-## Временная ручная кнопка блока: пока цепочки действий не появились.
+## Временный совместимый ручной вызов блока.
 func perform_guard() -> Dictionary:
 	if is_victory or is_defeat:
 		return {"success": false, "reason": "Бой завершён", "events": []}
@@ -241,8 +232,13 @@ func _counterattack() -> void:
 	var enemy: BattleParticipant = get_enemy()
 	if hero == null or enemy == null or not hero.is_alive() or not enemy.is_alive():
 		return
-	var hit: Dictionary = AbilityExecutor.apply_damage(enemy, hero, enemy.attack, "basic_strike")
-	hit["type"] = "counter" # Старые журналы и экран ожидают ответный удар.
+	var ability: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
+	if ability == null or ability.effects.is_empty():
+		return
+	var amount: int = AbilityExecutor.preview_damage(enemy, ability, ability.effects[0])
+	enemy.block_attack_bonus_percent = 0
+	var hit: Dictionary = AbilityExecutor.apply_damage(enemy, hero, amount, "basic_strike")
+	hit["type"] = "counter"
 	hit["turn"] = turn_index
 	last_counter_damage = int(hit["damage"])
 	last_blocked_damage = int(hit["blocked"])

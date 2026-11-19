@@ -14,6 +14,7 @@ signal equipment_requested(item_id: String, equip: bool)
 @onready var _gold_label: Label = %GoldLabel
 @onready var _attack_label: Label = %AttackLabel
 @onready var _strength_label: Label = %StrengthLabel
+@onready var _agility_label: Label = %AgilityLabel
 @onready var _defense_label: Label = %DefenseLabel
 @onready var _item_icon: TextureRect = %ItemIcon
 @onready var _item_name: Label = %ItemName
@@ -59,8 +60,9 @@ func _refresh_contents() -> void:
 	_entries.clear()
 	var hero: HeroState = _session.hero
 	_gold_label.text = "Золото: %d" % hero.gold
-	_attack_label.text = "Атака: %d" % hero.melee_attack()
+	_attack_label.text = "Мощь ближнего боя: %d" % hero.melee_attack()
 	_strength_label.text = "Сила: %d" % hero.strength
+	_agility_label.text = "Ловкость: %d" % hero.agility
 	var shield_item: ItemDefinition = ItemCatalog.get_item(hero.equipped_shield_id)
 	_defense_label.text = "Блок: %d" % (shield_item.defense_bonus if shield_item != null else hero.defense)
 	_set_equipment(_weapon_icon, _weapon_name, hero.equipped_weapon_id, "Оружие: не найдено")
@@ -157,8 +159,8 @@ func _show_item(index: int) -> void:
 		_:
 			if item.healing_amount > 0:
 				details += "\nВосстанавливает: до %d HP" % item.healing_amount
-	if item.attack_bonus > 0:
-		details += "\nАтака: +%d" % item.attack_bonus
+	if item.weapon_damage > 0:
+		details += "\nУрон оружия: %d (%s)" % [item.weapon_damage, "дальний" if item.weapon_kind == ItemDefinition.WeaponKind.RANGED else "ближний"]
 	if item.defense_bonus > 0:
 		details += "\nБлок: +%d" % item.defense_bonus
 		if item.max_durability > 0:

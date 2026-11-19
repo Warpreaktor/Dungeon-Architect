@@ -7,7 +7,8 @@ func _fighter(id: String, team: String, hp: int, power: int) -> BattleParticipan
 	participant.team_id = team
 	participant.max_health = hp
 	participant.health = hp
-	participant.attack = power
+	## basic_strike даёт +1, остальное зависит от Силы, не от скрытой атаки.
+	participant.strength = maxi(power - 1, 0) * 2
 	participant.defense = 0
 	participant.personal_ability_ids = ["basic_strike", "guard"]
 	return participant

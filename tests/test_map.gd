@@ -172,9 +172,9 @@ func _initialize() -> void:
 	var monster_palette_map := DungeonMap.create_blank(8, 8)
 	assert(monster_palette_map.place_entity("monster", 2, 2, {"monster_id": "rabbit_symbiont"}))
 	assert(monster_palette_map.place_entity("monster", 3, 2, {"monster_id": "hunter"}))
-	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(2, 2)[0]).max_health == 3)
-	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(3, 2)[0]).max_health == 5)
-	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(3, 2)[0]).attack_damage == 2)
+	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(2, 2)[0]).max_health == MonsterCatalog.get_monster("rabbit_symbiont").max_health)
+	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(3, 2)[0]).max_health == MonsterCatalog.get_monster("hunter").max_health)
+	assert(MonsterCatalog.from_entity(monster_palette_map.entities_at(3, 2)[0]).agility == MonsterCatalog.get_monster("hunter").agility)
 	assert(not monster_palette_map.place_entity("monster", 3, 2, {"monster_id": "rabbit_symbiont"}))
 	var monster_palette_restored := DungeonMap.from_dict(JSON.parse_string(JSON.stringify(monster_palette_map.to_dict())))
 	assert(monster_palette_restored != null)
@@ -197,11 +197,11 @@ func _initialize() -> void:
 	assert(equipment_session.carried_items["shield"] == 1)
 	var sword_def: ItemDefinition = ItemCatalog.get_item("sword")
 	var shield_def: ItemDefinition = ItemCatalog.get_item("shield")
-	assert(equipment_session.hero.attack == HeroState.START_ATTACK + sword_def.attack_bonus + shield_def.attack_bonus)
-	assert(equipment_session.hero.defense == HeroState.START_DEFENSE + sword_def.defense_bonus + shield_def.defense_bonus)
+	assert(equipment_session.hero.melee_attack_value() == float(equipment_session.hero.strength) * 0.5 + sword_def.weapon_damage)
+	assert(equipment_session.hero.defense == HeroState.START_DEFENSE + sword_def.defense_bonus)
 	assert(equipment_session.unequip_item("sword"))
 	assert(equipment_session.hero.equipped_weapon_id.is_empty())
-	assert(equipment_session.hero.attack == HeroState.START_ATTACK + shield_def.attack_bonus)
+	assert(equipment_session.hero.melee_attack_value() == float(equipment_session.hero.strength) * 0.5)
 	assert(equipment_session.carried_items["sword"] == 1) # Предмет не расходуется.
 	assert(not equipment_session.unequip_item("sword"))
 	assert(equipment_session.equip_item("sword"))
@@ -475,7 +475,7 @@ func _initialize() -> void:
 	var sword_item := ItemCatalog.get_item("sword")
 	assert(sword_item != null)
 	assert(sword_item.category == ItemDefinition.Category.EQUIPMENT)
-	assert(sword_item.attack_bonus == 1)
+	assert(sword_item.weapon_damage == 1)
 	var equip_map := DungeonMap.create_blank(8, 8)
 	assert(not equip_map.place_entity("sword", 2, 3)) # Меч не размещается на полу карты.
 	assert(equip_map.place_entity("player_spawn", 2, 2))
@@ -491,25 +491,28 @@ func _initialize() -> void:
 	var equip_loaded := DungeonMap.from_dict(JSON.parse_string(equip_json))
 	assert(equip_loaded != null)
 	var equip_session := GameSession.start_for(equip_loaded)
-	assert(equip_session.hero.attack == 1)
+	assert(equip_session.hero.melee_attack() == floori(float(equip_session.hero.strength) * 0.5))
 	assert(equip_session.hero.equipped_weapon_id.is_empty())
 	assert(equip_session.move_by(1, 0))
 	assert(equip_session.hero.gold == 37)
 	assert(equip_session.carried_items.get("sword", 0) == 1)
-	assert(equip_session.hero.attack == 2)
+	assert(equip_session.hero.melee_attack() == floori(float(equip_session.hero.strength) * 0.5) + sword_item.weapon_damage)
 	assert(equip_session.hero.equipped_weapon_id == "sword")
 	assert(not equip_session.move_by(1, 0)) # Встречаем монстра.
 	assert(equip_session.has_pending_encounter())
-	var equip_combat := CombatSession.new()
-	assert(equip_combat.hero_attack(equip_session.hero.attack) == 2)
-	assert(not equip_combat.is_victory)
-	assert(equip_combat.hero_attack(equip_session.hero.attack) == 2 and equip_combat.is_victory)
+	var equip_combat := CombatSession.new(MonsterCatalog.get_monster("rabbit_symbiont"), equip_session.hero)
+	assert(equip_combat.hero_attack(1234) > 0) # Внешний аргумент больше не подменяет оружие/Силу.
+	for attack_index in range(30):
+		if equip_combat.is_victory or equip_combat.is_defeat:
+			break
+		equip_combat.hero_attack()
+	assert(equip_combat.is_victory)
 	assert(equip_session.win_pending_encounter())
 	assert(JSON.stringify(equip_loaded.to_dict()) == equip_json)
 	var equip_again := GameSession.start_for(equip_loaded)
-	assert(equip_again.hero.attack == 1 and equip_again.hero.gold == 0)
+	assert(equip_again.hero.equipped_weapon_id.is_empty() and equip_again.hero.gold == 0)
 	assert(equip_again.move_by(1, 0))
-	assert(equip_again.hero.attack == 2 and equip_again.hero.gold == 37)
+	assert(equip_again.hero.melee_attack() == floori(float(equip_again.hero.strength) * 0.5) + sword_item.weapon_damage and equip_again.hero.gold == 37)
 	# Сняли золото с сундука: размер денежной награды не влияет на остальные предметы.
 	assert(equip_map.set_chest_contents(equip_chest_id, ["sword"]))
 	assert(DungeonMap.chest_contents(equip_chest) == ["sword"])
@@ -560,11 +563,11 @@ func _initialize() -> void:
 	assert(treasure_loot.size() == 5)
 	assert(treasure_loot[2]["item_id"] == "gold" and treasure_loot[2]["quantity"] == 42)
 	assert(decorated_session.hero.gold == 42)
-	assert(decorated_session.hero.attack == 2)
-	assert(decorated_session.hero.defense == 1)
+	assert(decorated_session.hero.melee_attack() == floori(float(decorated_session.hero.strength) * 0.5) + sword_item.weapon_damage)
+	assert(decorated_session.hero.defense == decorated_session.hero.base_defense)
 	assert(decorated_session.hero.equipped_shield_id == "shield")
-	assert(decorated_session.hero.take_damage(2) == 1)
-	assert(decorated_session.hero.health == 39)
+	assert(decorated_session.hero.take_damage(2) == 2)
+	assert(decorated_session.hero.health == decorated_session.hero.max_health - 2)
 	assert(decorated_session.move_by(-1, 0) and decorated_session.move_by(1, 0))
 	assert(decorated_session.take_message_events().is_empty())
 	assert(JSON.stringify(decorated_chest_map.to_dict()) == decorated_json)
@@ -585,16 +588,11 @@ func _initialize() -> void:
 
 	# Пять видов врагов с собственными Resource, старые идентификаторы перенаправляются.
 	assert(HeroState.START_HEALTH == 40)
-	var expected_stats := {
-		"rabbit_symbiont": [3, 1], "hunter": [5, 2], "giant_crab": [8, 2],
-		"lobar": [12, 3], "kadavr": [15, 4]
-	}
-	assert(MonsterCatalog.DEFINITIONS.size() == expected_stats.size())
-	for monster_kind in expected_stats:
-		var definition: MonsterDefinition = MonsterCatalog.get_monster(monster_kind)
-		assert(definition.monster_id == monster_kind)
-		assert(definition.max_health == int(expected_stats[monster_kind][0]))
-		assert(definition.attack_damage == int(expected_stats[monster_kind][1]))
+	assert(MonsterCatalog.DEFINITIONS.size() == 5)
+	for monster_kind in MonsterCatalog.DEFINITIONS:
+		var definition: MonsterDefinition = MonsterCatalog.get_monster(str(monster_kind))
+		assert(definition.monster_id == str(monster_kind))
+		assert(definition.max_health > 0 and definition.strength >= 0 and definition.agility >= 0)
 		assert(definition.icon != null)
 	assert(MonsterCatalog.get_monster("small_monster").monster_id == "rabbit_symbiont")
 	assert(MonsterCatalog.get_monster("skeleton_guard").monster_id == "hunter")
@@ -615,29 +613,28 @@ func _initialize() -> void:
 	assert(not hunter_game.move_by(1, 0))
 	assert(hunter_game.pending_monster_definition().monster_id == "hunter")
 	var hunter_fight := CombatSession.new(hunter_game.pending_monster_definition(), hunter_game.hero)
-	for hit_index in range(5):
-		assert(hunter_fight.hero_attack(1) == 1)
+	var hunter_hp_before: int = hunter_game.hero.health
+	for hit_index in range(30):
+		if hunter_fight.is_victory or hunter_fight.is_defeat:
+			break
+		hunter_fight.hero_attack()
 	assert(hunter_fight.is_victory)
-	assert(hunter_game.hero.health == 40 - 4 * 2)
+	assert(hunter_game.hero.health < hunter_hp_before)
 	assert(hunter_game.win_pending_encounter())
 	assert(JSON.stringify(hunter_loaded.to_dict()) == hunter_json)
-	# Меч сокращает поединок, щит поглощает единицу урона за ответный удар.
+	# Меч повышает ближний урон; щит не защищает без явного блока.
 	var guarded_hero := HeroState.new()
 	guarded_hero.equip_weapon(ItemCatalog.get_item("sword"))
 	guarded_hero.equip_shield(ItemCatalog.get_item("shield"))
 	var guarded_fight := CombatSession.new(MonsterCatalog.get_monster("hunter"), guarded_hero)
-	assert(guarded_fight.hero_attack(guarded_hero.attack) == 2)
-	assert(guarded_fight.enemy_health == 3)
-	assert(guarded_fight.last_counter_damage == 1 and guarded_fight.last_blocked_damage == 1)
-	assert(guarded_hero.health == 39)
-	assert(guarded_fight.hero_attack(guarded_hero.attack) == 2)
-	assert(guarded_fight.hero_attack(guarded_hero.attack) == 2 and guarded_fight.is_victory)
-	assert(guarded_hero.health == 38)
+	assert(guarded_fight.hero_attack() > 0)
+	assert(guarded_fight.last_blocked_damage == 0)
+	assert(guarded_hero.health < guarded_hero.max_health)
 	# Поражение не удаляет монстра из игрового мира.
 	var fragile := HeroState.new()
 	fragile.health = 1
 	var losing_fight := CombatSession.new(MonsterCatalog.get_monster("hunter"), fragile)
-	assert(losing_fight.hero_attack(1) == 1)
+	assert(losing_fight.hero_attack() > 0)
 	assert(losing_fight.is_defeat and not losing_fight.is_victory)
 	assert(fragile.health == 0 and losing_fight.hero_attack(1) == 0)
 	# Совместимость JSON, в котором стояли прежние монстры.

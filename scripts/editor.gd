@@ -1385,6 +1385,14 @@ func _set_status(message: String) -> void:
 		_log_console.append_text("[%s] %s\n" % [Time.get_time_string_from_system(), message])
 
 
+## Боевые события не проходят через _set_status: одинаковые удары не
+## должны исчезать из журнала из-за дедупликации строк состояния.
+func _append_combat_log(message: String) -> void:
+	if _log_console == null or message.is_empty():
+		return
+	_log_console.append_text("[%s] %s\n" % [Time.get_time_string_from_system(), message])
+
+
 func _toggle_log_console() -> void:
 	_log_open = not _log_open
 	_log_console.visible = _log_open
@@ -2031,6 +2039,7 @@ func _show_combat_view() -> void:
 	_battle_view.battle_won.connect(_finish_combat)
 	_battle_view.battle_lost.connect(_lose_combat)
 	_battle_view.shield_broken.connect(_on_battle_shield_broken)
+	_battle_view.combat_log_line.connect(_append_combat_log)
 	_battle_view.item_use_requested.connect(_on_battle_item_requested)
 	_battle_view.begin(CombatSession.new(game_session.pending_monster_definition(), game_session.hero), game_session.hero)
 	_battle_view.bind_combat_items(game_session)
@@ -2043,6 +2052,9 @@ func _on_battle_item_requested(item_id: String) -> void:
 	var outcome: Dictionary = game_session.use_combat_item(item_id, _battle_view.current_battle_state())
 	_battle_view.show_combat_item_result(outcome, game_session)
 	if bool(outcome.get("used", false)):
+		_append_combat_log("    %s: %s · HP %d/%d" % [game_session.hero.definition.display_name,
+			str(outcome.get("message", "Предмет применён")), game_session.hero.health,
+			game_session.hero.max_health])
 		_refresh_stats()
 
 

@@ -6,6 +6,7 @@ extends Control
 signal battle_won
 signal battle_lost
 signal shield_broken(item_id: String)
+signal combat_log_line(message: String)
 signal item_use_requested(item_id: String)
 
 @onready var _hero_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroHealthMeter
@@ -564,6 +565,7 @@ func _on_punch_pressed() -> void:
 		_refresh_phase_controls()
 		return
 	_refresh_phase_controls()
+	combat_log_line.emit("Бой · фаза %d" % int(result.get("phase_number", 0)))
 	_play_phase_events(result.get("events", []))
 
 
@@ -705,6 +707,9 @@ func _play_phase_events(phase_events: Array) -> void:
 func _display_phase_event(event: Dictionary) -> void:
 	var actor_id: String = str(event.get("actor_id", ""))
 	var kind: String = str(event.get("type", ""))
+	# Удар записывается при контакте портретов, остальные события здесь.
+	if kind != "attack" and not (kind == "rest" and bool(event.get("premature", false))):
+		_emit_combat_event_log(event)
 	match kind:
 		"tick":
 			_conceal_enemy_actions()
@@ -746,7 +751,14 @@ func _display_phase_event(event: Dictionary) -> void:
 			_show_reload_icon(actor_id)
 
 
+func _emit_combat_event_log(event: Dictionary) -> void:
+	var message: String = BattleCombatLog.format_event(event, _hero_name.text, _enemy_name.text)
+	if not message.is_empty():
+		combat_log_line.emit(message)
+
+
 func _impact(event: Dictionary) -> void:
+	_emit_combat_event_log(event)
 	var target_id: String = str(event.get("target_id", ""))
 	var target: TextureRect = _impact_portraits.get(target_id) as TextureRect
 	if target == null:
@@ -839,10 +851,13 @@ func _after_phase_playback() -> void:
 			if hero_actor != null and hero_actor._hero_snapshot != null:
 				hero_actor._hero_snapshot.last_shield_broken = ""
 	if _combat.is_victory:
+		combat_log_line.emit("Бой окончен: победа %s" % _hero_name.text)
 		_show_victory()
 	elif _combat.is_defeat:
+		combat_log_line.emit("Бой окончен: поражение %s" % _hero_name.text)
 		_show_defeat()
 	else:
+		combat_log_line.emit("Фаза %d завершена" % _combat.battle_state.flow.phase_number)
 		_result_text.text = "Фаза %d завершена." % _combat.battle_state.flow.phase_number
 		_refresh_phase_controls()
 

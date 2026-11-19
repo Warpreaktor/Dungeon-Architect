@@ -60,11 +60,13 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 				recipient.prepare_block(effect.amount)
 				event_list.append({"type": "block", "actor_id": actor_id, "target_id": recipient.participant_id,
 					"ability_id": ability_id, "armor": recipient.block_armor,
-					"damage_bonus_percent": recipient.block_attack_bonus_percent})
+					"damage_bonus_percent": recipient.block_attack_bonus_percent,
+					"hp_after": recipient.health, "hp_max": recipient.max_health})
 			AbilityEffectDefinition.Kind.HEAL:
 				var healed: int = recipient.restore_health(effect.amount)
 				event_list.append({"type": "heal", "actor_id": actor_id, "target_id": recipient.participant_id,
-					"ability_id": ability_id, "healed": healed})
+					"ability_id": ability_id, "healed": healed,
+					"hp_after": recipient.health, "hp_max": recipient.max_health})
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
 				recipient.statuses[effect.status_id] = {"amount": effect.amount, "ticks": effect.duration_ticks}
 				event_list.append({"type": "status_applied", "actor_id": actor_id,
@@ -106,9 +108,19 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 	# Статусы задают изменения чисел общими эффектами, а не отдельной логикой монстров.
 	if actor.statuses.has("attack_down"):
 		raw = maxi(raw - int(actor.statuses["attack_down"].get("amount", 0)), 0)
+	# Снимок делаем непосредственно в момент удара. В конце фазы HP и
+	# прочность уже могут быть другими после следующих действий.
+	var shield_before: String = target.equipped_shield_id
 	var taken: int = target.receive_damage(raw)
+	var shield_durability_after: int = -1
+	if not shield_before.is_empty() and target._hero_snapshot != null:
+		shield_durability_after = target._hero_snapshot.current_shield_durability(shield_before)
 	return {"type": "attack", "actor_id": actor.participant_id, "target_id": target.participant_id,
-		"ability_id": ability_id, "damage": taken, "blocked": maxi(raw - taken, 0),
+		"ability_id": ability_id, "raw_damage": raw, "damage": taken,
+		"blocked": maxi(raw - taken, 0), "hp_after": target.health,
+		"hp_max": target.max_health, "armor_after": target.defense,
+		"active_block_after": target.block_armor,
+		"shield_durability_after": shield_durability_after,
 		"shield_blocked": target.last_shield_blocked, "block_absorbed": target.last_block_absorbed,
 		"shield_broken": target.last_shield_broken}
 

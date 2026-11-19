@@ -15,5 +15,6 @@ script = ExtResource("1_script")
 ability_id = "hunter_shot"
 display_name = "Выстрел охотника"
 category = 0
+damage_delivery = 1
 target = 1
 effects = Array[Resource]([SubResource("Effect0")])

@@ -13,5 +13,6 @@ portrait = ExtResource("2_portrait")
 map_icon = ExtResource("3_map")
 max_health = 48
 base_attack = 6
+strength = 6
 base_defense = 0
 personal_ability_ids = Array[String](["basic_strike", "guard", "wolf_feint", "wolf_dodge", "wolf_counter"])

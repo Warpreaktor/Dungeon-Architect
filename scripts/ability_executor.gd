@@ -53,9 +53,10 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 			return _failure("Нет цели эффекта")
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
-				var raw_damage: int = maxi(actor.attack + effect.amount - 1, 0)
+				var attack_base: float = actor.melee_attack_value() if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else float(actor.attack)
 				var bonus_percent: int = actor.block_attack_bonus_percent
-				raw_damage = raw_damage * (100 + bonus_percent) / 100
+				var raw_damage: int = floori(maxf(0.0,
+					(attack_base + float(effect.amount - 1)) * float(100 + bonus_percent) / 100.0))
 				actor.block_attack_bonus_percent = 0
 				event_list.append(apply_damage(actor, recipient, raw_damage, ability_id))
 			AbilityEffectDefinition.Kind.BLOCK:

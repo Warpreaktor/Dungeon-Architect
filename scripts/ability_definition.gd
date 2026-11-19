@@ -4,6 +4,7 @@ extends Resource
 ## Неизменяемый справочник способностей. HP, доступность и цепочки живут в BattleState.
 enum Category { ATTACK, DEFENSE, SUPPORT, SPECIAL }
 enum Target { SELF, ENEMY }
+enum DamageDelivery { MELEE, RANGED, MAGIC }
 
 @export var ability_id: String = ""
 @export var display_name: String = ""
@@ -11,6 +12,8 @@ enum Target { SELF, ENEMY }
 @export var icon: Texture2D
 @export var category: Category = Category.ATTACK
 @export var target: Target = Target.ENEMY
+## Сила применяется только к ближним атакующим эффектам.
+@export var damage_delivery: DamageDelivery = DamageDelivery.MELEE
 @export var requirements: Array[AbilityRequirementDefinition] = []
 @export var effects: Array[AbilityEffectDefinition] = []
 ## Необязательные затраты для будущих способностей: {"mana": 4, "rage": 2}.
@@ -25,6 +28,8 @@ func validation_error() -> String:
 		return "Отсутствует название способности"
 	if effects.is_empty():
 		return "Способность не содержит эффектов"
+	if damage_delivery < DamageDelivery.MELEE or damage_delivery > DamageDelivery.MAGIC:
+		return "Некорректный вид урона"
 	for resource_id in resource_costs:
 		var cost: Variant = resource_costs[resource_id]
 		if typeof(resource_id) != TYPE_STRING or str(resource_id).strip_edges().is_empty():

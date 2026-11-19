@@ -13,6 +13,7 @@ signal equipment_requested(item_id: String, equip: bool)
 @onready var _empty_label: Label = %EmptyLabel
 @onready var _gold_label: Label = %GoldLabel
 @onready var _attack_label: Label = %AttackLabel
+@onready var _strength_label: Label = %StrengthLabel
 @onready var _defense_label: Label = %DefenseLabel
 @onready var _item_icon: TextureRect = %ItemIcon
 @onready var _item_name: Label = %ItemName
@@ -58,7 +59,8 @@ func _refresh_contents() -> void:
 	_entries.clear()
 	var hero: HeroState = _session.hero
 	_gold_label.text = "Золото: %d" % hero.gold
-	_attack_label.text = "Атака: %d" % hero.attack
+	_attack_label.text = "Атака: %d" % hero.melee_attack()
+	_strength_label.text = "Сила: %d" % hero.strength
 	var shield_item: ItemDefinition = ItemCatalog.get_item(hero.equipped_shield_id)
 	_defense_label.text = "Блок: %d" % (shield_item.defense_bonus if shield_item != null else hero.defense)
 	_set_equipment(_weapon_icon, _weapon_name, hero.equipped_weapon_id, "Оружие: не найдено")

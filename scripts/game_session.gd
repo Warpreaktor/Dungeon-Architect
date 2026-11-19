@@ -341,6 +341,45 @@ func _receive_item(item_id: String, quantity: int) -> void:
 		potions = int(carried_items.get("potion", 0))
 
 
+## Боевой пояс: только расходники, применимые к бойцу во время паузы.
+static func is_combat_item(item: ItemDefinition) -> bool:
+	if item == null or item.category != ItemDefinition.Category.CONSUMABLE:
+		return false
+	return item.consumable_effect in [
+		ItemDefinition.ConsumableEffect.HEAL,
+		ItemDefinition.ConsumableEffect.ATTACK,
+		ItemDefinition.ConsumableEffect.RESIST
+	] or (item.consumable_effect == ItemDefinition.ConsumableEffect.NONE and item.healing_amount > 0)
+
+
+func combat_item_ids() -> Array[String]:
+	var result: Array[String] = []
+	for key in carried_items:
+		var item_id: String = str(key)
+		if int(carried_items[item_id]) > 0 and is_combat_item(ItemCatalog.get_item(item_id)):
+			result.append(item_id)
+	result.sort()
+	return result
+
+
+## Применение через модель. Нельзя использовать предмет в момент проигрывания
+## алгоритма или на подготовке; нельзя потратить один флакон дважды.
+func use_combat_item(item_id: String, battle: BattleState) -> Dictionary:
+	if battle == null or not battle.flow.can_use_item():
+		return {"used": false, "message": "Сейчас предмет недоступен."}
+	if hero == null or battle.get_hero() == null or battle.get_hero()._hero_snapshot == null:
+		return {"used": false, "message": "Герой недоступен."}
+	var definition: ItemDefinition = ItemCatalog.get_item(item_id)
+	if not is_combat_item(definition):
+		return {"used": false, "message": "Предмет нельзя использовать в бою."}
+	var outcome: Dictionary = use_item(item_id)
+	if bool(outcome.get("used", false)):
+		battle.get_hero().sync_consumable_from_hero(hero)
+		battle.events.append({"type": "item_used", "actor_id": battle.hero_id,
+			"item_id": item_id, "message": outcome.get("message", "")})
+	return outcome
+
+
 ## Инвентарь лишь запрашивает действие: предметы и здоровье изменяет игровая сессия.
 ## Снаряжение остаётся в рюкзаке и не расходуется при надевании.
 func equip_item(item_id: String) -> bool:

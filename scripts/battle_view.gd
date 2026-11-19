@@ -6,22 +6,26 @@ extends Control
 signal battle_won
 signal battle_lost
 signal shield_broken(item_id: String)
+signal item_use_requested(item_id: String)
 
 @onready var _hero_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroHealthMeter
 @onready var _enemy_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyHealthMeter
 @onready var _hero_portrait: TextureRect = %HeroPortrait
 @onready var _hero_attack_icon: TextureRect = %HeroAttackIcon
 @onready var _hero_attack_value: Label = %HeroAttackValue
+@onready var _hero_strength_value: Label = %HeroStrengthValue
 @onready var _hero_defense_icon: TextureRect = %HeroDefenseIcon
 @onready var _hero_defense_value: Label = %HeroDefenseValue
 @onready var _hero_name: Label = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroName
 @onready var _enemy_attack_value: Label = %EnemyAttackValue
+@onready var _enemy_strength_value: Label = %EnemyStrengthValue
 @onready var _enemy_defense_value: Label = %EnemyDefenseValue
 @onready var _enemy_defense_icon: TextureRect = %EnemyDefenseIcon
 @onready var _enemy_name: Label = %EnemyName
 @onready var _enemy_portrait: TextureRect = %EnemyPortrait
 @onready var _punch_button: Button = %PunchButton
 @onready var _guard_button: Button = %GuardButton
+@onready var _combat_items_button: Button = %CombatItemsButton
 @onready var _result_text: Label = %ResultText
 @onready var _sequence_slots: HBoxContainer = %SequenceSlots
 @onready var _enemy_sequence_slots: HBoxContainer = %EnemySequenceSlots
@@ -47,6 +51,8 @@ var _ability_picker: PanelContainer
 var _picker_grid: GridContainer
 var _picker_actions: HBoxContainer
 var _picker_target: int = -1
+var _items_session: GameSession
+var _item_picker: BattleItemPicker
 ## Два временных портрета поверх поля: движение не меняет настоящие UI-узлы.
 var _impact_layer: Control
 var _impact_portraits: Dictionary = {}
@@ -62,10 +68,15 @@ var _visible_block: Dictionary = {"hero": false, "enemy": false}
 func _ready() -> void:
 	_punch_button.pressed.connect(_on_punch_pressed)
 	_guard_button.pressed.connect(_on_guard_pressed)
+	_combat_items_button.pressed.connect(_on_combat_items_pressed)
+	_combat_items_button.icon = preload("res://assets/icons/potion.png")
+	_combat_items_button.tooltip_text = "Боевые зелья"
+	_combat_items_button.disabled = true
 	_guard_button.icon = preload("res://assets/hud/menu.png")
 	_punch_button.disabled = true
 	_guard_button.visible = false
 	_build_ability_picker()
+	_build_combat_item_picker()
 	_default_attack_icon = _hero_attack_icon.texture
 	_result_text.text = "Твой ход"
 	modulate.a = 0.0
@@ -77,7 +88,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	if hero.definition != null:
 		_hero_name.text = hero.definition.display_name
 		_hero_portrait.texture = hero.definition.portrait
-	_hero_attack_damage = hero.attack
+	_hero_attack_damage = hero.melee_attack()
 	var equipped_weapon: ItemDefinition = ItemCatalog.get_item(hero.equipped_weapon_id)
 	_attack_name = "Удар: " + equipped_weapon.display_name if equipped_weapon != null else "Удар кулаком"
 	var weapon: ItemDefinition = ItemCatalog.get_item(hero.equipped_weapon_id)
@@ -85,7 +96,8 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_punch_button.text = "%s  ·  %d" % [_attack_name, _hero_attack_damage]
 	_punch_button.icon = weapon_icon
 	_hero_attack_icon.texture = weapon_icon
-	_hero_attack_value.text = str(hero.attack)
+	_hero_attack_value.text = str(hero.melee_attack())
+	_hero_strength_value.text = "СИЛ %d" % hero.strength
 	var shield_item: ItemDefinition = ItemCatalog.get_item(hero.equipped_shield_id)
 	_hero_defense_value.text = str(_combat.battle_state.get_hero().preview_block_armor())
 	_defense_idle_color = Color.WHITE
@@ -93,7 +105,8 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_hero_chain_title.text = _hero_name.text.to_upper()
 	_enemy_name.text = combat.enemy_definition.display_name
 	_enemy_chain_title.text = _enemy_name.text.to_upper()
-	_enemy_attack_value.text = str(combat.enemy_damage)
+	_enemy_attack_value.text = str(_combat.battle_state.get_enemy().melee_attack())
+	_enemy_strength_value.text = "СИЛ %d" % _combat.battle_state.get_enemy().strength
 	_enemy_defense_value.text = str(_combat.battle_state.get_enemy().preview_block_armor())
 	_enemy_defense_icon.modulate = Color.WHITE if combat.enemy_defense > 0 else Color(0.55, 0.60, 0.67, 0.65)
 	_enemy_portrait.texture = combat.enemy_definition.icon
@@ -147,6 +160,11 @@ func _refresh_chain_slots() -> void:
 		_sequence_slots.add_child(slot)
 		slot.configure(index, ability, editable, _combat.battle_state.get_hero())
 		slot.slot_selected.connect(_on_slot_selected)
+	# Отдых всегда следует после полного круга, но не входит в три
+	# переставляемых слота и не сохраняется в HeroState.
+	var rest_slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
+	_sequence_slots.add_child(rest_slot)
+	rest_slot.configure_recharge(_planner_editing.size())
 
 
 func _refresh_enemy_slots() -> void:
@@ -154,27 +172,117 @@ func _refresh_enemy_slots() -> void:
 		_enemy_sequence_slots.remove_child(child)
 		child.queue_free()
 	var enemy: BattleParticipant = _combat.battle_state.get_enemy()
-	var capacity: int = maxi(enemy.action_slot_capacity, _enemy_chain.size() + 1)
+	var capacity: int = _enemy_chain.size() + 1
 	for index in range(capacity):
 		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_enemy_sequence_slots.add_child(slot)
 		if index < _enemy_chain.size():
 			slot.configure_hidden(index)
 		else:
-			slot.configure_hidden(index)
+			slot.configure_recharge(index)
 
 
 func _conceal_enemy_actions() -> void:
-	for index in range(_enemy_sequence_slots.get_child_count()):
+	for index in range(_enemy_chain.size()):
 		(_enemy_sequence_slots.get_child(index) as BattleAbilitySlot).configure_hidden(index)
 
 
 func _highlight_slots(hero_index: int, enemy_index: int, hero_reloading: bool = false, enemy_reloading: bool = false) -> void:
 	for index in range(_sequence_slots.get_child_count()):
-		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(not hero_reloading and index == hero_index)
+		var active: bool = index == _planner_editing.size() if hero_reloading else index == hero_index
+		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(active)
 	for index in range(_enemy_sequence_slots.get_child_count()):
 		var active: bool = index == enemy_index if not enemy_reloading else index == _enemy_chain.size()
 		(_enemy_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(active)
+
+
+func current_battle_state() -> BattleState:
+	return _combat.battle_state if _combat != null else null
+
+
+func bind_combat_items(session: GameSession) -> void:
+	_items_session = session
+	_refresh_combat_items_button()
+
+
+func _build_combat_item_picker() -> void:
+	_item_picker = BattleItemPicker.new()
+	_item_picker.name = "BattleItemPicker"
+	_item_picker.hide()
+	add_child(_item_picker)
+	_item_picker.closed.connect(_hide_combat_item_picker)
+	_item_picker.item_selected.connect(_on_combat_item_chosen)
+
+
+func _refresh_combat_items_button() -> void:
+	if _combat == null:
+		_combat_items_button.disabled = true
+		return
+	var count: int = 0
+	if _items_session != null:
+		for item_id in _items_session.combat_item_ids():
+			count += int(_items_session.carried_items.get(item_id, 0))
+	_combat_items_button.text = "×%d" % count
+	_combat_items_button.disabled = (_is_playing_back or not _combat.battle_state.flow.can_use_item() or count == 0)
+	if _item_picker != null and _item_picker.visible and _combat_items_button.disabled:
+		_hide_combat_item_picker()
+
+
+func _on_combat_items_pressed() -> void:
+	if _combat_items_button.disabled or _items_session == null:
+		return
+	if _item_picker.visible:
+		_hide_combat_item_picker()
+		return
+	_hide_ability_picker()
+	_item_picker.refresh_items(_items_session)
+	_item_picker.show()
+	_position_combat_item_picker()
+	call_deferred("_position_combat_item_picker")
+
+
+func _position_combat_item_picker() -> void:
+	if _item_picker == null or not _item_picker.visible:
+		return
+	var rect: Rect2 = _combat_items_button.get_global_rect()
+	var size_needed: Vector2 = _item_picker.get_combined_minimum_size()
+	var local: Vector2 = rect.position - global_position
+	var x: float = clampf(local.x + rect.size.x - size_needed.x, 8.0,
+		maxf(8.0, size.x - size_needed.x - 8.0))
+	var y: float = local.y - size_needed.y - 8.0
+	if y < 8.0:
+		y = local.y + rect.size.y + 8.0
+	_item_picker.position = Vector2(x, clampf(y, 8.0, maxf(8.0, size.y - size_needed.y - 8.0)))
+
+
+func _hide_combat_item_picker() -> void:
+	if _item_picker != null:
+		_item_picker.hide()
+
+
+func _on_combat_item_chosen(item_id: String) -> void:
+	if _combat != null and not _is_playing_back and _combat.battle_state.flow.can_use_item():
+		item_use_requested.emit(item_id)
+
+
+## Отображает подтверждённый GameSession результат, не рассчитывая эффекты.
+func show_combat_item_result(result: Dictionary, session: GameSession) -> void:
+	if _combat == null or session == null or session.hero == null:
+		return
+	if bool(result.get("used", false)):
+		_visible_hero_hp = session.hero.health
+		_hero_health_meter.set_health(_visible_hero_hp, session.hero.max_health, true)
+		_hero_attack_value.text = str(session.hero.melee_attack())
+		_result_text.text = str(result.get("message", ""))
+	elif not str(result.get("message", "")).is_empty():
+		_result_text.text = str(result["message"])
+	_refresh_combat_items_button()
+	if _item_picker != null and _item_picker.visible:
+		if _combat_items_button.disabled:
+			_hide_combat_item_picker()
+		else:
+			_item_picker.refresh_items(session)
+			_position_combat_item_picker()
 
 
 func _build_ability_picker() -> void:
@@ -258,6 +366,7 @@ func _on_slot_selected(index: int) -> void:
 	if _ability_picker.visible and _picker_target == index:
 		_hide_ability_picker()
 		return
+	_hide_combat_item_picker()
 	_picker_target = index
 	_populate_ability_picker(index)
 	_ability_picker.show()
@@ -376,17 +485,26 @@ func _point_is_on_slot(point: Vector2) -> bool:
 
 
 func _input(event: InputEvent) -> void:
-	if _ability_picker == null or not _ability_picker.visible:
+	var abilities_open: bool = _ability_picker != null and _ability_picker.visible
+	var items_open: bool = _item_picker != null and _item_picker.visible
+	if not abilities_open and not items_open:
 		return
 	if event.is_action_pressed("ui_cancel"):
 		_hide_ability_picker()
+		_hide_combat_item_picker()
 		get_viewport().set_input_as_handled()
-	elif event is InputEventMouseButton and event.pressed:
-		if not _ability_picker.get_global_rect().has_point(event.position) and not _point_is_on_slot(event.position):
-			_hide_ability_picker()
+		return
+	var point: Vector2
+	if event is InputEventMouseButton and event.pressed:
+		point = event.position
 	elif event is InputEventScreenTouch and event.pressed:
-		if not _ability_picker.get_global_rect().has_point(event.position) and not _point_is_on_slot(event.position):
-			_hide_ability_picker()
+		point = event.position
+	else:
+		return
+	if abilities_open and not _ability_picker.get_global_rect().has_point(point) and not _point_is_on_slot(point):
+		_hide_ability_picker()
+	if items_open and not _item_picker.get_global_rect().has_point(point) and not _combat_items_button.get_global_rect().has_point(point):
+		_hide_combat_item_picker()
 
 
 func _commit_draft() -> bool:
@@ -425,6 +543,7 @@ func _on_punch_pressed() -> void:
 		# Не пересоздаём слоты: иначе Tween красного мигания мгновенно погибнет.
 		return
 	_hide_ability_picker()
+	_hide_combat_item_picker()
 	_is_playing_back = true
 	var result: Dictionary = _combat.play_phase(_hero_chain, _enemy_chain)
 	if not bool(result.get("success", false)):
@@ -725,6 +844,7 @@ func _refresh_phase_controls() -> void:
 	if not editable and _ability_picker.visible:
 		_hide_ability_picker()
 	_refresh_chain_slots()
+	_refresh_combat_items_button()
 	# Кнопка остаётся доступной, чтобы по нажатию мигнули пустые слоты.
 	_punch_button.disabled = (_is_playing_back or stage == BattleFlow.Stage.EXECUTING or stage == BattleFlow.Stage.FINISHED)
 	match stage:
@@ -774,7 +894,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var key_event := event as InputEventKey
 	if not key_event.pressed or key_event.echo:
 		return
-	if _ability_picker.visible:
+	if _ability_picker.visible or (_item_picker != null and _item_picker.visible):
 		return
 	if key_event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and not _punch_button.disabled:
 		_on_punch_pressed()

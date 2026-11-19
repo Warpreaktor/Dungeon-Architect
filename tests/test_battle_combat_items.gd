@@ -1,0 +1,49 @@
+extends SceneTree
+
+## Зелья расходуются из GameSession в паузе, а не из временной UI-копии.
+func _initialize() -> void:
+	var game := GameSession.new()
+	game.hero = HeroState.new(HeroCatalog.get_hero("volcha"))
+	game.map_data = DungeonMap.create_blank(5, 5)
+	game.player_pos = Vector2i(2, 2)
+	game._init_masks()
+	game.carried_items = {
+		"potion_health_small": 2, "potion_strength_small": 1,
+		"potion_vitality_small": 1, "potion_vision_small": 1,
+		"sword": 1
+	}
+	var items: Array[String] = game.combat_item_ids()
+	assert(items.size() == 3)
+	assert(not ("potion_vision_small" in items) and not ("sword" in items))
+	var battle: BattleState = BattleState.begin(MonsterCatalog.get_monster("lobar"), game.hero)
+	assert(not game.use_combat_item("potion_health_small", battle).used)
+	assert(game.carried_items["potion_health_small"] == 2)
+	assert(battle.flow.start_phase())
+	assert(not game.use_combat_item("potion_strength_small", battle).used)
+	assert(battle.flow.complete_phase())
+
+	# В конце фазы герой уже получил урон и был перенесён в игровую сессию.
+	var actor: BattleParticipant = battle.get_hero()
+	actor.receive_damage(16)
+	actor.commit_hero_result(game.hero)
+	var hp_before: int = game.hero.health
+	var heal: Dictionary = game.use_combat_item("potion_health_small", battle)
+	assert(heal.used)
+	assert(game.hero.health > hp_before)
+	assert(actor.health == game.hero.health)
+	assert(game.carried_items["potion_health_small"] == 1)
+	var old_power: int = actor.melee_attack()
+	var boost: Dictionary = game.use_combat_item("potion_strength_small", battle)
+	assert(boost.used and game.carried_items["potion_strength_small"] == 0)
+	assert(actor.melee_attack() > old_power)
+	assert(actor.melee_attack() == game.hero.melee_attack())
+	assert(not game.use_combat_item("potion_strength_small", battle).used)
+	assert(not game.use_combat_item("potion_vision_small", battle).used)
+	assert(not game.use_combat_item("sword", battle).used)
+	assert(game.carried_items["potion_vision_small"] == 1)
+	assert(battle.flow.start_phase())
+	assert(not game.use_combat_item("potion_health_small", battle).used)
+	assert(game.carried_items["potion_health_small"] == 1)
+	assert(battle.flow.finish_battle())
+	assert(not game.use_combat_item("potion_health_small", battle).used)
+	quit()

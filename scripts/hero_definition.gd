@@ -11,4 +11,6 @@ extends Resource
 @export_range(1, 8, 1) var base_action_slots: int = 3
 @export_range(1, 999, 1) var max_health: int = 40
 @export_range(1, 999, 1) var base_attack: int = 6
+## Каждые две единицы силы добавляют 1 к базовому урону ближнего боя.
+@export_range(0, 999, 1) var strength: int = 0
 @export_range(0, 999, 1) var base_defense: int = 0

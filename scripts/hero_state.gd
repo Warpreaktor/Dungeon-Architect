@@ -12,6 +12,7 @@ var definition: HeroDefinition
 var max_health: int = START_HEALTH
 var health: int = START_HEALTH
 var base_attack: int = START_ATTACK
+var strength: int = 0
 var base_defense: int = START_DEFENSE
 var attack: int = START_ATTACK
 var defense: int = START_DEFENSE
@@ -44,8 +45,13 @@ func _init(hero_definition: HeroDefinition = null) -> void:
 	max_health = definition.max_health
 	health = max_health
 	base_attack = definition.base_attack
+	strength = definition.strength
 	base_defense = definition.base_defense
 	_recalculate_equipment_stats()
+
+
+func melee_attack() -> int:
+	return attack + floori(float(maxi(strength, 0)) * 0.5)
 
 
 func action_slot_capacity() -> int:
@@ -252,6 +258,7 @@ func copy_for_battle() -> HeroState:
 	copy.max_health = max_health
 	copy.health = health
 	copy.base_attack = base_attack
+	copy.strength = strength
 	copy.base_defense = base_defense
 	copy.attack = attack
 	copy.defense = defense

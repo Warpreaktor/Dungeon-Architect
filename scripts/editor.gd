@@ -2024,8 +2024,19 @@ func _show_combat_view() -> void:
 	_battle_view.battle_won.connect(_finish_combat)
 	_battle_view.battle_lost.connect(_lose_combat)
 	_battle_view.shield_broken.connect(_on_battle_shield_broken)
+	_battle_view.item_use_requested.connect(_on_battle_item_requested)
 	_battle_view.begin(CombatSession.new(game_session.pending_monster_definition(), game_session.hero), game_session.hero)
+	_battle_view.bind_combat_items(game_session)
 
+
+
+func _on_battle_item_requested(item_id: String) -> void:
+	if game_session == null or _battle_view == null or not _combat_active:
+		return
+	var outcome: Dictionary = game_session.use_combat_item(item_id, _battle_view.current_battle_state())
+	_battle_view.show_combat_item_result(outcome, game_session)
+	if bool(outcome.get("used", false)):
+		_refresh_stats()
 
 
 func _on_battle_shield_broken(_item_id: String) -> void:

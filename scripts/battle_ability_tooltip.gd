@@ -14,7 +14,8 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
 				if participant != null:
-					lines.append("Урон: %d (до защиты и бонусов)" % maxi(participant.attack + effect.amount - 1, 0))
+					var attack_base: int = participant.melee_attack() if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else participant.attack
+					lines.append("Урон: %d (до защиты и бонуса блока)" % maxi(attack_base + effect.amount - 1, 0))
 				elif effect.amount >= 1:
 					lines.append("Урон: атака бойца + %d" % (effect.amount - 1))
 				else:

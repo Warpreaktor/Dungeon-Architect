@@ -5,7 +5,7 @@ func _initialize() -> void:
 	var hero := HeroState.new(HeroCatalog.get_hero("volcha"))
 	var actor: BattleParticipant = BattleParticipant.from_hero(hero)
 	var strike: String = BattleAbilityTooltip.describe(AbilityCatalog.get_ability("basic_strike"), actor)
-	assert(strike.contains("Урон: %d" % actor.attack))
+	assert(strike.contains("Урон: %d" % actor.melee_attack()))
 	assert(strike.contains("до защиты"))
 	var guard: String = BattleAbilityTooltip.describe(AbilityCatalog.get_ability("guard"), actor)
 	assert(guard.contains("Броня блока:"))

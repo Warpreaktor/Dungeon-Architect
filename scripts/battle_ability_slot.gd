@@ -61,9 +61,10 @@ func configure_recharge(index: int) -> void:
 	configure(index, null, false)
 	_slot_number.text = "%02d" % (index + 1)
 	_slot_name.text = "Отдых"
-	_slot_icon.texture = SPECIAL_ICON
-	_slot_icon.visible = true
-	_empty_icon.visible = false
+	_slot_icon.texture = null
+	_slot_icon.visible = false
+	_empty_icon.visible = true
+	_empty_icon.text = "Zz"
 	tooltip_text = "Отдых: один пропущенный такт"
 
 

@@ -9,6 +9,7 @@ var team_id: String = ""
 var max_health: int = 0
 var health: int = 0
 var attack: int = 0
+var strength: int = 0
 var defense: int = 0
 var equipped_weapon_id: String = ""
 var equipped_shield_id: String = ""
@@ -64,6 +65,7 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 	participant.max_health = source.max_health
 	participant.health = source.max_health
 	participant.attack = source.attack_damage
+	participant.strength = source.strength
 	participant.defense = source.defense
 	participant.personal_ability_ids = source.personal_ability_ids.duplicate()
 	participant.action_slot_capacity = clampi(source.base_action_slots, 1, BattleChainPlanner.MAX_ACTIONS)
@@ -76,6 +78,7 @@ func refresh_from_hero() -> void:
 	max_health = _hero_snapshot.max_health
 	health = _hero_snapshot.health
 	attack = _hero_snapshot.attack
+	strength = _hero_snapshot.strength
 	defense = _hero_snapshot.defense
 	equipped_weapon_id = _hero_snapshot.equipped_weapon_id
 	equipped_shield_id = _hero_snapshot.equipped_shield_id
@@ -87,6 +90,25 @@ func refresh_from_hero() -> void:
 		"vision_bonus": _hero_snapshot.vision_bonus,
 		"vision_steps": _hero_snapshot.vision_steps
 	}
+
+
+func melee_attack_value() -> float:
+	## Половинки сохраняем до финального округления всего удара,
+	## в том числе после применения накопленных процентов от блока.
+	return float(attack) + float(maxi(strength, 0)) * 0.5
+
+
+func melee_attack() -> int:
+	return floori(melee_attack_value())
+
+
+func sync_consumable_from_hero(source: HeroState) -> void:
+	## В межфазной паузе источник правды для зелья — GameSession.hero.
+	## Заменяем только копию HeroState, сохраняя курсор, статусы и бонус блока.
+	if source == null or _hero_snapshot == null:
+		return
+	_hero_snapshot = source.copy_for_battle()
+	refresh_from_hero()
 
 
 func prepare_block(base_armor: int) -> void:

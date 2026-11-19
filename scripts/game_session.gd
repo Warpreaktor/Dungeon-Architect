@@ -15,6 +15,7 @@ var carried_items: Dictionary = {} # Количество найденных п�
 var is_completed: bool = false # Выход достигнут в текущем прохождении.
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
+var pending_chest_id: String = "" # Ожидает завершения анимации шага до открытия сундука.
 var activated_triggers: Dictionary = {} # ID сработавших триггеров; обнуляется с новой сессией.
 var shown_messages: Dictionary = {} # Авторские сообщения показываются один раз за прохождение.
 var _message_events: Array[Dictionary] = []
@@ -71,6 +72,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	player_pos = saved.get("position", spawn)
 	removed_entities = saved.get("removed", {}).duplicate(true)
 	opened_chests = saved.get("chests", {}).duplicate(true)
+	pending_chest_id = ""
 	activated_triggers = saved.get("triggers", {}).duplicate(true)
 	shown_messages = saved.get("messages", {}).duplicate(true)
 	encounter_monster_id = ""
@@ -237,10 +239,10 @@ func can_enter(cell: Vector2i) -> bool:
 	return contains(cell.x, cell.y) and map_data.get_terrain(cell.x, cell.y) != "wall"
 
 
-func move_by(dx: int, dy: int) -> bool:
+func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 	last_event_message = ""
 	_trigger_events.clear()
-	if has_pending_encounter() or is_completed:
+	if has_pending_encounter() or is_completed or not pending_chest_id.is_empty():
 		return false
 	var target := player_pos + Vector2i(dx, dy)
 	if not can_enter(target):
@@ -266,11 +268,13 @@ func move_by(dx: int, dy: int) -> bool:
 		removed_entities[opened_door_id] = true
 		last_event_message = "Ключ использован. Дверь открыта!"
 
-	# Сундук не блокирует клетку: открываем его и завершаем тот же шаг.
-	# Проверяем после замка, чтобы нельзя было получить награду через запертую дверь.
+	# Проверка сундука после двери: нельзя получить добычу через замок.
 	var chest := _find_active_entity(target, "chest")
 	if not chest.is_empty() and not is_chest_open(chest) and (DungeonMap.chest_is_random(chest) or not DungeonMap.chest_contents(chest).is_empty()):
-		_open_chest(chest)
+		if defer_chest_open:
+			pending_chest_id = str(chest["id"])
+		else:
+			_open_chest(chest)
 
 	player_pos = target
 	steps += 1
@@ -286,6 +290,19 @@ func move_by(dx: int, dy: int) -> bool:
 	# Пока лестница завершает приключение. Позже здесь появится переход на другую карту.
 	if not _find_active_entity(target, "stairs_down").is_empty():
 		is_completed = true
+	return true
+
+
+## Завершает открытие сундука только после визуального прибытия героя.
+func open_pending_chest() -> bool:
+	if pending_chest_id.is_empty():
+		return false
+	var chest_id := pending_chest_id
+	pending_chest_id = ""
+	var chest := _find_active_entity(player_pos, "chest")
+	if chest.is_empty() or str(chest.get("id", "")) != chest_id or is_chest_open(chest):
+		return false
+	_open_chest(chest)
 	return true
 
 

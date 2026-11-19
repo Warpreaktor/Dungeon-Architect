@@ -1963,7 +1963,8 @@ func _try_move_player(dx: int, dy: int) -> void:
 	if _canvas.is_player_moving():
 		return
 	var previous_pos: Vector2i = game_session.player_pos
-	var moved := game_session.move_by(dx, dy)
+	var moving_session: GameSession = game_session
+	var moved := moving_session.move_by(dx, dy, true)
 	if game_session.has_pending_encounter():
 		_collect_game_messages()
 		if not _game_dialogue.visible:
@@ -1972,8 +1973,14 @@ func _try_move_player(dx: int, dy: int) -> void:
 	if moved:
 		if not game_session.hero.has_vision_effect() and _canvas.zoom < DungeonCanvas.PLAY_MIN_ZOOM:
 			_canvas.zoom = DungeonCanvas.PLAY_MIN_ZOOM
-		_canvas.animate_player_step(previous_pos, game_session.player_pos)
-	# Сундук меняет вид при открытии, даже если сам герой не сдвинулся.
+		_canvas.animate_player_step(previous_pos, moving_session.player_pos)
+		if not moving_session.pending_chest_id.is_empty():
+			# Лишь после завершения шага появляется открытый сундук и награда.
+			await _canvas.player_step_finished
+			if not is_play_mode or game_session != moving_session:
+				return
+			moving_session.open_pending_chest()
+	# Теперь сундук обновляется после прибытия, не во время движения.
 	_canvas.queue_redraw()
 	_refresh_map_overlays()
 	_refresh_stats()
@@ -2048,13 +2055,18 @@ func _on_battle_shield_broken(_item_id: String) -> void:
 func _finish_combat() -> void:
 	if not _combat_active or game_session == null:
 		return
+	# Победа двигает игровую позицию, а визуальное перемещение надо запускать отдельно.
+	var previous_pos: Vector2i = game_session.player_pos
 	var moved: bool = game_session.win_pending_encounter()
 	if _battle_view != null:
 		_battle_view.queue_free()
 		_battle_view = null
 	_combat_active = false
 	_canvas.zoom = _pre_combat_zoom
-	_canvas.center_on_cell(game_session.player_pos)
+	if moved:
+		_canvas.animate_player_step(previous_pos, game_session.player_pos)
+	else:
+		_canvas.center_on_cell(game_session.player_pos)
 	_game_command_bar.visible = true
 	_dpad.visible = true
 	_mini_map.visible = _minimap_enabled

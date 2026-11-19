@@ -7,6 +7,7 @@ signal map_edited
 signal hover_changed(cell: Vector2i)
 signal move_selection_changed(description: String)
 signal move_failed
+signal player_step_finished
 signal edit_action_committed(before: Dictionary, after: Dictionary)
 signal configurable_entity_tapped(kind: String, entity_id: String)
 signal message_cell_tapped(cell: Vector2i)
@@ -174,6 +175,7 @@ func _update_player_visual_cell(cell: Vector2) -> void:
 func _finish_player_step(cell: Vector2) -> void:
 	_player_step_tween = null
 	_update_player_visual_cell(cell)
+	player_step_finished.emit()
 
 
 func _cancel_player_step() -> void:

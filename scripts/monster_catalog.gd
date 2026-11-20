@@ -19,6 +19,18 @@ const LEGACY_IDS := {
 }
 
 
+static func list_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for monster_id in DEFINITIONS:
+		ids.append(str(monster_id))
+	ids.sort()
+	return ids
+
+
+static func has(monster_id: String) -> bool:
+	return DEFINITIONS.has(monster_id)
+
+
 static func resolve_id(monster_id: String) -> String:
 	var resolved: String = str(LEGACY_IDS.get(monster_id, monster_id))
 	return resolved if DEFINITIONS.has(resolved) else DEFAULT_MONSTER_ID

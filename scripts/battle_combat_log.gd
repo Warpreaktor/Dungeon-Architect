@@ -5,12 +5,14 @@ extends RefCounted
 ## рассчитанных событий: никаких изменений HP, повторных формул или RNG.
 
 
-static func participant_name(participant_id: String, hero_name: String, enemy_name: String) -> String:
+static func participant_name(participant_id: String, hero_name: String, enemy_name: String, support_name: String = "") -> String:
 	match participant_id:
 		"hero":
 			return hero_name
 		"enemy":
 			return enemy_name
+		BattleState.SUPPORT_ENEMY_ID:
+			return support_name if not support_name.is_empty() else enemy_name
 	return participant_id
 
 
@@ -19,10 +21,10 @@ static func ability_name(ability_id: String) -> String:
 	return definition.display_name if definition != null else ability_id
 
 
-static func format_event(event: Dictionary, hero_name: String, enemy_name: String) -> String:
+static func format_event(event: Dictionary, hero_name: String, enemy_name: String, support_name: String = "") -> String:
 	var kind: String = str(event.get("type", ""))
-	var actor: String = participant_name(str(event.get("actor_id", "")), hero_name, enemy_name)
-	var target: String = participant_name(str(event.get("target_id", "")), hero_name, enemy_name)
+	var actor: String = participant_name(str(event.get("actor_id", "")), hero_name, enemy_name, support_name)
+	var target: String = participant_name(str(event.get("target_id", "")), hero_name, enemy_name, support_name)
 	match kind:
 		"enemy_chain_changed":
 			return "    %s: смена тактики" % actor

@@ -39,3 +39,9 @@ func order(hero_id: String, hero_step: Dictionary, enemy_id: String, enemy_step:
 		first = enemy_id
 		second = hero_id
 	return [first, second]
+
+
+func order_with_support(hero_id: String, enemy_ids: Array[String]) -> Array[String]:
+	var result: Array[String] = [hero_id]
+	result.append_array(enemy_ids)
+	return result

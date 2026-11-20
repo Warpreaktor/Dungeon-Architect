@@ -1,17 +1,23 @@
 class_name BattleState
 extends RefCounted
 
+const SUPPORT_ENEMY_ID: String = "enemy_support"
+
 ## Независимое от сцены состояние боя. Не управляет камерой и кнопками.
 ## Фазы управляются BattleFlow, участники адресуются только через ID.
 var participants: Dictionary = {}
 var positions: Dictionary = {}
 var hero_id: String = "hero"
 var enemy_id: String = "enemy"
-var passive_enemy_id: String = "enemy_support"
+var support_enemy_id: String = SUPPORT_ENEMY_ID
 var enemy_definition: MonsterDefinition
 var current_enemy_profile_id: String = ""
 var initial_enemy_chain: Array[String] = []
 var enemy_intermission_usage: Dictionary = {}
+var support_enemy_definition: MonsterDefinition
+var support_initial_chain: Array[String] = []
+var support_profile_id: String = ""
+var support_intermission_usage: Dictionary = {}
 var is_victory: bool = false
 var is_defeat: bool = false
 var last_counter_damage: int = 0
@@ -21,7 +27,7 @@ var events: Array[Dictionary] = []
 var flow: BattleFlow = BattleFlow.new()
 var tick_policy: BattleTurnPolicy = BattleTurnPolicy.new()
 var last_phase_events: Array[Dictionary] = []
-## One RNG for reproducible dodge decisions. Seed can be supplied by a test.
+## One RNG for reproducible combat decisions.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
@@ -54,78 +60,91 @@ func get_hero() -> BattleParticipant:
 	return get_participant(hero_id)
 
 
-func add_passive_enemy(definition: MonsterDefinition) -> BattleParticipant:
+func add_support_enemy(definition: MonsterDefinition) -> BattleParticipant:
 	if definition == null:
 		return null
-	var existing: BattleParticipant = get_participant(passive_enemy_id)
+	var existing: BattleParticipant = get_participant(support_enemy_id)
 	if existing != null:
 		return existing
-	var dummy: BattleParticipant = BattleParticipant.from_monster(definition, passive_enemy_id)
-	dummy.is_passive = true
-	dummy.is_targetable = false
-	dummy.personal_ability_ids.clear()
-	dummy.learned_ability_ids.clear()
-	dummy.action_chain.clear()
-	for _slot_index in range(dummy.action_slot_capacity):
-		dummy.action_chain.append("wait")
-	participants[passive_enemy_id] = dummy
-	return dummy
+	var participant: BattleParticipant = BattleParticipant.from_monster(definition, support_enemy_id)
+	participant.is_targetable = false
+	participant.action_chain = MonsterCardDraw.draw(definition, participant, rng)
+	participants[support_enemy_id] = participant
+	support_enemy_definition = definition
+	support_initial_chain = participant.action_chain.duplicate()
+	return participant
+
+
+func enemy_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for id in [enemy_id, support_enemy_id]:
+		if get_participant(id) != null:
+			ids.append(id)
+	return ids
 
 
 func _reconfigure_enemy_for_phase() -> void:
+	_reconfigure_enemy_for_actor(enemy_id)
+
+
+func _reconfigure_enemy_for_actor(actor_id: String) -> void:
 	if flow.stage not in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.RECONFIGURING]:
 		return
-	var enemy: BattleParticipant = get_enemy()
-	if enemy == null or enemy.action_cursor != 0:
+	var actor: BattleParticipant = get_participant(actor_id)
+	if actor == null or not actor.is_alive() or actor.action_cursor != 0:
 		return
-	var selected: MonsterTacticProfile = MonsterAiPlanner.choose_profile(
-		enemy_definition, enemy, current_enemy_profile_id, rng)
-	if selected == null:
-		if not current_enemy_profile_id.is_empty() and not initial_enemy_chain.is_empty():
-			var rest_pending: bool = enemy.action_cursor >= enemy.action_chain.size()
-			enemy.action_chain = initial_enemy_chain.duplicate()
-			enemy.action_cursor = enemy.action_chain.size() if rest_pending else 0
-			current_enemy_profile_id = ""
-			events.append({"type": "enemy_chain_changed", "actor_id": enemy_id,
-				"profile_id": "", "chain_size": enemy.action_chain.size()})
+	var definition: MonsterDefinition = enemy_definition if actor_id == enemy_id else support_enemy_definition
+	if definition == null:
 		return
-	var should_update: bool = current_enemy_profile_id != selected.profile_id or enemy_definition.reconsider_tactics_each_phase
-	if not should_update:
+	var active_profile: String = current_enemy_profile_id if actor_id == enemy_id else support_profile_id
+	var initial_chain: Array[String] = initial_enemy_chain if actor_id == enemy_id else support_initial_chain
+	var profile: MonsterTacticProfile = MonsterAiPlanner.choose_profile(definition, actor, active_profile, rng)
+	var profile_id: String = profile.profile_id if profile != null else ""
+	if profile_id == active_profile and (profile == null or not definition.reconsider_tactics_each_phase):
 		return
-	var planned: Array[String] = MonsterAiPlanner.planned_chain(selected, enemy, rng)
+	var planned: Array[String] = initial_chain.duplicate() if profile == null else MonsterAiPlanner.planned_chain(profile, actor, rng)
 	if planned.is_empty():
 		return
-	var previous: Array[String] = enemy.action_chain.duplicate()
-	current_enemy_profile_id = selected.profile_id
-	if planned == previous:
+	if actor_id == enemy_id:
+		current_enemy_profile_id = profile_id
+	else:
+		support_profile_id = profile_id
+	if planned == actor.action_chain:
 		return
-	var rest_pending: bool = enemy.action_cursor >= previous.size()
-	enemy.action_chain = planned
-	enemy.action_cursor = planned.size() if rest_pending else 0
-	events.append({"type": "enemy_chain_changed", "actor_id": enemy_id,
-		"profile_id": selected.profile_id, "chain_size": planned.size()})
+	actor.action_chain = planned
+	actor.action_cursor = 0
+	events.append({"type": "enemy_chain_changed", "actor_id": actor_id,
+		"profile_id": profile_id, "chain_size": planned.size()})
 
 
 func _run_enemy_intermission() -> void:
-	if flow.stage != BattleFlow.Stage.BETWEEN_PHASES or enemy_definition == null:
+	for actor_id in enemy_ids():
+		_run_enemy_intermission_for(actor_id)
+
+
+func _run_enemy_intermission_for(actor_id: String) -> void:
+	if flow.stage != BattleFlow.Stage.BETWEEN_PHASES:
 		return
-	var enemy: BattleParticipant = get_enemy()
-	for _action_index in range(enemy_definition.max_intermission_actions):
-		var action: MonsterIntermissionAction = MonsterAiPlanner.choose_intermission(
-			enemy_definition, enemy, enemy_intermission_usage, rng)
+	var definition: MonsterDefinition = enemy_definition if actor_id == enemy_id else support_enemy_definition
+	var actor: BattleParticipant = get_participant(actor_id)
+	if definition == null or actor == null or not actor.is_alive():
+		return
+	var usage: Dictionary = enemy_intermission_usage if actor_id == enemy_id else support_intermission_usage
+	for _action_index in range(definition.max_intermission_actions):
+		var action: MonsterIntermissionAction = MonsterAiPlanner.choose_intermission(definition, actor, usage, rng)
 		if action == null:
 			break
 		var ability: AbilityDefinition = AbilityCatalog.get_ability(action.ability_id)
-		var target_id: String = create_context().default_target_id(enemy_id, ability)
+		var target_id: String = create_context().choose_target_id(actor_id, ability)
 		if target_id.is_empty():
 			break
-		var outcome: Dictionary = execute_ability(enemy_id, target_id, action.ability_id)
+		var outcome: Dictionary = execute_ability(actor_id, target_id, action.ability_id)
 		if not bool(outcome.get("success", false)):
 			break
-		enemy_intermission_usage[action.identity()] = int(enemy_intermission_usage.get(action.identity(), 0)) + 1
+		usage[action.identity()] = int(usage.get(action.identity(), 0)) + 1
 		var result_events: Array = outcome.get("events", [])
 		events.insert(events.size() - result_events.size(), {
-			"type": "enemy_intermission_action", "actor_id": enemy_id,
+			"type": "enemy_intermission_action", "actor_id": actor_id,
 			"ability_id": action.ability_id, "target_id": target_id})
 		if is_victory or is_defeat:
 			break
@@ -218,76 +237,72 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES:
 		_run_enemy_intermission()
 	if not is_victory and not is_defeat:
-		_reconfigure_enemy_for_phase()
+		for actor_id in enemy_ids():
+			_reconfigure_enemy_for_actor(actor_id)
 	enemy_actions = enemy_actor.action_chain.duplicate()
 	if not flow.start_phase():
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
 	var hero_actions_done: int = 0
 	var hero_rest_finished: bool = false
 	while (hero_actions_done < current_hero_chain.size() or not hero_rest_finished) and not is_victory and not is_defeat:
-		var hero_step: Dictionary = BattleChainPlanner.next_step(current_hero_chain, hero_actor.action_cursor)
-		var enemy_step: Dictionary = BattleChainPlanner.next_step(enemy_actions, enemy_actor.action_cursor)
-		hero_actor.action_cursor = int(hero_step["next_cursor"])
-		enemy_actor.action_cursor = int(enemy_step["next_cursor"])
-		hero_actor.is_resting = bool(hero_step["reload"])
-		enemy_actor.is_resting = bool(enemy_step["reload"])
-		if bool(hero_step["reload"]):
-			# Отдых до завершения круга (старый курсор) не закрывает фазу.
+		var steps: Dictionary = {}
+		for actor_id in [hero_id] + enemy_ids():
+			var actor: BattleParticipant = get_participant(actor_id)
+			if actor == null or not actor.is_alive():
+				continue
+			var step: Dictionary = BattleChainPlanner.next_step(actor.action_chain, actor.action_cursor)
+			steps[actor_id] = step
+			actor.action_cursor = int(step["next_cursor"])
+			actor.is_resting = bool(step["reload"])
+		var hero_step: Dictionary = steps.get(hero_id, {})
+		if bool(hero_step.get("reload", false)):
 			hero_rest_finished = hero_actions_done >= current_hero_chain.size()
 		else:
 			hero_actions_done += 1
+		var enemy_step: Dictionary = steps.get(enemy_id, {})
+		var support_step: Dictionary = steps.get(support_enemy_id, {})
 		var tick: int = flow.completed_ticks + 1
-		var support: BattleParticipant = get_participant(passive_enemy_id)
-		var support_step: Dictionary = {}
-		if support != null:
-			support_step = BattleChainPlanner.next_step(support.action_chain, support.action_cursor)
-			support.action_cursor = int(support_step["next_cursor"])
-			support.is_resting = true
-		events.append({"type": "tick", "tick": tick, "hero_slot": int(hero_step["slot_index"]),
-			"enemy_slot": int(enemy_step["slot_index"]), "hero_reload": bool(hero_step["reload"]),
-			"enemy_reload": bool(enemy_step["reload"])})
-		# Защитное действие имеет приоритет 0, любая другая категория — 10.
-		# При равенстве герой ходит первым; смерть отменяет оставшийся ответ.
+		events.append({"type": "tick", "tick": tick,
+			"hero_slot": int(hero_step.get("slot_index", -1)),
+			"enemy_slot": int(enemy_step.get("slot_index", -1)),
+			"support_slot": int(support_step.get("slot_index", -1)),
+			"hero_reload": bool(hero_step.get("reload", false)),
+			"enemy_reload": bool(enemy_step.get("reload", false)),
+			"support_reload": bool(support_step.get("reload", false))})
 		var order: Array[String] = tick_policy.order(hero_id, hero_step, enemy_id, enemy_step)
+		if not support_step.is_empty():
+			order = tick_policy.order_with_support(hero_id, enemy_ids())
 		for actor_id in order:
 			if is_victory or is_defeat:
 				break
-			var step: Dictionary = hero_step if actor_id == hero_id else enemy_step
+			if not steps.has(actor_id) or not get_participant(actor_id).is_alive():
+				continue
+			var step: Dictionary = steps[actor_id]
 			if bool(step["reload"]):
 				var resting: BattleParticipant = get_participant(actor_id)
 				resting.completed_phases += 1
 				resting.last_rest_tick = tick
-				var status_ticks: Array[Dictionary] = resting.owner_phase_status_damage_events(actor_id)
-				events.append_array(status_ticks)
+				events.append_array(resting.owner_phase_status_damage_events(actor_id))
 				update_outcome()
 				if is_victory or is_defeat:
 					break
 				for expired_id in resting.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, tick):
 					events.append({"type": "status_removed", "actor_id": actor_id,
 						"target_id": actor_id, "status_id": expired_id, "removed": true})
-				events.append({"type": "reload", "actor_id": actor_id, "tick": tick,
-					"slot_index": -1})
+				events.append({"type": "reload", "actor_id": actor_id, "tick": tick, "slot_index": -1})
 				continue
 			var action_id: String = str(step["action_id"])
 			events.append({"type": "action_start", "actor_id": actor_id,
 				"ability_id": action_id, "slot_index": int(step["slot_index"]), "tick": tick})
 			var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
-			var target_id: String = create_context().default_target_id(actor_id, ability)
+			var target_id: String = create_context().choose_target_id(actor_id, ability)
 			var outcome: Dictionary = execute_ability(actor_id, target_id, action_id)
 			if not bool(outcome.get("success", false)):
-				# Неисполненный приём = досрочный отдых. Такт НЕ повторяется,
-				# его стоимость не списывается и автоматический блок не даётся.
 				events.append({"type": "failed", "actor_id": actor_id, "ability_id": action_id,
 					"slot_index": int(step["slot_index"]), "tick": tick,
 					"reason": outcome.get("reason", "Недоступно")})
 				events.append({"type": "rest", "actor_id": actor_id,
 					"slot_index": int(step["slot_index"]), "tick": tick, "premature": true})
-		if support != null and not is_victory and not is_defeat:
-			if bool(support_step["reload"]):
-				support.completed_phases += 1
-			events.append({"type": "passive_rest", "actor_id": passive_enemy_id,
-				"tick": tick, "slot_index": int(support_step["slot_index"]),
-				"reload": bool(support_step["reload"])})
 		flow.mark_tick()
 		flow.grant_half_health_reconfiguration(hero_actor.health, hero_actor.max_health)
 	if not is_victory and not is_defeat:
@@ -297,7 +312,7 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		flow.finish_battle()
 	hero_actor.is_resting = false
 	enemy_actor.is_resting = false
-	var remaining_support: BattleParticipant = get_participant(passive_enemy_id)
+	var remaining_support: BattleParticipant = get_participant(support_enemy_id)
 	if remaining_support != null:
 		remaining_support.is_resting = false
 	last_phase_events = events.slice(start_event)
@@ -309,7 +324,7 @@ func default_chain(participant_id: String) -> Array[String]:
 	var participant: BattleParticipant = get_participant(participant_id)
 	if participant == null:
 		return []
-	if participant_id == enemy_id and not participant.action_chain.is_empty():
+	if participant_id in enemy_ids() and not participant.action_chain.is_empty():
 		return participant.action_chain.duplicate()
 	var defense_id: String = ""
 	var attack_id: String = ""
@@ -335,7 +350,15 @@ func default_chain(participant_id: String) -> Array[String]:
 func update_outcome() -> void:
 	var enemy: BattleParticipant = get_enemy()
 	var hero: BattleParticipant = get_hero()
-	is_victory = enemy != null and not enemy.is_alive()
+	var any_living_enemy: bool = false
+	for actor_id in enemy_ids():
+		var actor: BattleParticipant = get_participant(actor_id)
+		if actor != null and actor.is_alive():
+			any_living_enemy = true
+	var support: BattleParticipant = get_participant(support_enemy_id)
+	if support != null and enemy != null and not enemy.is_alive():
+		support.is_targetable = true
+	is_victory = enemy != null and not any_living_enemy
 	is_defeat = hero != null and not hero.is_alive() and not is_victory
 
 

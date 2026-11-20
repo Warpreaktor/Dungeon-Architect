@@ -4,7 +4,7 @@ extends RefCounted
 ## Совместимый фасад существующего боя. Расчёт теперь выполняет BattleState;
 ## BattleView продолжает пользоваться прежними полями и hero_attack().
 var enemy_definition: MonsterDefinition
-var passive_enemy_definition: MonsterDefinition
+var support_enemy_definition: MonsterDefinition
 var hero: HeroState
 var battle_state: BattleState
 
@@ -38,9 +38,11 @@ var last_blocked_damage: int:
 
 func _init(monster: MonsterDefinition = null, participant: HeroState = null, secondary: MonsterDefinition = null) -> void:
 	enemy_definition = monster if monster != null else MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID)
-	passive_enemy_definition = secondary
+	support_enemy_definition = secondary
 	hero = participant if participant != null else HeroState.new()
 	battle_state = BattleState.begin(enemy_definition, hero)
+	if support_enemy_definition != null:
+		battle_state.add_support_enemy(support_enemy_definition)
 
 
 func hero_attack(_legacy_attack_damage: int = 0) -> int:

@@ -12,10 +12,11 @@ func _initialize() -> void:
 	var enemy: BattleParticipant = battle.get_enemy()
 	var unchanged_chain: Array[String] = enemy.action_chain.duplicate()
 	assert(not unchanged_chain.is_empty())
-	var dummy: BattleParticipant = battle.add_passive_enemy(definition)
-	assert(dummy == battle.add_passive_enemy(definition))
-	assert(dummy.is_passive)
+	var dummy: BattleParticipant = battle.add_support_enemy(definition)
+	assert(dummy == battle.add_support_enemy(definition))
+	assert(not dummy.is_passive)
 	assert(not dummy.is_targetable)
+	assert(not dummy.action_chain.is_empty())
 	assert(battle.create_context().target_error("hero", dummy.participant_id, AbilityCatalog.get_ability("basic_strike")) != "")
 	assert(battle.create_context().default_target_id("hero", AbilityCatalog.get_ability("basic_strike")) == battle.enemy_id)
 	var profile := MonsterTacticProfile.new()
@@ -102,13 +103,11 @@ func _initialize() -> void:
 		hero_chain.append(action_id)
 	var result: Dictionary = battle.run_phase(hero_chain, unchanged_chain)
 	assert(bool(result.get("success", false)))
-	var passive_events: int = 0
+	var support_events: int = 0
 	for event in result.get("events", []):
-		if str(event.get("actor_id", "")) != dummy.participant_id:
-			continue
-		assert(event.get("type", "") == "passive_rest")
-		passive_events += 1
-	assert(passive_events > 0)
+		if str(event.get("actor_id", "")) == dummy.participant_id and event.get("type", "") in ["action_start", "reload"]:
+			support_events += 1
+	assert(support_events > 0)
 	assert(dummy.health == dummy.max_health)
 	quit()
 

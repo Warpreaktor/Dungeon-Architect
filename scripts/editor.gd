@@ -2087,7 +2087,8 @@ func _show_combat_view() -> void:
 	_battle_view.shield_broken.connect(_on_battle_shield_broken)
 	_battle_view.combat_log_line.connect(_append_combat_log)
 	_battle_view.item_use_requested.connect(_on_battle_item_requested)
-	_battle_view.begin(CombatSession.new(game_session.pending_monster_definition(), game_session.hero), game_session.hero)
+	var monster: MonsterDefinition = game_session.pending_monster_definition()
+	_battle_view.begin(CombatSession.new(monster, game_session.hero, monster), game_session.hero)
 	_battle_view.bind_combat_items(game_session)
 
 

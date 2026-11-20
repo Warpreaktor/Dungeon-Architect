@@ -291,6 +291,7 @@ func _fit_chain_row(scroll: ScrollContainer, row: HBoxContainer) -> void:
 		return
 	var gap: float = float(row.get_theme_constant("separation"))
 	var side: float = BattleAbilitySlot.side_for_width(scroll.size.x, count, gap, MIN_CHAIN_SLOT_SIDE, MAX_CHAIN_SLOT_SIDE)
+	scroll.custom_minimum_size.y = side
 	for child in row.get_children():
 		(child as Control).custom_minimum_size = Vector2.ONE * side
 

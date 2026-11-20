@@ -15,6 +15,7 @@ const FILE_IMPORT := 4
 const FILE_EXPORT := 5
 const SETTINGS_MAP_PROPERTIES := 1
 const SETTINGS_TEST_HERO := 2
+const SETTINGS_CONSOLE := 3
 const VIEW_REACHABILITY := 1
 const VIEW_GRID := 2
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
@@ -81,7 +82,7 @@ var _startup_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
 ## Герой исключительно для тестового прохождения из редактора.
 var _test_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
 var _editor_header: PanelContainer
-var _console_row: HBoxContainer
+var _floating_console: FloatingDebugConsole
 var _game_command_bar: GameCommandBar
 var _game_system_menu: GameSystemMenu
 var _map_screen: MapScreen
@@ -159,7 +160,6 @@ var _delete_path: String = ""
 var _unsaved_dialog: ConfirmationDialog
 var _pending_action: Callable
 var _log_console: RichTextLabel
-var _log_toggle: Button
 var _log_open: bool = false
 const PREVIEW_WIDTH := 176
 const PREVIEW_HEIGHT := 116
@@ -259,6 +259,7 @@ func _build_interface() -> void:
 	var settings_popup := _settings_menu.get_popup()
 	settings_popup.add_icon_item(COMMAND_ICONS["inspector"], "Свойства карты", SETTINGS_MAP_PROPERTIES)
 	settings_popup.add_item("Тестовый герой", SETTINGS_TEST_HERO)
+	settings_popup.add_check_item("Показать консоль", SETTINGS_CONSOLE)
 	settings_popup.id_pressed.connect(_on_settings_option_selected)
 	toolbar.add_child(_settings_menu)
 	_register_editor_control(_settings_menu)
@@ -454,20 +455,16 @@ func _build_interface() -> void:
 	# без переподключения сигналов и пересоздания палитры.
 	workspace.move_child(_palette_panel, workspace.get_child_count() - 1)
 
-	# Нижняя консоль полностью скрыта до раскрытия: только небольшая кнопка.
-	var console_row := HBoxContainer.new()
-	_console_row = console_row
-	root_column.add_child(console_row)
-	_log_toggle = _button("▴", "Развернуть консоль сообщений", _toggle_log_console)
-	_log_toggle.focus_mode = Control.FOCUS_NONE
-	_log_toggle.custom_minimum_size = Vector2(32, 26)
-	console_row.add_child(_log_toggle)
-	_log_console = RichTextLabel.new()
-	_log_console.custom_minimum_size.y = 145
-	_log_console.scroll_following = true
-	_log_console.selection_enabled = true
-	_log_console.visible = false
-	root_column.add_child(_log_console)
+	_floating_console = FloatingDebugConsole.new()
+	_floating_console.name = "FloatingConsole"
+	add_child(_floating_console)
+	_log_console = _floating_console.log_node()
+	_floating_console.visibility_changed.connect(_on_console_visibility_changed)
+	var config := ConfigFile.new()
+	config.load(EDITOR_SETTINGS_PATH)
+	_log_open = bool(config.get_value("interface", "show_console", false))
+	_floating_console.set_open(_log_open)
+	_floating_console.set_game_controls_visible(is_play_mode or standalone_game)
 
 
 func _tool_grid() -> GridContainer:
@@ -950,6 +947,9 @@ func _apply_editor_panels() -> void:
 
 
 func _on_settings_option_selected(id: int) -> void:
+	if id == SETTINGS_CONSOLE:
+		_toggle_log_console()
+		return
 	if is_play_mode or standalone_game:
 		return
 	match id:
@@ -1452,10 +1452,20 @@ func _append_combat_log(message: String) -> void:
 
 
 func _toggle_log_console() -> void:
-	_log_open = not _log_open
-	_log_console.visible = _log_open
-	_log_toggle.text = "▾" if _log_open else "▴"
-	_log_toggle.tooltip_text = "Свернуть консоль сообщений" if _log_open else "Развернуть консоль сообщений"
+	_floating_console.set_open(not _floating_console.is_open())
+
+
+func _on_console_visibility_changed(opened: bool) -> void:
+	_log_open = opened
+	var config := ConfigFile.new()
+	config.load(EDITOR_SETTINGS_PATH)
+	config.set_value("interface", "show_console", opened)
+	config.save(EDITOR_SETTINGS_PATH)
+	if _settings_menu != null:
+		var popup := _settings_menu.get_popup()
+		var index: int = popup.get_item_index(SETTINGS_CONSOLE)
+		if index >= 0:
+			popup.set_item_checked(index, opened)
 
 
 func _request_new() -> void:
@@ -1909,8 +1919,7 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 func _update_mode_ui() -> void:
 	_editor_header.visible = not standalone_game
 	_apply_editor_panels()
-	_console_row.visible = not standalone_game
-	_log_console.visible = _log_open and not standalone_game
+	_floating_console.set_game_controls_visible(is_play_mode or standalone_game)
 	_play_button.text = "Редактор" if is_play_mode else "Тест"
 	_set_command_icon(_play_button, "editor" if is_play_mode else "test")
 	_play_button.tooltip_text = "Выйти из теста и вернуться к редактированию" if is_play_mode else "Проверить текущую карту без сохранения игрового прогресса"

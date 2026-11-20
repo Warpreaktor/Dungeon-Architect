@@ -4,6 +4,7 @@ extends PanelContainer
 ## Компактный пояс зелий. Не изменяет GameSession самостоятельно.
 signal item_selected(item_id: String)
 signal closed
+signal info_requested(content: String)
 
 var _item_list: VBoxContainer
 var _scroll: ScrollContainer
@@ -69,9 +70,22 @@ func refresh_items(session: GameSession) -> void:
 			choice.disabled = true
 			choice.tooltip_text += "\nЗдоровье полное"
 		choice.pressed.connect(_choose.bind(item_id))
-		_item_list.add_child(choice)
+		var row := HBoxContainer.new()
+		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		choice.custom_minimum_size.x = 0.0
+		row.add_child(choice)
+		var info := Button.new()
+		info.text = "ⓘ"
+		info.custom_minimum_size = Vector2(46, 46)
+		info.pressed.connect(_request_info.bind(choice))
+		row.add_child(info)
+		_item_list.add_child(row)
 	_scroll.custom_minimum_size.y = minf(268.0, maxf(56.0, float(entries.size()) * 57.0))
 
 
 func _choose(item_id: String) -> void:
 	item_selected.emit(item_id)
+
+
+func _request_info(choice: Button) -> void:
+	info_requested.emit(choice.tooltip_text)

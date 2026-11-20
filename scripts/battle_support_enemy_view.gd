@@ -1,6 +1,8 @@
 class_name BattleSupportEnemyView
 extends PanelContainer
 
+signal info_requested(content: String)
+
 const ICON_SIZE: Vector2 = Vector2(104.0, 120.0)
 const SLOT_SIZE: Vector2 = Vector2(40.0, 40.0)
 const PANEL_HORIZONTAL_PADDING: float = 24.0
@@ -107,8 +109,17 @@ func _refresh_slots() -> void:
 		button.disabled = true
 		button.expand_icon = true
 		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button.mouse_filter = Control.MOUSE_FILTER_PASS
 		_slots.add_child(button)
+		var info := Button.new()
+		info.text = "ⓘ"
+		info.custom_minimum_size = Vector2(24, 24)
+		info.size = info.custom_minimum_size
+		info.position = Vector2(SLOT_SIZE.x - info.size.x, 0.0)
+		info.focus_mode = Control.FOCUS_NONE
+		info.mouse_filter = Control.MOUSE_FILTER_STOP
+		info.pressed.connect(_show_slot_info.bind(index))
+		button.add_child(info)
 		_render_slot(index)
 
 
@@ -127,6 +138,14 @@ func _render_slot(index: int) -> void:
 		slot.text = "?"
 		slot.icon = null
 		slot.tooltip_text = ""
+	var info: Button = slot.get_child(0) as Button
+	info.visible = not slot.tooltip_text.is_empty()
+
+
+func _show_slot_info(index: int) -> void:
+	var slot: Button = _slots.get_child(index) as Button
+	if not slot.tooltip_text.is_empty():
+		info_requested.emit(slot.tooltip_text)
 
 
 func highlight_cursor(index: int) -> void:

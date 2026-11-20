@@ -78,6 +78,7 @@ var _impact_shields: Dictionary = {}
 var _shield_flash_tweens: Dictionary = {}
 var _status_presenter: BattleStatusPresenter
 var _support_enemy_view: BattleSupportEnemyView
+var _touch_info: TouchInfoOverlay
 var _visible_hero_hp: int = 0
 var _visible_enemy_hp: int = 0
 var _visible_support_hp: int = 0
@@ -104,10 +105,19 @@ func _ready() -> void:
 	_guard_button.visible = false
 	_build_ability_picker()
 	_build_combat_item_picker()
+	_touch_info = TouchInfoOverlay.new()
+	add_child(_touch_info)
+	_item_picker.info_requested.connect(_touch_info.show_text)
+	_touch_info.attach_tap(_hero_dodge_value, func() -> String: return _hero_dodge_value.tooltip_text)
+	_touch_info.attach_tap(_enemy_dodge_value, func() -> String: return _enemy_dodge_value.tooltip_text)
+	_touch_info.attach_tap(_hero_accuracy_value, func() -> String: return "Меткость\n" + _hero_accuracy_value.text + " — итоговая меткость героя")
+	_touch_info.attach_tap(_enemy_accuracy_value, func() -> String: return "Меткость\n" + _enemy_accuracy_value.text + " — итоговая меткость противника")
 	_default_attack_icon = _hero_attack_icon.texture
 	_status_presenter = BattleStatusPresenter.new(self)
+	_status_presenter.info_requested.connect(_on_status_info_requested)
 	_status_presenter.setup({"hero": _hero_portrait, "enemy": _enemy_portrait})
 	_support_enemy_view = BattleSupportEnemyView.new()
+	_support_enemy_view.info_requested.connect(_touch_info.show_text)
 	_support_enemy_view.name = "SupportEnemy"
 	_support_enemy_view.theme = ($OuterMargin/Main/Battlefield/EnemyCard as PanelContainer).theme
 	_battlefield.add_child(_support_enemy_view)
@@ -118,6 +128,33 @@ func _ready() -> void:
 
 
 ## Единственный расчёт: тот же метод, что использует обработчик способности.
+func _on_status_info_requested(actor_id: String, status_id: String) -> void:
+	if _combat == null:
+		return
+	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
+	if actor == null or not actor.statuses.has(status_id):
+		return
+	var status: Dictionary = actor.statuses[status_id]
+	var title: String = "Кровотечение" if status_id == "bleeding" else ("Снижение меткости" if status_id == "petushan_accuracy_down" else status_id)
+	var lines: Array[String] = []
+	var tick_damage: int = int(status.get("tick_damage", 0))
+	if tick_damage > 0:
+		lines.append("Урон за отдых: %d HP" % tick_damage)
+	var modifier: int = int(status.get("modifier", 0))
+	if modifier != 0:
+		match int(status.get("stat", AbilityEffectDefinition.Stat.NONE)):
+			AbilityEffectDefinition.Stat.ACCURACY:
+				lines.append("Меткость: %+d п.п." % modifier)
+			AbilityEffectDefinition.Stat.AGILITY:
+				lines.append("Ловкость: %+d" % modifier)
+			AbilityEffectDefinition.Stat.DODGE_PERCENT:
+				lines.append("Уклонение: %+d п.п." % modifier)
+			_:
+				lines.append("Модификатор: %+d" % modifier)
+	lines.append("Осталось фаз: %d" % int(status.get("ticks", 0)))
+	_touch_info.show_info(title, "\n".join(lines))
+
+
 func _basic_strike_damage(actor: BattleParticipant) -> int:
 	return actor.melee_attack() if actor != null else 0
 
@@ -219,12 +256,15 @@ func _refresh_chain_slots() -> void:
 		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_sequence_slots.add_child(slot)
 		slot.configure(index, ability, editable, _combat.battle_state.get_hero())
-		slot.slot_selected.connect(_on_slot_selected)
+		slot.slot_selected.connect(_on_slot_pressed.bind(slot))
+		slot.info_requested.connect(_touch_info.show_text)
+		_touch_info.attach_long_press(slot, func() -> String: return slot.tooltip_text)
 	# Отдых всегда следует после полного круга, но не входит в три
 	# переставляемых слота и не сохраняется в HeroState.
 	var rest_slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 	_sequence_slots.add_child(rest_slot)
 	rest_slot.configure_recharge(_planner_editing.size())
+	rest_slot.info_requested.connect(_touch_info.show_text)
 	_highlight_next_actions()
 
 
@@ -244,6 +284,7 @@ func _refresh_enemy_slots() -> void:
 				slot.configure_hidden(index)
 		else:
 			slot.configure_recharge(index)
+		slot.info_requested.connect(_touch_info.show_text)
 	if not _is_playing_back:
 		_highlight_next_actions()
 
@@ -441,6 +482,12 @@ func _style_picker_button(button: Button) -> void:
 	button.add_theme_constant_override("icon_max_width", PICKER_ICON_WIDTH)
 
 
+func _on_slot_pressed(index: int, slot: BattleAbilitySlot) -> void:
+	if _touch_info.consume_long_press(slot):
+		return
+	_on_slot_selected(index)
+
+
 func _on_slot_selected(index: int) -> void:
 	if not _editing_allowed():
 		return
@@ -479,8 +526,18 @@ func _populate_ability_picker(index: int) -> void:
 			choice.tooltip_text += "\nНедоступно: " + reason
 		choice.disabled = not reason.is_empty()
 		_style_picker_button(choice)
-		choice.pressed.connect(_choose_ability.bind(index, ability.ability_id))
-		_picker_grid.add_child(choice)
+		choice.custom_minimum_size.x = PICKER_CHOICE_WIDTH - 50.0
+		_touch_info.attach_long_press(choice, func() -> String: return choice.tooltip_text)
+		choice.pressed.connect(_on_choice_pressed.bind(choice, index, ability.ability_id))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		row.add_child(choice)
+		var info := Button.new()
+		info.text = "ⓘ"
+		info.custom_minimum_size = Vector2(46, PICKER_CHOICE_HEIGHT)
+		info.pressed.connect(_touch_info.show_text.bind(choice.tooltip_text))
+		row.add_child(info)
+		_picker_grid.add_child(row)
 		shown += 1
 	var scroll: ScrollContainer = _picker_grid.get_parent() as ScrollContainer
 	scroll.custom_minimum_size.y = minf(PICKER_MAX_LIST_HEIGHT, maxf(PICKER_CHOICE_HEIGHT, float(shown) * (PICKER_CHOICE_HEIGHT + PICKER_ROW_SPACING)))
@@ -519,6 +576,12 @@ func _position_ability_picker() -> void:
 		y = local_pos.y + rect.size.y + 8.0
 	y = clampf(y, 8.0, maxf(8.0, size.y - size_needed.y - 8.0))
 	_ability_picker.position = Vector2(x, y)
+
+
+func _on_choice_pressed(choice: Button, index: int, ability_id: String) -> void:
+	if _touch_info.consume_long_press(choice):
+		return
+	_choose_ability(index, ability_id)
 
 
 func _choose_ability(index: int, ability_id: String) -> void:

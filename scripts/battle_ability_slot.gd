@@ -4,6 +4,7 @@ extends Button
 ## Одна ячейка алгоритма. Никакого собственного состояния боя:
 ## показывает AbilityDefinition и посылает номер выбранной ячейки.
 signal slot_selected(index: int)
+signal info_requested(content: String)
 
 const ATTACK_ICON: Texture2D = preload("res://assets/hud/attack.png")
 const DEFENSE_ICON: Texture2D = preload("res://assets/hud/shield.png")
@@ -18,6 +19,7 @@ const SPECIAL_ICON: Texture2D = preload("res://assets/hud/fist.png")
 
 var slot_index: int = 0
 var _invalid_tween: Tween
+var _info_button: Button
 
 
 static func visual_icon(ability: AbilityDefinition) -> Texture2D:
@@ -38,6 +40,27 @@ static func visual_icon(ability: AbilityDefinition) -> Texture2D:
 
 func _ready() -> void:
 	pressed.connect(_notify_selection)
+	_info_button = Button.new()
+	_info_button.text = "ⓘ"
+	_info_button.custom_minimum_size = Vector2(32, 32)
+	_info_button.size = _info_button.custom_minimum_size
+	_info_button.focus_mode = Control.FOCUS_NONE
+	_info_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	_info_button.pressed.connect(_show_info)
+	add_child(_info_button)
+	resized.connect(_position_info_button)
+	_position_info_button()
+	_info_button.hide()
+
+
+func _position_info_button() -> void:
+	if _info_button != null:
+		_info_button.position = Vector2(maxf(0.0, size.x - _info_button.size.x), 0.0)
+
+
+func _show_info() -> void:
+	if not tooltip_text.is_empty():
+		info_requested.emit(tooltip_text)
 
 
 func configure(index: int, ability: AbilityDefinition, editable: bool, actor: BattleParticipant = null) -> void:
@@ -51,6 +74,7 @@ func configure(index: int, ability: AbilityDefinition, editable: bool, actor: Ba
 	_empty_icon.text = "+"
 	tooltip_text = BattleAbilityTooltip.describe(ability, actor, index)
 	disabled = not editable
+	_info_button.visible = not tooltip_text.is_empty()
 
 
 func _notify_selection() -> void:
@@ -66,6 +90,7 @@ func configure_recharge(index: int) -> void:
 	_empty_icon.visible = true
 	_empty_icon.text = "Zz"
 	tooltip_text = "Отдых: один пропущенный такт"
+	_info_button.visible = true
 
 
 func set_current(active: bool) -> void:
@@ -97,6 +122,7 @@ func configure_hidden(index: int) -> void:
 	_slot_name.text = "???"
 	_empty_icon.text = "?"
 	tooltip_text = ""
+	_info_button.hide()
 
 
 func reveal_enemy_action(ability: AbilityDefinition, participant: BattleParticipant) -> void:

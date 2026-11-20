@@ -1,6 +1,8 @@
 class_name BattleStatusPresenter
 extends RefCounted
 
+signal info_requested(actor_id: String, status_id: String)
+
 # Общая раскладка значков состояний. Константы BLEED_FLASH управляют анимацией статусов.
 const STATUS_ICONS: Dictionary = {
 	"bleeding": preload("res://assets/abilities/statuses/bleeding.png"),
@@ -32,7 +34,7 @@ func setup(portraits: Dictionary) -> void:
 	for actor_id in portraits:
 		var portrait: TextureRect = portraits[actor_id] as TextureRect
 		if portrait != null:
-			_status_markers[str(actor_id)] = _make_status_markers(portrait)
+			_status_markers[str(actor_id)] = _make_status_markers(portrait, str(actor_id))
 
 
 func reset() -> void:
@@ -44,7 +46,7 @@ func reset() -> void:
 
 func attach_impact(actor_id: String, portrait: TextureRect) -> void:
 	_impact_portraits[actor_id] = portrait
-	_impact_status_markers[actor_id] = _make_status_markers(portrait)
+	_impact_status_markers[actor_id] = _make_status_markers(portrait, actor_id)
 	_layout_status_markers(actor_id)
 
 
@@ -58,20 +60,28 @@ func clear_impact() -> void:
 	_impact_portraits.clear()
 
 
-func _make_status_markers(parent: TextureRect) -> Dictionary:
+func _make_status_markers(parent: TextureRect, actor_id: String) -> Dictionary:
 	var result: Dictionary = {}
 	for status_id in STATUS_ICONS:
 		var icon := TextureRect.new()
 		icon.texture = STATUS_ICONS[status_id]
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.mouse_filter = Control.MOUSE_FILTER_STOP
+		icon.gui_input.connect(_on_marker_input.bind(actor_id, str(status_id)))
 		icon.set_anchors_preset(Control.PRESET_TOP_LEFT)
 		icon.size = parent.size * BLEED_MARKER_SCALE
 		icon.visible = false
 		parent.add_child(icon)
 		result[status_id] = icon
 	return result
+
+
+func _on_marker_input(event: InputEvent, actor_id: String, status_id: String) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		info_requested.emit(actor_id, status_id)
+	elif event is InputEventScreenTouch and event.pressed and event.index == 0:
+		info_requested.emit(actor_id, status_id)
 
 
 func _visible_marker_ids(actor_id: String) -> Array[String]:

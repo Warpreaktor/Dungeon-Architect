@@ -131,6 +131,7 @@ var _name_input: LineEdit
 var _last_log_message: String = ""
 var _stats_label: Label
 var _palette_buttons: Dictionary = {}
+var _touch_info: TouchInfoOverlay
 var _chest_popup: ChestContentsPopup
 var _monster_loot_popup: ChestContentsPopup
 var _door_popup: DoorPropertiesPopup
@@ -192,6 +193,8 @@ func _ready() -> void:
 	_reachability_refresh_timer.timeout.connect(_refresh_reachability)
 	add_child(_reachability_refresh_timer)
 	_load_test_hero_selection()
+	_touch_info = TouchInfoOverlay.new()
+	add_child(_touch_info)
 	_build_interface()
 	_create_dialogs()
 	get_viewport().size_changed.connect(_on_editor_viewport_resized)
@@ -482,8 +485,9 @@ func _add_tool_button(grid: GridContainer, tool: Dictionary) -> void:
 	button.expand_icon = true
 	button.custom_minimum_size = Vector2(66, 66)
 	button.tooltip_text = "%s\n%s" % [str(tool["label"]), str(tool["hint"])]
-	button.pressed.connect(_set_tool.bind(key))
+	button.pressed.connect(_on_tool_button_pressed.bind(button, key))
 	grid.add_child(button)
+	_touch_info.attach_long_press(button, func() -> String: return button.tooltip_text)
 	_palette_buttons[key] = button
 	_register_editor_control(button)
 
@@ -1304,6 +1308,12 @@ func _on_monster_configuration_changed(monster_entity_id: String, party: Array[S
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()
+
+
+func _on_tool_button_pressed(button: Button, kind: String) -> void:
+	if _touch_info.consume_long_press(button):
+		return
+	_set_tool(kind)
 
 
 func _set_tool(kind: String) -> void:

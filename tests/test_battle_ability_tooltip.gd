@@ -10,6 +10,7 @@ func _initialize() -> void:
 	assert(not strike.contains("Мощность приёма:"))
 	var guard: String = BattleAbilityTooltip.describe(AbilityCatalog.get_ability("guard"), actor)
 	assert(guard.contains("сила блока зависит от щита"))
+	assert(guard.contains("После атакующего приёма блок пропадает"))
 	assert(not guard.contains("Броня блока:"))
 	var regen: String = BattleAbilityTooltip.describe(AbilityCatalog.get_ability("kadavr_regen"), actor)
 	assert(regen.contains("Лечение: 3 HP"))

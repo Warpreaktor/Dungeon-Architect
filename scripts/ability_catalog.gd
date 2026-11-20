@@ -1,12 +1,34 @@
 class_name AbilityCatalog
 extends RefCounted
 
-## Каталог умений по идентификаторам ресурсов; неизвестные ID не заменяются запасными.
-const ABILITIES_DIRECTORY: String = "res://abilities/"
-const ABILITY_EXTENSION: String = ".tres"
-const COMMON_ABILITIES := ["basic_strike"]
-static var _loaded: Dictionary = {}
-
+## Строгий реестр: неизвестный ID не заменяется случайным приёмом.
+## Умения добавляются отдельными .tres, без кода под каждое действие.
+const DEFINITIONS := {
+	"basic_strike": preload("res://abilities/basic_strike.tres"),
+	"guard": preload("res://abilities/guard.tres"),
+	"rooster_crush": preload("res://abilities/rooster_crush.tres"),
+	"volcha_wolf_lunge": preload("res://abilities/volcha_wolf_lunge.tres"),
+	"volcha_strike_and_rebound": preload("res://abilities/volcha_strike_and_rebound.tres"),
+	"volcha_wolf_instinct": preload("res://abilities/volcha_wolf_instinct.tres"),
+	"volcha_broken_rhythm": preload("res://abilities/volcha_broken_rhythm.tres"),
+	"volcha_cut_tendons": preload("res://abilities/volcha_cut_tendons.tres"),
+	"hunter_shot": preload("res://abilities/hunter_shot.tres"),
+	"rooster_windup": preload("res://abilities/rooster_windup.tres"),
+	"hunter_aim": preload("res://abilities/hunter_aim.tres"),
+	"lobar_charge": preload("res://abilities/lobar_charge.tres"),
+	"lobar_brace": preload("res://abilities/lobar_brace.tres"),
+	"crab_pincer": preload("res://abilities/crab_pincer.tres"),
+	"kadavr_regen": preload("res://abilities/kadavr_regen.tres"),
+	"kadavr_curse": preload("res://abilities/kadavr_curse.tres"),
+	"rabbit_bite": preload("res://abilities/rabbit_bite.tres"),
+	"rabbit_hide": preload("res://abilities/rabbit_hide.tres"),
+	"skeleton_rusty_slash": preload("res://abilities/skeleton_rusty_slash.tres"),
+	"skeleton_bone_kick": preload("res://abilities/skeleton_bone_kick.tres"),
+	"skeleton_bone_ram": preload("res://abilities/skeleton_bone_ram.tres"),
+	"skeleton_grave_howl": preload("res://abilities/skeleton_grave_howl.tres"),
+	"rest": preload("res://abilities/rest.tres"),
+	"wait": preload("res://abilities/wait.tres")
+}
 
 
 ## Общий приём выдаётся только при выполнении условия экипировки.
@@ -21,10 +43,7 @@ static func known_ability_ids(participant: BattleParticipant) -> Array[String]:
 	if participant == null:
 		return ids
 	for id in participant.personal_ability_ids + participant.learned_ability_ids:
-		if get_ability(id) != null and not ids.has(id):
-			ids.append(id)
-	for id in COMMON_ABILITIES:
-		if get_ability(id) != null and not ids.has(id):
+		if DEFINITIONS.has(id) and not ids.has(id):
 			ids.append(id)
 	for id in COMMON_EQUIPMENT_ABILITIES:
 		if not ids.has(id) and _has_equipment(participant, int(COMMON_EQUIPMENT_ABILITIES[id])):
@@ -41,35 +60,16 @@ static func _has_equipment(participant: BattleParticipant, slot: int) -> bool:
 		return false
 	match slot:
 		ItemDefinition.EquipmentSlot.SHIELD:
-			return participant.has_serviceable_shield()
+			if participant.equipped_shield_id.is_empty():
+				return false
+			if participant._hero_snapshot != null:
+				return participant._hero_snapshot.current_shield_durability(participant.equipped_shield_id) > 0
+			return true
 	return false
 
 
 static func get_ability(ability_id: String) -> AbilityDefinition:
-	if not ability_id.is_valid_identifier():
-		return null
-	if _loaded.has(ability_id):
-		return _loaded[ability_id] as AbilityDefinition
-	var path: String = ABILITIES_DIRECTORY + ability_id + ABILITY_EXTENSION
-	if not ResourceLoader.exists(path):
-		return null
-	var definition: AbilityDefinition = ResourceLoader.load(path) as AbilityDefinition
-	if definition == null or definition.ability_id != ability_id:
-		return null
-	_loaded[ability_id] = definition
-	return definition
-
-
-static func all_ability_ids() -> Array[String]:
-	var result: Array[String] = []
-	for filename in ResourceLoader.list_directory(ABILITIES_DIRECTORY):
-		if not filename.ends_with(ABILITY_EXTENSION):
-			continue
-		var ability_id: String = filename.trim_suffix(ABILITY_EXTENSION)
-		if ability_id.is_valid_identifier():
-			result.append(ability_id)
-	result.sort()
-	return result
+	return DEFINITIONS.get(ability_id) as AbilityDefinition
 
 
 static func validate_definitions(definitions: Array[AbilityDefinition]) -> Array[String]:
@@ -91,7 +91,7 @@ static func validate_definitions(definitions: Array[AbilityDefinition]) -> Array
 static func validate_catalog() -> Array[String]:
 	var definitions: Array[AbilityDefinition] = []
 	var errors: Array[String] = []
-	for ability_id in all_ability_ids():
+	for ability_id in DEFINITIONS:
 		var definition: AbilityDefinition = get_ability(ability_id)
 		if definition == null:
 			errors.append("Не удалось загрузить: %s" % ability_id)

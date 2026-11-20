@@ -143,7 +143,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_enemy_agility_value.text = "ЛОВ %d" % _combat.battle_state.get_enemy().agility
 	_enemy_defense_value.text = str(_combat.battle_state.get_enemy().block_armor)
 	_enemy_defense_icon.modulate = Color(0.55, 0.60, 0.67, 0.65)
-	_enemy_portrait.texture = combat.enemy_definition.icon
+	_enemy_portrait.texture = combat.enemy_definition.portrait if combat.enemy_definition.portrait != null else combat.enemy_definition.icon
 	_enemy_portrait.modulate = Color.WHITE
 	_hero_health_meter.set_health(hero.health, hero.max_health)
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)

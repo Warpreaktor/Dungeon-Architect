@@ -4,6 +4,7 @@ extends Resource
 ## Статические характеристики противника. Состояние здоровья хранится в CombatSession.
 @export var monster_id: String = ""
 @export var display_name: String = ""
+@export var portrait: Texture2D
 @export var icon: Texture2D
 @export var personal_ability_ids: Array[String] = []
 ## Обязательные карты в колоде на бой (порядок фиксирован).

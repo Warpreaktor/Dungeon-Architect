@@ -612,16 +612,16 @@ func _initialize() -> void:
 	assert(decorated_chest_map.message_at(3, 2).is_empty())
 	assert(decorated_chest_map.message_at(4, 2)["properties"]["target_entity_id"] == decorated_chest_id)
 
-	# Пять видов врагов с собственными Resource, старые идентификаторы перенаправляются.
-	assert(HeroState.new().max_health == HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID).max_health)
-	assert(not MonsterCatalog.list_ids().is_empty())
-	for monster_kind in MonsterCatalog.list_ids():
+	# Шесть видов врагов с собственными Resource, старые идентификаторы перенаправляются.
+	assert(HeroState.START_HEALTH == 40)
+	assert(MonsterCatalog.DEFINITIONS.size() == 6)
+	for monster_kind in MonsterCatalog.DEFINITIONS:
 		var definition: MonsterDefinition = MonsterCatalog.get_monster(str(monster_kind))
 		assert(definition.monster_id == str(monster_kind))
 		assert(definition.max_health > 0 and definition.strength >= 0 and definition.agility >= 0)
 		assert(definition.icon != null)
 	assert(MonsterCatalog.get_monster("small_monster").monster_id == "rabbit_symbiont")
-	assert(MonsterCatalog.get_monster("skeleton_guard").monster_id == "hunter")
+	assert(MonsterCatalog.get_monster("skeleton_guard").monster_id == "skeleton")
 	assert(MonsterCatalog.get_monster("unknown").monster_id == "rabbit_symbiont")
 	var monster_map := DungeonMap.create_blank(8, 8)
 	assert(monster_map.place_entity("player_spawn", 2, 2))
@@ -665,7 +665,7 @@ func _initialize() -> void:
 	assert(fragile.health == 0 and losing_fight.hero_attack(1) == 0)
 	# Совместимость JSON, в котором стояли прежние монстры.
 	monster_entity["properties"] = {"monster_id": "skeleton_guard"}
-	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "hunter")
+	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "skeleton")
 	monster_entity["properties"] = {}
 	assert(MonsterCatalog.from_entity(monster_entity).monster_id == "rabbit_symbiont")
 	# Награда за победу настраивается у конкретного монстра, исходный JSON неизменен.

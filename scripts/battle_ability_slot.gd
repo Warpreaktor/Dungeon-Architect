@@ -10,6 +10,7 @@ const ATTACK_ICON: Texture2D = preload("res://assets/hud/attack.png")
 const DEFENSE_ICON: Texture2D = preload("res://assets/hud/shield.png")
 const SUPPORT_ICON: Texture2D = preload("res://assets/hud/heart.png")
 const SPECIAL_ICON: Texture2D = preload("res://assets/hud/fist.png")
+const INFO_BUTTON_SIDE: float = 30.0
 
 
 @onready var _slot_number: Label = $SlotMargin/Row/Labels/SlotNumber
@@ -38,11 +39,17 @@ static func visual_icon(ability: AbilityDefinition) -> Texture2D:
 			return ATTACK_ICON
 
 
+static func side_for_width(available_width: float, slot_count: int, gap: float, minimum: float, maximum: float) -> float:
+	if slot_count <= 0:
+		return minimum
+	return clampf((available_width - gap * float(slot_count - 1)) / float(slot_count), minimum, maximum)
+
+
 func _ready() -> void:
 	pressed.connect(_notify_selection)
 	_info_button = Button.new()
 	_info_button.text = "ⓘ"
-	_info_button.custom_minimum_size = Vector2(32, 32)
+	_info_button.custom_minimum_size = Vector2.ONE * INFO_BUTTON_SIDE
 	_info_button.size = _info_button.custom_minimum_size
 	_info_button.focus_mode = Control.FOCUS_NONE
 	_info_button.mouse_filter = Control.MOUSE_FILTER_STOP

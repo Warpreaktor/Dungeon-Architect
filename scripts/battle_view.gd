@@ -35,7 +35,9 @@ signal item_use_requested(item_id: String)
 @onready var _combat_items_button: Button = %CombatItemsButton
 @onready var _result_text: Label = %ResultText
 @onready var _sequence_slots: HBoxContainer = %SequenceSlots
+@onready var _sequence_scroll: ScrollContainer = $OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides/SequenceScroll
 @onready var _enemy_sequence_slots: HBoxContainer = %EnemySequenceSlots
+@onready var _enemy_sequence_scroll: ScrollContainer = $OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides/EnemySequenceScroll
 @onready var _battlefield: HBoxContainer = $OuterMargin/Main/Battlefield
 @onready var _hero_chain_title: Label = %HeroChainTitle
 @onready var _enemy_chain_title: Label = %EnemyChainTitle
@@ -48,6 +50,8 @@ const PICKER_ROW_SPACING: float = 6.0
 const PICKER_MAX_LIST_HEIGHT: float = 260.0
 
 const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
+const MAX_CHAIN_SLOT_SIDE: float = 116.0
+const MIN_CHAIN_SLOT_SIDE: float = 64.0
 
 var _combat: CombatSession
 var _hero_attack_damage: int = 0
@@ -95,6 +99,8 @@ const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 
 
 func _ready() -> void:
+	_sequence_scroll.resized.connect(_resize_chain_slots)
+	_enemy_sequence_scroll.resized.connect(_resize_chain_slots)
 	_punch_button.pressed.connect(_on_punch_pressed)
 	_guard_button.pressed.connect(_on_guard_pressed)
 	_combat_items_button.pressed.connect(_on_combat_items_pressed)
@@ -270,7 +276,23 @@ func _refresh_chain_slots() -> void:
 	_sequence_slots.add_child(rest_slot)
 	rest_slot.configure_recharge(_planner_editing.size())
 	rest_slot.info_requested.connect(_touch_info.show_text)
+	_resize_chain_slots()
 	_highlight_next_actions()
+
+
+func _resize_chain_slots() -> void:
+	_fit_chain_row(_sequence_scroll, _sequence_slots)
+	_fit_chain_row(_enemy_sequence_scroll, _enemy_sequence_slots)
+
+
+func _fit_chain_row(scroll: ScrollContainer, row: HBoxContainer) -> void:
+	var count: int = row.get_child_count()
+	if count == 0 or scroll.size.x <= 0.0:
+		return
+	var gap: float = float(row.get_theme_constant("separation"))
+	var side: float = BattleAbilitySlot.side_for_width(scroll.size.x, count, gap, MIN_CHAIN_SLOT_SIDE, MAX_CHAIN_SLOT_SIDE)
+	for child in row.get_children():
+		(child as Control).custom_minimum_size = Vector2.ONE * side
 
 
 func _refresh_enemy_slots() -> void:
@@ -292,6 +314,7 @@ func _refresh_enemy_slots() -> void:
 		slot.info_requested.connect(_touch_info.show_text)
 	if not _is_playing_back:
 		_highlight_next_actions()
+	_resize_chain_slots()
 
 
 func _conceal_enemy_actions() -> void:

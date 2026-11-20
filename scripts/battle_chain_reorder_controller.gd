@@ -1,7 +1,7 @@
 class_name BattleChainReorderController
 extends RefCounted
 
-const DRAG_START_FRACTION: float = 0.28
+const DRAG_START_FRACTION: float = 0.08
 const HORIZONTAL_INTENT_RATIO: float = 1.15
 const SWAP_SECONDS: float = 0.23
 const DRAG_LIFT_SCALE: float = 1.04
@@ -11,7 +11,7 @@ enum Pointer { NONE, MOUSE, TOUCH }
 var _host: Control
 var _row: HBoxContainer
 var _can_reorder: Callable
-var _on_swap: Callable
+var _on_move: Callable
 var _pointer: int = Pointer.NONE
 var _source_index: int = -1
 var _touch_index: int = -1
@@ -19,24 +19,26 @@ var _origin: Vector2 = Vector2.ZERO
 var _moving: bool = false
 var _animating: bool = false
 var _suppressed_index: int = -1
-var _source_origin: Vector2 = Vector2.ZERO
+var _positions: Array[Vector2] = []
+var _preview_index: int = -1
 var _tween: Tween
+var _preview_tween: Tween
 
 
-func configure(host: Control, row: HBoxContainer, can_reorder: Callable, on_swap: Callable) -> void:
+func configure(host: Control, row: HBoxContainer, can_reorder: Callable, on_move: Callable) -> void:
 	_host = host
 	_row = row
 	_can_reorder = can_reorder
-	_on_swap = on_swap
+	_on_move = on_move
 
 
-static func swapped(values: Array[String], from_index: int, to_index: int) -> Array[String]:
+static func moved(values: Array[String], from_index: int, to_index: int) -> Array[String]:
 	var result: Array[String] = values.duplicate()
 	if from_index < 0 or to_index < 0 or from_index >= result.size() or to_index >= result.size():
 		return result
-	var previous: String = result[from_index]
-	result[from_index] = result[to_index]
-	result[to_index] = previous
+	var entry: String = result[from_index]
+	result.remove_at(from_index)
+	result.insert(to_index, entry)
 	return result
 
 
@@ -49,13 +51,14 @@ func consume_selection(index: int) -> bool:
 
 
 func cancel() -> void:
-	if _tween != null and _tween.is_valid():
-		_tween.kill()
-	_tween = null
+	_stop_tweens()
+	_restore_slots()
 	_pointer = Pointer.NONE
 	_moving = false
 	_animating = false
 	_source_index = -1
+	_preview_index = -1
+	_suppressed_index = -1
 
 
 func handle_input(event: InputEvent) -> void:
@@ -106,30 +109,41 @@ func _start(point: Vector2, pointer: Pointer, index: int) -> void:
 		_pointer = pointer
 		_touch_index = index
 		_source_index = i
+		_preview_index = i
 		_origin = point
-		_source_origin = slot.position
+		_positions.clear()
+		for child in _row.get_children():
+			_positions.append((child as Control).position)
 		_moving = false
 		return
 
 
 func _update(point: Vector2) -> void:
-	if _source_index < 0 or not _can_reorder.is_valid() or not bool(_can_reorder.call()):
+	if _source_index < 0:
 		return
-	var slot: Control = _row.get_child(_source_index) as Control
+	if not _can_reorder.is_valid() or not bool(_can_reorder.call()):
+		cancel()
+		return
+	var source: Control = _row.get_child(_source_index) as Control
 	var delta: Vector2 = point - _origin
 	if not _moving:
-		if absf(delta.x) < slot.size.x * DRAG_START_FRACTION:
+		if absf(delta.x) < source.size.x * DRAG_START_FRACTION:
 			return
 		if absf(delta.x) <= absf(delta.y) * HORIZONTAL_INTENT_RATIO:
 			return
 		_moving = true
 		_suppressed_index = _source_index
-		slot.z_index = 2
-		slot.pivot_offset = slot.size * 0.5
-		slot.scale = Vector2.ONE * DRAG_LIFT_SCALE
-	var step: float = slot.size.x + float(_row.get_theme_constant("separation"))
-	var max_displacement: float = step * float(_row.get_child_count() - 2)
-	slot.position = _source_origin + Vector2(clampf(delta.x, -max_displacement, max_displacement), 0.0)
+		source.z_index = 2
+		source.pivot_offset = source.size * 0.5
+		source.scale = Vector2.ONE * DRAG_LIFT_SCALE
+	var count: int = _row.get_child_count() - 1
+	var first_x: float = _positions.front().x
+	var last_x: float = _positions[count - 1].x
+	source.position = Vector2(clampf(_positions[_source_index].x + delta.x, first_x, last_x), _positions[_source_index].y)
+	var target_index: int = target_for_displacement(_source_index, count, delta.x, source.size.x, float(_row.get_theme_constant("separation")))
+	if target_index != _preview_index:
+		_preview_index = target_index
+		_animate_preview()
 
 
 func _finish(point: Vector2) -> void:
@@ -142,12 +156,22 @@ func _finish(point: Vector2) -> void:
 		return
 	_suppressed_index = from_index
 	var source: Control = _row.get_child(from_index) as Control
-	var delta_x: float = point.x - _origin.x
-	var target_index: int = target_for_displacement(from_index, _row.get_child_count() - 1, delta_x, source.size.x, float(_row.get_theme_constant("separation")))
-	if target_index == from_index:
-		_animate_return(source)
-		return
-	_animate_swap(source, _row.get_child(target_index) as Control, from_index, target_index)
+	var to_index: int = target_for_displacement(from_index, _row.get_child_count() - 1, point.x - _origin.x, source.size.x, float(_row.get_theme_constant("separation")))
+	_preview_index = to_index
+	_stop_tweens()
+	_animating = true
+	_tween = _host.create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween.set_parallel(true)
+	for i in range(_row.get_child_count() - 1):
+		var slot: Control = _row.get_child(i) as Control
+		_tween.tween_property(slot, "position", _target_position(i, from_index, to_index), SWAP_SECONDS)
+	_tween.tween_property(source, "scale", Vector2.ONE, SWAP_SECONDS)
+	_tween.finished.connect(func() -> void:
+		_animating = false
+		_restore_slots()
+		if from_index != to_index and _on_move.is_valid():
+			_on_move.call(from_index, to_index)
+	)
 
 
 static func target_for_displacement(source_index: int, count: int, delta_x: float, slot_width: float, spacing: float) -> int:
@@ -158,32 +182,45 @@ static func target_for_displacement(source_index: int, count: int, delta_x: floa
 	var step: float = maxf(slot_width + spacing, slot_width)
 	if step <= 0.0:
 		return source_index
-	var distance_in_slots: int = maxi(1, roundi(absf(delta_x) / step))
+	var distance_in_slots: int = roundi(absf(delta_x) / step)
 	return clampi(source_index + (distance_in_slots if delta_x > 0.0 else -distance_in_slots), 0, count - 1)
 
 
-func _animate_return(source: Control) -> void:
-	_animating = true
-	_tween = _host.create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_tween.set_parallel(true)
-	_tween.tween_property(source, "position", _source_origin, SWAP_SECONDS)
-	_tween.tween_property(source, "scale", Vector2.ONE, SWAP_SECONDS)
-	_tween.finished.connect(func() -> void:
-		source.z_index = 0
-		_animating = false
-	)
+func _target_position(index: int, from_index: int, to_index: int) -> Vector2:
+	if index == from_index:
+		return _positions[to_index]
+	if from_index < to_index and index > from_index and index <= to_index:
+		return _positions[index - 1]
+	if from_index > to_index and index >= to_index and index < from_index:
+		return _positions[index + 1]
+	return _positions[index]
 
 
-func _animate_swap(source: Control, target: Control, from_index: int, to_index: int) -> void:
-	_animating = true
-	var target_origin: Vector2 = target.position
-	_tween = _host.create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_tween.set_parallel(true)
-	_tween.tween_property(source, "position", target_origin, SWAP_SECONDS)
-	_tween.tween_property(target, "position", _source_origin, SWAP_SECONDS)
-	_tween.tween_property(source, "scale", Vector2.ONE, SWAP_SECONDS)
-	_tween.finished.connect(func() -> void:
-		_animating = false
-		if _on_swap.is_valid():
-			_on_swap.call(from_index, to_index)
-	)
+func _animate_preview() -> void:
+	if _preview_tween != null and _preview_tween.is_valid():
+		_preview_tween.kill()
+	_preview_tween = _host.create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_preview_tween.set_parallel(true)
+	for i in range(_row.get_child_count() - 1):
+		if i == _source_index:
+			continue
+		_preview_tween.tween_property(_row.get_child(i), "position", _target_position(i, _source_index, _preview_index), SWAP_SECONDS)
+
+
+func _stop_tweens() -> void:
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	if _preview_tween != null and _preview_tween.is_valid():
+		_preview_tween.kill()
+	_tween = null
+	_preview_tween = null
+
+
+func _restore_slots() -> void:
+	if _row == null:
+		return
+	for i in range(mini(_positions.size(), _row.get_child_count())):
+		var slot: Control = _row.get_child(i) as Control
+		slot.position = _positions[i]
+		slot.scale = Vector2.ONE
+		slot.z_index = 0

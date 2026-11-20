@@ -614,7 +614,7 @@ func _can_reorder_slots() -> bool:
 func _swap_draft_slots(from_index: int, to_index: int) -> void:
 	if not _editing_allowed():
 		return
-	_planner_editing = BattleChainReorderController.swapped(_planner_editing, from_index, to_index)
+	_planner_editing = BattleChainReorderController.moved(_planner_editing, from_index, to_index)
 	_hide_ability_picker()
 	_refresh_phase_controls()
 

@@ -19,7 +19,7 @@ const NAME_SECRETS := [
 	"алой луны", "железных теней", "безмолвных духов", "серебряного ключа",
 	"древнего пророчества", "разбитой звезды", "погасших факелов", "тайного ордена"
 ]
-const ENTITY_TYPES := ["door", "chest", "monster", "stairs_down", "key", "potion", "gold", "trigger", "player_spawn", "message"]
+const ENTITY_TYPES := ["door", "chest", "monster", "trap", "stairs_down", "key", "potion", "gold", "trigger", "player_spawn", "message"]
 static var CHEST_REWARDS: Array = LockCatalog.LOCK_IDS + ["potion", "gold"] + ItemCatalog.consumable_ids() + ItemCatalog.equipment_ids()
 
 var map_id: String = ""
@@ -105,6 +105,11 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		if not MonsterCatalog.has(monster_id):
 			monster_id = MonsterCatalog.DEFAULT_MONSTER_ID
 		properties = {"monster_id": monster_id, "loot_contents": [], "loot_mode": "random"}
+	elif kind == "trap":
+		var trap_id: String = str(options.get("trap_id", TrapCatalog.DEFAULT_TRAP_ID))
+		if not TrapCatalog.has(trap_id):
+			trap_id = TrapCatalog.DEFAULT_TRAP_ID
+		properties = {"trap_id": trap_id}
 	elif kind == "trigger":
 		properties = {"event_id": ""}
 	elif kind == "message":
@@ -117,6 +122,11 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		"properties": properties
 	})
 	return true
+
+
+static func trap_id(entity: Dictionary) -> String:
+	var properties: Dictionary = entity.get("properties", {})
+	return TrapCatalog.resolve_id(str(properties.get("trap_id", TrapCatalog.DEFAULT_TRAP_ID)))
 
 
 ## Описание добычи принадлежит карте; старая форма reward продолжает читаться.

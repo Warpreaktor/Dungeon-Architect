@@ -1,7 +1,7 @@
 class_name FloatingDebugConsole
 extends CanvasLayer
 
-signal visibility_changed(opened: bool)
+signal console_open_changed(opened: bool)
 
 const MIN_SIZE: Vector2 = Vector2(280.0, 150.0)
 const DEFAULT_VIEWPORT_SHARE: Vector2 = Vector2(0.56, 0.32)
@@ -103,7 +103,7 @@ func log_node() -> RichTextLabel:
 func set_open(opened: bool) -> void:
 	_panel.visible = opened
 	_gear.get_popup().set_item_checked(0, opened)
-	visibility_changed.emit(opened)
+	console_open_changed.emit(opened)
 	if opened:
 		_fit_to_viewport()
 

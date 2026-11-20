@@ -32,6 +32,8 @@ var vitality_percent: int = 0
 var vitality_steps: int = 0
 var vision_bonus: int = 0
 var vision_steps: int = 0
+## Отдельный слой эффектов исследования карты: ловушки и будущие вредные зоны.
+var overworld_statuses: Dictionary = {}
 
 
 
@@ -254,6 +256,48 @@ func has_vision_effect() -> bool:
 	return vision_steps > 0 and vision_bonus > 0
 
 
+func apply_overworld_status(status_id: String, label: String, damage: int, ticks: int, interval_steps: int) -> bool:
+	var clean_id := status_id.strip_edges()
+	if clean_id.is_empty() or damage <= 0 or ticks <= 0 or interval_steps <= 0:
+		return false
+	var current: Dictionary = overworld_statuses.get(clean_id, {})
+	overworld_statuses[clean_id] = {
+		"label": label if not label.strip_edges().is_empty() else clean_id.capitalize(),
+		"damage": maxi(damage, int(current.get("damage", 0))),
+		"ticks_remaining": maxi(ticks, int(current.get("ticks_remaining", 0))),
+		"interval_steps": interval_steps,
+		"steps_until_tick": mini(int(current.get("steps_until_tick", interval_steps)), interval_steps) if not current.is_empty() else interval_steps
+	}
+	return true
+
+
+func advance_overworld_statuses() -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	for status_id in overworld_statuses.keys():
+		var status: Dictionary = overworld_statuses[status_id]
+		var remaining_steps: int = int(status.get("steps_until_tick", 0)) - 1
+		status["steps_until_tick"] = remaining_steps
+		if remaining_steps > 0:
+			overworld_statuses[status_id] = status
+			continue
+		var damage: int = maxi(int(status.get("damage", 0)), 0)
+		var applied: int = take_damage(damage)
+		var ticks_remaining: int = int(status.get("ticks_remaining", 0)) - 1
+		events.append({
+			"status_id": str(status_id),
+			"label": str(status.get("label", status_id)),
+			"damage": applied,
+			"ticks_remaining": maxi(ticks_remaining, 0)
+		})
+		if ticks_remaining <= 0:
+			overworld_statuses.erase(status_id)
+		else:
+			status["ticks_remaining"] = ticks_remaining
+			status["steps_until_tick"] = maxi(int(status.get("interval_steps", 1)), 1)
+			overworld_statuses[status_id] = status
+	return events
+
+
 func active_effects_summary() -> String:
 	var parts: Array[String] = []
 	if strength_steps > 0:
@@ -262,6 +306,14 @@ func active_effects_summary() -> String:
 		parts.append("Живучесть %d%% · %d ш." % [vitality_percent, vitality_steps])
 	if vision_steps > 0:
 		parts.append("Всевиденье +%d · %d ш." % [vision_bonus, vision_steps])
+	for status_id in overworld_statuses:
+		var status: Dictionary = overworld_statuses[status_id]
+		parts.append("%s %d×%d · %d ш." % [
+			str(status.get("label", status_id)),
+			int(status.get("damage", 0)),
+			int(status.get("ticks_remaining", 0)),
+			int(status.get("steps_until_tick", 0))
+		])
 	return "  |  ".join(parts)
 
 

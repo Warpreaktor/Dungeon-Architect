@@ -294,6 +294,8 @@ func _draw_cell(x: int, y: int) -> void:
 		elif kind == "monster":
 			var icon: Texture2D = MonsterCatalog.from_entity(entity).icon
 			draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
+		elif kind == "trap":
+			_draw_trap(origin, entity, mode == "play" and game_session != null and game_session.is_trap_disarmed(entity))
 		else:
 			_draw_entity(kind, origin)
 			if kind == "door":
@@ -338,6 +340,22 @@ func _draw_player(origin: Vector2) -> void:
 	draw_colored_polygon(PackedVector2Array([center + Vector2(-14, 17), center + Vector2(-10, 0), center + Vector2(0, -1), center + Vector2(10, 0), center + Vector2(14, 17)]), Color("#8af0c1"))
 	draw_rect(Rect2(center + Vector2(-5, 3), Vector2(10, 10)), Color("#1e7463"))
 	draw_circle(center + Vector2(14, -12), 4.0, Color("#e8c58a"))
+
+
+func _draw_trap(origin: Vector2, entity: Dictionary, disarmed: bool) -> void:
+	var trap: TrapDefinition = TrapCatalog.from_entity(entity)
+	if trap == null or trap.icon == null:
+		_draw_entity("trigger", origin)
+		return
+	var modulate := Color(1, 1, 1, 1)
+	if disarmed:
+		modulate = Color(0.58, 0.63, 0.70, 0.72)
+	draw_texture_rect(trap.icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false, modulate)
+	if disarmed:
+		var overlay := Rect2(origin + Vector2(4, 4), Vector2(40, 40))
+		draw_rect(overlay, Color(0.05, 0.08, 0.12, 0.22))
+		draw_line(overlay.position + Vector2(6, 34), overlay.position + Vector2(34, 6), Color("#9fb2c8"), 2.2)
+		draw_line(overlay.position + Vector2(8, 36), overlay.position + Vector2(36, 8), Color("#1d2631"), 1.0)
 
 
 func _draw_open_chest(origin: Vector2) -> void:
@@ -587,6 +605,10 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 		var monster_id: String = selected_tool.trim_prefix("monster:")
 		if MonsterCatalog.has(monster_id):
 			modified = map_data.place_entity("monster", cell.x, cell.y, {"monster_id": monster_id})
+	elif selected_tool.begins_with("trap:"):
+		var trap_id: String = selected_tool.trim_prefix("trap:")
+		if TrapCatalog.has(trap_id):
+			modified = map_data.place_entity("trap", cell.x, cell.y, {"trap_id": trap_id})
 	elif selected_tool not in ["key", "potion", "gold", "sword"]:
 		# Подбираемые вещи появляются только через источники добычи (пока сундуки).
 		modified = map_data.place_entity(selected_tool, cell.x, cell.y)

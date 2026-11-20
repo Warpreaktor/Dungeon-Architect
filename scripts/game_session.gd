@@ -15,6 +15,7 @@ var carried_items: Dictionary = {} # Количество найденных п�
 var is_completed: bool = false # Выход достигнут в текущем прохождении.
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
+var disarmed_traps: Dictionary = {} # ID разряженных ловушек только в этом прохождении.
 var pending_chest_id: String = "" # Ожидает завершения анимации шага до открытия сундука.
 var activated_triggers: Dictionary = {} # ID сработавших триггеров; обнуляется с новой сессией.
 var shown_messages: Dictionary = {} # Авторские сообщения показываются один раз за прохождение.
@@ -63,6 +64,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 			"position": player_pos,
 			"removed": removed_entities.duplicate(true),
 			"chests": opened_chests.duplicate(true),
+			"traps": disarmed_traps.duplicate(true),
 			"triggers": activated_triggers.duplicate(true),
 			"messages": shown_messages.duplicate(true),
 			"revealed": revealed.duplicate(true)
@@ -72,6 +74,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	player_pos = saved.get("position", spawn)
 	removed_entities = saved.get("removed", {}).duplicate(true)
 	opened_chests = saved.get("chests", {}).duplicate(true)
+	disarmed_traps = saved.get("traps", {}).duplicate(true)
 	pending_chest_id = ""
 	activated_triggers = saved.get("triggers", {}).duplicate(true)
 	shown_messages = saved.get("messages", {}).duplicate(true)
@@ -132,6 +135,10 @@ func is_entity_removed(entity: Dictionary) -> bool:
 
 func is_chest_open(entity: Dictionary) -> bool:
 	return opened_chests.has(str(entity.get("id", "")))
+
+
+func is_trap_disarmed(entity: Dictionary) -> bool:
+	return disarmed_traps.has(str(entity.get("id", "")))
 
 
 func _find_active_entity(cell: Vector2i, kind: String) -> Dictionary:
@@ -246,6 +253,42 @@ func _activate_message_at(cell: Vector2i, activation: String, target_id: String 
 		_message_events.append({"text": authored_text, "activation": activation, "loot": loot.duplicate(true)})
 
 
+func _append_event_message(message: String) -> void:
+	var clean := message.strip_edges()
+	if clean.is_empty():
+		return
+	if last_event_message.is_empty():
+		last_event_message = clean
+	else:
+		last_event_message += "  " + clean
+
+
+func _activate_traps_at(cell: Vector2i) -> void:
+	for entity in map_data.entities_at(cell.x, cell.y):
+		if str(entity.get("type", "")) != "trap" or is_trap_disarmed(entity):
+			continue
+		var trap: TrapDefinition = TrapCatalog.from_entity(entity)
+		if trap == null:
+			continue
+		var parts: Array[String] = []
+		if hero != null and trap.direct_damage > 0:
+			var damage: int = hero.take_damage(trap.direct_damage)
+			if damage > 0:
+				parts.append("-%d HP" % damage)
+		if hero != null and trap.applies_overworld_status():
+			if hero.apply_overworld_status(trap.overworld_status_id, trap.overworld_status_label,
+				trap.overworld_status_damage, trap.overworld_status_ticks, trap.overworld_status_interval_steps):
+				parts.append("%s %d на %d фазы" % [
+					trap.overworld_status_label,
+					trap.overworld_status_damage,
+					trap.overworld_status_ticks
+				])
+		if not parts.is_empty():
+			_append_event_message("Ловушка «%s»: %s." % [trap.display_name, " и ".join(parts)])
+		if trap.disarm_on_trigger:
+			disarmed_traps[str(entity.get("id", ""))] = true
+
+
 func can_enter(cell: Vector2i) -> bool:
 	return contains(cell.x, cell.y) and map_data.get_terrain(cell.x, cell.y) != "wall"
 
@@ -289,14 +332,23 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 
 	player_pos = target
 	steps += 1
+	if hero != null:
+		hero.advance_effects()
+		for status_event in hero.advance_overworld_statuses():
+			var label: String = str(status_event.get("label", ""))
+			var amount: int = int(status_event.get("damage", 0))
+			if amount > 0:
+				_append_event_message("%s: -%d HP" % [label, amount])
+	_activate_traps_at(target)
+	if hero != null and hero.health <= 0:
+		_refresh_visibility()
+		return true
 	_collect_pickups_at(target)
 	_activate_triggers_at(target)
 	if not opened_door_id.is_empty():
 		_activate_message_at(target, "door_open", opened_door_id)
 	else:
 		_activate_message_at(target, "enter")
-	if hero != null:
-		hero.advance_effects()
 	_refresh_visibility()
 	# Пока лестница завершает приключение. Позже здесь появится переход на другую карту.
 	if not _find_active_entity(target, "stairs_down").is_empty():
@@ -469,10 +521,7 @@ func _collect_pickups_at(cell: Vector2i) -> void:
 		removed_entities[str(entity["id"])] = true
 		# Это запись в свёрнутую техническую консоль, не всплывающее игровое сообщение.
 		var pickup_message := "Получено: %s ×%d" % [item.display_name, quantity]
-		if last_event_message.is_empty():
-			last_event_message = pickup_message
-		else:
-			last_event_message += "  " + pickup_message
+		_append_event_message(pickup_message)
 
 
 func _refresh_visibility() -> void:

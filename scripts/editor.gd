@@ -451,6 +451,19 @@ func _build_interface() -> void:
 			"icon": monster.icon
 		})
 
+	palette.add_child(HSeparator.new())
+	palette.add_child(_label("ЛОВУШКИ", 14, Color("#e8c58a")))
+	var trap_tools := _tool_grid()
+	palette.add_child(trap_tools)
+	for trap_id in TrapCatalog.list_ids():
+		var trap: TrapDefinition = TrapCatalog.get_trap(str(trap_id))
+		_add_tool_button(trap_tools, {
+			"id": "trap:" + trap.trap_id,
+			"label": trap.display_name,
+			"hint": trap.description if not trap.description.is_empty() else "Ловушка: %s" % trap.display_name,
+			"icon": trap.icon
+		})
+
 	# Перестановка дочернего Control в HBoxContainer меняет порядок панелей
 	# без переподключения сигналов и пересоздания палитры.
 	workspace.move_child(_palette_panel, workspace.get_child_count() - 1)
@@ -459,7 +472,7 @@ func _build_interface() -> void:
 	_floating_console.name = "FloatingConsole"
 	add_child(_floating_console)
 	_log_console = _floating_console.log_node()
-	_floating_console.visibility_changed.connect(_on_console_visibility_changed)
+	_floating_console.console_open_changed.connect(_on_console_visibility_changed)
 	var config := ConfigFile.new()
 	config.load(EDITOR_SETTINGS_PATH)
 	_log_open = bool(config.get_value("interface", "show_console", false))
@@ -2059,6 +2072,11 @@ func _try_move_player(dx: int, dy: int) -> void:
 	_canvas.queue_redraw()
 	_refresh_map_overlays()
 	_refresh_stats()
+	if game_session.hero != null and game_session.hero.health <= 0:
+		if not game_session.last_event_message.is_empty():
+			_show_game_event(game_session.last_event_message)
+		_show_end_view(true)
+		return
 	_log_trigger_events()
 	_collect_game_messages()
 	if _game_dialogue.visible:

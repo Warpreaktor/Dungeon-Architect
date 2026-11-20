@@ -106,7 +106,7 @@ var _layers_menu: MenuButton
 var _issues_toggle: Button
 var _settings_dialog: AcceptDialog
 var _settings_tabs: TabContainer
-var _test_hero_select: OptionButton
+var _test_hero_panel: EditorTestHeroPanel
 var _issues_dialog: PopupPanel
 var _palette_toggle: Button
 var _palette_panel: PanelContainer
@@ -438,7 +438,7 @@ func _build_interface() -> void:
 	palette.add_child(_label("МОНСТРЫ", 14, Color("#e8c58a")))
 	var monster_tools := _tool_grid()
 	palette.add_child(monster_tools)
-	for monster_id in MonsterCatalog.DEFINITIONS:
+	for monster_id in MonsterCatalog.list_ids():
 		var monster: MonsterDefinition = MonsterCatalog.get_monster(str(monster_id))
 		_add_tool_button(monster_tools, {
 			"id": "monster:" + monster.monster_id,
@@ -564,33 +564,11 @@ func _create_dialogs() -> void:
 	_stats_label.tooltip_text = "Размер задаётся при создании карты и здесь не меняется"
 	map_properties.add_child(_stats_label)
 
-	# Тестовый герой принадлежит настройкам редактора, а не карте.
-	var test_tab := MarginContainer.new()
-	test_tab.name = "Тестирование"
-	for margin_side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		test_tab.add_theme_constant_override(margin_side, 12)
-	settings_tabs.add_child(test_tab)
-	var test_properties := VBoxContainer.new()
-	test_properties.name = "TestProperties"
-	test_properties.add_theme_constant_override("separation", 12)
-	test_tab.add_child(test_properties)
-	test_properties.add_child(_label("Тестовый герой", 15, Color("#d5e0e7")))
-	_test_hero_select = OptionButton.new()
-	_test_hero_select.name = "TestHeroSelect"
-	_test_hero_select.custom_minimum_size.y = 44
-	_test_hero_select.tooltip_text = "Герой для временного тестового прохождения карты"
-	var hero_ids: Array[String] = []
-	for hero_id in HeroCatalog.DEFINITIONS.keys():
-		hero_ids.append(str(hero_id))
-	hero_ids.sort()
-	for hero_id in hero_ids:
-		var hero_definition: HeroDefinition = HeroCatalog.get_hero(hero_id)
-		_test_hero_select.add_item(hero_definition.display_name)
-		_test_hero_select.set_item_metadata(_test_hero_select.item_count - 1, hero_id)
-	_test_hero_select.select(_test_hero_option_index())
-	_test_hero_select.item_selected.connect(_on_test_hero_selected)
-	test_properties.add_child(_test_hero_select)
-	test_properties.add_child(_label("Выбор действует только при запуске «Тест» и не сохраняется в карте.", 13, Color("#9ab0bf")))
+	_test_hero_panel = EditorTestHeroPanel.new()
+	_test_hero_panel.name = "Тестирование"
+	_settings_tabs.add_child(_test_hero_panel)
+	_test_hero_panel.select_hero(_test_hero_id)
+	_test_hero_panel.hero_selected.connect(_on_test_hero_selected)
 
 	# Диагностика остаётся доступной по запросу, но не забирает ширину у карты.
 	_issues_dialog = PopupPanel.new()
@@ -980,24 +958,12 @@ func _on_settings_option_selected(id: int) -> void:
 			_settings_dialog.popup_centered_clamped(Vector2i(490, 260))
 		SETTINGS_TEST_HERO:
 			_settings_tabs.current_tab = 1
-			_test_hero_select.select(_test_hero_option_index())
+			_test_hero_panel.select_hero(_test_hero_id)
 			_settings_dialog.popup_centered_clamped(Vector2i(490, 260))
 
 
-func _test_hero_option_index() -> int:
-	if _test_hero_select == null:
-		return 0
-	for index in range(_test_hero_select.item_count):
-		if str(_test_hero_select.get_item_metadata(index)) == _test_hero_id:
-			return index
-	return 0
-
-
-func _on_test_hero_selected(index: int) -> void:
-	if _test_hero_select == null or index < 0 or index >= _test_hero_select.item_count:
-		return
-	var selected_id: String = str(_test_hero_select.get_item_metadata(index))
-	if not HeroCatalog.DEFINITIONS.has(selected_id):
+func _on_test_hero_selected(selected_id: String) -> void:
+	if not HeroCatalog.has(selected_id):
 		return
 	_test_hero_id = selected_id
 	var config := ConfigFile.new()
@@ -1014,7 +980,7 @@ func _load_test_hero_selection() -> void:
 	if config.load(EDITOR_SETTINGS_PATH) != OK:
 		return
 	var saved_id: String = str(config.get_value("editor", "test_hero_id", HeroCatalog.DEFAULT_HERO_ID))
-	if HeroCatalog.DEFINITIONS.has(saved_id):
+	if HeroCatalog.has(saved_id):
 		_test_hero_id = saved_id
 
 

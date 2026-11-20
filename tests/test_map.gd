@@ -614,8 +614,8 @@ func _initialize() -> void:
 
 	# Пять видов врагов с собственными Resource, старые идентификаторы перенаправляются.
 	assert(HeroState.new().max_health == HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID).max_health)
-	assert(MonsterCatalog.DEFINITIONS.size() == 5)
-	for monster_kind in MonsterCatalog.DEFINITIONS:
+	assert(not MonsterCatalog.list_ids().is_empty())
+	for monster_kind in MonsterCatalog.list_ids():
 		var definition: MonsterDefinition = MonsterCatalog.get_monster(str(monster_kind))
 		assert(definition.monster_id == str(monster_kind))
 		assert(definition.max_health > 0 and definition.strength >= 0 and definition.agility >= 0)

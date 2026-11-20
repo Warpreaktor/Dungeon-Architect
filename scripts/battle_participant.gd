@@ -43,9 +43,10 @@ var last_rest_tick: int = -1
 var resource_amounts: Dictionary = {}
 const PERCENT_SCALE: int = BattleMath.PERCENT_SCALE
 
-# Для совместимости существующих щитов их логика пока выполняется на
-# изолированной копии HeroState, а не на реальном герое прохождения.
+# Снимок героя остаётся изолирован от прогресса прохождения.
+# Работу с предметами делегируем адаптеру экипировки.
 var _hero_snapshot: HeroState
+var _equipment: BattleEquipment = BattleEquipment.new()
 
 
 static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipant:
@@ -56,6 +57,7 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant.team_id = "heroes"
 	participant.definition_id = source.definition.hero_id if source.definition != null else ""
 	participant._hero_snapshot = source.copy_for_battle()
+	participant._equipment.set_snapshot(participant._hero_snapshot)
 	participant.personal_ability_ids = source.definition.personal_ability_ids.duplicate() if source.definition != null else []
 	participant.base_dodge_percent = source.definition.base_dodge_percent if source.definition != null else 0
 	participant.accuracy_bonus = source.definition.accuracy_bonus if source.definition != null else 0
@@ -87,6 +89,7 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 func refresh_from_hero() -> void:
 	if _hero_snapshot == null:
 		return
+	_equipment.set_snapshot(_hero_snapshot)
 	max_health = _hero_snapshot.max_health
 	health = _hero_snapshot.health
 	strength = _hero_snapshot.strength
@@ -107,7 +110,7 @@ func refresh_from_hero() -> void:
 ## Мощность оружия учитывается лишь для подходящего вида атаки.
 ## Монстры атакуют природными приёмами: их база — характеристики + эффект.
 func weapon_damage(kind: int) -> int:
-	return _hero_snapshot.weapon_damage(kind) if _hero_snapshot != null else 0
+	return _equipment.weapon_damage(kind)
 
 
 func melee_attack_value() -> float:
@@ -132,6 +135,7 @@ func sync_consumable_from_hero(source: HeroState) -> void:
 	if source == null or _hero_snapshot == null:
 		return
 	_hero_snapshot = source.copy_for_battle()
+	_equipment.set_snapshot(_hero_snapshot)
 	refresh_from_hero()
 
 
@@ -143,11 +147,16 @@ func prepare_block(base_armor: int) -> void:
 
 
 func preview_block_armor(base_armor: int = BattleMath.USE_DEFAULT_BLOCK_ARMOR) -> int:
-	var shield: ItemDefinition = ItemCatalog.get_item(equipped_shield_id)
-	if shield != null and _hero_snapshot != null and _hero_snapshot.current_shield_durability(equipped_shield_id) > 0:
-		return maxi(shield.defense_bonus, 0)
 	var requested: int = BattleMath.RULES.unarmed_block_armor if base_armor == BattleMath.USE_DEFAULT_BLOCK_ARMOR else base_armor
-	return maxi(BattleMath.RULES.unarmed_block_armor, requested)
+	return _equipment.block_armor(equipped_shield_id, maxi(BattleMath.RULES.unarmed_block_armor, requested))
+
+
+func has_serviceable_shield() -> bool:
+	return _equipment.has_shield(equipped_shield_id)
+
+
+func shield_durability(shield_id: String) -> int:
+	return _equipment.shield_durability(shield_id)
 
 
 func restore_health(amount: int) -> int:
@@ -171,17 +180,11 @@ func receive_damage(incoming: int, armor_pierce_fraction: float = 0.0) -> int:
 	# ceili обеспечивает минимум 1 пробивающего урона при ненулевом пробитии.
 	var pierced: int = ceili(float(raw) * clampf(armor_pierce_fraction, 0.0, 1.0))
 	var armor_after_base: int = maxi(raw - pierced, 0)
-	var active_shield: bool = (_hero_snapshot != null
-		and not equipped_shield_id.is_empty()
-		and _hero_snapshot.current_shield_durability(equipped_shield_id) > 0)
-	# Пассивного блока нет. Щит лишь задаёт силу выполненного блока.
-	var extra_armor: int = block_armor
-	var blocked: int = mini(armor_after_base, extra_armor)
-	if blocked > 0 and active_shield:
-		# Износ от всей силы удара по щиту, не только от поглощённых HP.
-		blocked = _hero_snapshot.consume_shield_block(armor_after_base, blocked)
-		last_shield_blocked = blocked
-		last_shield_broken = _hero_snapshot.last_shield_broken
+	var requested_block: int = mini(armor_after_base, block_armor)
+	var absorption: Dictionary = _equipment.absorb(equipped_shield_id, armor_after_base, requested_block)
+	var blocked: int = int(absorption["blocked"])
+	last_shield_blocked = int(absorption["shield_blocked"])
+	last_shield_broken = str(absorption["broken"])
 	# Показываем поглощение и монстру без физического щита.
 	last_block_absorbed = blocked
 	# Блок защищает от одного попадания, даже если оно было нулевым.
@@ -218,65 +221,32 @@ func dodge_chance_against(attacker: BattleParticipant) -> int:
 
 
 func status_modifier(stat: int) -> int:
-	var total: int = 0
-	for active in statuses.values():
-		if int(active.get("stat", AbilityEffectDefinition.Stat.NONE)) == stat:
-			total += int(active.get("modifier", 0)) * int(active.get("stacks", 1))
-	return total
+	return BattleStatusRules.modifier(statuses, stat)
 
 
 func apply_status(effect: AbilityEffectDefinition, tick: int) -> void:
-	var previous: Dictionary = statuses.get(effect.status_id, {})
-	var stacks: int = 1
-	if effect.effective_stack_policy() == AbilityEffectDefinition.Stack.ADD:
-		stacks = int(previous.get("stacks", 0)) + 1
-	elif effect.effective_stack_policy() == AbilityEffectDefinition.Stack.ONCE and not previous.is_empty():
-		# Multiple uses of the same non-stacking dodge grant no extra chance.
-		return
-	statuses[effect.status_id] = {
-		"amount": effect.amount, "modifier": effect.effective_status_modifier(),
-		"stat": effect.effective_status_stat(), "clock": effect.effective_status_clock(),
-		"ticks": effect.duration_ticks, "stacks": stacks, "applied_tick": tick,
-		"tick_damage": effect.tick_damage,
-		# A partly completed current cycle is not a full phase of this effect.
-		"skip_partial_phase": effect.tick_damage <= 0
-			and effect.effective_status_clock() == AbilityEffectDefinition.Clock.OWNER_PHASE
-			and not is_resting and action_cursor > 0
-	}
+	var partial_phase: bool = not is_resting and action_cursor > 0
+	BattleStatusRules.apply(statuses, effect, tick, partial_phase)
 
 
 func has_damaged_armor() -> bool:
-	if _hero_snapshot == null or equipped_shield_id.is_empty():
-		return false
-	var shield: ItemDefinition = ItemCatalog.get_item(equipped_shield_id)
-	if shield == null:
-		return false
-	var full: int = maxi(shield.max_durability, shield.defense_bonus)
-	var remaining: int = _hero_snapshot.current_shield_durability(equipped_shield_id)
-	return remaining > 0 and remaining < full
+	return _equipment.has_damaged_shield(equipped_shield_id)
 
 
 ## Кровотечение обходит блок: в этот момент это не атака противника.
 ## Возвращаем фактические снимки HP для последовательного воспроизведения.
 func owner_phase_status_damage_events(actor_id: String) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
-	for status_id in statuses.keys():
-		var status: Dictionary = statuses[status_id]
-		if int(status.get("clock", -1)) != AbilityEffectDefinition.Clock.OWNER_PHASE:
-			continue
-		if bool(status.get("skip_partial_phase", false)):
-			continue
-		var amount: int = int(status.get("tick_damage", 0)) * maxi(int(status.get("stacks", 1)), 1)
-		if amount <= 0:
-			continue
+	for entry in BattleStatusRules.ticking_entries(statuses, AbilityEffectDefinition.Clock.OWNER_PHASE):
 		var before: int = health
+		var amount: int = int(entry["damage"])
 		if _hero_snapshot != null:
 			_hero_snapshot.health = maxi(_hero_snapshot.health - amount, 0)
 			refresh_from_hero()
 		else:
 			health = maxi(health - amount, 0)
 		events.append({"type": "status_tick", "actor_id": actor_id,
-			"target_id": actor_id, "status_id": str(status_id), "damage": before - health,
+			"target_id": actor_id, "status_id": str(entry["status_id"]), "damage": before - health,
 			"hp_after": health, "hp_max": max_health})
 		if not is_alive():
 			break
@@ -284,26 +254,7 @@ func owner_phase_status_damage_events(actor_id: String) -> Array[Dictionary]:
 
 
 func advance_status_clock(clock: int, current_tick: int = -1) -> Array[String]:
-	var expired: Array[String] = []
-	for status_id in statuses.keys():
-		var status: Dictionary = statuses[status_id]
-		if int(status.get("clock", AbilityEffectDefinition.Clock.LEGACY_HERO_PHASE)) != clock:
-			continue
-		# Периодический урон начинается с первого отдыха, даже если
-		# кровь была наложена в том же самом такте.
-		if current_tick >= 0 and int(status.get("applied_tick", -1)) == current_tick and int(status.get("tick_damage", 0)) <= 0:
-			continue
-		if clock == AbilityEffectDefinition.Clock.OWNER_PHASE and bool(status.get("skip_partial_phase", false)):
-			status["skip_partial_phase"] = false
-			statuses[status_id] = status
-			continue
-		status["ticks"] = int(status.get("ticks", 0)) - 1
-		if int(status["ticks"]) <= 0:
-			statuses.erase(status_id)
-			expired.append(str(status_id))
-		else:
-			statuses[status_id] = status
-	return expired
+	return BattleStatusRules.advance(statuses, clock, current_tick)
 
 
 func end_phase() -> void:

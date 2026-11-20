@@ -41,11 +41,7 @@ static func _has_equipment(participant: BattleParticipant, slot: int) -> bool:
 		return false
 	match slot:
 		ItemDefinition.EquipmentSlot.SHIELD:
-			if participant.equipped_shield_id.is_empty():
-				return false
-			if participant._hero_snapshot != null:
-				return participant._hero_snapshot.current_shield_durability(participant.equipped_shield_id) > 0
-			return true
+			return participant.has_serviceable_shield()
 	return false
 
 

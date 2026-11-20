@@ -585,7 +585,7 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 		modified = map_data.place_entity("chest", cell.x, cell.y)
 	elif selected_tool.begins_with("monster:"):
 		var monster_id: String = selected_tool.trim_prefix("monster:")
-		if MonsterCatalog.DEFINITIONS.has(monster_id):
+		if MonsterCatalog.has(monster_id):
 			modified = map_data.place_entity("monster", cell.x, cell.y, {"monster_id": monster_id})
 	elif selected_tool not in ["key", "potion", "gold", "sword"]:
 		# Подбираемые вещи появляются только через источники добычи (пока сундуки).

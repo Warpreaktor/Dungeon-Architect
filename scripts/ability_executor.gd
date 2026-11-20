@@ -154,9 +154,7 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 	# Even an avoided attack spends 'next incoming attack' dodge bonuses.
 	target.advance_status_clock(AbilityEffectDefinition.Clock.INCOMING_ATTACK)
 	var taken: int = 0 if dodged else target.receive_damage(raw, armor_pierce_fraction)
-	var shield_durability_after: int = -1
-	if not shield_before.is_empty() and target._hero_snapshot != null:
-		shield_durability_after = target._hero_snapshot.current_shield_durability(shield_before)
+	var shield_durability_after: int = target.shield_durability(shield_before)
 	return {"type": "attack", "actor_id": actor.participant_id, "target_id": target.participant_id,
 		"ability_id": ability_id, "raw_damage": raw, "damage": taken,
 		"dodged": dodged, "dodge_chance": dodge_percent,

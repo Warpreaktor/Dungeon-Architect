@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="WeightedLootTable" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/weighted_loot_table.gd" id="1_table"]
+
+[resource]
+script = ExtResource("1_table")
+weights = {
+"gold": 20,
+"potion_health_small": 6,
+"potion_health_medium": 3,
+"potion_health_large": 1,
+"potion_strength_small": 6,
+"potion_strength_medium": 3,
+"potion_strength_large": 1,
+"potion_vitality_small": 6,
+"potion_vitality_medium": 3,
+"potion_vitality_large": 1,
+"potion_vision_small": 6,
+"potion_vision_medium": 3,
+"potion_vision_large": 1,
+"sword": 1,
+"dagger": 1,
+"hatchet": 1,
+"spear": 1,
+"mace": 1,
+"pickaxe": 1,
+"battle_axe": 1,
+"flail": 1,
+"greatsword": 1,
+"warhammer": 1,
+"halberd": 1,
+"shield": 1,
+"wooden_shield": 1,
+"heraldic_shield": 1,
+"tower_shield": 1,
+"spiked_shield": 1
+}
+quantity_ranges = {
+"gold": Vector2i(3, 12)
+}

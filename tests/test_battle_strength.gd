@@ -12,7 +12,7 @@ func _initialize() -> void:
 	assert(copy.strength == wolf.strength and copy.agility == wolf.agility)
 	assert(copy.melee_attack_value() == wolf.melee_attack_value())
 
-	for id in MonsterCatalog.DEFINITIONS:
+	for id in MonsterCatalog.list_ids():
 		var monster: MonsterDefinition = MonsterCatalog.get_monster(id)
 		var actor: BattleParticipant = BattleParticipant.from_monster(monster)
 		assert(actor.melee_attack_value() == float(monster.strength) * 0.5)

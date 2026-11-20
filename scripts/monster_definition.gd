@@ -7,6 +7,11 @@ extends Resource
 @export var portrait: Texture2D
 @export var icon: Texture2D
 @export var personal_ability_ids: Array[String] = []
+@export var ai_profiles: Array[MonsterTacticProfile] = []
+@export var reconsider_tactics_each_phase: bool = false
+@export var intermission_actions: Array[MonsterIntermissionAction] = []
+@export_range(0, 8, 1) var max_intermission_actions: int = 1
+@export var starting_resources: Dictionary = {}
 ## Обязательные карты в колоде на бой (порядок фиксирован).
 ## Если не заданы, первая карта из personal_ability_ids обязательна.
 @export var guaranteed_card_ids: Array[String] = []

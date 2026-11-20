@@ -6,6 +6,8 @@ extends RefCounted
 var participant_id: String = ""
 var definition_id: String = ""
 var team_id: String = ""
+var is_targetable: bool = true
+var is_passive: bool = false
 var max_health: int = 0
 var health: int = 0
 var strength: int = 0
@@ -82,6 +84,10 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 	participant.base_dodge_percent = source.base_dodge_percent
 	participant.accuracy_bonus = source.accuracy_bonus
 	participant.personal_ability_ids = source.personal_ability_ids.duplicate()
+	for action in source.intermission_actions:
+		if action != null and not participant.learned_ability_ids.has(action.ability_id):
+			participant.learned_ability_ids.append(action.ability_id)
+	participant.resource_amounts = source.starting_resources.duplicate(true)
 	participant.action_slot_capacity = clampi(source.base_action_slots, 1, BattleChainPlanner.MAX_ACTIONS)
 	return participant
 

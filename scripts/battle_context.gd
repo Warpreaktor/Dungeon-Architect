@@ -30,7 +30,7 @@ func target_error(source_id: String, target_id: String, ability: AbilityDefiniti
 	if ability == null:
 		return "Неизвестный приём"
 	var target: BattleParticipant = get_participant(target_id)
-	if target == null or not target.is_alive():
+	if target == null or not target.is_alive() or not target.is_targetable:
 		return "Цель недоступна"
 	match ability.target:
 		AbilityDefinition.Target.SELF:
@@ -78,6 +78,6 @@ func opponent_for(source_id: String) -> BattleParticipant:
 		return null
 	for id in participants:
 		var candidate: BattleParticipant = get_participant(str(id))
-		if candidate != null and candidate.is_alive() and candidate.team_id != source.team_id:
+		if candidate != null and candidate.is_alive() and candidate.is_targetable and candidate.team_id != source.team_id:
 			return candidate
 	return null

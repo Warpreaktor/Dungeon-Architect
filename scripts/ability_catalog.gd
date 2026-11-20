@@ -1,34 +1,7 @@
 class_name AbilityCatalog
 extends RefCounted
 
-## Строгий реестр: неизвестный ID не заменяется случайным приёмом.
-## Умения добавляются отдельными .tres, без кода под каждое действие.
-const DEFINITIONS := {
-	"basic_strike": preload("res://abilities/basic_strike.tres"),
-	"guard": preload("res://abilities/guard.tres"),
-	"rooster_crush": preload("res://abilities/rooster_crush.tres"),
-	"volcha_wolf_lunge": preload("res://abilities/volcha_wolf_lunge.tres"),
-	"volcha_strike_and_rebound": preload("res://abilities/volcha_strike_and_rebound.tres"),
-	"volcha_wolf_instinct": preload("res://abilities/volcha_wolf_instinct.tres"),
-	"volcha_broken_rhythm": preload("res://abilities/volcha_broken_rhythm.tres"),
-	"volcha_cut_tendons": preload("res://abilities/volcha_cut_tendons.tres"),
-	"hunter_shot": preload("res://abilities/hunter_shot.tres"),
-	"rooster_windup": preload("res://abilities/rooster_windup.tres"),
-	"hunter_aim": preload("res://abilities/hunter_aim.tres"),
-	"lobar_charge": preload("res://abilities/lobar_charge.tres"),
-	"lobar_brace": preload("res://abilities/lobar_brace.tres"),
-	"crab_pincer": preload("res://abilities/crab_pincer.tres"),
-	"kadavr_regen": preload("res://abilities/kadavr_regen.tres"),
-	"kadavr_curse": preload("res://abilities/kadavr_curse.tres"),
-	"rabbit_bite": preload("res://abilities/rabbit_bite.tres"),
-	"rabbit_hide": preload("res://abilities/rabbit_hide.tres"),
-	"skeleton_rusty_slash": preload("res://abilities/skeleton_rusty_slash.tres"),
-	"skeleton_bone_kick": preload("res://abilities/skeleton_bone_kick.tres"),
-	"skeleton_bone_ram": preload("res://abilities/skeleton_bone_ram.tres"),
-	"skeleton_grave_howl": preload("res://abilities/skeleton_grave_howl.tres"),
-	"rest": preload("res://abilities/rest.tres"),
-	"wait": preload("res://abilities/wait.tres")
-}
+const ABILITY_DIRECTORY: String = "res://abilities"
 
 
 ## Общий приём выдаётся только при выполнении условия экипировки.
@@ -43,7 +16,7 @@ static func known_ability_ids(participant: BattleParticipant) -> Array[String]:
 	if participant == null:
 		return ids
 	for id in participant.personal_ability_ids + participant.learned_ability_ids:
-		if DEFINITIONS.has(id) and not ids.has(id):
+		if get_ability(id) != null and not ids.has(id):
 			ids.append(id)
 	for id in COMMON_EQUIPMENT_ABILITIES:
 		if not ids.has(id) and _has_equipment(participant, int(COMMON_EQUIPMENT_ABILITIES[id])):
@@ -69,7 +42,11 @@ static func _has_equipment(participant: BattleParticipant, slot: int) -> bool:
 
 
 static func get_ability(ability_id: String) -> AbilityDefinition:
-	return DEFINITIONS.get(ability_id) as AbilityDefinition
+	return ResourceCatalog.load_by_id(ABILITY_DIRECTORY, ability_id) as AbilityDefinition
+
+
+static func list_ids() -> Array[String]:
+	return ResourceCatalog.list_ids(ABILITY_DIRECTORY)
 
 
 static func validate_definitions(definitions: Array[AbilityDefinition]) -> Array[String]:
@@ -91,7 +68,7 @@ static func validate_definitions(definitions: Array[AbilityDefinition]) -> Array
 static func validate_catalog() -> Array[String]:
 	var definitions: Array[AbilityDefinition] = []
 	var errors: Array[String] = []
-	for ability_id in DEFINITIONS:
+	for ability_id in list_ids():
 		var definition: AbilityDefinition = get_ability(ability_id)
 		if definition == null:
 			errors.append("Не удалось загрузить: %s" % ability_id)

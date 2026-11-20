@@ -24,6 +24,10 @@ static func format_event(event: Dictionary, hero_name: String, enemy_name: Strin
 	var actor: String = participant_name(str(event.get("actor_id", "")), hero_name, enemy_name)
 	var target: String = participant_name(str(event.get("target_id", "")), hero_name, enemy_name)
 	match kind:
+		"enemy_chain_changed":
+			return "    %s: смена тактики" % actor
+		"enemy_intermission_action":
+			return "    %s: подготовка, %s" % [actor, ability_name(str(event.get("ability_id", "")))]
 		"tick":
 			return "  Такт %d" % int(event.get("tick", 0))
 		"attack":

@@ -5,6 +5,8 @@ func _initialize() -> void:
 	_check_catalog(HeroCatalog.list_ids(), "res://heroes")
 	_check_catalog(MonsterCatalog.list_ids(), "res://monsters")
 	_check_catalog(ItemCatalog.list_ids(), "res://items")
+	_check_catalog(AbilityCatalog.list_ids(), AbilityCatalog.ABILITY_DIRECTORY)
+	_check_personal_abilities()
 	assert(not HeroCatalog.list_ids().is_empty())
 	assert(not MonsterCatalog.list_ids().is_empty())
 	assert(not ItemCatalog.list_ids().is_empty())
@@ -26,6 +28,25 @@ func _check_catalog(ids: Array[String], directory: String) -> void:
 		var resource: Resource = ResourceCatalog.load_by_id(directory, id)
 		assert(resource != null)
 		assert(ResourceCatalog.is_valid_id(id))
+
+
+func _check_personal_abilities() -> void:
+	for hero_id in HeroCatalog.list_ids():
+		var hero: HeroDefinition = HeroCatalog.get_hero(hero_id)
+		var participant: BattleParticipant = BattleParticipant.from_hero(HeroState.new(hero))
+		for ability_id in hero.personal_ability_ids:
+			var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
+			assert(ability != null)
+			assert(ability.validation_error().is_empty())
+			assert(AbilityCatalog.knows_ability(participant, ability_id))
+	for monster_id in MonsterCatalog.list_ids():
+		var monster: MonsterDefinition = MonsterCatalog.get_monster(monster_id)
+		var participant: BattleParticipant = BattleParticipant.from_monster(monster)
+		for ability_id in monster.personal_ability_ids:
+			var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
+			assert(ability != null)
+			assert(ability.validation_error().is_empty())
+			assert(AbilityCatalog.knows_ability(participant, ability_id))
 
 
 func _check_loot() -> void:

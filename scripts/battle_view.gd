@@ -77,6 +77,7 @@ var _impact_origin: Dictionary = {}
 var _impact_shields: Dictionary = {}
 var _shield_flash_tweens: Dictionary = {}
 var _status_presenter: BattleStatusPresenter
+var _passive_enemy_view: BattlePassiveEnemyView
 var _visible_hero_hp: int = 0
 var _visible_enemy_hp: int = 0
 
@@ -105,6 +106,11 @@ func _ready() -> void:
 	_default_attack_icon = _hero_attack_icon.texture
 	_status_presenter = BattleStatusPresenter.new(self)
 	_status_presenter.setup({"hero": _hero_portrait, "enemy": _enemy_portrait})
+	_passive_enemy_view = BattlePassiveEnemyView.new()
+	_passive_enemy_view.name = "PassiveEnemy"
+	_passive_enemy_view.theme = ($OuterMargin/Main/Battlefield/EnemyCard as PanelContainer).theme
+	_battlefield.add_child(_passive_enemy_view)
+	_passive_enemy_view.hide()
 	_result_text.text = "Твой ход"
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.24)
@@ -117,6 +123,10 @@ func _basic_strike_damage(actor: BattleParticipant) -> int:
 
 func begin(combat: CombatSession, hero: HeroState) -> void:
 	_combat = combat
+	var passive_definition: MonsterDefinition = combat.passive_enemy_definition if combat.passive_enemy_definition != null else combat.enemy_definition
+	var passive: BattleParticipant = combat.battle_state.add_passive_enemy(passive_definition)
+	var portrait: Texture2D = passive_definition.portrait if passive_definition.portrait != null else passive_definition.icon
+	_passive_enemy_view.configure(passive, portrait, passive_definition.display_name)
 	if hero.definition != null:
 		_hero_name.text = hero.definition.display_name
 		_hero_portrait.texture = hero.definition.portrait
@@ -226,7 +236,8 @@ func _refresh_enemy_slots() -> void:
 				slot.configure_hidden(index)
 		else:
 			slot.configure_recharge(index)
-	_highlight_next_actions()
+	if not _is_playing_back:
+		_highlight_next_actions()
 
 
 func _conceal_enemy_actions() -> void:
@@ -726,6 +737,10 @@ func _play_phase_events(phase_events: Array) -> void:
 				_playback.tween_interval(0.20)
 			"action_start":
 				_playback.tween_interval(0.08)
+			"passive_rest":
+				_playback.tween_interval(0.12)
+			"enemy_chain_changed", "enemy_intermission_action":
+				_playback.tween_interval(0.12)
 			"attack":
 				var actor_id: String = str(event.get("actor_id", ""))
 				var target_id: String = str(event.get("target_id", ""))
@@ -774,6 +789,14 @@ func _display_phase_event(event: Dictionary) -> void:
 	if kind != "attack" and not (kind == "rest" and bool(event.get("premature", false))):
 		_emit_combat_event_log(event)
 	match kind:
+		"enemy_chain_changed":
+			_enemy_chain = _combat.battle_state.get_enemy().action_chain.duplicate()
+			_enemy_revealed.clear()
+			_refresh_enemy_slots()
+		"passive_rest":
+			if _passive_enemy_view != null:
+				var index: int = int(event.get("slot_index", -1))
+				_passive_enemy_view.highlight_cursor(_combat.battle_state.get_participant("enemy_support").action_chain.size() if bool(event.get("reload", false)) else index)
 		"tick":
 			_conceal_enemy_actions()
 			_highlight_slots(int(event.get("hero_slot", -1)), int(event.get("enemy_slot", -1)),
@@ -949,6 +972,10 @@ func _after_phase_playback() -> void:
 	_set_block_display("enemy", _combat.battle_state.get_enemy().block_armor)
 	_conceal_enemy_actions()
 	_highlight_next_actions()
+	if _passive_enemy_view != null:
+		var passive: BattleParticipant = _combat.battle_state.get_participant("enemy_support")
+		if passive != null:
+			_passive_enemy_view.highlight_cursor(passive.action_cursor)
 	_hero_health_meter.set_health(_combat.hero.health, _combat.hero.max_health, true)
 	_enemy_health_meter.set_health(_combat.enemy_health, _combat.enemy_max_health, true)
 	# При нескольких ударах за фазу щит мог сломаться не на последнем.

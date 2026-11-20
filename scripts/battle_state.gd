@@ -7,6 +7,11 @@ var participants: Dictionary = {}
 var positions: Dictionary = {}
 var hero_id: String = "hero"
 var enemy_id: String = "enemy"
+var passive_enemy_id: String = "enemy_support"
+var enemy_definition: MonsterDefinition
+var current_enemy_profile_id: String = ""
+var initial_enemy_chain: Array[String] = []
+var enemy_intermission_usage: Dictionary = {}
 var is_victory: bool = false
 var is_defeat: bool = false
 var last_counter_damage: int = 0
@@ -20,13 +25,18 @@ var last_phase_events: Array[Dictionary] = []
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
-static func begin(monster: MonsterDefinition, hero: HeroState = null) -> BattleState:
+static func begin(monster: MonsterDefinition, hero: HeroState = null, rng_seed: int = -1) -> BattleState:
 	var state := BattleState.new()
-	state.rng.randomize()
+	if rng_seed < 0:
+		state.rng.randomize()
+	else:
+		state.rng.seed = rng_seed
+	state.enemy_definition = monster
 	var enemy: BattleParticipant = BattleParticipant.from_monster(monster)
 	state.participants[state.enemy_id] = enemy
 	if enemy != null:
 		enemy.action_chain = MonsterCardDraw.draw(monster, enemy, state.rng)
+		state.initial_enemy_chain = enemy.action_chain.duplicate()
 	if hero != null:
 		state.participants[state.hero_id] = BattleParticipant.from_hero(hero)
 	return state
@@ -42,6 +52,83 @@ func get_enemy() -> BattleParticipant:
 
 func get_hero() -> BattleParticipant:
 	return get_participant(hero_id)
+
+
+func add_passive_enemy(definition: MonsterDefinition) -> BattleParticipant:
+	if definition == null:
+		return null
+	var existing: BattleParticipant = get_participant(passive_enemy_id)
+	if existing != null:
+		return existing
+	var dummy: BattleParticipant = BattleParticipant.from_monster(definition, passive_enemy_id)
+	dummy.is_passive = true
+	dummy.is_targetable = false
+	dummy.personal_ability_ids.clear()
+	dummy.learned_ability_ids.clear()
+	dummy.action_chain.clear()
+	for _slot_index in range(dummy.action_slot_capacity):
+		dummy.action_chain.append("wait")
+	participants[passive_enemy_id] = dummy
+	return dummy
+
+
+func _reconfigure_enemy_for_phase() -> void:
+	if flow.stage not in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.RECONFIGURING]:
+		return
+	var enemy: BattleParticipant = get_enemy()
+	if enemy == null or enemy.action_cursor != 0:
+		return
+	var selected: MonsterTacticProfile = MonsterAiPlanner.choose_profile(
+		enemy_definition, enemy, current_enemy_profile_id, rng)
+	if selected == null:
+		if not current_enemy_profile_id.is_empty() and not initial_enemy_chain.is_empty():
+			var rest_pending: bool = enemy.action_cursor >= enemy.action_chain.size()
+			enemy.action_chain = initial_enemy_chain.duplicate()
+			enemy.action_cursor = enemy.action_chain.size() if rest_pending else 0
+			current_enemy_profile_id = ""
+			events.append({"type": "enemy_chain_changed", "actor_id": enemy_id,
+				"profile_id": "", "chain_size": enemy.action_chain.size()})
+		return
+	var should_update: bool = current_enemy_profile_id != selected.profile_id or enemy_definition.reconsider_tactics_each_phase
+	if not should_update:
+		return
+	var planned: Array[String] = MonsterAiPlanner.planned_chain(selected, enemy, rng)
+	if planned.is_empty():
+		return
+	var previous: Array[String] = enemy.action_chain.duplicate()
+	current_enemy_profile_id = selected.profile_id
+	if planned == previous:
+		return
+	var rest_pending: bool = enemy.action_cursor >= previous.size()
+	enemy.action_chain = planned
+	enemy.action_cursor = planned.size() if rest_pending else 0
+	events.append({"type": "enemy_chain_changed", "actor_id": enemy_id,
+		"profile_id": selected.profile_id, "chain_size": planned.size()})
+
+
+func _run_enemy_intermission() -> void:
+	if flow.stage != BattleFlow.Stage.BETWEEN_PHASES or enemy_definition == null:
+		return
+	var enemy: BattleParticipant = get_enemy()
+	for _action_index in range(enemy_definition.max_intermission_actions):
+		var action: MonsterIntermissionAction = MonsterAiPlanner.choose_intermission(
+			enemy_definition, enemy, enemy_intermission_usage, rng)
+		if action == null:
+			break
+		var ability: AbilityDefinition = AbilityCatalog.get_ability(action.ability_id)
+		var target_id: String = create_context().default_target_id(enemy_id, ability)
+		if target_id.is_empty():
+			break
+		var outcome: Dictionary = execute_ability(enemy_id, target_id, action.ability_id)
+		if not bool(outcome.get("success", false)):
+			break
+		enemy_intermission_usage[action.identity()] = int(enemy_intermission_usage.get(action.identity(), 0)) + 1
+		var result_events: Array = outcome.get("events", [])
+		events.insert(events.size() - result_events.size(), {
+			"type": "enemy_intermission_action", "actor_id": enemy_id,
+			"ability_id": action.ability_id, "target_id": target_id})
+		if is_victory or is_defeat:
+			break
 
 
 func create_context() -> BattleContext:
@@ -127,9 +214,14 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		current_hero_chain = hero_actor.action_chain
 	else:
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
+	var start_event: int = events.size()
+	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES:
+		_run_enemy_intermission()
+	if not is_victory and not is_defeat:
+		_reconfigure_enemy_for_phase()
+	enemy_actions = enemy_actor.action_chain.duplicate()
 	if not flow.start_phase():
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
-	var start_event: int = events.size()
 	var hero_actions_done: int = 0
 	var hero_rest_finished: bool = false
 	while (hero_actions_done < current_hero_chain.size() or not hero_rest_finished) and not is_victory and not is_defeat:
@@ -145,6 +237,12 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		else:
 			hero_actions_done += 1
 		var tick: int = flow.completed_ticks + 1
+		var support: BattleParticipant = get_participant(passive_enemy_id)
+		var support_step: Dictionary = {}
+		if support != null:
+			support_step = BattleChainPlanner.next_step(support.action_chain, support.action_cursor)
+			support.action_cursor = int(support_step["next_cursor"])
+			support.is_resting = true
 		events.append({"type": "tick", "tick": tick, "hero_slot": int(hero_step["slot_index"]),
 			"enemy_slot": int(enemy_step["slot_index"]), "hero_reload": bool(hero_step["reload"]),
 			"enemy_reload": bool(enemy_step["reload"])})
@@ -184,6 +282,12 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 					"reason": outcome.get("reason", "Недоступно")})
 				events.append({"type": "rest", "actor_id": actor_id,
 					"slot_index": int(step["slot_index"]), "tick": tick, "premature": true})
+		if support != null and not is_victory and not is_defeat:
+			if bool(support_step["reload"]):
+				support.completed_phases += 1
+			events.append({"type": "passive_rest", "actor_id": passive_enemy_id,
+				"tick": tick, "slot_index": int(support_step["slot_index"]),
+				"reload": bool(support_step["reload"])})
 		flow.mark_tick()
 		flow.grant_half_health_reconfiguration(hero_actor.health, hero_actor.max_health)
 	if not is_victory and not is_defeat:
@@ -193,6 +297,9 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		flow.finish_battle()
 	hero_actor.is_resting = false
 	enemy_actor.is_resting = false
+	var remaining_support: BattleParticipant = get_participant(passive_enemy_id)
+	if remaining_support != null:
+		remaining_support.is_resting = false
 	last_phase_events = events.slice(start_event)
 	return {"success": true, "events": last_phase_events, "finished": flow.stage == BattleFlow.Stage.FINISHED,
 		"phase_number": flow.phase_number, "hero_hp": hero_actor.health, "ticks": flow.completed_ticks}

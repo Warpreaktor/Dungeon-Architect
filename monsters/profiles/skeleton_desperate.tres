@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="MonsterTacticProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/monster_tactic_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+profile_id = "desperate"
+priority = 1
+weight = 1
+minimum_health_percent = 0
+maximum_health_percent = 50
+card_ids = Array[String](["skeleton_bone_ram", "skeleton_rusty_slash", "skeleton_bone_kick"])
+shuffle_cards = false

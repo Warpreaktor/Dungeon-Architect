@@ -46,6 +46,29 @@ theme_override_colors/font_color = Color(0.91, 0.77, 0.54, 1)
 theme_override_font_sizes/font_size = 21
 text = "Содержимое сундука"
 
+[node name="MonsterParty" type="VBoxContainer" parent="ContentMargin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+visible = false
+theme_override_constants/separation = 6
+
+[node name="PartyTitle" type="Label" parent="ContentMargin/Content/MonsterParty"]
+layout_mode = 2
+text = "Состав группы"
+
+[node name="PrimaryMonster" type="Label" parent="ContentMargin/Content/MonsterParty"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "1. Основной монстр"
+
+[node name="SecondaryMonster" type="OptionButton" parent="ContentMargin/Content/MonsterParty"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 44)
+
+[node name="PartySeparator" type="HSeparator" parent="ContentMargin/Content/MonsterParty"]
+layout_mode = 2
+
 [node name="RandomCheck" type="CheckBox" parent="ContentMargin/Content"]
 unique_name_in_owner = true
 layout_mode = 2

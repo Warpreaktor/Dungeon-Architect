@@ -493,7 +493,7 @@ func _create_dialogs() -> void:
 	_chest_popup.contents_changed.connect(_on_chest_contents_changed)
 	add_child(_chest_popup)
 	_monster_loot_popup = CHEST_CONTENTS_SCENE.instantiate() as ChestContentsPopup
-	_monster_loot_popup.contents_changed.connect(_on_monster_loot_changed)
+	_monster_loot_popup.monster_configuration_changed.connect(_on_monster_configuration_changed)
 	add_child(_monster_loot_popup)
 	_door_popup = DOOR_PROPERTIES_SCENE.instantiate() as DoorPropertiesPopup
 	_door_popup.lock_changed.connect(_on_door_lock_changed)
@@ -1289,16 +1289,18 @@ func _on_monster_tapped(monster_entity_id: String) -> void:
 	_canvas.finish_edit_stroke()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == monster_entity_id and str(entity.get("type", "")) == "monster":
-			_monster_loot_popup.configure(monster_entity_id, DungeonMap.monster_loot_contents(entity), DungeonMap.monster_gold_amount(entity), true, DungeonMap.monster_loot_is_random(entity), bool(entity.get("properties", {}).get("hidden", false)), DungeonMap.monster_item_quantities(entity))
-			_monster_loot_popup.popup_centered_clamped(Vector2i(470, 530), 0.9)
+			_monster_loot_popup.configure(monster_entity_id, DungeonMap.monster_loot_contents(entity), DungeonMap.monster_gold_amount(entity), true, DungeonMap.monster_loot_is_random(entity), bool(entity.get("properties", {}).get("hidden", false)), DungeonMap.monster_item_quantities(entity), DungeonMap.monster_party_ids(entity))
+			_monster_loot_popup.popup_centered_clamped(Vector2i(470, 630), 0.9)
 			return
 
 
-func _on_monster_loot_changed(monster_entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary) -> void:
+func _on_monster_configuration_changed(monster_entity_id: String, party: Array[String], contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary) -> void:
 	if is_play_mode:
 		return
 	var before := _canvas.capture_edit_state()
-	if map_data.set_monster_loot(monster_entity_id, contents, gold_amount, random_mode, hidden, quantities):
+	var changed: bool = map_data.set_monster_party(monster_entity_id, party)
+	changed = map_data.set_monster_loot(monster_entity_id, contents, gold_amount, random_mode, hidden, quantities) or changed
+	if changed:
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()
@@ -2087,8 +2089,10 @@ func _show_combat_view() -> void:
 	_battle_view.shield_broken.connect(_on_battle_shield_broken)
 	_battle_view.combat_log_line.connect(_append_combat_log)
 	_battle_view.item_use_requested.connect(_on_battle_item_requested)
-	var monster: MonsterDefinition = game_session.pending_monster_definition()
-	_battle_view.begin(CombatSession.new(monster, game_session.hero, monster), game_session.hero)
+	var monsters: Array[MonsterDefinition] = game_session.pending_monster_definitions()
+	var main_monster: MonsterDefinition = monsters[0] if not monsters.is_empty() else game_session.pending_monster_definition()
+	var second_monster: MonsterDefinition = monsters[1] if monsters.size() > 1 else null
+	_battle_view.begin(CombatSession.new(main_monster, game_session.hero, second_monster), game_session.hero)
 	_battle_view.bind_combat_items(game_session)
 
 

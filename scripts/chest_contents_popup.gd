@@ -3,12 +3,16 @@ extends MobileKeyboardPopup
 
 ## Редактор количества наград для сундуков и монстров. Карта хранит ID и количества.
 signal contents_changed(entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary)
+signal monster_configuration_changed(entity_id: String, party: Array[String], contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary)
 
 @onready var _title: Label = %Title
 @onready var _random_check: CheckBox = %RandomCheck
 @onready var _hidden_check: CheckBox = %HiddenCheck
 @onready var _rows: VBoxContainer = %LootRows
 @onready var _scroll: ScrollContainer = %LootScroll
+@onready var _monster_party: VBoxContainer = %MonsterParty
+@onready var _primary_monster: Label = %PrimaryMonster
+@onready var _secondary_monster: OptionButton = %SecondaryMonster
 
 const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Прочее"]
 const CATEGORY_ICONS := {
@@ -21,6 +25,8 @@ const CATEGORY_ICONS := {
 const AMOUNT_WIDTH := 94.0
 
 var _entity_id: String = ""
+var _editing_monster: bool = false
+var _primary_monster_id: String = ""
 var _item_checks: Dictionary = {} # id -> CheckBox
 var _item_amounts: Dictionary = {} # id -> SpinBox
 var _group_buttons: Dictionary = {} # category -> Button
@@ -131,9 +137,28 @@ func _toggle_group(category: String) -> void:
 	header.text = ("▾  " if body.visible else "▸  ") + category
 
 
-func configure(entity_id: String, contents: Array[String], gold_amount: int = 5, is_monster: bool = false, random_mode: bool = true, hidden: bool = false, quantities: Dictionary = {}) -> void:
+func configure(entity_id: String, contents: Array[String], gold_amount: int = 5, is_monster: bool = false, random_mode: bool = true, hidden: bool = false, quantities: Dictionary = {}, monster_ids: Array[String] = []) -> void:
 	_entity_id = entity_id
-	_title.text = "Награда за победу" if is_monster else "Содержимое сундука"
+	_editing_monster = is_monster
+	_title.text = "Настройки монстров" if is_monster else "Содержимое сундука"
+	_monster_party.visible = is_monster
+	if is_monster:
+		_primary_monster_id = monster_ids[0] if not monster_ids.is_empty() else MonsterCatalog.DEFAULT_MONSTER_ID
+		var main_definition: MonsterDefinition = MonsterCatalog.get_monster(_primary_monster_id)
+		_primary_monster.text = "1. %s" % main_definition.display_name
+		_secondary_monster.clear()
+		_secondary_monster.add_item("Нет второго монстра")
+		_secondary_monster.set_item_metadata(0, "")
+		var selected_id: String = monster_ids[1] if monster_ids.size() > 1 else ""
+		var selection_index: int = 0
+		for monster_id in MonsterCatalog.list_ids():
+			var monster: MonsterDefinition = MonsterCatalog.get_monster(monster_id)
+			var index: int = _secondary_monster.item_count
+			_secondary_monster.add_icon_item(monster.icon, monster.display_name)
+			_secondary_monster.set_item_metadata(index, monster_id)
+			if monster_id == selected_id:
+				selection_index = index
+		_secondary_monster.select(selection_index)
 	_random_check.set_pressed_no_signal(random_mode)
 	_hidden_check.set_pressed_no_signal(hidden)
 	for item_id in _item_checks:
@@ -195,5 +220,12 @@ func _save() -> void:
 			contents.append(item_id)
 			quantities[item_id] = int(amount.value)
 	var gold_amount: int = int(quantities.get("gold", 5))
-	contents_changed.emit(_entity_id, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities)
+	if _editing_monster:
+		var party: Array[String] = [_primary_monster_id]
+		var secondary_id: String = str(_secondary_monster.get_selected_metadata())
+		if not secondary_id.is_empty():
+			party.append(secondary_id)
+		monster_configuration_changed.emit(_entity_id, party, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities)
+	else:
+		contents_changed.emit(_entity_id, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities)
 	hide()

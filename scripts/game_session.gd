@@ -146,11 +146,22 @@ func has_pending_encounter() -> bool:
 
 
 ## Возвращает описание монстра для следующего поединка; старые карты получают базовый тип.
-func pending_monster_definition() -> MonsterDefinition:
+func pending_monster_definitions() -> Array[MonsterDefinition]:
+	var result: Array[MonsterDefinition] = []
+	if not has_pending_encounter():
+		return result
 	for entity in map_data.entities:
-		if str(entity.get("id", "")) == encounter_monster_id and str(entity.get("type", "")) == "monster":
-			return MonsterCatalog.from_entity(entity)
-	return MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID)
+		if str(entity.get("id", "")) != encounter_monster_id or str(entity.get("type", "")) != "monster":
+			continue
+		for monster_id in DungeonMap.monster_party_ids(entity):
+			result.append(MonsterCatalog.get_monster(monster_id))
+		break
+	return result
+
+
+func pending_monster_definition() -> MonsterDefinition:
+	var definitions: Array[MonsterDefinition] = pending_monster_definitions()
+	return definitions[0] if not definitions.is_empty() else MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID)
 
 
 ## Победа снимает монстра только в сессии, затем повторяет вход в клетку

@@ -5,6 +5,7 @@ extends RefCounted
 ## Поверхность и сущности хранятся раздельно; у клетки может быть несколько сущностей.
 
 const FORMAT_VERSION := 1
+const MAX_MONSTERS_PER_ENCOUNTER: int = 2
 const MAX_SIZE := 256
 # Пары слов образуют названия без грамматических несоответствий.
 const NAME_PLACES := [
@@ -217,6 +218,44 @@ func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amou
 
 ## Настраиваемая награда монстра — отдельные свойства его сущности в JSON.
 ## Для совместимости старых карт отсутствие loot_contents означает отсутствие награды.
+static func monster_party_ids(monster: Dictionary) -> Array[String]:
+	var properties: Dictionary = monster.get("properties", {})
+	var primary: String = MonsterCatalog.resolve_id(str(properties.get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID)))
+	var party: Array[String] = [primary]
+	var raw: Variant = properties.get("monster_ids", [])
+	if raw is Array:
+		for item in raw:
+			var member_id: String = str(item)
+			if not MonsterCatalog.has(member_id):
+				continue
+			if party.size() >= MAX_MONSTERS_PER_ENCOUNTER:
+				break
+			party.append(member_id)
+	return party
+
+
+func set_monster_party(entity_id: String, party: Array[String]) -> bool:
+	if party.is_empty() or party.size() > MAX_MONSTERS_PER_ENCOUNTER:
+		return false
+	for member_id in party:
+		if not MonsterCatalog.has(member_id):
+			return false
+	for entity in entities:
+		if str(entity.get("id", "")) != entity_id or str(entity.get("type", "")) != "monster":
+			continue
+		if monster_party_ids(entity) == party:
+			return false
+		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		properties["monster_id"] = party[0]
+		if party.size() > 1:
+			properties["monster_ids"] = party.slice(1)
+		else:
+			properties.erase("monster_ids")
+		entity["properties"] = properties
+		return true
+	return false
+
+
 static func monster_loot_contents(monster: Dictionary) -> Array[String]:
 	var properties: Dictionary = monster.get("properties", {})
 	var items: Array[String] = []

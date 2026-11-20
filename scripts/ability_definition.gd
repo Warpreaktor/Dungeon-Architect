@@ -3,8 +3,10 @@ extends Resource
 
 ## Неизменяемый справочник способностей. HP, доступность и цепочки живут в BattleState.
 enum Category { ATTACK, DEFENSE, SUPPORT, SPECIAL }
-enum Target { SELF, ENEMY }
+enum Target { SELF, ENEMY, ALLY }
 enum DamageDelivery { MELEE, RANGED, MAGIC }
+
+const UNLIMITED_RANGE: int = -1
 
 @export var ability_id: String = ""
 @export var display_name: String = ""
@@ -12,6 +14,8 @@ enum DamageDelivery { MELEE, RANGED, MAGIC }
 @export var icon: Texture2D
 @export var category: Category = Category.ATTACK
 @export var target: Target = Target.ENEMY
+@export_range(0, 999, 1) var minimum_range: int = 0
+@export_range(-1, 999, 1) var maximum_range: int = UNLIMITED_RANGE
 ## Сила применяется только к ближним атакующим эффектам.
 @export var damage_delivery: DamageDelivery = DamageDelivery.MELEE
 @export var requirements: Array[AbilityRequirementDefinition] = []
@@ -30,6 +34,10 @@ func validation_error() -> String:
 		return "Способность не содержит эффектов"
 	if damage_delivery < DamageDelivery.MELEE or damage_delivery > DamageDelivery.MAGIC:
 		return "Некорректный вид урона"
+	if target < Target.SELF or target > Target.ALLY:
+		return "Некорректное правило цели"
+	if minimum_range < 0 or (maximum_range != UNLIMITED_RANGE and maximum_range < minimum_range):
+		return "Некорректная дальность"
 	for resource_id in resource_costs:
 		var cost: Variant = resource_costs[resource_id]
 		if typeof(resource_id) != TYPE_STRING or str(resource_id).strip_edges().is_empty():

@@ -1,7 +1,7 @@
 class_name BattleTurnPolicy
 extends RefCounted
 
-## DA-4.07. Порядок действий на одном такте, не зависящий от визуализации.
+## Порядок действий на одном такте, не зависящий от визуализации.
 ## Политика принадлежит экземпляру BattleState и может быть заменена в тестах.
 var block_priority: int = 0
 var other_priority: int = 10

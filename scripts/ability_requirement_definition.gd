@@ -1,7 +1,7 @@
 class_name AbilityRequirementDefinition
 extends Resource
 
-## Требования для формирования алгоритма. Расход ресурсов проверит DA-4.08.
+## Набор условий доступности приёма для участника.
 enum Kind { WEAPON, SHIELD, TWO_HANDED_WEAPON, HEALTH_AT_LEAST_PERCENT }
 
 @export var kind: Kind = Kind.WEAPON
@@ -29,7 +29,7 @@ func is_met(participant: BattleParticipant) -> bool:
 			var weapon: ItemDefinition = ItemCatalog.get_item(participant.equipped_weapon_id)
 			return weapon != null and weapon.two_handed
 		Kind.HEALTH_AT_LEAST_PERCENT:
-			return participant.max_health > 0 and participant.health * 100 >= participant.max_health * min_health_percent
+			return participant.max_health > 0 and participant.health * BattleMath.PERCENT_SCALE >= participant.max_health * min_health_percent
 	return false
 
 

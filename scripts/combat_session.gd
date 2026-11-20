@@ -3,9 +3,6 @@ extends RefCounted
 
 ## Совместимый фасад существующего боя. Расчёт теперь выполняет BattleState;
 ## BattleView продолжает пользоваться прежними полями и hero_attack().
-const ENEMY_MAX_HEALTH: int = 1 # Совместимость с тестами первого поединка.
-const PUNCH_DAMAGE: int = 0 # Урон никогда не берётся из константы.
-
 var enemy_definition: MonsterDefinition
 var hero: HeroState
 var battle_state: BattleState
@@ -67,7 +64,7 @@ func hero_punch() -> int:
 	return hero_attack()
 
 
-## DA-4.05: пробная двухтактовая фаза на уже имеющихся приёмах.
+## пробная двухтактовая фаза на уже имеющихся приёмах.
 ## Старые hero_attack()/hero_block() сохраняются для регрессионных тестов.
 func play_phase(hero_chain: Array[String], enemy_chain: Array[String]) -> Dictionary:
 	var result: Dictionary = battle_state.run_phase(hero_chain, enemy_chain)

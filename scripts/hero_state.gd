@@ -4,16 +4,13 @@ extends RefCounted
 ## Характеристики одного героя в рамках игрового прохождения.
 ## Не относятся к исходной карте и пока не сохраняются на диск.
 
-const START_HEALTH: int = 40
-const START_DEFENSE: int = 0
-
 var definition: HeroDefinition
-var max_health: int = START_HEALTH
-var health: int = START_HEALTH
+var max_health: int = 0
+var health: int = 0
 var strength: int = 0
 var agility: int = 0
-var base_defense: int = START_DEFENSE
-var defense: int = START_DEFENSE
+var base_defense: int = 0
+var defense: int = 0
 var gold: int = 0
 ## Общие способности, изученные в ходе приключения (не меняют HeroDefinition).
 var learned_ability_ids: Array[String] = []
@@ -49,7 +46,7 @@ func _init(hero_definition: HeroDefinition = null) -> void:
 
 
 ## Ближний и дальний урон: собственная мощность оружия нужного типа +
-## половина соответствующей характеристики + временное усиление атаки.
+## коэффициент характеристики из боевых правил + временное усиление атаки.
 ## Число из эффекта способности прибавляется в AbilityExecutor.
 func weapon_damage(kind: int) -> int:
 	var item: ItemDefinition = ItemCatalog.get_item(equipped_weapon_id)
@@ -59,11 +56,11 @@ func weapon_damage(kind: int) -> int:
 
 
 func melee_attack_value() -> float:
-	return float(weapon_damage(ItemDefinition.WeaponKind.MELEE) + strength_bonus) + float(maxi(strength, 0)) * 0.5
+	return BattleMath.melee_power(weapon_damage(ItemDefinition.WeaponKind.MELEE), strength_bonus, strength)
 
 
 func ranged_attack_value() -> float:
-	return float(weapon_damage(ItemDefinition.WeaponKind.RANGED) + strength_bonus) + float(maxi(agility, 0)) * 0.5
+	return BattleMath.ranged_power(weapon_damage(ItemDefinition.WeaponKind.RANGED), strength_bonus, agility)
 
 
 func melee_attack() -> int:

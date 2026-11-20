@@ -1,6 +1,6 @@
 extends SceneTree
 
-## DA-4.09: damage is derived from current equipment, stats, ability and block.
+## Урон зависит от актуального оружия, характеристик и эффекта блока.
 func _initialize() -> void:
 	var wolf := HeroState.new(HeroCatalog.get_hero("petushan"))
 	var strike: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
@@ -37,7 +37,7 @@ func _initialize() -> void:
 	attacker.personal_ability_ids.append("test_ranged")
 	var expected_range: int = floori(float(wolf.agility) * 0.5 + 2)
 	assert(AbilityExecutor.preview_damage(attacker, ranged, ranged_hit) == expected_range)
-	var shot: Dictionary = AbilityExecutor.execute_definition(battle, "hero", "enemy", ranged)
+	var shot: Dictionary = battle.execute_definition("hero", "enemy", ranged)
 	assert(shot.success and shot.events[0].damage == maxi(expected_range - battle.get_enemy().defense, 0))
 	attacker.agility += 2
 	assert(AbilityExecutor.preview_damage(attacker, ranged, ranged_hit) == expected_range + 1)
@@ -45,6 +45,7 @@ func _initialize() -> void:
 
 	# Rounding only once, after adding weapon power and strength and block bonus.
 	attacker.strength = 1
+	attacker.learned_ability_ids.append("guard")
 	assert(battle.execute_ability("hero", "hero", "guard").success)
 	assert(AbilityExecutor.preview_damage(attacker, strike, strike.effects[0]) == floori((0.5 + sword.weapon_damage + 1) * 1.25))
 	assert(wolf.strength == wolf.definition.strength) # Shared resource / original untouched.

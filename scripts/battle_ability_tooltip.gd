@@ -9,7 +9,13 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 	var lines: Array[String] = [ability.display_name]
 	if not ability.description.strip_edges().is_empty():
 		lines.append(ability.description.strip_edges())
-	lines.append("Цель: противник" if ability.target == AbilityDefinition.Target.ENEMY else "Цель: на себя")
+	match ability.target:
+		AbilityDefinition.Target.SELF:
+			lines.append("Цель: на себя")
+		AbilityDefinition.Target.ENEMY:
+			lines.append("Цель: противник")
+		AbilityDefinition.Target.ALLY:
+			lines.append("Цель: союзник")
 	for effect in ability.effects:
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
@@ -24,7 +30,7 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 					lines.append("Ударов: %d" % effect.hit_count)
 			AbilityEffectDefinition.Kind.BLOCK:
 				lines.append("Защищает от следующего попадания; сила блока зависит от щита")
-				lines.append("+25%% базового урона к следующей атаке за каждый блок (через фазы)")
+				lines.append("+%d%% базового урона к следующей атаке за каждый блок (через фазы)" % BattleMath.RULES.block_attack_bonus_percent)
 			AbilityEffectDefinition.Kind.HEAL:
 				lines.append("Лечение: %d HP (не выше максимума)" % maxi(effect.amount, 0))
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
@@ -34,6 +40,8 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 					lines.append("Меткость цели: %d%% на %d фазы" % [effect.effective_status_modifier(), effect.duration_ticks])
 				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.DODGE_PERCENT:
 					lines.append("Уклонение: %+d%% до следующей входящей атаки" % effect.effective_status_modifier())
+				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.ATTACK_POWER:
+					lines.append("Мощность атак: %+d на %d фазы" % [effect.effective_status_modifier(), effect.duration_ticks])
 				else:
 					lines.append("Эффект «%s»: %d на %d ед. времени" % [effect.status_id, effect.effective_status_modifier(), effect.duration_ticks])
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:

@@ -41,11 +41,7 @@ var last_rest_tick: int = -1
 ## Неиспользуемые пока в контенте запасы будущих ресурсов (ярость, мана и т.д.).
 ## Это изменяемые данные конкретного участника боя, не .tres.
 var resource_amounts: Dictionary = {}
-const BASE_BLOCK_ARMOR: int = 2
-## Одна сотня процентов является определением процентной шкалы, не балансом.
-const PERCENT_SCALE: int = 100
-## Базовая меткость всех участников: регулируемый параметр баланса.
-const BASE_ACCURACY_PERCENT: int = 90
+const PERCENT_SCALE: int = BattleMath.PERCENT_SCALE
 
 # Для совместимости существующих щитов их логика пока выполняется на
 # изолированной копии HeroState, а не на реальном герое прохождения.
@@ -115,11 +111,11 @@ func weapon_damage(kind: int) -> int:
 
 
 func melee_attack_value() -> float:
-	return float(weapon_damage(ItemDefinition.WeaponKind.MELEE) + int(effects.get("strength_bonus", 0))) + float(maxi(strength, 0)) * 0.5
+	return BattleMath.melee_power(weapon_damage(ItemDefinition.WeaponKind.MELEE), int(effects.get("strength_bonus", 0)), strength)
 
 
 func ranged_attack_value() -> float:
-	return float(weapon_damage(ItemDefinition.WeaponKind.RANGED) + int(effects.get("strength_bonus", 0))) + float(maxi(agility + status_modifier(AbilityEffectDefinition.Stat.AGILITY), 0)) * 0.5
+	return BattleMath.ranged_power(weapon_damage(ItemDefinition.WeaponKind.RANGED), int(effects.get("strength_bonus", 0)), effective_agility())
 
 
 func melee_attack() -> int:
@@ -143,14 +139,15 @@ func prepare_block(base_armor: int) -> void:
 	# Блок доступен без щита. С щитом используем ЕГО броню, а не сумму
 	# с базовой; остаток прочности влияет только на последующие удары.
 	block_armor = preview_block_armor(base_armor)
-	block_attack_bonus_percent += 25
+	block_attack_bonus_percent += BattleMath.RULES.block_attack_bonus_percent
 
 
-func preview_block_armor(base_armor: int = BASE_BLOCK_ARMOR) -> int:
+func preview_block_armor(base_armor: int = BattleMath.USE_DEFAULT_BLOCK_ARMOR) -> int:
 	var shield: ItemDefinition = ItemCatalog.get_item(equipped_shield_id)
 	if shield != null and _hero_snapshot != null and _hero_snapshot.current_shield_durability(equipped_shield_id) > 0:
 		return maxi(shield.defense_bonus, 0)
-	return maxi(BASE_BLOCK_ARMOR, base_armor)
+	var requested: int = BattleMath.RULES.unarmed_block_armor if base_armor == BattleMath.USE_DEFAULT_BLOCK_ARMOR else base_armor
+	return maxi(BattleMath.RULES.unarmed_block_armor, requested)
 
 
 func restore_health(amount: int) -> int:
@@ -211,10 +208,9 @@ func dodge_percent() -> int:
 
 
 func accuracy_percent() -> int:
-	# Возвращаем поправку к 100%: учитываем базовые 90%, Ловкость и эффекты.
-	# Итоговая меткость не может быть отрицательной.
-	return maxi(BASE_ACCURACY_PERCENT + effective_agility() + accuracy_bonus
-		+ status_modifier(AbilityEffectDefinition.Stat.ACCURACY), 0) - PERCENT_SCALE
+	return BattleMath.accuracy_total(
+		effective_agility(), accuracy_bonus, status_modifier(AbilityEffectDefinition.Stat.ACCURACY)
+	) - PERCENT_SCALE
 
 
 func dodge_chance_against(attacker: BattleParticipant) -> int:
@@ -311,7 +307,7 @@ func advance_status_clock(clock: int, current_tick: int = -1) -> Array[String]:
 
 
 func end_phase() -> void:
-	# Бонус +25% и активный блок живут до следующего соответствующего удара,
+	# Бонус блока и активный блок живут до следующего соответствующего удара,
 	# даже если между действиями была перезарядка или граница фазы.
 	advance_status_clock(AbilityEffectDefinition.Clock.LEGACY_HERO_PHASE)
 

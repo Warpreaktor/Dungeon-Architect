@@ -613,7 +613,7 @@ func _initialize() -> void:
 	assert(decorated_chest_map.message_at(4, 2)["properties"]["target_entity_id"] == decorated_chest_id)
 
 	# Пять видов врагов с собственными Resource, старые идентификаторы перенаправляются.
-	assert(HeroState.START_HEALTH == 40)
+	assert(HeroState.new().max_health == HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID).max_health)
 	assert(MonsterCatalog.DEFINITIONS.size() == 5)
 	for monster_kind in MonsterCatalog.DEFINITIONS:
 		var definition: MonsterDefinition = MonsterCatalog.get_monster(str(monster_kind))

@@ -1,7 +1,7 @@
 class_name BattleFlow
 extends RefCounted
 
-## DA-4.05. Единственный источник разрешений на переходы между состояниями.
+## Единственный источник разрешений на переходы между состояниями.
 ## UI не изменяет состояние напрямую; исполнение одного такта принадлежит BattleState.
 enum Stage { PREPARATION, EXECUTING, BETWEEN_PHASES, RECONFIGURING, FINISHED }
 
@@ -51,13 +51,13 @@ func can_use_item() -> bool:
 
 
 func grant_half_health_reconfiguration(current_hp: int, maximum_hp: int) -> void:
-	# Гипотеза v0.1: один токен при первом пересечении порога 50%.
+	# Дополнительная перенастройка выдаётся при первом достижении порога HP.
 	if not _half_health_token_granted and maximum_hp > 0 and current_hp > 0 and current_hp * 2 < maximum_hp:
 		_half_health_token_granted = true
 		reconfiguration_tokens += 1
 
 
-## Прототип DA-4.08: после любой завершённой фазы менять тактику можно
+## После любой завершённой фазы можно менять тактику
 ## бесплатно. Система жетонов сохранена для будущих испытаний баланса.
 func request_reconfiguration() -> bool:
 	if stage != Stage.BETWEEN_PHASES:

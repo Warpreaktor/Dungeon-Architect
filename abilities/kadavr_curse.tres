@@ -9,6 +9,8 @@ kind = 3
 recipient = 1
 amount = 2
 status_id = "attack_down"
+status_stat = 4
+status_modifier = -2
 duration_ticks = 2
 
 [resource]

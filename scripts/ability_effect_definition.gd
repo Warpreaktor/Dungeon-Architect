@@ -1,12 +1,12 @@
 class_name AbilityEffectDefinition
 extends Resource
 
-## Описание результата приёма, но не его исполнение (DA-4.04).
+## Данные эффекта отделены от алгоритма его исполнения.
 enum Kind { DAMAGE, BLOCK, HEAL, APPLY_STATUS, REMOVE_STATUS, WAIT }
 enum Recipient { SELF, TARGET }
 enum Clock { LEGACY_HERO_PHASE, OWNER_PHASE, INCOMING_ATTACK }
 enum Stack { REFRESH, ADD, ONCE }
-enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY }
+enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 
 
 @export var kind: Kind = Kind.DAMAGE
@@ -22,7 +22,7 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY }
 @export_range(0.0, 10.0, 0.01) var vs_block_multiplier: float = 0.0
 @export_range(1, 20, 1) var hit_count: int = 1
 ## Параметры боевых ресурсов выражены через проценты от динамической базы.
-## 0 = использовать legacy damage_multiplier; положительное значение = процент базы.
+## Нулевое значение использует damage_multiplier, положительное задаёт долю базы.
 @export_range(0, 1000, 1) var damage_scale_percent: int = 0
 @export_range(0, 1000, 1) var bonus_vs_damaged_armor_percent: int = 0
 ## APPLY_STATUS metadata: positive percentages, signed attribute changes.

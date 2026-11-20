@@ -63,7 +63,7 @@ const BLEED_MARKER_OFFSET: Vector2 = Vector2(0.02, 0.70)
 const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 
 var _combat: CombatSession
-var _hero_attack_damage: int = CombatSession.PUNCH_DAMAGE
+var _hero_attack_damage: int = 0
 var _attack_name: String = "Удар кулаком"
 var _defense_idle_color: Color = Color.WHITE
 var _default_attack_icon: Texture2D

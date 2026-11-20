@@ -2,8 +2,9 @@ class_name BattleState
 extends RefCounted
 
 ## Независимое от сцены состояние боя. Не управляет камерой и кнопками.
-## Фазы управляются BattleFlow; планировщик произвольных цепочек — DA-4.06.
-var participants: Dictionary = {} # participant_id -> BattleParticipant
+## Фазы управляются BattleFlow, участники адресуются только через ID.
+var participants: Dictionary = {}
+var positions: Dictionary = {}
 var hero_id: String = "hero"
 var enemy_id: String = "enemy"
 var is_victory: bool = false
@@ -43,9 +44,27 @@ func get_hero() -> BattleParticipant:
 	return get_participant(hero_id)
 
 
-## Полный результат действия с отдельными событиями для будущих анимаций.
+func create_context() -> BattleContext:
+	return BattleContext.new(participants, rng, flow.completed_ticks + 1, positions)
+
+
 func execute_ability(actor_id: String, target_id: String, ability_id: String) -> Dictionary:
-	return AbilityExecutor.execute(self, actor_id, target_id, ability_id)
+	if is_victory or is_defeat:
+		return {"success": false, "reason": "Бой уже завершён", "events": []}
+	return _commit_action(AbilityExecutor.execute(create_context(), actor_id, target_id, ability_id))
+
+
+func execute_definition(actor_id: String, target_id: String, ability: AbilityDefinition) -> Dictionary:
+	if is_victory or is_defeat:
+		return {"success": false, "reason": "Бой уже завершён", "events": []}
+	return _commit_action(AbilityExecutor.execute_definition(create_context(), actor_id, target_id, ability))
+
+
+func _commit_action(outcome: Dictionary) -> Dictionary:
+	if bool(outcome.get("success", false)):
+		events.append_array(outcome.get("events", []))
+		update_outcome()
+	return outcome
 
 
 ## После каждой законченной фазы игрок может изменить тактику.
@@ -155,9 +174,7 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 			events.append({"type": "action_start", "actor_id": actor_id,
 				"ability_id": action_id, "slot_index": int(step["slot_index"]), "tick": tick})
 			var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
-			var target_id: String = actor_id
-			if ability != null and ability.target == AbilityDefinition.Target.ENEMY:
-				target_id = enemy_id if actor_id == hero_id else hero_id
+			var target_id: String = create_context().default_target_id(actor_id, ability)
 			var outcome: Dictionary = execute_ability(actor_id, target_id, action_id)
 			if not bool(outcome.get("success", false)):
 				# Неисполненный приём = досрочный отдых. Такт НЕ повторяется,
@@ -228,8 +245,10 @@ func perform_basic_attack(_legacy_attack_damage: int = 0) -> int:
 		return 0
 	last_counter_damage = 0
 	last_blocked_damage = 0
-	var attack_id: String = ""
+	var attack_id: String = "basic_strike" if AbilityCatalog.can_prepare(get_hero(), "basic_strike") else ""
 	for id in get_hero().personal_ability_ids + get_hero().learned_ability_ids:
+		if not attack_id.is_empty():
+			break
 		var definition: AbilityDefinition = AbilityCatalog.get_ability(id)
 		if definition != null and definition.category == AbilityDefinition.Category.ATTACK:
 			attack_id = id

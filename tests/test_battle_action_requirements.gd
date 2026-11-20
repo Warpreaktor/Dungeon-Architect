@@ -77,17 +77,17 @@ func _initialize() -> void:
 	var user: BattleParticipant = battle.get_hero()
 	user.personal_ability_ids.append("paid_test")
 	user.resource_amounts = {"focus": 6}
-	var first: Dictionary = AbilityExecutor.execute_definition(battle, "hero", "enemy", paid)
+	var first: Dictionary = battle.execute_definition("hero", "enemy", paid)
 	assert(first.success)
 	assert(user.resource_amounts["focus"] == 2)
 	assert(first.events.size() == 3) # расход, урон, лечение
 	var enemy_hp: int = battle.get_enemy().health
 	var event_count: int = battle.events.size()
-	var failed: Dictionary = AbilityExecutor.execute_definition(battle, "hero", "enemy", paid)
+	var failed: Dictionary = battle.execute_definition("hero", "enemy", paid)
 	assert(not failed.success and failed.reason.contains("focus"))
 	assert(user.resource_amounts["focus"] == 2)
 	assert(battle.get_enemy().health == enemy_hp and battle.events.size() == event_count)
-	var bad_target: Dictionary = AbilityExecutor.execute_definition(battle, "hero", "hero", paid)
+	var bad_target: Dictionary = battle.execute_definition("hero", "hero", paid)
 	assert(not bad_target.success and user.resource_amounts["focus"] == 2)
 	paid.resource_costs = {"focus": -1}
 	assert(not paid.validation_error().is_empty())

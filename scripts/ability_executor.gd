@@ -1,38 +1,34 @@
 class_name AbilityExecutor
 extends RefCounted
 
-## Общий обработчик одного приёма. Не зависит от Control, кадров и Tween.
-## Возвращает только факты; BattleState хранит события и исход схватки.
+## Расчёт действия не зависит от сцены, а состояние и события принадлежат вызывающему бою.
 
 
-static func execute(state, actor_id: String, target_id: String, ability_id: String) -> Dictionary:
-	return execute_definition(state, actor_id, target_id, AbilityCatalog.get_ability(ability_id))
+static func execute(context: BattleContext, actor_id: String, target_id: String, ability_id: String) -> Dictionary:
+	return execute_definition(context, actor_id, target_id, AbilityCatalog.get_ability(ability_id))
 
 
-## Прямое исполнение ресурса полезно для тестов и будущих изучаемых приёмов.
-## Владение приёмом и все ограничения проверяются так же, как при вызове по ID.
-static func execute_definition(state, actor_id: String, target_id: String, ability: AbilityDefinition) -> Dictionary:
-	var actor: BattleParticipant = state.get_participant(actor_id)
-	var target: BattleParticipant = state.get_participant(target_id)
+## Исполняет определение способности с проверкой владения и правил выбора цели.
+static func execute_definition(context: BattleContext, actor_id: String, target_id: String, ability: AbilityDefinition) -> Dictionary:
+	var actor: BattleParticipant = context.get_participant(actor_id)
+	var target: BattleParticipant = context.get_participant(target_id)
 	var ability_id: String = ability.ability_id if ability != null else ""
-	if state.is_victory or state.is_defeat:
-		return _failure("Бой уже завершён")
 	if actor == null or not actor.is_alive():
 		return _failure("Участник недоступен")
 	if ability == null:
 		return _failure("Неизвестный приём")
-	if not AbilityCatalog.knows_ability(actor, ability_id):
+	if not (ability_id in actor.personal_ability_ids
+			or ability_id in actor.learned_ability_ids
+			or AbilityCatalog.knows_ability(actor, ability_id)):
 		return _failure("Приём не изучен")
 	var ability_problem: String = ability.validation_error()
 	if ability_problem.is_empty():
 		ability_problem = ability.unavailable_reason(actor)
 	if not ability_problem.is_empty():
 		return _failure(ability_problem)
-	if ability.target == AbilityDefinition.Target.SELF:
-		if target != actor:
-			return _failure("Требуется цель: сам участник")
-	elif target == null or target == actor or not target.is_alive() or target.team_id == actor.team_id:
-		return _failure("Недопустимая цель")
+	var targeting_error: String = context.target_error(actor_id, target_id, ability)
+	if not targeting_error.is_empty():
+		return _failure(targeting_error)
 	# Валидация всей операции до первого изменения HP, статуса или запаса.
 	for effect in ability.effects:
 		if effect == null or effect.validation_error() != "":
@@ -60,7 +56,7 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 				actor.block_armor = 0
 				actor.block_attack_bonus_percent = 0
 				for hit_index in range(effect.hit_count):
-					last_hit = apply_damage(actor, recipient, raw_damage, ability_id, state.rng, effect.armor_pierce_fraction)
+					last_hit = apply_damage(actor, recipient, raw_damage, ability_id, context.rng, effect.armor_pierce_fraction)
 					last_hit["hit_index"] = hit_index
 					last_hit["hit_count"] = effect.hit_count
 					event_list.append(last_hit)
@@ -84,20 +80,20 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 					continue
 				if effect.requires_unblocked_hit and (last_hit.is_empty() or bool(last_hit.get("dodged", false)) or bool(last_hit.get("was_blocking", false))):
 					continue
-				recipient.apply_status(effect, state.flow.completed_ticks + 1)
+				recipient.apply_status(effect, context.current_tick)
 				event_list.append({"type": "status_applied", "actor_id": actor_id,
 					"target_id": recipient.participant_id, "ability_id": ability_id, "status_id": effect.status_id,
 					"duration_ticks": effect.duration_ticks,
 					"dodge_after": recipient.dodge_percent(),
 					"effective_dodge_after": recipient.dodge_chance_against(
-						state.get_enemy() if recipient.participant_id == state.hero_id else state.get_hero()),
+						context.opponent_for(recipient.participant_id)),
 					"accuracy_after": recipient.accuracy_percent()})
 				# Если цель уже отдыхала ранее в этом же такте, кровь тоже
 				# должна снять HP за эту фазу. Другой порядок покрыт BattleState.
-				if effect.tick_damage > 0 and recipient.last_rest_tick == state.flow.completed_ticks + 1:
+				if effect.tick_damage > 0 and recipient.last_rest_tick == context.current_tick:
 					var instant: Array[Dictionary] = recipient.owner_phase_status_damage_events(recipient.participant_id)
 					event_list.append_array(instant)
-					var expired: Array[String] = recipient.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, state.flow.completed_ticks + 1)
+					var expired: Array[String] = recipient.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, context.current_tick)
 					for expired_id in expired:
 						event_list.append({"type": "status_removed", "actor_id": recipient.participant_id,
 							"target_id": recipient.participant_id, "status_id": expired_id, "removed": true})
@@ -110,8 +106,6 @@ static func execute_definition(state, actor_id: String, target_id: String, abili
 			AbilityEffectDefinition.Kind.WAIT:
 				event_list.append({"type": "wait", "actor_id": actor_id, "target_id": recipient.participant_id,
 					"ability_id": ability_id})
-	state.events.append_array(event_list)
-	state.update_outcome()
 	return {"success": true, "reason": "", "events": event_list}
 
 
@@ -143,23 +137,20 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 			multiplier = effect.vs_block_multiplier
 		elif target.is_resting and effect.vs_rest_multiplier > 0.0:
 			multiplier = effect.vs_rest_multiplier
-	var total: float = maxf(base * (multiplier + float(actor.block_attack_bonus_percent) / 100.0), 0.0)
+	var total: float = maxf(base * (multiplier + float(actor.block_attack_bonus_percent) / float(BattleMath.PERCENT_SCALE)), 0.0)
 	if target != null and effect.bonus_vs_damaged_armor_percent > 0 and target.has_damaged_armor():
-		total *= 1.0 + float(effect.bonus_vs_damaged_armor_percent) / float(BattleParticipant.PERCENT_SCALE)
-	return floori(total)
+		total *= 1.0 + float(effect.bonus_vs_damaged_armor_percent) / float(BattleMath.PERCENT_SCALE)
+	return maxi(floori(total) + actor.status_modifier(AbilityEffectDefinition.Stat.ATTACK_POWER), 0)
 
 
 static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "", rng: RandomNumberGenerator = null, armor_pierce_fraction: float = 0.0) -> Dictionary:
 	var raw: int = maxi(amount, 0)
-	# Статусы задают изменения чисел общими эффектами, а не отдельной логикой монстров.
-	if actor.statuses.has("attack_down"):
-		raw = maxi(raw - int(actor.statuses["attack_down"].get("amount", 0)), 0)
 	# Снимок делаем непосредственно в момент удара. В конце фазы HP и
 	# прочность уже могут быть другими после следующих действий.
 	var shield_before: String = target.equipped_shield_id
 	var was_blocking: bool = target.block_armor > 0
 	var dodge_percent: int = target.dodge_chance_against(actor)
-	var dodged: bool = rng != null and dodge_percent > 0 and rng.randf() < float(dodge_percent) / float(BattleParticipant.PERCENT_SCALE)
+	var dodged: bool = rng != null and dodge_percent > 0 and rng.randf() < float(dodge_percent) / float(BattleMath.PERCENT_SCALE)
 	# Even an avoided attack spends 'next incoming attack' dodge bonuses.
 	target.advance_status_clock(AbilityEffectDefinition.Clock.INCOMING_ATTACK)
 	var taken: int = 0 if dodged else target.receive_damage(raw, armor_pierce_fraction)

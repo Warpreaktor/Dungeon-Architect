@@ -4,9 +4,14 @@ extends RefCounted
 ## Состояние конкретного прохождения карты. Не изменяет саму карту.
 
 const VISION_RADIUS := 1
+## Число одновременных портретов в походном интерфейсе.
+const MAX_PARTY_SIZE: int = 4
 
 var map_data: DungeonMap
 var hero: HeroState
+var party: Array[HeroState] = []
+var trap_random: RandomNumberGenerator = RandomNumberGenerator.new()
+var _party_damage_events: Array[Dictionary] = []
 var player_pos := Vector2i(-1, -1)
 var steps: int = 0
 var keys: int = 0
@@ -40,6 +45,8 @@ static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT
 	var session := GameSession.new()
 	session.map_data = map_ref
 	session.hero = HeroState.new(HeroCatalog.get_hero(hero_id))
+	session.party.append(session.hero)
+	session.trap_random.randomize()
 	session.player_pos = spawn
 	session.debug_open_map = open_map
 	session._init_masks()
@@ -48,6 +55,74 @@ static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT
 	session._activate_triggers_at(spawn)
 	session._activate_message_at(spawn, "enter")
 	return session
+
+
+func party_members() -> Array[HeroState]:
+	if party.is_empty():
+		var fallback: Array[HeroState] = []
+		if hero != null:
+			fallback.append(hero)
+		return fallback
+	var result: Array[HeroState] = []
+	result.append_array(party)
+	return result
+
+
+func add_party_member(hero_id: String) -> bool:
+	if not HeroCatalog.has(hero_id):
+		return false
+	if party.is_empty() and hero != null:
+		party.append(hero)
+	if party.size() >= MAX_PARTY_SIZE:
+		return false
+	var member := HeroState.new(HeroCatalog.get_hero(hero_id))
+	party.append(member)
+	if hero == null:
+		hero = member
+	return true
+
+
+func is_party_defeated() -> bool:
+	for member in party_members():
+		if member != null and member.health > 0:
+			return false
+	return true
+
+
+func _update_active_hero() -> void:
+	if hero != null and hero.health > 0:
+		return
+	for member in party_members():
+		if member != null and member.health > 0:
+			hero = member
+			return
+
+
+func has_party_damage_events() -> bool:
+	return not _party_damage_events.is_empty()
+
+
+func take_party_damage_events() -> Array[Dictionary]:
+	var result: Array[Dictionary] = _party_damage_events.duplicate(true)
+	_party_damage_events.clear()
+	return result
+
+
+func _record_party_damage(member: HeroState, damage: int, source: String) -> void:
+	if damage <= 0:
+		return
+	var index: int = party_members().find(member)
+	_party_damage_events.append({"hero_index": index, "damage": damage, "source": source})
+
+
+func _random_living_party_member() -> HeroState:
+	var living: Array[HeroState] = []
+	for member in party_members():
+		if member != null and member.health > 0:
+			living.append(member)
+	if living.is_empty():
+		return null
+	return living[trap_random.randi_range(0, living.size() - 1)]
 
 
 ## Переход между этажами без пересоздания героя и инвентаря.
@@ -84,6 +159,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	last_event_message = ""
 	_message_events.clear()
 	_trigger_events.clear()
+	_party_damage_events.clear()
 	_init_masks()
 	if saved.has("revealed"):
 		revealed = saved["revealed"].duplicate(true)
@@ -270,13 +346,19 @@ func _activate_traps_at(cell: Vector2i) -> void:
 		var trap: TrapDefinition = TrapCatalog.from_entity(entity)
 		if trap == null:
 			continue
+		var target: HeroState = _random_living_party_member()
+		if target == null:
+			continue
 		var parts: Array[String] = []
-		if hero != null and trap.direct_damage > 0:
-			var damage: int = hero.take_damage(trap.direct_damage)
+		if trap.direct_damage > 0:
+			var health_before: int = target.health
+			target.take_damage(trap.direct_damage)
+			var damage: int = health_before - target.health
 			if damage > 0:
+				_record_party_damage(target, damage, trap.trap_id)
 				parts.append("-%d HP" % damage)
-		if hero != null and trap.applies_overworld_status():
-			if hero.apply_overworld_status(trap.overworld_status_id, trap.overworld_status_label,
+		if target.health > 0 and trap.applies_overworld_status():
+			if target.apply_overworld_status(trap.overworld_status_id, trap.overworld_status_label,
 				trap.overworld_status_damage, trap.overworld_status_ticks, trap.overworld_status_interval_steps):
 				parts.append("%s %d на %d фазы" % [
 					trap.overworld_status_label,
@@ -284,7 +366,9 @@ func _activate_traps_at(cell: Vector2i) -> void:
 					trap.overworld_status_ticks
 				])
 		if not parts.is_empty():
-			_append_event_message("Ловушка «%s»: %s." % [trap.display_name, " и ".join(parts)])
+			_append_event_message("%s: ловушка «%s», %s." % [
+				target.definition.display_name, trap.display_name, " и ".join(parts)
+			])
 		if trap.disarm_on_trigger:
 			disarmed_traps[str(entity.get("id", ""))] = true
 
@@ -296,7 +380,8 @@ func can_enter(cell: Vector2i) -> bool:
 func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 	last_event_message = ""
 	_trigger_events.clear()
-	if has_pending_encounter() or is_completed or not pending_chest_id.is_empty():
+	_party_damage_events.clear()
+	if is_party_defeated() or has_pending_encounter() or is_completed or not pending_chest_id.is_empty():
 		return false
 	var target := player_pos + Vector2i(dx, dy)
 	if not can_enter(target):
@@ -332,15 +417,20 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 
 	player_pos = target
 	steps += 1
-	if hero != null:
-		hero.advance_effects()
-		for status_event in hero.advance_overworld_statuses():
+	for member in party_members():
+		if member == null or member.health <= 0:
+			continue
+		member.advance_effects()
+		for status_event in member.advance_overworld_statuses():
 			var label: String = str(status_event.get("label", ""))
 			var amount: int = int(status_event.get("damage", 0))
 			if amount > 0:
-				_append_event_message("%s: -%d HP" % [label, amount])
-	_activate_traps_at(target)
-	if hero != null and hero.health <= 0:
+				_record_party_damage(member, amount, str(status_event.get("status_id", "")))
+				_append_event_message("%s: %s, -%d HP" % [member.definition.display_name, label, amount])
+	if not is_party_defeated():
+		_activate_traps_at(target)
+	_update_active_hero()
+	if is_party_defeated():
 		_refresh_visibility()
 		return true
 	_collect_pickups_at(target)

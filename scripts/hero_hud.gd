@@ -1,34 +1,39 @@
 class_name HeroHUD
-extends PanelContainer
+extends MarginContainer
 
-## Экранное представление характеристик героя. Не управляет игровой сессией.
-## Компоновка и внешний вид задаются сценой и темой Godot.
+signal status_info_requested(title: String, description: String)
 
-@onready var _health_meter: HealthMeter = $Content/HealthMeter
-@onready var _attack_value: Label = %AttackValue
-@onready var _attack_icon: TextureRect = %AttackIcon
-@onready var _defense_value: Label = %DefenseValue
-@onready var _defense_icon: TextureRect = %DefenseIcon
-@onready var _gold_value: Label = %GoldValue
-@onready var _effects_value: Label = %EffectsValue
-var _default_attack_icon: Texture2D
-
-
-func _ready() -> void:
-	_default_attack_icon = _attack_icon.texture
+@onready var _party_row: HBoxContainer = $PartyRow
+var _slots: Array[PartyPortraitSlot] = []
 
 
 func set_hero(hero: HeroState) -> void:
-	if hero == null:
+	var members: Array[HeroState] = []
+	if hero != null:
+		members.append(hero)
+	set_party(members)
+
+
+func set_party(members: Array[HeroState]) -> void:
+	if _party_row == null:
 		return
-	_health_meter.set_health(hero.health, hero.max_health)
-	_attack_value.text = str(hero.melee_attack())
-	_attack_value.tooltip_text = "Ближняя мощь без бонуса конкретного приёма"
-	var weapon := ItemCatalog.get_item(hero.equipped_weapon_id)
-	_attack_icon.texture = weapon.icon if weapon != null else _default_attack_icon
-	# The equipped shield is potential block strength, not passive armor.
-	_defense_value.text = "0"
-	_defense_icon.modulate = Color(0.55, 0.60, 0.67, 0.65)
-	_gold_value.text = str(hero.gold)
-	_effects_value.text = hero.active_effects_summary()
-	_effects_value.visible = not _effects_value.text.is_empty()
+	var count: int = mini(members.size(), GameSession.MAX_PARTY_SIZE)
+	while _slots.size() < count:
+		var slot := PartyPortraitSlot.new()
+		_party_row.add_child(slot)
+		slot.status_info_requested.connect(_forward_status_info)
+		_slots.append(slot)
+	for i in range(_slots.size()):
+		if i < count:
+			_slots[i].display_member(members[i])
+		else:
+			_slots[i].hide()
+
+
+func flash_hero(member_index: int) -> void:
+	if member_index >= 0 and member_index < _slots.size() and _slots[member_index].visible:
+		_slots[member_index].flash_damage()
+
+
+func _forward_status_info(title: String, description: String) -> void:
+	status_info_requested.emit(title, description)

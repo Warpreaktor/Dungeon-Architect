@@ -22,6 +22,9 @@ const PLAY_MIN_ZOOM := 3.25
 const PLAY_VISION_MIN_ZOOM := 2.7
 const PLAY_MAX_ZOOM := 4.0
 const PLAYER_STEP_SECONDS := 0.30
+const DAMAGE_FLASH_IN_SECONDS: float = 0.13
+const DAMAGE_FLASH_OUT_SECONDS: float = 0.24
+const DAMAGE_FLASH_COLOR: Color = Color(1.0, 0.26, 0.26, 1.0)
 
 var map_data: DungeonMap
 var game_session: GameSession
@@ -33,6 +36,8 @@ var camera_offset := Vector2.ZERO
 var zoom: float = 1.0
 var _player_visual_cell := Vector2.ZERO
 var _player_step_tween: Tween
+var _player_flash_tween: Tween
+var _player_flash_color: Color = Color.WHITE
 
 var _hovered := Vector2i(-1, -1)
 var _painting: bool = false
@@ -80,6 +85,7 @@ func _on_canvas_resized() -> void:
 
 func set_map(value: DungeonMap) -> void:
 	_cancel_player_step()
+	_cancel_player_flash()
 	reachability_result.clear()
 	_stroke_before.clear()
 	map_data = value
@@ -126,6 +132,7 @@ func _reset_pointer_state() -> void:
 
 func set_game_session(value: GameSession) -> void:
 	_cancel_player_step()
+	_cancel_player_flash()
 	reachability_result.clear()
 	cancel_move_selection()
 	_reset_pointer_state()
@@ -182,6 +189,29 @@ func _cancel_player_step() -> void:
 	if _player_step_tween != null:
 		_player_step_tween.kill()
 		_player_step_tween = null
+
+
+func flash_player_damage() -> void:
+	if mode != "play" or game_session == null:
+		return
+	_cancel_player_flash()
+	_player_flash_tween = create_tween()
+	_player_flash_tween.tween_method(_set_player_flash_color, Color.WHITE, DAMAGE_FLASH_COLOR, DAMAGE_FLASH_IN_SECONDS)
+	_player_flash_tween.tween_method(_set_player_flash_color, DAMAGE_FLASH_COLOR, Color.WHITE, DAMAGE_FLASH_OUT_SECONDS)
+	_player_flash_tween.tween_method(_set_player_flash_color, Color.WHITE, DAMAGE_FLASH_COLOR, DAMAGE_FLASH_IN_SECONDS)
+	_player_flash_tween.tween_method(_set_player_flash_color, DAMAGE_FLASH_COLOR, Color.WHITE, DAMAGE_FLASH_OUT_SECONDS)
+
+
+func _set_player_flash_color(value: Color) -> void:
+	_player_flash_color = value
+	queue_redraw()
+
+
+func _cancel_player_flash() -> void:
+	if _player_flash_tween != null and _player_flash_tween.is_valid():
+		_player_flash_tween.kill()
+	_player_flash_tween = null
+	_player_flash_color = Color.WHITE
 
 
 func fit_to_view() -> void:
@@ -333,12 +363,12 @@ func _draw_door_lock(origin: Vector2, lock_id: String) -> void:
 func _draw_player(origin: Vector2) -> void:
 	var icon: Texture2D = game_session.hero.definition.map_icon if game_session != null and game_session.hero != null and game_session.hero.definition != null else null
 	if icon != null:
-		draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
+		draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false, _player_flash_color)
 		return
 	var center := origin + Vector2.ONE * (TILE_SIZE / 2.0)
-	draw_circle(center + Vector2(0, -9), 8.0, Color("#f9fff4"))
-	draw_colored_polygon(PackedVector2Array([center + Vector2(-14, 17), center + Vector2(-10, 0), center + Vector2(0, -1), center + Vector2(10, 0), center + Vector2(14, 17)]), Color("#8af0c1"))
-	draw_rect(Rect2(center + Vector2(-5, 3), Vector2(10, 10)), Color("#1e7463"))
+	draw_circle(center + Vector2(0, -9), 8.0, Color("#f9fff4") * _player_flash_color)
+	draw_colored_polygon(PackedVector2Array([center + Vector2(-14, 17), center + Vector2(-10, 0), center + Vector2(0, -1), center + Vector2(10, 0), center + Vector2(14, 17)]), Color("#8af0c1") * _player_flash_color)
+	draw_rect(Rect2(center + Vector2(-5, 3), Vector2(10, 10)), Color("#1e7463") * _player_flash_color)
 	draw_circle(center + Vector2(14, -12), 4.0, Color("#e8c58a"))
 
 

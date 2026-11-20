@@ -388,6 +388,7 @@ func _build_interface() -> void:
 
 	# Интерфейс героя — самостоятельная сцена, не часть логики редактора.
 	_hero_hud = HERO_HUD_SCENE.instantiate() as HeroHUD
+	_hero_hud.status_info_requested.connect(_on_party_status_info_requested)
 	_hero_hud.visible = false
 	canvas_host.add_child(_hero_hud)
 	# Экранные команды — отдельная сцена, не часть HUD персонажа.
@@ -1110,7 +1111,19 @@ func _refresh_stats() -> void:
 func _update_hero_hud() -> void:
 	if not is_play_mode or game_session == null:
 		return
-	_hero_hud.set_hero(game_session.hero)
+	_hero_hud.set_party(game_session.party_members())
+
+
+func _on_party_status_info_requested(title: String, description: String) -> void:
+	_touch_info.show_info(title, description)
+
+
+func _flash_party_damage() -> void:
+	if game_session == null:
+		return
+	for event in game_session.take_party_damage_events():
+		_hero_hud.flash_hero(int(event.get("hero_index", -1)))
+		_canvas.flash_player_damage()
 
 
 func _on_configurable_entity_tapped(kind: String, entity_id: String) -> void:
@@ -2068,11 +2081,16 @@ func _try_move_player(dx: int, dy: int) -> void:
 			if not is_play_mode or game_session != moving_session:
 				return
 			moving_session.open_pending_chest()
+		elif moving_session.has_party_damage_events():
+			await _canvas.player_step_finished
+			if not is_play_mode or game_session != moving_session:
+				return
 	# Теперь сундук обновляется после прибытия, не во время движения.
 	_canvas.queue_redraw()
 	_refresh_map_overlays()
 	_refresh_stats()
-	if game_session.hero != null and game_session.hero.health <= 0:
+	_flash_party_damage()
+	if game_session.is_party_defeated():
 		if not game_session.last_event_message.is_empty():
 			_show_game_event(game_session.last_event_message)
 		_show_end_view(true)
@@ -2175,6 +2193,10 @@ func _finish_combat() -> void:
 	_canvas.queue_redraw()
 	_refresh_map_overlays()
 	_refresh_stats()
+	_flash_party_damage()
+	if game_session.is_party_defeated():
+		_show_end_view(true)
+		return
 	_log_trigger_events()
 	_collect_game_messages()
 	if _game_dialogue.visible:

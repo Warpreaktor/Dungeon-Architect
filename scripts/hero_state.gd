@@ -281,7 +281,9 @@ func advance_overworld_statuses() -> Array[Dictionary]:
 			overworld_statuses[status_id] = status
 			continue
 		var damage: int = maxi(int(status.get("damage", 0)), 0)
-		var applied: int = take_damage(damage)
+		var health_before: int = health
+		take_damage(damage)
+		var applied: int = health_before - health
 		var ticks_remaining: int = int(status.get("ticks_remaining", 0)) - 1
 		events.append({
 			"status_id": str(status_id),

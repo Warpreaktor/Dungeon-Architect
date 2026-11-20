@@ -79,6 +79,7 @@ var _shield_flash_tweens: Dictionary = {}
 var _status_presenter: BattleStatusPresenter
 var _support_enemy_view: BattleSupportEnemyView
 var _touch_info: TouchInfoOverlay
+var _reorder: BattleChainReorderController
 var _visible_hero_hp: int = 0
 var _visible_enemy_hp: int = 0
 var _visible_support_hp: int = 0
@@ -105,6 +106,8 @@ func _ready() -> void:
 	_guard_button.visible = false
 	_build_ability_picker()
 	_build_combat_item_picker()
+	_reorder = BattleChainReorderController.new()
+	_reorder.configure(self, _sequence_slots, _can_reorder_slots, _swap_draft_slots)
 	_touch_info = TouchInfoOverlay.new()
 	add_child(_touch_info)
 	_item_picker.info_requested.connect(_touch_info.show_text)
@@ -246,6 +249,8 @@ func _draft_actions() -> Array[String]:
 
 
 func _refresh_chain_slots() -> void:
+	if _reorder != null:
+		_reorder.cancel()
 	for child in _sequence_slots.get_children():
 		_sequence_slots.remove_child(child)
 		child.queue_free()
@@ -483,6 +488,8 @@ func _style_picker_button(button: Button) -> void:
 
 
 func _on_slot_pressed(index: int, slot: BattleAbilitySlot) -> void:
+	if _reorder != null and _reorder.consume_selection(index):
+		return
 	if _touch_info.consume_long_press(slot):
 		return
 	_on_slot_selected(index)
@@ -542,8 +549,6 @@ func _populate_ability_picker(index: int) -> void:
 	var scroll: ScrollContainer = _picker_grid.get_parent() as ScrollContainer
 	scroll.custom_minimum_size.y = minf(PICKER_MAX_LIST_HEIGHT, maxf(PICKER_CHOICE_HEIGHT, float(shown) * (PICKER_CHOICE_HEIGHT + PICKER_ROW_SPACING)))
 	if not _planner_editing[index].is_empty():
-		_add_picker_action("←", "Сдвинуть приём влево", index > 0, _move_draft.bind(index, -1))
-		_add_picker_action("→", "Сдвинуть приём вправо", index + 1 < _planner_editing.size(), _move_draft.bind(index, 1))
 		_add_picker_action("✕ Убрать", "Очистить ячейку", true, _clear_draft.bind(index))
 
 
@@ -602,15 +607,14 @@ func _clear_draft(index: int) -> void:
 	_refresh_phase_controls()
 
 
-func _move_draft(index: int, offset: int) -> void:
+func _can_reorder_slots() -> bool:
+	return _editing_allowed() and (_touch_info == null or not _touch_info.is_open())
+
+
+func _swap_draft_slots(from_index: int, to_index: int) -> void:
 	if not _editing_allowed():
 		return
-	var other: int = index + offset
-	if other < 0 or other >= _planner_editing.size():
-		return
-	var previous: String = _planner_editing[index]
-	_planner_editing[index] = _planner_editing[other]
-	_planner_editing[other] = previous
+	_planner_editing = BattleChainReorderController.swapped(_planner_editing, from_index, to_index)
 	_hide_ability_picker()
 	_refresh_phase_controls()
 
@@ -629,6 +633,8 @@ func _point_is_on_slot(point: Vector2) -> bool:
 
 
 func _input(event: InputEvent) -> void:
+	if _reorder != null:
+		_reorder.handle_input(event)
 	var abilities_open: bool = _ability_picker != null and _ability_picker.visible
 	var items_open: bool = _item_picker != null and _item_picker.visible
 	if not abilities_open and not items_open:

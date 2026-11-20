@@ -269,9 +269,9 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 			"hero_reload": bool(hero_step.get("reload", false)),
 			"enemy_reload": bool(enemy_step.get("reload", false)),
 			"support_reload": bool(support_step.get("reload", false))})
-		var order: Array[String] = tick_policy.order(hero_id, hero_step, enemy_id, enemy_step)
-		if not support_step.is_empty():
-			order = tick_policy.order_with_support(hero_id, enemy_ids())
+		var actor_ids: Array[String] = [hero_id]
+		actor_ids.append_array(enemy_ids())
+		var order: Array[String] = tick_policy.order_for_tick(participants, steps, actor_ids)
 		for actor_id in order:
 			if is_victory or is_defeat:
 				break

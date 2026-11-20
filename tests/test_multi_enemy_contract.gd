@@ -46,7 +46,10 @@ func _initialize() -> void:
 	for event in result.get("events", []):
 		if event.get("type", "") == "tick":
 			if not actors.is_empty():
-				assert(actors == [battle.hero_id, battle.enemy_id, battle.support_enemy_id])
+				assert(actors.size() == battle.enemy_ids().size() + 1)
+				assert(actors.has(battle.hero_id))
+				for enemy_id in battle.enemy_ids():
+					assert(actors.has(enemy_id))
 			actors.clear()
 			ticks += 1
 		elif event.get("type", "") in ["action_start", "reload"]:

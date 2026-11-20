@@ -3,11 +3,14 @@ extends VBoxContainer
 
 signal status_info_requested(title: String, description: String)
 
-const PORTRAIT_SIDE: float = 78.0
+# Размеры элементов одной карточки на карте: ширина всех зон совпадает.
+const PORTRAIT_SIDE: float = 90.0
+const HEALTH_BAR_HEIGHT: float = 20.0
 const BADGE_SIDE: float = 24.0
-const SLOT_SPACING: int = 3
-const HEALTH_FONT_SIZE: int = 15
-const STATUS_MAX_ICONS: int = 3
+const SLOT_SPACING: int = 4
+const BADGE_SPACING: int = 2
+const HEALTH_FONT_SIZE: int = 13
+const STATUS_MAX_ICONS: int = 4
 const HIT_IN_SECONDS: float = 0.13
 const HIT_OUT_SECONDS: float = 0.24
 const HIT_COLOR: Color = Color(1.0, 0.25, 0.25, 1.0)
@@ -18,10 +21,22 @@ const STATUS_TEXTURES: Dictionary = {
 	"vision": preload("res://assets/icons/potion_vision_small.png")
 }
 const DEFAULT_STATUS_ICON: Texture2D = preload("res://assets/icons/trigger.png")
+const HEALTH_BACKGROUND_COLOR: Color = Color("#263039")
+const HEALTH_FILL_COLOR: Color = Color("#d45062")
+const HEALTH_EDGE_COLOR: Color = Color("#70808f")
+const HEALTH_TEXT_COLOR: Color = Color("#ffffff")
+const HEALTH_TEXT_DISABLED_COLOR: Color = Color("#c5cbd1")
+const BADGE_BACKGROUND_COLOR: Color = Color("#1b2632")
+const BADGE_BORDER_COLOR: Color = Color("#637789")
+const HEALTH_CORNER_RADIUS: int = 3
+const BADGE_CORNER_RADIUS: int = 4
+const HEALTH_BORDER_WIDTH: int = 1
+const BADGE_BORDER_WIDTH: int = 1
 
 var _portrait: TextureRect
 var _badges: HBoxContainer
 var _health: Label
+var _health_bar: ProgressBar
 var _hit_tween: Tween
 var _member: HeroState
 var _normal_tint: Color = Color.WHITE
@@ -30,32 +45,75 @@ var _normal_tint: Color = Color.WHITE
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_theme_constant_override("separation", SLOT_SPACING)
-	custom_minimum_size = Vector2(PORTRAIT_SIDE, PORTRAIT_SIDE)
+	custom_minimum_size = Vector2(PORTRAIT_SIDE, 0.0)
+
 	var portrait_box := Control.new()
 	portrait_box.custom_minimum_size = Vector2(PORTRAIT_SIDE, PORTRAIT_SIDE)
 	portrait_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(portrait_box)
 	_portrait = TextureRect.new()
-	_portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_portrait.mouse_filter = Control.MOUSE_FILTER_STOP
 	_portrait.gui_input.connect(_on_portrait_input)
 	portrait_box.add_child(_portrait)
-	_badges = HBoxContainer.new()
-	_badges.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_badges.offset_left = 1.0
-	_badges.offset_right = PORTRAIT_SIDE
-	_badges.offset_top = -BADGE_SIDE
-	_badges.offset_bottom = 0.0
-	_badges.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_badges.add_theme_constant_override("separation", 1)
-	portrait_box.add_child(_badges)
+	_portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var health_box := Control.new()
+	health_box.custom_minimum_size = Vector2(PORTRAIT_SIDE, HEALTH_BAR_HEIGHT)
+	health_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(health_box)
+	_health_bar = ProgressBar.new()
+	_health_bar.show_percentage = false
+	_health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_health_bar.max_value = 1.0
+	_health_bar.value = 1.0
+	_health_bar.add_theme_stylebox_override("background", _health_background_style())
+	_health_bar.add_theme_stylebox_override("fill", _health_fill_style())
+	health_box.add_child(_health_bar)
+	_health_bar.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_health = Label.new()
 	_health.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_health.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_health.add_theme_font_size_override("font_size", HEALTH_FONT_SIZE)
+	_health.add_theme_color_override("font_color", HEALTH_TEXT_COLOR)
+	_health.add_theme_color_override("font_shadow_color", Color.BLACK)
+	_health.add_theme_constant_override("shadow_offset_x", 1)
+	_health.add_theme_constant_override("shadow_offset_y", 1)
 	_health.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_health)
+	health_box.add_child(_health)
+	_health.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	_badges = HBoxContainer.new()
+	_badges.custom_minimum_size = Vector2(PORTRAIT_SIDE, BADGE_SIDE)
+	_badges.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_badges.add_theme_constant_override("separation", BADGE_SPACING)
+	add_child(_badges)
+
+
+func _health_background_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = HEALTH_BACKGROUND_COLOR
+	style.border_color = HEALTH_EDGE_COLOR
+	style.set_border_width_all(HEALTH_BORDER_WIDTH)
+	style.set_corner_radius_all(HEALTH_CORNER_RADIUS)
+	return style
+
+
+func _health_fill_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = HEALTH_FILL_COLOR
+	style.set_corner_radius_all(HEALTH_CORNER_RADIUS)
+	return style
+
+
+func _badge_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = BADGE_BACKGROUND_COLOR
+	style.border_color = BADGE_BORDER_COLOR
+	style.set_border_width_all(BADGE_BORDER_WIDTH)
+	style.set_corner_radius_all(BADGE_CORNER_RADIUS)
+	return style
 
 
 func display_member(member: HeroState) -> void:
@@ -67,8 +125,11 @@ func display_member(member: HeroState) -> void:
 	_portrait.texture = member.definition.portrait if member.definition != null else null
 	var name_text: String = member.definition.display_name if member.definition != null else "Герой"
 	_portrait.tooltip_text = "%s: %d/%d HP" % [name_text, member.health, member.max_health]
+	var max_health: int = maxi(member.max_health, 1)
+	_health_bar.max_value = float(max_health)
+	_health_bar.value = float(clampi(member.health, 0, max_health))
 	_health.text = "%d / %d" % [member.health, member.max_health]
-	_health.add_theme_color_override("font_color", Color("#aeb7c1") if member.health <= 0 else Color("#f4dad0"))
+	_health.add_theme_color_override("font_color", HEALTH_TEXT_DISABLED_COLOR if member.health <= 0 else HEALTH_TEXT_COLOR)
 	_normal_tint = Color(0.55, 0.55, 0.55) if member.health <= 0 else Color.WHITE
 	if _hit_tween == null or not _hit_tween.is_running():
 		_portrait.modulate = _normal_tint
@@ -93,13 +154,20 @@ func _update_badges(member: HeroState) -> void:
 		_badges.remove_child(child)
 		child.queue_free()
 	var effects: Array[Dictionary] = _effect_entries(member)
-	for i in range(mini(effects.size(), STATUS_MAX_ICONS)):
+	var visible_count: int = mini(effects.size(), STATUS_MAX_ICONS)
+	if visible_count == 0:
+		return
+	var icon_side: float = minf(BADGE_SIDE,
+		(PORTRAIT_SIDE - float(visible_count - 1) * float(BADGE_SPACING)) / float(visible_count))
+	for i in range(visible_count):
 		var entry: Dictionary = effects[i]
 		var icon := Button.new()
-		icon.flat = true
 		icon.icon = STATUS_TEXTURES.get(str(entry["id"]), DEFAULT_STATUS_ICON)
 		icon.expand_icon = true
-		icon.custom_minimum_size = Vector2(BADGE_SIDE, BADGE_SIDE)
+		icon.custom_minimum_size = Vector2(icon_side, icon_side)
+		var style: StyleBoxFlat = _badge_style()
+		for state in ["normal", "hover", "pressed", "focus"]:
+			icon.add_theme_stylebox_override(state, style)
 		icon.tooltip_text = "%s\n%s" % [entry["name"], entry["description"]]
 		icon.pressed.connect(_on_status_pressed.bind(str(entry["name"]), str(entry["description"])))
 		_badges.add_child(icon)

@@ -76,6 +76,14 @@ func _verify_hud(members: Array[HeroState]) -> void:
 		var slot: PartyPortraitSlot = row.get_child(i) as PartyPortraitSlot
 		assert(slot.visible)
 		assert(slot._health.text == "%d / %d" % [members[i].health, members[i].max_health])
+		assert(slot._health_bar.value == float(members[i].health))
+		assert(slot._health_bar.max_value == float(members[i].max_health))
+		assert(not slot._health_bar.show_percentage)
+		assert(slot._health.get_parent() == slot._health_bar.get_parent())
+		assert(slot._portrait.stretch_mode == TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+		assert(slot._badges.get_parent() == slot)
+		assert(slot._badges.custom_minimum_size.y > 0.0)
+		assert(slot._badges.get_index() > slot._health.get_parent().get_index())
 	members[0].apply_overworld_status("bleeding", "Кровотечение", 2, 2, 4)
 	hud.set_party(members)
 	var first_slot: PartyPortraitSlot = row.get_child(0) as PartyPortraitSlot

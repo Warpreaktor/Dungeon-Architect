@@ -1,15 +1,25 @@
-[gd_resource type="Resource" script_class="MonsterDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="MonsterDefinition" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/monster_definition.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assets/icons/rabbit_symbiont.png" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/monsters/rabbit_symbiont_portrait.png" id="2_portrait"]
+[ext_resource type="Texture2D" path="res://assets/icons/rabbit_symbiont.png" id="3_icon"]
+[ext_resource type="Resource" path="res://data/rabbit_bond.tres" id="4_bond"]
 
 [resource]
 script = ExtResource("1_script")
 monster_id = "rabbit_symbiont"
+rank = 2
 display_name = "Зайка-симбионт"
-icon = ExtResource("2_icon")
+portrait = ExtResource("2_portrait")
+icon = ExtResource("3_icon")
+battle_bond = ExtResource("4_bond")
+personal_ability_ids = Array[String](["rabbit_command_strike", "rabbit_heal", "rabbit_split"])
+guaranteed_card_ids = Array[String](["rabbit_command_strike", "rabbit_heal", "rabbit_split"])
+random_card_count = 0
+base_action_slots = 3
 max_health = 16
-strength = 4
+strength = 2
 agility = 5
+base_dodge_percent = 0
+accuracy_bonus = 0
 defense = 0
-personal_ability_ids = Array[String](["basic_strike", "guard", "rabbit_bite", "rabbit_hide"])

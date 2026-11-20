@@ -33,7 +33,10 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 				lines.append("После атакующего приёма блок пропадает")
 				lines.append("+%d%% базового урона к следующей атаке за каждый блок (через фазы)" % BattleMath.RULES.block_attack_bonus_percent)
 			AbilityEffectDefinition.Kind.HEAL:
-				lines.append("Лечение: %d HP (не выше максимума)" % maxi(effect.amount, 0))
+				if effect.heal_percent_max > 0:
+					lines.append("Лечение: %d%% максимального HP цели" % effect.heal_percent_max)
+				else:
+					lines.append("Лечение: %d HP (не выше максимума)" % maxi(effect.amount, 0))
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
 				if effect.tick_damage > 0:
 					lines.append("Кровотечение: −%d HP за отдых цели, %d фазы" % [effect.tick_damage, effect.duration_ticks])
@@ -48,7 +51,8 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:
 				lines.append("Снимает эффект «%s»" % effect.status_id)
 			AbilityEffectDefinition.Kind.WAIT:
-				lines.append("Пропуск действия")
+				if ability.description.strip_edges().is_empty():
+					lines.append("Пропуск действия")
 	for requirement in ability.requirements:
 		match requirement.kind:
 			AbilityRequirementDefinition.Kind.WEAPON:

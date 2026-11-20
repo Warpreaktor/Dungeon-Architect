@@ -59,10 +59,31 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 				actor.block_armor = 0
 				actor.block_attack_bonus_percent = 0
 				for hit_index in range(effect.hit_count):
-					last_hit = apply_damage(actor, recipient, raw_damage, ability_id, context.rng, effect.armor_pierce_fraction)
+					var original_target: BattleParticipant = target if effect.recipient == AbilityEffectDefinition.Recipient.TARGET else actor
+					recipient = original_target
+					var protector_id: String = str(context.redirects.get(recipient.participant_id, ""))
+					var protector: BattleParticipant = context.get_participant(protector_id) if not protector_id.is_empty() else null
+					if protector != null and protector.is_alive():
+						context.redirects.erase(original_target.participant_id)
+						recipient = protector
+						event_list.append({"type": "attack_intercepted", "actor_id": protector.participant_id,
+							"target_id": original_target.participant_id, "ability_id": ability_id})
+					var accuracy_offset: int = effect.accuracy_offset_percent
+					if actor_id == context.focused_attacker_id and original_target.participant_id == context.focused_target_id:
+						accuracy_offset += context.focused_accuracy_bonus
+					var saved_block: int = recipient.block_armor if protector != null and recipient == protector else 0
+					if protector != null and recipient == protector:
+						recipient.block_armor = 0
+					last_hit = apply_damage(actor, recipient, raw_damage, ability_id, context.rng,
+						effect.armor_pierce_fraction, accuracy_offset)
+					if protector != null and recipient == protector:
+						recipient.block_armor = saved_block
 					last_hit["hit_index"] = hit_index
 					last_hit["hit_count"] = effect.hit_count
 					event_list.append(last_hit)
+					if protector != null and recipient == protector and protector.is_alive() and actor.is_alive() and context.counter_multiplier > 0.0:
+						var counter_damage: int = floori(protector.melee_attack_value() * context.counter_multiplier)
+						event_list.append(apply_damage(protector, actor, counter_damage, context.counter_ability_id, context.rng))
 					if not recipient.is_alive():
 						break
 			AbilityEffectDefinition.Kind.BLOCK:
@@ -72,7 +93,7 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					"damage_bonus_percent": recipient.block_attack_bonus_percent,
 					"hp_after": recipient.health, "hp_max": recipient.max_health})
 			AbilityEffectDefinition.Kind.HEAL:
-				var healed: int = recipient.restore_health(effect.amount)
+				var healed: int = recipient.restore_health(maxi(effect.amount, ceili(float(recipient.max_health) * float(effect.heal_percent_max) / float(BattleMath.PERCENT_SCALE))))
 				event_list.append({"type": "heal", "actor_id": actor_id, "target_id": recipient.participant_id,
 					"ability_id": ability_id, "healed": healed,
 					"hp_after": recipient.health, "hp_max": recipient.max_health})
@@ -146,13 +167,13 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 	return maxi(floori(total) + actor.status_modifier(AbilityEffectDefinition.Stat.ATTACK_POWER), 0)
 
 
-static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "", rng: RandomNumberGenerator = null, armor_pierce_fraction: float = 0.0) -> Dictionary:
+static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "", rng: RandomNumberGenerator = null, armor_pierce_fraction: float = 0.0, accuracy_offset_percent: int = 0) -> Dictionary:
 	var raw: int = maxi(amount, 0)
 	# Снимок делаем непосредственно в момент удара. В конце фазы HP и
 	# прочность уже могут быть другими после следующих действий.
 	var shield_before: String = target.equipped_shield_id
 	var was_blocking: bool = target.block_armor > 0
-	var dodge_percent: int = target.dodge_chance_against(actor)
+	var dodge_percent: int = clampi(target.dodge_chance_against(actor) - accuracy_offset_percent, 0, BattleMath.PERCENT_SCALE)
 	var dodged: bool = rng != null and dodge_percent > 0 and rng.randf() < float(dodge_percent) / float(BattleMath.PERCENT_SCALE)
 	# Even an avoided attack spends 'next incoming attack' dodge bonuses.
 	target.advance_status_clock(AbilityEffectDefinition.Clock.INCOMING_ATTACK)

@@ -4,7 +4,8 @@ extends RefCounted
 # Общая раскладка значков состояний. Константы BLEED_FLASH управляют анимацией статусов.
 const STATUS_ICONS: Dictionary = {
 	"bleeding": preload("res://assets/abilities/statuses/bleeding.png"),
-	"petushan_accuracy_down": preload("res://assets/abilities/statuses/accuracy_down.png")
+	"petushan_accuracy_down": preload("res://assets/abilities/statuses/accuracy_down.png"),
+	"rabbit_master_mark": preload("res://assets/abilities/statuses/rabbit_master_mark.png")
 }
 const STATUS_MARKER_GAP: float = 0.04
 const BLEED_FLASH_IN_SECONDS: float = 0.18

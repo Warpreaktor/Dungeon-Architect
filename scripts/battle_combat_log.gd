@@ -26,6 +26,14 @@ static func format_event(event: Dictionary, hero_name: String, enemy_name: Strin
 	var actor: String = participant_name(str(event.get("actor_id", "")), hero_name, enemy_name, support_name)
 	var target: String = participant_name(str(event.get("target_id", "")), hero_name, enemy_name, support_name)
 	match kind:
+		"bond_marked":
+			return "    %s: указал цель %s" % [actor, target]
+		"bond_protected":
+			return "    %s: прикрывает %s" % [actor, target]
+		"attack_intercepted":
+			return "    %s: перехватил удар по %s" % [actor, target]
+		"bond_form_changed":
+			return "    %s: %s" % [actor, "соединился с Кадавром" if bool(event.get("mounted", false)) else "отделился от Кадавра"]
 		"enemy_chain_changed":
 			return "    %s: смена тактики" % actor
 		"enemy_intermission_action":

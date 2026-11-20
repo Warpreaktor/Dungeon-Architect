@@ -34,6 +34,8 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 @export_range(0, 999, 1) var duration_ticks: int = 0
 ## Периодический урон раз в собственный отдых владельца эффекта.
 @export_range(0, 9999, 1) var tick_damage: int = 0
+@export_range(0, 100, 1) var heal_percent_max: int = 0
+@export_range(-100, 100, 1) var accuracy_offset_percent: int = 0
 ## Дебафф после атаки требует попадания (обычное попадание или через блок).
 @export var requires_hit: bool = false
 ## Совместимость ресурсов стартовых способностей Волчи.

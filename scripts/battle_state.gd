@@ -18,6 +18,10 @@ var support_enemy_definition: MonsterDefinition
 var support_initial_chain: Array[String] = []
 var support_profile_id: String = ""
 var support_intermission_usage: Dictionary = {}
+var battle_bond: BattleBondDefinition
+var bond_mounted: bool = false
+var bond_marked_target_id: String = ""
+var intercept_targets: Dictionary = {}
 var is_victory: bool = false
 var is_defeat: bool = false
 var last_counter_damage: int = 0
@@ -73,6 +77,111 @@ func add_support_enemy(definition: MonsterDefinition) -> BattleParticipant:
 	support_enemy_definition = definition
 	support_initial_chain = participant.action_chain.duplicate()
 	return participant
+
+
+func configure_bond(bond: BattleBondDefinition) -> void:
+	battle_bond = bond
+	bond_mounted = bond != null
+	var commander: BattleParticipant = get_participant(support_enemy_id)
+	if commander != null and bond_mounted:
+		commander.is_targetable = false
+
+
+func _bond_swap_cards(actor: BattleParticipant, from_ids: Array, to_ids: Array) -> void:
+	for index in range(mini(from_ids.size(), to_ids.size())):
+		var old_id: String = str(from_ids[index])
+		var new_id: String = str(to_ids[index])
+		var slot_index: int = actor.action_chain.find(old_id)
+		if slot_index >= 0:
+			actor.action_chain[slot_index] = new_id
+		actor.personal_ability_ids.erase(old_id)
+		if not actor.personal_ability_ids.has(new_id):
+			actor.personal_ability_ids.append(new_id)
+	events.append({"type": "enemy_chain_changed", "actor_id": actor.participant_id,
+		"chain_size": actor.action_chain.size()})
+
+
+func _bond_change_form(mounted: bool) -> void:
+	if battle_bond == null or bond_mounted == mounted:
+		return
+	var commander: BattleParticipant = get_participant(support_enemy_id)
+	if commander == null or not commander.is_alive():
+		return
+	if mounted:
+		_bond_swap_cards(commander,
+			[battle_bond.ranged_ability_id, battle_bond.rejoin_ability_id],
+			[battle_bond.heal_ability_id, battle_bond.split_ability_id])
+	else:
+		_bond_swap_cards(commander,
+			[battle_bond.heal_ability_id, battle_bond.split_ability_id],
+			[battle_bond.ranged_ability_id, battle_bond.rejoin_ability_id])
+	bond_mounted = mounted
+	commander.is_targetable = not mounted
+	events.append({"type": "bond_form_changed", "actor_id": commander.participant_id,
+		"mounted": mounted})
+
+
+func _bond_clear_mark() -> void:
+	if battle_bond == null or bond_marked_target_id.is_empty():
+		return
+	var marked: BattleParticipant = get_participant(bond_marked_target_id)
+	if marked != null:
+		marked.statuses.erase(battle_bond.marked_status_id)
+		events.append({"type": "status_removed", "actor_id": support_enemy_id,
+			"target_id": bond_marked_target_id, "status_id": battle_bond.marked_status_id,
+			"removed": true})
+	bond_marked_target_id = ""
+
+
+func _bond_after_action(actor_id: String, target_id: String, ability_id: String) -> void:
+	if battle_bond == null:
+		return
+	var guardian: BattleParticipant = get_enemy()
+	var commander: BattleParticipant = get_participant(support_enemy_id)
+	if guardian == null or commander == null:
+		return
+	if actor_id == support_enemy_id:
+		if ability_id == battle_bond.command_ability_id:
+			if bond_marked_target_id != target_id:
+				_bond_clear_mark()
+			bond_marked_target_id = target_id
+			var marked: BattleParticipant = get_participant(target_id)
+			if marked != null and not battle_bond.marked_status_id.is_empty():
+				marked.statuses[battle_bond.marked_status_id] = {
+					"stat": AbilityEffectDefinition.Stat.NONE, "modifier": 0, "stacks": 1,
+					"clock": -1, "ticks": -1, "tick_damage": 0
+				}
+				events.append({"type": "status_applied", "actor_id": actor_id,
+					"target_id": target_id, "ability_id": ability_id,
+					"status_id": battle_bond.marked_status_id, "duration_ticks": -1,
+					"accuracy_after": marked.accuracy_percent(), "dodge_after": marked.dodge_percent()})
+			events.append({"type": "bond_marked", "actor_id": actor_id, "target_id": target_id})
+		elif ability_id == battle_bond.split_ability_id:
+			_bond_change_form(false)
+		elif ability_id == battle_bond.rejoin_ability_id and guardian.is_alive():
+			_bond_change_form(true)
+	elif actor_id == enemy_id and ability_id == battle_bond.protect_ability_id and commander.is_alive():
+		intercept_targets[support_enemy_id] = enemy_id
+		events.append({"type": "bond_protected", "actor_id": actor_id, "target_id": support_enemy_id})
+
+
+func _bond_update_life() -> void:
+	if battle_bond == null:
+		return
+	var guardian: BattleParticipant = get_enemy()
+	var commander: BattleParticipant = get_participant(support_enemy_id)
+	if commander == null or guardian == null:
+		return
+	if not commander.is_alive():
+		_bond_clear_mark()
+		intercept_targets.clear()
+	elif not guardian.is_alive():
+		intercept_targets.clear()
+		_bond_change_form(false)
+	if not bond_marked_target_id.is_empty():
+		var marked: BattleParticipant = get_participant(bond_marked_target_id)
+		if marked == null or not marked.is_alive():
+			_bond_clear_mark()
 
 
 func enemy_ids() -> Array[String]:
@@ -151,13 +260,25 @@ func _run_enemy_intermission_for(actor_id: String) -> void:
 
 
 func create_context() -> BattleContext:
-	return BattleContext.new(participants, rng, flow.completed_ticks + 1, positions)
+	return BattleContext.new(participants, rng, flow.completed_ticks + 1, positions,
+		intercept_targets, battle_bond.counter_multiplier if battle_bond != null else 0.0,
+		battle_bond.protect_ability_id if battle_bond != null else "",
+		enemy_id if battle_bond != null else "", bond_marked_target_id,
+		battle_bond.marked_accuracy_bonus if battle_bond != null else 0)
 
 
 func execute_ability(actor_id: String, target_id: String, ability_id: String) -> Dictionary:
 	if is_victory or is_defeat:
 		return {"success": false, "reason": "Бой уже завершён", "events": []}
-	return _commit_action(AbilityExecutor.execute(create_context(), actor_id, target_id, ability_id))
+	if battle_bond != null and actor_id == support_enemy_id:
+		if ability_id == battle_bond.split_ability_id and not bond_mounted:
+			return {"success": false, "reason": "Уже отделён", "events": []}
+		if ability_id == battle_bond.rejoin_ability_id and (bond_mounted or not get_enemy().is_alive()):
+			return {"success": false, "reason": "Нельзя соединиться", "events": []}
+	var outcome: Dictionary = _commit_action(AbilityExecutor.execute(create_context(), actor_id, target_id, ability_id))
+	if bool(outcome.get("success", false)):
+		_bond_after_action(actor_id, target_id, ability_id)
+	return outcome
 
 
 func execute_definition(actor_id: String, target_id: String, ability: AbilityDefinition) -> Dictionary:
@@ -348,6 +469,7 @@ func default_chain(participant_id: String) -> Array[String]:
 
 
 func update_outcome() -> void:
+	_bond_update_life()
 	var enemy: BattleParticipant = get_enemy()
 	var hero: BattleParticipant = get_hero()
 	var any_living_enemy: bool = false

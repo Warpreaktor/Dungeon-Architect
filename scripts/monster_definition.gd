@@ -1,12 +1,16 @@
 class_name MonsterDefinition
 extends Resource
 
+enum Rank { COMMON, ELITE, BOSS }
+
 ## Статические характеристики противника. Состояние здоровья хранится в CombatSession.
 @export var monster_id: String = ""
+@export var rank: Rank = Rank.COMMON
 @export var display_name: String = ""
 @export var portrait: Texture2D
 @export var portrait_flip_h: bool = false
 @export var icon: Texture2D
+@export var battle_bond: BattleBondDefinition
 @export var personal_ability_ids: Array[String] = []
 @export var ai_profiles: Array[MonsterTacticProfile] = []
 @export var reconsider_tactics_each_phase: bool = false

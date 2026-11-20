@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/rabbit_symbiont/split.png" id="3_icon"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+kind = 5
+recipient = 0
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "rabbit_split"
+display_name = "А теперь сам!"
+description = "Зайка отделяется от Кадавра, сохраняя здоровье и фазу."
+icon = ExtResource("3_icon")
+category = 3
+target = 0
+effects = Array[Resource]([SubResource("Effect0")])

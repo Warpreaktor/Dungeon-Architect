@@ -526,7 +526,7 @@ func _initialize() -> void:
 	assert(equip_session.hero.equipped_weapon_id == "sword")
 	assert(not equip_session.move_by(1, 0)) # Встречаем монстра.
 	assert(equip_session.has_pending_encounter())
-	var equip_combat := CombatSession.new(MonsterCatalog.get_monster("rabbit_symbiont"), equip_session.hero)
+	var equip_combat := CombatSession.new(MonsterCatalog.get_monster("hunter"), equip_session.hero)
 	assert(equip_combat.hero_attack(1234) > 0) # Внешний аргумент больше не подменяет оружие/Силу.
 	for attack_index in range(30):
 		if equip_combat.is_victory or equip_combat.is_defeat:
@@ -612,9 +612,8 @@ func _initialize() -> void:
 	assert(decorated_chest_map.message_at(3, 2).is_empty())
 	assert(decorated_chest_map.message_at(4, 2)["properties"]["target_entity_id"] == decorated_chest_id)
 
-	# Шесть видов врагов с собственными Resource, старые идентификаторы перенаправляются.
 	assert(HeroState.START_HEALTH == 40)
-	assert(MonsterCatalog.DEFINITIONS.size() == 6)
+	assert(MonsterCatalog.DEFINITIONS.size() == MonsterCatalog.list_ids().size())
 	for monster_kind in MonsterCatalog.DEFINITIONS:
 		var definition: MonsterDefinition = MonsterCatalog.get_monster(str(monster_kind))
 		assert(definition.monster_id == str(monster_kind))

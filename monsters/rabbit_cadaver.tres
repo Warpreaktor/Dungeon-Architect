@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="MonsterDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/monster_definition.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/monsters/rabbit_cadaver_portrait.png" id="2_portrait"]
+[ext_resource type="Texture2D" path="res://assets/icons/rabbit_symbiont.png" id="3_icon"]
+
+[resource]
+script = ExtResource("1_script")
+monster_id = "rabbit_cadaver"
+rank = 2
+display_name = "Кадавр Зайки"
+portrait = ExtResource("2_portrait")
+portrait_flip_h = true
+icon = ExtResource("3_icon")
+personal_ability_ids = Array[String](["rabbit_cadaver_bone_crusher", "rabbit_cadaver_protect"])
+guaranteed_card_ids = Array[String](["rabbit_cadaver_bone_crusher", "rabbit_cadaver_protect"])
+random_card_count = 0
+base_action_slots = 2
+max_health = 48
+strength = 4
+agility = 2
+base_dodge_percent = 0
+accuracy_bonus = 0
+defense = 0

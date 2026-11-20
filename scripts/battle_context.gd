@@ -5,18 +5,36 @@ var participants: Dictionary = {}
 var rng: RandomNumberGenerator
 var current_tick: int = 0
 var positions: Dictionary = {}
+var redirects: Dictionary = {}
+var counter_multiplier: float = 0.0
+var counter_ability_id: String = ""
+var focused_attacker_id: String = ""
+var focused_target_id: String = ""
+var focused_accuracy_bonus: int = 0
 
 
 func _init(
 		fighters: Dictionary = {},
 		generator: RandomNumberGenerator = null,
 		tick: int = 0,
-		spatial_positions: Dictionary = {}
+		spatial_positions: Dictionary = {},
+		active_redirects: Dictionary = {},
+		active_counter_multiplier: float = 0.0,
+		counter_id: String = "",
+		marked_attacker_id: String = "",
+		marked_target_id: String = "",
+		marked_accuracy_bonus: int = 0
 ) -> void:
 	participants = fighters
 	rng = generator
 	current_tick = tick
 	positions = spatial_positions
+	redirects = active_redirects
+	counter_multiplier = active_counter_multiplier
+	counter_ability_id = counter_id
+	focused_attacker_id = marked_attacker_id
+	focused_target_id = marked_target_id
+	focused_accuracy_bonus = marked_accuracy_bonus
 
 
 func get_participant(participant_id: String) -> BattleParticipant:

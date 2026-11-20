@@ -9,7 +9,8 @@ const DEFINITIONS := {
 	"giant_crab": preload("res://monsters/giant_crab.tres"),
 	"lobar": preload("res://monsters/lobar.tres"),
 	"kadavr": preload("res://monsters/kadavr.tres"),
-	"skeleton": preload("res://monsters/skeleton.tres")
+	"skeleton": preload("res://monsters/skeleton.tres"),
+	"rabbit_cadaver": preload("res://monsters/rabbit_cadaver.tres")
 }
 
 ## Старые карты с прежними видами монстров продолжают загружаться.

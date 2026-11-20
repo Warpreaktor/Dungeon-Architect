@@ -30,6 +30,7 @@ var turn_index: int = 0
 var events: Array[Dictionary] = []
 var flow: BattleFlow = BattleFlow.new()
 var tick_policy: BattleTurnPolicy = BattleTurnPolicy.new()
+var next_enemy_clash_cursor: int = 0
 var last_phase_events: Array[Dictionary] = []
 ## One RNG for reproducible combat decisions.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
@@ -366,8 +367,14 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 	var hero_actions_done: int = 0
 	var hero_rest_finished: bool = false
 	while (hero_actions_done < current_hero_chain.size() or not hero_rest_finished) and not is_victory and not is_defeat:
+		var clash: Dictionary = BattleClashPlanner.next_opponent(participants, enemy_ids(), next_enemy_clash_cursor)
+		var opponent_id: String = str(clash.get("actor_id", ""))
+		if opponent_id.is_empty():
+			update_outcome()
+			break
+		next_enemy_clash_cursor = int(clash.get("next_cursor", next_enemy_clash_cursor))
 		var steps: Dictionary = {}
-		for actor_id in [hero_id] + enemy_ids():
+		for actor_id in [hero_id, opponent_id]:
 			var actor: BattleParticipant = get_participant(actor_id)
 			if actor == null or not actor.is_alive():
 				continue
@@ -383,15 +390,14 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		var enemy_step: Dictionary = steps.get(enemy_id, {})
 		var support_step: Dictionary = steps.get(support_enemy_id, {})
 		var tick: int = flow.completed_ticks + 1
-		events.append({"type": "tick", "tick": tick,
+		events.append({"type": "tick", "tick": tick, "opponent_id": opponent_id,
 			"hero_slot": int(hero_step.get("slot_index", -1)),
 			"enemy_slot": int(enemy_step.get("slot_index", -1)),
 			"support_slot": int(support_step.get("slot_index", -1)),
 			"hero_reload": bool(hero_step.get("reload", false)),
 			"enemy_reload": bool(enemy_step.get("reload", false)),
 			"support_reload": bool(support_step.get("reload", false))})
-		var actor_ids: Array[String] = [hero_id]
-		actor_ids.append_array(enemy_ids())
+		var actor_ids: Array[String] = [hero_id, opponent_id]
 		var order: Array[String] = tick_policy.order_for_tick(participants, steps, actor_ids)
 		for actor_id in order:
 			if is_victory or is_defeat:
@@ -416,7 +422,8 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 			events.append({"type": "action_start", "actor_id": actor_id,
 				"ability_id": action_id, "slot_index": int(step["slot_index"]), "tick": tick})
 			var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
-			var target_id: String = create_context().choose_target_id(actor_id, ability)
+			var context: BattleContext = create_context()
+			var target_id: String = opponent_id if actor_id == hero_id and context.target_ids(actor_id, ability).has(opponent_id) else context.choose_target_id(actor_id, ability)
 			var outcome: Dictionary = execute_ability(actor_id, target_id, action_id)
 			if not bool(outcome.get("success", false)):
 				events.append({"type": "failed", "actor_id": actor_id, "ability_id": action_id,

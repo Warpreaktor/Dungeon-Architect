@@ -32,8 +32,6 @@ func order_for_tick(participants: Dictionary, steps: Dictionary, actor_ids: Arra
 		var right: BattleParticipant = participants[right_id] as BattleParticipant
 		var left_agility: int = left.effective_agility()
 		var right_agility: int = right.effective_agility()
-		if left_agility != right_agility:
-			return left_agility > right_agility
 		var left_step: Dictionary = steps[left_id]
 		var right_step: Dictionary = steps[right_id]
 		var left_reloading: bool = bool(left_step.get("reload", false))
@@ -44,6 +42,8 @@ func order_for_tick(participants: Dictionary, steps: Dictionary, actor_ids: Arra
 		var right_priority: int = priority(str(right_step.get("action_id", "")))
 		if left_priority != right_priority:
 			return left_priority < right_priority
+		if left_agility != right_agility:
+			return left_agility > right_agility
 		return int(stable_positions[left_id]) < int(stable_positions[right_id])
 	)
 	return sorted_ids

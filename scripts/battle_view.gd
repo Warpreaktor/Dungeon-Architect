@@ -96,6 +96,15 @@ const SHIELD_FLASH_START_SCALE: float = 0.25
 const SHIELD_FLASH_PEAK_SCALE: float = 1.08
 const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 
+@export_range(0.0, 2.0, 0.01) var clash_windup_seconds: float = 0.20
+@export_range(0.0, 2.0, 0.01) var clash_impact_seconds: float = 0.16
+@export_range(0.0, 2.0, 0.01) var clash_hold_seconds: float = 0.12
+@export_range(0.0, 2.0, 0.01) var clash_recover_seconds: float = 0.22
+@export_range(0.0, 2.0, 0.01) var clash_idle_seconds: float = 0.22
+@export_range(0.0, 1.0, 0.01) var clash_recoil_fraction: float = 0.18
+@export_range(0.0, 1.0, 0.01) var clash_contact_gap_fraction: float = 0.22
+@export_range(0.0, 1.0, 0.01) var clash_cast_icon_fraction: float = 0.42
+
 
 
 func _ready() -> void:
@@ -824,7 +833,6 @@ func _clear_impact_layer() -> void:
 
 
 func _play_phase_events(phase_events: Array) -> void:
-	# Единственный расчёт уже выполнил BattleState. Здесь только режиссура.
 	_create_impact_layer()
 	_playback = create_tween()
 	_playback.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -832,62 +840,116 @@ func _play_phase_events(phase_events: Array) -> void:
 	for actor_id in _impact_portraits:
 		var portrait: TextureRect = _impact_portraits[actor_id]
 		if first_intro:
-			_playback.tween_property(portrait, "position", _impact_idle[actor_id], 0.56)
+			_playback.tween_property(portrait, "position", _impact_idle[actor_id], clash_recover_seconds)
 			first_intro = false
 		else:
-			_playback.parallel().tween_property(portrait, "position", _impact_idle[actor_id], 0.56)
-		_playback.parallel().tween_property(portrait, "scale", Vector2(1.5, 1.5), 0.56)
-	_playback.tween_interval(0.16)
-	for raw_event in phase_events:
-		var event: Dictionary = raw_event
-		var kind: String = str(event.get("type", ""))
-		_playback.tween_callback(_display_phase_event.bind(event))
-		match kind:
-			"tick":
-				_playback.tween_interval(0.20)
-			"action_start":
-				_playback.tween_interval(0.08)
-			"enemy_chain_changed", "enemy_intermission_action":
-				_playback.tween_interval(0.12)
-			"attack":
-				var actor_id: String = str(event.get("actor_id", ""))
-				var target_id: String = str(event.get("target_id", ""))
-				var actor: TextureRect = _impact_portraits.get(actor_id) as TextureRect
-				var target: TextureRect = _impact_portraits.get(target_id) as TextureRect
-				if actor == null or target == null:
-					continue
-				var direction: float = 1.0 if actor_id == "hero" else -1.0
-				var windup: Vector2 = _impact_idle[actor_id] + Vector2(-direction * 30.0, 0)
-				var contact: Vector2 = _impact_idle[target_id] + Vector2(-direction * actor.size.x * 0.84, 0)
-				_playback.tween_property(actor, "position", windup, 0.20).set_trans(Tween.TRANS_QUAD)
-				_playback.parallel().tween_property(actor, "rotation_degrees", -direction * 7.0, 0.20)
-				_playback.tween_property(actor, "rotation_degrees", direction * 4.0, 0.065)
-				_playback.tween_property(actor, "rotation_degrees", -direction * 4.0, 0.065)
-				_playback.tween_property(actor, "position", contact, 0.13).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
-				_playback.parallel().tween_property(actor, "rotation_degrees", 0.0, 0.13)
-				_playback.tween_callback(_impact.bind(event))
-				_playback.tween_property(target, "position", _impact_idle[target_id] + Vector2(direction * 12.0, 0), 0.08)
-				_playback.tween_interval(0.46)
-				_playback.tween_property(actor, "position", _impact_idle[actor_id], 0.27)
-				_playback.parallel().tween_property(target, "position", _impact_idle[target_id], 0.27)
-				_playback.parallel().tween_property(target, "modulate", Color.WHITE, 0.27)
-			"block":
-				_playback.tween_interval(0.40)
-			"reload":
-				_playback.tween_interval(0.42)
-			_:
-				_playback.tween_interval(0.40)
+			_playback.parallel().tween_property(portrait, "position", _impact_idle[actor_id], clash_recover_seconds)
+		_playback.parallel().tween_property(portrait, "scale", Vector2(1.5, 1.5), clash_recover_seconds)
+	for group in BattleClashTimeline.group_events(phase_events):
+		var group_events: Array[Dictionary] = group["events"]
+		if bool(group.get("is_clash", false)):
+			_queue_clash_animation(group_events)
+		else:
+			for event in group_events:
+				_playback.tween_callback(_display_phase_event.bind(event))
+			_playback.tween_interval(clash_idle_seconds)
 	var first_return: bool = true
 	for actor_id in _impact_portraits:
 		var portrait: TextureRect = _impact_portraits[actor_id]
 		if first_return:
-			_playback.tween_property(portrait, "position", _impact_origin[actor_id], 0.42)
+			_playback.tween_property(portrait, "position", _impact_origin[actor_id], clash_recover_seconds)
 			first_return = false
 		else:
-			_playback.parallel().tween_property(portrait, "position", _impact_origin[actor_id], 0.42)
-		_playback.parallel().tween_property(portrait, "scale", Vector2.ONE, 0.42)
+			_playback.parallel().tween_property(portrait, "position", _impact_origin[actor_id], clash_recover_seconds)
+		_playback.parallel().tween_property(portrait, "scale", Vector2.ONE, clash_recover_seconds)
 	_playback.tween_callback(_clear_impact_layer)
 	_playback.tween_callback(_after_phase_playback)
+
+
+func _queue_clash_animation(group_events: Array[Dictionary]) -> void:
+	var outcomes: Array[Dictionary] = []
+	var attackers: Dictionary = {}
+	for event in group_events:
+		var kind: String = str(event.get("type", ""))
+		if kind in ["tick", "action_start", "block"]:
+			_playback.tween_callback(_display_phase_event.bind(event))
+			if kind == "action_start":
+				_playback.tween_callback(_show_clash_ability.bind(event))
+		else:
+			outcomes.append(event)
+		if kind == "attack":
+			var actor_id: String = str(event.get("actor_id", ""))
+			var target_id: String = str(event.get("target_id", ""))
+			if _impact_portraits.has(actor_id) and _impact_portraits.has(target_id):
+				attackers[actor_id] = target_id
+	if attackers.is_empty():
+		_playback.tween_interval(clash_idle_seconds)
+	else:
+		var first_actor: bool = true
+		for actor_id in attackers:
+			var portrait: TextureRect = _impact_portraits[actor_id]
+			var target: TextureRect = _impact_portraits[attackers[actor_id]]
+			var direction: float = signf((_impact_idle[attackers[actor_id]] + target.size * 0.5).x - (_impact_idle[actor_id] + portrait.size * 0.5).x)
+			var windup: Vector2 = _impact_idle[actor_id] - Vector2(direction * portrait.size.x * clash_recoil_fraction, 0.0)
+			if first_actor:
+				_playback.tween_property(portrait, "position", windup, clash_windup_seconds)
+				first_actor = false
+			else:
+				_playback.parallel().tween_property(portrait, "position", windup, clash_windup_seconds)
+		var first_contact: bool = true
+		for actor_id in attackers:
+			var portrait: TextureRect = _impact_portraits[actor_id]
+			var target: TextureRect = _impact_portraits[attackers[actor_id]]
+			var actor_center: Vector2 = _impact_idle[actor_id] + portrait.size * 0.5
+			var target_center: Vector2 = _impact_idle[attackers[actor_id]] + target.size * 0.5
+			var direction: float = signf(target_center.x - actor_center.x)
+			var middle: Vector2 = (actor_center + target_center) * 0.5
+			var contact_x: float = middle.x - portrait.size.x * (0.5 + direction * clash_contact_gap_fraction)
+			if not attackers.has(attackers[actor_id]):
+				contact_x = target.position.x - portrait.size.x * 0.5 if direction > 0.0 else target.position.x + target.size.x - portrait.size.x * 0.5
+			var contact: Vector2 = Vector2(contact_x, _impact_idle[actor_id].y)
+			if first_contact:
+				_playback.tween_property(portrait, "position", contact, clash_impact_seconds).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+				first_contact = false
+			else:
+				_playback.parallel().tween_property(portrait, "position", contact, clash_impact_seconds).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+	for event in outcomes:
+		if str(event.get("type", "")) == "attack":
+			_playback.tween_callback(_impact.bind(event))
+		else:
+			_playback.tween_callback(_display_phase_event.bind(event))
+	if not attackers.is_empty():
+		_playback.tween_interval(clash_hold_seconds)
+		var first_recover: bool = true
+		for actor_id in _impact_portraits:
+			var portrait: TextureRect = _impact_portraits[actor_id]
+			if first_recover:
+				_playback.tween_property(portrait, "position", _impact_idle[actor_id], clash_recover_seconds)
+				first_recover = false
+			else:
+				_playback.parallel().tween_property(portrait, "position", _impact_idle[actor_id], clash_recover_seconds)
+			_playback.parallel().tween_property(portrait, "modulate", Color.WHITE, clash_recover_seconds)
+
+
+func _show_clash_ability(event: Dictionary) -> void:
+	if _impact_layer == null or not is_instance_valid(_impact_layer):
+		return
+	var actor_id: String = str(event.get("actor_id", ""))
+	var portrait: TextureRect = _impact_portraits.get(actor_id) as TextureRect
+	var ability: AbilityDefinition = AbilityCatalog.get_ability(str(event.get("ability_id", "")))
+	if portrait == null or ability == null or ability.icon == null:
+		return
+	var icon := TextureRect.new()
+	icon.texture = ability.icon
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.size = portrait.size * clash_cast_icon_fraction
+	icon.position = portrait.position + Vector2((portrait.size.x - icon.size.x) * 0.5, -icon.size.y * 0.65)
+	_impact_layer.add_child(icon)
+	var effect: Tween = create_tween()
+	effect.tween_property(icon, "modulate:a", 0.0, clash_windup_seconds + clash_impact_seconds + clash_hold_seconds)
+	effect.tween_callback(icon.queue_free)
 
 
 func _display_phase_event(event: Dictionary) -> void:

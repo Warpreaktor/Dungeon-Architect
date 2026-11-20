@@ -42,19 +42,24 @@ func _initialize() -> void:
 	var result: Dictionary = battle.run_phase(hero_chain, main.action_chain)
 	assert(bool(result.get("success", false)))
 	var actors: Array[String] = []
+	var opponents: Array[String] = []
 	var ticks: int = 0
 	for event in result.get("events", []):
 		if event.get("type", "") == "tick":
 			if not actors.is_empty():
-				assert(actors.size() == battle.enemy_ids().size() + 1)
+				assert(actors.size() == 2)
 				assert(actors.has(battle.hero_id))
-				for enemy_id in battle.enemy_ids():
-					assert(actors.has(enemy_id))
+				assert(actors.has(opponents[-1]))
 			actors.clear()
+			opponents.append(str(event.get("opponent_id", "")))
 			ticks += 1
 		elif event.get("type", "") in ["action_start", "reload"]:
 			actors.append(str(event.get("actor_id", "")))
 	assert(ticks > 0)
+	assert(actors.size() == 2 and actors.has(battle.hero_id) and actors.has(opponents[-1]))
+	assert(opponents[0] == battle.enemy_id)
+	if opponents.size() > 1:
+		assert(opponents[1] == battle.support_enemy_id)
 	assert(not battle.is_victory)
 	main.health = 0
 	battle.update_outcome()

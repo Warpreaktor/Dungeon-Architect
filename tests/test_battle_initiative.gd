@@ -62,6 +62,15 @@ func _initialize() -> void:
 	assert(_initiative_order(battle, steps) == [enemy.participant_id, hero.participant_id, support.participant_id])
 	steps[battle.enemy_id] = _step("basic_strike")
 	assert(_initiative_order(battle, steps) == ids)
+	steps[battle.hero_id] = _step("guard")
+	steps[battle.enemy_id] = _step("basic_strike")
+	steps[battle.support_enemy_id] = _step("basic_strike")
+	hero.agility = 1
+	enemy.agility = 9
+	support.agility = 8
+	assert(_initiative_order(battle, steps)[0] == hero.participant_id)
+	hero.agility = enemy.agility
+	support.agility = enemy.agility
 	steps[battle.hero_id] = _step("guard", true)
 	assert(_initiative_order(battle, steps) == [enemy.participant_id, support.participant_id, hero.participant_id])
 
@@ -93,7 +102,7 @@ func _initialize() -> void:
 			found_first_tick = true
 		elif found_first_tick and str(event.get("type", "")) in ["action_start", "reload"]:
 			first_tick_actors.append(str(event.get("actor_id", "")))
-	assert(first_tick_actors == [s.participant_id, e.participant_id, h.participant_id])
+	assert(first_tick_actors == [e.participant_id, h.participant_id])
 
 	var lethal := BattleState.new()
 	var victim: BattleParticipant = _fighter(lethal.hero_id, "heroes")

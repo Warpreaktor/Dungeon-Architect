@@ -54,13 +54,14 @@ func portrait_node() -> TextureRect:
 	return _portrait
 
 
-func configure(participant: BattleParticipant, portrait: Texture2D, display_name: String) -> void:
+func configure(participant: BattleParticipant, portrait: Texture2D, display_name: String, flip_h: bool = false) -> void:
 	_participant = participant
 	visible = participant != null
 	if participant == null:
 		return
 	_name.text = display_name
 	_portrait.texture = portrait
+	_portrait.flip_h = flip_h
 	_revealed.clear()
 	_refresh_slots()
 	refresh_health(participant)

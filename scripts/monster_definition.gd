@@ -5,6 +5,7 @@ extends Resource
 @export var monster_id: String = ""
 @export var display_name: String = ""
 @export var portrait: Texture2D
+@export var portrait_flip_h: bool = false
 @export var icon: Texture2D
 @export var personal_ability_ids: Array[String] = []
 @export var ai_profiles: Array[MonsterTacticProfile] = []

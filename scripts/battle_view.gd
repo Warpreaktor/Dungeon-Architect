@@ -130,7 +130,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	var support_name: String = support_definition.display_name
 	if support_definition.monster_id == combat.enemy_definition.monster_id:
 		support_name += " (2)"
-	_support_enemy_view.configure(support, portrait, support_name)
+	_support_enemy_view.configure(support, portrait, support_name, support_definition.portrait_flip_h)
 	if support != null:
 		_status_presenter.setup({combat.battle_state.support_enemy_id: _support_enemy_view.portrait_node()})
 	if hero.definition != null:
@@ -160,6 +160,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_enemy_defense_value.text = str(_combat.battle_state.get_enemy().block_armor)
 	_enemy_defense_icon.modulate = Color(0.55, 0.60, 0.67, 0.65)
 	_enemy_portrait.texture = combat.enemy_definition.portrait if combat.enemy_definition.portrait != null else combat.enemy_definition.icon
+	_enemy_portrait.flip_h = combat.enemy_definition.portrait_flip_h
 	_enemy_portrait.modulate = Color.WHITE
 	_hero_health_meter.set_health(hero.health, hero.max_health)
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
@@ -677,6 +678,7 @@ func _create_impact_layer() -> void:
 		var portrait := TextureRect.new()
 		portrait.name = "Impact_" + actor_id
 		portrait.texture = original.texture
+		portrait.flip_h = original.flip_h
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE

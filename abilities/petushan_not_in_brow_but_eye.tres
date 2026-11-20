@@ -18,7 +18,7 @@ recipient = 1
 status_id = "petushan_accuracy_down"
 requires_hit = true
 status_stat = 3
-status_modifier = -10
+status_modifier = -20
 duration_ticks = 2
 status_clock = 1
 

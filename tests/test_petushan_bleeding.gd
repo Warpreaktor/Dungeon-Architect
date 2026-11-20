@@ -15,7 +15,21 @@ func _initialize() -> void:
 	assert(AbilityExecutor.preview_damage(actor, peck, peck.effects[0]) == floori(actor.melee_attack_value()))
 	assert(AbilityExecutor.preview_damage(actor, eye, eye.effects[0]) == floori(actor.melee_attack_value() * 0.4))
 	assert(state.execute_ability("hero", "enemy", eye.ability_id).success)
-	assert(target.status_modifier(AbilityEffectDefinition.Stat.ACCURACY) == -10)
+	assert(target.status_modifier(AbilityEffectDefinition.Stat.ACCURACY) == -20)
+	# Повтор того же приёма не увеличивает штраф, но обновляет срок.
+	var blind: AbilityEffectDefinition = eye.effects[1]
+	assert(blind.effective_stack_policy() == AbilityEffectDefinition.Stack.REFRESH)
+	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
+	assert(int(target.statuses["petushan_accuracy_down"].ticks) == 1)
+	target.apply_status(blind, state.flow.completed_ticks + 2)
+	assert(target.status_modifier(AbilityEffectDefinition.Stat.ACCURACY) == -20)
+	assert(int(target.statuses["petushan_accuracy_down"].stacks) == 1)
+	assert(int(target.statuses["petushan_accuracy_down"].ticks) == 2)
+	# Второй отдых удалит эффект, точность вернётся в исходное состояние.
+	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
+	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
+	assert(not target.statuses.has("petushan_accuracy_down"))
+	assert(target.status_modifier(AbilityEffectDefinition.Stat.ACCURACY) == 0)
 	assert(state.execute_ability("hero", "enemy", spur.ability_id).success)
 	assert(target.statuses.has("bleeding"))
 	# Эффект может быть наложен посреди уже начатой собственной фазы.

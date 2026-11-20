@@ -151,7 +151,7 @@ func configure(entity_id: String, contents: Array[String], gold_amount: int = 5,
 		_secondary_monster.set_item_metadata(0, "")
 		var selected_id: String = monster_ids[1] if monster_ids.size() > 1 else ""
 		var selection_index: int = 0
-		for monster_id in MonsterCatalog.list_ids():
+		for monster_id in MonsterCatalog.list_placeable_ids():
 			var monster: MonsterDefinition = MonsterCatalog.get_monster(monster_id)
 			var index: int = _secondary_monster.item_count
 			_secondary_monster.add_icon_item(monster.icon, monster.display_name)

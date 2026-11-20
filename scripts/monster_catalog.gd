@@ -28,6 +28,22 @@ static func list_ids() -> Array[String]:
 	return ids
 
 
+static func list_placeable_ids() -> Array[String]:
+	var reserved: Dictionary = {}
+	for monster_id in DEFINITIONS:
+		var monster: MonsterDefinition = DEFINITIONS[monster_id] as MonsterDefinition
+		if monster == null or monster.battle_bond == null:
+			continue
+		var companion_id: String = monster.battle_bond.companion_monster_id
+		if not companion_id.is_empty():
+			reserved[companion_id] = true
+	var ids: Array[String] = []
+	for monster_id in list_ids():
+		if not reserved.has(monster_id):
+			ids.append(monster_id)
+	return ids
+
+
 static func has(monster_id: String) -> bool:
 	return DEFINITIONS.has(monster_id)
 

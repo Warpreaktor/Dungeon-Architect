@@ -9,8 +9,18 @@ func _run() -> void:
 	var popup := load("res://scenes/chest_contents_popup.tscn").instantiate() as ChestContentsPopup
 	root.add_child(popup)
 	await process_frame
-	var ids: Array[String] = MonsterCatalog.list_ids()
+	var ids: Array[String] = MonsterCatalog.list_placeable_ids()
 	assert(not ids.is_empty())
+	for monster_id in MonsterCatalog.list_ids():
+		var monster: MonsterDefinition = MonsterCatalog.get_monster(monster_id)
+		if monster.battle_bond == null:
+			continue
+		var companion_id: String = monster.battle_bond.companion_monster_id
+		if companion_id.is_empty():
+			continue
+		assert(MonsterCatalog.has(companion_id))
+		assert(not ids.has(companion_id))
+
 	var first: String = ids[0]
 	var second: String = ids[1] if ids.size() > 1 else first
 	popup.configure("monster", [], 1, true, false, false, {}, [first, second])

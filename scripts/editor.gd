@@ -438,7 +438,7 @@ func _build_interface() -> void:
 	palette.add_child(_label("МОНСТРЫ", 14, Color("#e8c58a")))
 	var monster_tools := _tool_grid()
 	palette.add_child(monster_tools)
-	for monster_id in MonsterCatalog.list_ids():
+	for monster_id in MonsterCatalog.list_placeable_ids():
 		var monster: MonsterDefinition = MonsterCatalog.get_monster(str(monster_id))
 		_add_tool_button(monster_tools, {
 			"id": "monster:" + monster.monster_id,

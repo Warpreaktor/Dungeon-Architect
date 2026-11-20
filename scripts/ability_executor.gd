@@ -53,6 +53,9 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 				var raw_damage: int = preview_damage(actor, ability, effect, recipient)
 				# Атака опускает собственный поднятый блок, но не меняет
 				# уклонение: оно тратится только при входящей атаке.
+				if actor.block_armor > 0:
+					event_list.append({"type": "block_consumed", "actor_id": actor_id,
+						"target_id": actor_id, "ability_id": ability_id, "armor": 0})
 				actor.block_armor = 0
 				actor.block_attack_bonus_percent = 0
 				for hit_index in range(effect.hit_count):

@@ -791,6 +791,8 @@ func _display_phase_event(event: Dictionary) -> void:
 			var target_id: String = str(event.get("target_id", ""))
 			_set_block_display(target_id, int(event.get("armor", 0)))
 			_flash_shield(target_id)
+		"block_consumed":
+			_set_block_display(str(event.get("target_id", "")), int(event.get("armor", 0)))
 		"heal":
 			var healed: int = int(event.get("healed", 0))
 			if actor_id == "hero":

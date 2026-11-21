@@ -23,12 +23,22 @@ func _initialize() -> void:
 	var ability: AbilityDefinition = AbilityCatalog.get_ability(prepared[0])
 	var valid_targets: Array[String] = combat.battle_state.create_context().target_ids("hero", ability)
 	assert(not valid_targets.is_empty())
-	view._choose_manual_target(valid_targets[0])
-	assert(view._selected_manual_target == valid_targets[0])
-	assert(not view._punch_button.disabled)
-	view._on_punch_pressed()
+	assert(not view._punch_button.visible)
+	assert(view._target_outlines[valid_targets[0]].visible)
+	view._on_target_portrait_input(_tap_event(), "hero")
+	assert(combat.battle_state.flow.completed_ticks == 0)
+	view._on_target_portrait_input(_tap_event(), valid_targets[0])
 	assert(combat.battle_state.flow.completed_ticks == 1)
 	assert(combat.battle_state.manual_used_slots == [0])
 	assert(view._is_playing_back)
+	view._on_target_portrait_input(_tap_event(), valid_targets[0])
+	assert(combat.battle_state.flow.completed_ticks == 1)
 	view.queue_free()
 	quit()
+
+
+func _tap_event() -> InputEventMouseButton:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = true
+	return event

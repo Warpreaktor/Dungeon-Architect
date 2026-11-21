@@ -87,8 +87,7 @@ var _visible_enemy_max: int = 0
 var _visible_support_max: int = 0
 var _manual_started: bool = false
 var _selected_manual_slot: int = -2
-var _selected_manual_target: String = ""
-var _target_row: HBoxContainer
+var _target_outlines: Dictionary = {}
 var _enemy_intent: Label
 
 
@@ -140,12 +139,6 @@ func _ready() -> void:
 	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.add_child(_arsenal_button)
 	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.move_child(_arsenal_button, 1)
 	_build_combat_item_picker()
-	_target_row = HBoxContainer.new()
-	_target_row.name = "ManualTargets"
-	_target_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn.add_child(_target_row)
-	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn.move_child(_target_row, 1)
-	_target_row.hide()
 	_enemy_intent = Label.new()
 	_enemy_intent.name = "NextEnemyAction"
 	_enemy_intent.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -182,6 +175,9 @@ func _ready() -> void:
 	_support_enemy_view.theme = _main_enemy_card.theme
 	_enemy_party.add_child(_support_enemy_view)
 	_support_enemy_view.hide()
+	_bind_target_portrait(_hero_portrait, "hero")
+	_bind_target_portrait(_enemy_portrait, "enemy")
+	_bind_target_portrait(_support_enemy_view.portrait_node(), BattleState.SUPPORT_ENEMY_ID)
 	_enemy_health_meter.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
 	_enemy_party.resized.connect(_equalize_enemy_cards)
 	_result_text.text = "Твой ход"
@@ -209,7 +205,6 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_combat = combat
 	_manual_started = false
 	_selected_manual_slot = -2
-	_selected_manual_target = ""
 	var support_definition: MonsterDefinition = combat.support_enemy_definition if combat.support_enemy_definition != null else combat.enemy_definition
 	var support: BattleParticipant = combat.battle_state.get_participant(combat.battle_state.support_enemy_id)
 	var portrait: Texture2D = support_definition.portrait if support_definition.portrait != null else support_definition.icon
@@ -336,7 +331,9 @@ func _refresh_chain_slots() -> void:
 		child.queue_free()
 	var editable: bool = _editing_allowed()
 	var displayed: Array[String] = _hero_chain if _manual_started else _planner_editing
-	var available: Array[int] = _combat.battle_state.manual_available_slots() if _manual_started else []
+	var available: Array[int] = []
+	if _manual_started:
+		available = _combat.battle_state.manual_available_slots()
 	for index in range(displayed.size()):
 		var action_id: String = displayed[index]
 		var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
@@ -348,8 +345,7 @@ func _refresh_chain_slots() -> void:
 		slot.slot_selected.connect(_on_slot_pressed.bind(slot))
 		slot.info_requested.connect(_touch_info.show_text)
 		_touch_info.attach_long_press(slot, func() -> String: return slot.tooltip_text)
-	# Отдых всегда следует после полного круга, но не входит в три
-	# переставляемых слота и не сохраняется в HeroState.
+	# Отдых не занимает слот арсенала и не сохраняется в HeroState.
 	var rest_slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 	_sequence_slots.add_child(rest_slot)
 	rest_slot.configure_recharge(displayed.size())
@@ -536,9 +532,17 @@ func _on_slot_selected(_index: int) -> void:
 			return
 		if _index < _hero_chain.size() and not _combat.battle_state.manual_available_slots().has(_index):
 			return
-		_selected_manual_slot = -1 if _index == _hero_chain.size() else _index
-		_selected_manual_target = ""
-		_result_text.text = "Выбран отдых" if _selected_manual_slot == -1 else "Выбрано: %s" % AbilityCatalog.get_ability(_hero_chain[_selected_manual_slot]).display_name
+		var requested_slot: int = -1 if _index == _hero_chain.size() else _index
+		if requested_slot == -1:
+			_selected_manual_slot = -1
+			_play_selected_manual_action("")
+			return
+		_selected_manual_slot = -2 if _selected_manual_slot == requested_slot else requested_slot
+		if _selected_manual_slot >= 0:
+			var ability: AbilityDefinition = AbilityCatalog.get_ability(_hero_chain[_selected_manual_slot])
+			_result_text.text = "Выбери цель для «%s»" % ability.display_name
+		else:
+			_result_text.text = "Выбери приём"
 		_refresh_phase_controls()
 		return
 	if _editing_allowed() and _combat.battle_state.flow.stage == BattleFlow.Stage.PREPARATION:
@@ -599,42 +603,42 @@ func _commit_draft() -> bool:
 
 
 func _on_punch_pressed() -> void:
-	if _combat == null or _punch_button.disabled:
+	if _combat == null or _punch_button.disabled or _manual_started:
 		return
-	if not _manual_started:
-		if not _commit_draft():
-			return
-		var prepared: Dictionary = _combat.prepare_manual_combat(_hero_chain)
-		if not bool(prepared.get("success", false)):
-			_result_text.text = str(prepared.get("reason", "Не удалось подготовить бой"))
-			return
-		_manual_started = true
-		_punch_button.icon = null
-		_selected_manual_slot = -2
-		_selected_manual_target = ""
-		_hide_combat_item_picker()
-		_result_text.text = "Выбери приём и цель"
-		_refresh_phase_controls()
+	if not _commit_draft():
 		return
-	if _selected_manual_slot == -2:
-		_result_text.text = "Выбери карту или отдых"
+	var prepared: Dictionary = _combat.prepare_manual_combat(_hero_chain)
+	if not bool(prepared.get("success", false)):
+		_result_text.text = str(prepared.get("reason", "Не удалось подготовить бой"))
 		return
-	if _selected_manual_slot >= 0 and _selected_manual_target.is_empty():
-		_result_text.text = "Выбери цель"
-		return
+	_manual_started = true
+	_punch_button.hide()
 	_hide_combat_item_picker()
-	var result: Dictionary = _combat.play_manual_tick(_selected_manual_slot, _selected_manual_target)
+	_result_text.text = "Выбери карту, затем нажми на цель"
+	_refresh_phase_controls()
+
+
+func _play_selected_manual_action(target_id: String) -> void:
+	if not _manual_started or _is_playing_back or _selected_manual_slot == -2:
+		return
+	if _combat.battle_state.flow.stage == BattleFlow.Stage.FINISHED:
+		return
+	if _selected_manual_slot >= 0:
+		var ability: AbilityDefinition = AbilityCatalog.get_ability(_hero_chain[_selected_manual_slot])
+		if not _combat.battle_state.create_context().target_ids("hero", ability).has(target_id):
+			return
+	_hide_combat_item_picker()
+	var result: Dictionary = _combat.play_manual_tick(_selected_manual_slot, target_id)
 	if not bool(result.get("success", false)):
 		_result_text.text = str(result.get("reason", "Такт недоступен"))
-		_refresh_manual_targets()
+		_refresh_phase_controls()
 		return
 	_is_playing_back = true
 	_selected_manual_slot = -2
-	_selected_manual_target = ""
 	_punch_button.disabled = true
 	_combat_items_button.disabled = true
-	_target_row.hide()
 	_enemy_intent.hide()
+	_refresh_target_outlines()
 	_play_phase_events(result.get("events", []))
 
 
@@ -1156,18 +1160,15 @@ func _refresh_phase_controls() -> void:
 	_guard_button.visible = false
 	_arsenal_button.visible = not _manual_started and stage == BattleFlow.Stage.PREPARATION
 	_arsenal_button.disabled = _is_playing_back
+	_punch_button.visible = not _manual_started
 	if not _manual_started:
 		_punch_button.text = "Начать бой"
 		_punch_button.disabled = _is_playing_back or stage != BattleFlow.Stage.PREPARATION
-		_target_row.hide()
 		_enemy_intent.hide()
+		_refresh_target_outlines()
 		return
-	_refresh_manual_targets()
 	_update_enemy_intent()
-	_punch_button.text = "Выполнить такт"
-	_punch_button.disabled = _is_playing_back or stage == BattleFlow.Stage.FINISHED or _selected_manual_slot == -2 or (_selected_manual_slot >= 0 and _selected_manual_target.is_empty())
-	if _selected_manual_slot == -1:
-		_punch_button.text = "Отдых"
+	_refresh_target_outlines()
 
 
 func _highlight_manual_selection() -> void:
@@ -1178,40 +1179,49 @@ func _highlight_manual_selection() -> void:
 		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(selected)
 
 
-func _refresh_manual_targets() -> void:
-	for child in _target_row.get_children():
-		_target_row.remove_child(child)
-		child.queue_free()
-	_target_row.visible = _manual_started and not _is_playing_back and _selected_manual_slot >= 0
-	if not _target_row.visible:
+func _bind_target_portrait(portrait: TextureRect, actor_id: String) -> void:
+	portrait.mouse_filter = Control.MOUSE_FILTER_STOP
+	portrait.gui_input.connect(_on_target_portrait_input.bind(actor_id))
+	var outline := Panel.new()
+	outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	portrait.add_child(outline)
+	outline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var border := StyleBoxFlat.new()
+	border.bg_color = Color.TRANSPARENT
+	border.border_color = Color("#f5c568")
+	border.set_border_width_all(4)
+	border.set_corner_radius_all(8)
+	outline.add_theme_stylebox_override("panel", border)
+	_target_outlines[actor_id] = outline
+	outline.hide()
+
+
+func _on_target_portrait_input(event: InputEvent, actor_id: String) -> void:
+	var pressed: bool = false
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		pressed = mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed
+	elif event is InputEventScreenTouch:
+		pressed = (event as InputEventScreenTouch).pressed
+	if not pressed or not _manual_started or _selected_manual_slot < 0 or _is_playing_back:
 		return
 	var ability: AbilityDefinition = AbilityCatalog.get_ability(_hero_chain[_selected_manual_slot])
-	var targets: Array[String] = _combat.battle_state.create_context().target_ids("hero", ability)
-	if not targets.has(_selected_manual_target):
-		_selected_manual_target = targets[0] if targets.size() == 1 else ""
-	for id in targets:
-		var target: BattleParticipant = _combat.battle_state.get_participant(id)
-		var button := Button.new()
-		button.custom_minimum_size = Vector2(112, 38)
-		button.toggle_mode = true
-		button.button_pressed = id == _selected_manual_target
-		if id == "hero":
-			button.text = _hero_name.text
-		elif id == "enemy":
-			button.text = _enemy_name.text
-		else:
-			button.text = _combat.support_enemy_definition.display_name + " (2)" if _combat.support_enemy_definition != null else id
-		button.disabled = target == null or not target.is_alive()
-		button.pressed.connect(_choose_manual_target.bind(id))
-		_target_row.add_child(button)
-	if targets.is_empty():
-		_result_text.text = "Нет доступных целей для этого приёма"
+	if not _combat.battle_state.create_context().target_ids("hero", ability).has(actor_id):
+		return
+	get_viewport().set_input_as_handled()
+	_play_selected_manual_action(actor_id)
 
 
-func _choose_manual_target(id: String) -> void:
-	_selected_manual_target = id
-	_result_text.text = "Цель выбрана. Выполни такт."
-	_refresh_phase_controls()
+func _refresh_target_outlines() -> void:
+	var valid_targets: Array[String] = []
+	if _manual_started and not _is_playing_back and _selected_manual_slot >= 0 and _combat.battle_state.flow.stage != BattleFlow.Stage.FINISHED:
+		var ability: AbilityDefinition = AbilityCatalog.get_ability(_hero_chain[_selected_manual_slot])
+		valid_targets = _combat.battle_state.create_context().target_ids("hero", ability)
+	for actor_id in _target_outlines:
+		var outline: Panel = _target_outlines[actor_id]
+		outline.visible = valid_targets.has(str(actor_id))
+		var portrait: TextureRect = outline.get_parent() as TextureRect
+		portrait.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if outline.visible else Control.CURSOR_ARROW
 
 
 func _update_enemy_intent() -> void:
@@ -1268,6 +1278,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	if (_arsenal_view != null and _arsenal_view.visible) or (_item_picker != null and _item_picker.visible):
 		return
-	if key_event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and not _punch_button.disabled:
+	if key_event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and _punch_button.visible and not _punch_button.disabled:
 		_on_punch_pressed()
 		get_viewport().set_input_as_handled()

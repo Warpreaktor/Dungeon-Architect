@@ -19,6 +19,12 @@ func _initialize() -> void:
 	assert(dungeon.place_entity("trap", 2, 2, {"trap_id": "spikes"}))
 	var trap_entity: Dictionary = dungeon.entities_at(2, 2)[0]
 	assert(DungeonMap.trap_id(trap_entity) == "spikes")
+	assert(DungeonMap.is_entity_hidden(trap_entity))
+	assert(DungeonMap.is_entity_hidden({"type": "trap", "properties": {}}))
+	assert(not DungeonMap.is_entity_hidden({"type": "trap", "properties": {"hidden": false}}))
+	for kind in ["monster", "chest"]:
+		assert(not DungeonMap.is_entity_hidden({"type": kind, "properties": {}}))
+		assert(DungeonMap.is_entity_hidden({"type": kind, "properties": {"hidden": true}}))
 	var saved_json := JSON.stringify(dungeon.to_dict())
 	var restored: DungeonMap = DungeonMap.from_dict(JSON.parse_string(saved_json))
 	assert(restored != null)
@@ -28,6 +34,13 @@ func _initialize() -> void:
 
 	var session := GameSession.start_for(restored)
 	assert(session != null)
+	assert(DungeonMap.is_entity_hidden(restored_trap))
+	assert(session.is_entity_hidden_from_hero(restored_trap))
+	session.hero.vision_bonus = 1
+	session.hero.vision_phases = 1
+	assert(not session.is_entity_hidden_from_hero(restored_trap))
+	session.hero.advance_phase_effects()
+	assert(session.is_entity_hidden_from_hero(restored_trap))
 	var max_hp: int = session.hero.max_health
 	assert(session.move_by(1, 0))
 	assert(session.player_pos == Vector2i(2, 2))

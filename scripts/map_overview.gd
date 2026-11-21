@@ -80,7 +80,7 @@ func _draw() -> void:
 			for entity in session.entities_at(x, y):
 				if session.is_entity_removed(entity):
 					continue
-				if _is_hidden_from_hero(entity):
+				if session.is_entity_hidden_from_hero(entity):
 					continue
 				var kind := str(entity.get("type", ""))
 				var mark := Color.TRANSPARENT
@@ -133,7 +133,7 @@ func _draw_minimap_overlay() -> void:
 			if not _is_open_neighbor(data, x + 1, y):
 				draw_line(top_right, bottom_right, line_color, line_width, true)
 			for entity in session.entities_at(x, y):
-				if session.is_entity_removed(entity) or _is_hidden_from_hero(entity):
+				if session.is_entity_removed(entity) or session.is_entity_hidden_from_hero(entity):
 					continue
 				var mark := Color.TRANSPARENT
 				match str(entity.get("type", "")):
@@ -214,12 +214,3 @@ func _gui_input(event: InputEvent) -> void:
 			_pan += (new_a + new_b - old_a - old_b) * 0.5
 		queue_redraw()
 		accept_event()
-
-
-func _is_hidden_from_hero(entity: Dictionary) -> bool:
-	var kind := str(entity.get("type", ""))
-	if kind not in ["monster", "chest"]:
-		return false
-	if not bool(entity.get("properties", {}).get("hidden", false)):
-		return false
-	return session.hero == null or not session.hero.has_vision_effect()

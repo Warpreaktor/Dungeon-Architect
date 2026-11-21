@@ -109,7 +109,7 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		var trap_id: String = str(options.get("trap_id", TrapCatalog.DEFAULT_TRAP_ID))
 		if not TrapCatalog.has(trap_id):
 			trap_id = TrapCatalog.DEFAULT_TRAP_ID
-		properties = {"trap_id": trap_id}
+		properties = {"trap_id": trap_id, "hidden": bool(options.get("hidden", true))}
 	elif kind == "trigger":
 		properties = {"event_id": ""}
 	elif kind == "message":
@@ -122,6 +122,13 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		"properties": properties
 	})
 	return true
+
+
+static func is_entity_hidden(entity: Dictionary) -> bool:
+	var kind := str(entity.get("type", ""))
+	if kind not in ["monster", "chest", "trap"]:
+		return false
+	return bool(entity.get("properties", {}).get("hidden", kind == "trap"))
 
 
 static func trap_id(entity: Dictionary) -> String:

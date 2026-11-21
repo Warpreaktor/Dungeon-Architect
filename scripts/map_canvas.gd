@@ -15,6 +15,7 @@ signal message_cell_tapped(cell: Vector2i)
 const TILE_SIZE := 48.0
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
 const WALL_TEXTURE: Texture2D = preload("res://assets/stone_wall.png")
+const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.png")
 const DOUBLE_TAP_MS := 400
 const TAP_MOVE_LIMIT := 16.0
 const PLAY_START_ZOOM := 4.0
@@ -308,14 +309,13 @@ func _draw_cell(x: int, y: int) -> void:
 		else:
 			draw_rect(rect, Color(0.85, 0.25, 0.35, 0.24))
 	var entities_here: Array = game_session.entities_at(x, y) if mode == "play" and game_session != null else map_data.entities_at(x, y)
+	var has_hidden_entity := false
 	for entity in entities_here:
 		if mode == "play" and game_session != null and game_session.is_entity_removed(entity):
 			continue
 		var kind := str(entity["type"])
-		# Скрытые монстры и сундуки доступны только под действием всевиденья.
-		if mode == "play" and kind in ["monster", "chest"] and bool(entity.get("properties", {}).get("hidden", false)):
-			if game_session == null or game_session.hero == null or not game_session.hero.has_vision_effect():
-				continue
+		if mode == "play" and (game_session.is_entity_hidden_from_hero(entity) if game_session != null else DungeonMap.is_entity_hidden(entity)):
+			continue
 		if mode == "play" and kind in ["player_spawn", "trigger", "message"]:
 			continue
 		var origin := Vector2(x, y) * TILE_SIZE
@@ -330,25 +330,18 @@ func _draw_cell(x: int, y: int) -> void:
 			_draw_entity(kind, origin)
 			if kind == "door":
 				_draw_door_lock(origin, LockCatalog.required_key(entity))
-		# Подсказка для автора, не раскрываем скрытые сундуки во время игры.
-		if mode == "edit" and kind == "chest" and bool(entity.get("properties", {}).get("hidden", false)):
-			_draw_hidden_chest_marker(origin)
+		if mode == "edit" and DungeonMap.is_entity_hidden(entity):
+			has_hidden_entity = true
+	if has_hidden_entity:
+		_draw_hidden_marker(rect.position)
 	if mode == "play" and not can_see:
 		draw_rect(rect, Color(0.0, 0.0, 0.0, 0.55))
 
 
-## Фиолетовая рамка и перечёркнутый глаз обозначают скрытый сундук в редакторе.
-func _draw_hidden_chest_marker(origin: Vector2) -> void:
-	var accent := Color("#d8a3ff")
-	draw_rect(Rect2(origin + Vector2(2, 2), Vector2(44, 44)), accent, false, 2.0)
-	var badge_center := origin + Vector2(38, 10)
-	draw_circle(badge_center, 9.0, Color("#291b3e"))
-	draw_arc(badge_center, 6.0, 0.0, TAU, 20, accent, 1.2)
-	# Глаз с перечёркиванием читается даже при небольшом масштабе карты.
-	draw_line(badge_center + Vector2(-5, 0), badge_center, accent, 1.5)
-	draw_line(badge_center, badge_center + Vector2(5, 0), accent, 1.5)
-	draw_circle(badge_center, 2.0, accent)
-	draw_line(badge_center + Vector2(-6, 6), badge_center + Vector2(6, -6), Color("#fff0ff"), 2.0)
+func _draw_hidden_marker(origin: Vector2) -> void:
+	var marker := Rect2(origin + Vector2(2, 2), Vector2.ONE * 18.0)
+	draw_rect(marker, Color("#20202b"))
+	draw_texture_rect(HIDDEN_MARKER, marker, false)
 
 
 ## Цветной знак замка виден при редактировании и при прохождении.

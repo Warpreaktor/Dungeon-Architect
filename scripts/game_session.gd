@@ -221,6 +221,10 @@ func is_chest_open(entity: Dictionary) -> bool:
 	return opened_chests.has(str(entity.get("id", "")))
 
 
+func is_entity_hidden_from_hero(entity: Dictionary) -> bool:
+	return DungeonMap.is_entity_hidden(entity) and (hero == null or not hero.has_vision_effect())
+
+
 func is_trap_disarmed(entity: Dictionary) -> bool:
 	return disarmed_traps.has(str(entity.get("id", "")))
 

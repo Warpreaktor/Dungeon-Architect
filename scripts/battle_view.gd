@@ -44,6 +44,7 @@ signal item_use_requested(item_id: String)
 @onready var _hero_chain_title: Label = %HeroChainTitle
 @onready var _enemy_chain_title: Label = %EnemyChainTitle
 
+const ARSENAL_VIEW_SCRIPT: Script = preload("res://scripts/battle_arsenal_view.gd")
 const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 const MAX_CHAIN_SLOT_SIDE: float = 116.0
 const MIN_CHAIN_SLOT_SIDE: float = 64.0

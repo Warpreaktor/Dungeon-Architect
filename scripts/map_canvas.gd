@@ -264,6 +264,10 @@ func _draw() -> void:
 
 	if mode == "play" and game_session != null and map_data.contains(game_session.player_pos.x, game_session.player_pos.y):
 		_draw_player(_player_visual_cell * TILE_SIZE)
+		if _player_visual_cell.distance_to(Vector2(game_session.player_pos)) < 0.01:
+			for entity in map_data.entities_at(game_session.player_pos.x, game_session.player_pos.y):
+				if str(entity.get("type", "")) == "trap" and game_session.is_trap_revealed(entity):
+					_draw_triggered_trap_marker(_player_visual_cell * TILE_SIZE, entity)
 
 	if show_grid:
 		var grid_color := Color(0.82, 0.84, 0.91, 0.20)
@@ -363,6 +367,15 @@ func _draw_player(origin: Vector2) -> void:
 	draw_colored_polygon(PackedVector2Array([center + Vector2(-14, 17), center + Vector2(-10, 0), center + Vector2(0, -1), center + Vector2(10, 0), center + Vector2(14, 17)]), Color("#8af0c1") * _player_flash_color)
 	draw_rect(Rect2(center + Vector2(-5, 3), Vector2(10, 10)), Color("#1e7463") * _player_flash_color)
 	draw_circle(center + Vector2(14, -12), 4.0, Color("#e8c58a"))
+
+
+func _draw_triggered_trap_marker(origin: Vector2, entity: Dictionary) -> void:
+	var trap: TrapDefinition = TrapCatalog.from_entity(entity)
+	if trap == null or trap.icon == null:
+		return
+	var badge := Rect2(origin + Vector2(28, -3), Vector2(23, 23))
+	draw_rect(badge.grow(1.0), Color("#eeb978"))
+	draw_texture_rect(trap.icon, badge, false)
 
 
 func _draw_trap(origin: Vector2, entity: Dictionary, disarmed: bool) -> void:

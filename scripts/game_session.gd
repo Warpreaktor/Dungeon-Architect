@@ -21,6 +21,7 @@ var is_completed: bool = false # Выход достигнут в текущем
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
 var disarmed_traps: Dictionary = {} # ID разряженных ловушек только в этом прохождении.
+var revealed_traps: Dictionary = {}
 var pending_chest_id: String = "" # Ожидает завершения анимации шага до открытия сундука.
 var activated_triggers: Dictionary = {} # ID сработавших триггеров; обнуляется с новой сессией.
 var shown_messages: Dictionary = {} # Авторские сообщения показываются один раз за прохождение.
@@ -146,6 +147,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 			"removed": removed_entities.duplicate(true),
 			"chests": opened_chests.duplicate(true),
 			"traps": disarmed_traps.duplicate(true),
+			"revealed_traps": revealed_traps.duplicate(true),
 			"triggers": activated_triggers.duplicate(true),
 			"messages": shown_messages.duplicate(true),
 			"revealed": revealed.duplicate(true)
@@ -158,6 +160,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	removed_entities = saved.get("removed", {}).duplicate(true)
 	opened_chests = saved.get("chests", {}).duplicate(true)
 	disarmed_traps = saved.get("traps", {}).duplicate(true)
+	revealed_traps = saved.get("revealed_traps", {}).duplicate(true)
 	pending_chest_id = ""
 	activated_triggers = saved.get("triggers", {}).duplicate(true)
 	shown_messages = saved.get("messages", {}).duplicate(true)
@@ -222,11 +225,17 @@ func is_chest_open(entity: Dictionary) -> bool:
 
 
 func is_entity_hidden_from_hero(entity: Dictionary) -> bool:
+	if str(entity.get("type", "")) == "trap" and is_trap_revealed(entity):
+		return false
 	return DungeonMap.is_entity_hidden(entity) and (hero == null or not hero.has_vision_effect())
 
 
 func is_trap_disarmed(entity: Dictionary) -> bool:
 	return disarmed_traps.has(str(entity.get("id", "")))
+
+
+func is_trap_revealed(entity: Dictionary) -> bool:
+	return revealed_traps.has(str(entity.get("id", ""))) or is_trap_disarmed(entity)
 
 
 func entities_at(x: int, y: int) -> Array:
@@ -374,6 +383,7 @@ func _activate_traps_at(cell: Vector2i) -> void:
 		var target: HeroState = _random_living_party_member()
 		if target == null:
 			continue
+		revealed_traps[str(entity.get("id", ""))] = true
 		var parts: Array[String] = []
 		if trap.direct_damage > 0:
 			var health_before: int = target.health

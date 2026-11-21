@@ -106,15 +106,21 @@ func _initialize() -> void:
 	assert(rest_battle.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
 	assert(rest_battle.get_hero().block_attack_bonus_percent >= 50)
 
-	# Смена тактики после фазы без жетонов, но НЕ во время исполнения.
-	assert(rest_battle.configure_hero_chain(["guard", "guard", "guard"]).success)
-	assert(rest_battle.get_hero().action_cursor == 0) # Отдых уже исполнен в конце предыдущей фазы.
-	assert(rest_battle.run_phase(["guard", "guard", "guard"], ["guard", "basic_strike"]).success)
-	assert(not bool(rest_battle.last_phase_events[0].get("hero_reload", false)))
+	assert(not rest_battle.configure_hero_chain(["guard", "guard", "guard"]).success)
+	assert(rest_battle.get_hero().action_chain == ["guard", "basic_strike", "guard"])
+
+	var reorder_battle := BattleState.begin(MonsterCatalog.get_monster("lobar"), wolf)
+	var original: Array[String] = ["guard", "basic_strike", "guard"]
+	assert(reorder_battle.run_phase(original, ["guard", "basic_strike"]).success)
+	var reordered: Array[String] = ["guard", "guard", "basic_strike"]
+	assert(reorder_battle.configure_hero_chain(reordered).success)
+	assert(reorder_battle.get_hero().action_cursor == 0)
+	assert(reorder_battle.run_phase(reordered, ["guard", "basic_strike"]).success)
+	assert(not bool(reorder_battle.last_phase_events[0].get("hero_reload", false)))
 	var last_tick: Dictionary = {}
-	for event in rest_battle.last_phase_events:
+	for event in reorder_battle.last_phase_events:
 		if event.type == "tick":
 			last_tick = event
 	assert(bool(last_tick.get("hero_reload", false)))
-	assert(not rest_battle.configure_hero_chain(["guard", "guard"]).success)
+	assert(not reorder_battle.configure_hero_chain(["guard", "guard"]).success)
 	quit()

@@ -13,6 +13,7 @@ var support_enemy_id: String = SUPPORT_ENEMY_ID
 var enemy_definition: MonsterDefinition
 var current_enemy_profile_id: String = ""
 var initial_enemy_chain: Array[String] = []
+var locked_hero_arsenal: Array[String] = []
 var enemy_intermission_usage: Dictionary = {}
 var support_enemy_definition: MonsterDefinition
 var support_initial_chain: Array[String] = []
@@ -294,21 +295,32 @@ func _commit_action(outcome: Dictionary) -> Dictionary:
 	return outcome
 
 
-## После каждой законченной фазы игрок может изменить тактику.
-## При неизменной цепочке личный курсор продолжает прежний цикл.
+static func same_arsenal(first: Array[String], second: Array[String]) -> bool:
+	if first.size() != second.size():
+		return false
+	var left: Array[String] = first.duplicate()
+	var right: Array[String] = second.duplicate()
+	left.sort()
+	right.sort()
+	return left == right
+
+
 func configure_hero_chain(actions: Array[String]) -> Dictionary:
 	if not (flow.stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.RECONFIGURING]):
 		return {"success": false, "reason": "Сейчас нельзя изменить тактику"}
 	if get_hero() != null and actions.size() != get_hero().action_slot_capacity:
 		return {"success": false, "reason": "Цепочка содержит незаполненные слоты"}
+	if flow.phase_number > 0 and not same_arsenal(actions, locked_hero_arsenal):
+		return {"success": false, "reason": "Арсенал зафиксирован на весь бой. Можно менять только порядок приёмов."}
 	var hero: BattleParticipant = get_hero()
 	# Сохранённую цепочку не выкидываем при временной потере маны,
 	# щита или изученного приёма. Такой слот отдохнёт при исполнении.
 	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES and hero.action_chain == actions:
 		return {"success": true, "reason": ""}
-	var reason: String = BattleChainPlanner.validate(actions, hero, false)
-	if not reason.is_empty():
-		return {"success": false, "reason": reason}
+	if flow.phase_number == 0:
+		var reason: String = BattleChainPlanner.validate(actions, hero, false)
+		if not reason.is_empty():
+			return {"success": false, "reason": reason}
 	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES and hero.action_chain != actions:
 		# Перенастройка не должна отменять обязательный отдых после круга.
 		# После отдыха новый порядок начинается с первого слота.
@@ -363,6 +375,8 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 	enemy_actions = enemy_actor.action_chain.duplicate()
 	if not flow.start_phase():
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
+	if flow.phase_number == 1:
+		locked_hero_arsenal = current_hero_chain.duplicate()
 	var hero_actions_done: int = 0
 	var hero_rest_finished: bool = false
 	var initial_hero_phases: int = hero_actor.completed_phases

@@ -44,14 +44,6 @@ signal item_use_requested(item_id: String)
 @onready var _hero_chain_title: Label = %HeroChainTitle
 @onready var _enemy_chain_title: Label = %EnemyChainTitle
 
-# Pixel sizes for the combat ability chooser; keep icon/row/scroll sizes in sync.
-const PICKER_ICON_WIDTH: int = 54
-const PICKER_CHOICE_WIDTH: float = 306.0
-const PICKER_CHOICE_HEIGHT: float = 70.0
-const PICKER_ROW_SPACING: float = 6.0
-const PICKER_MAX_LIST_HEIGHT: float = 260.0
-
-const ARSENAL_VIEW_SCRIPT: Script = preload("res://scripts/battle_arsenal_view.gd")
 const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 const MAX_CHAIN_SLOT_SIDE: float = 116.0
 const MIN_CHAIN_SLOT_SIDE: float = 64.0
@@ -72,10 +64,6 @@ var _is_playing_back: bool = false
 var _planner_editing: Array[String] = []
 ## Зафиксированная раскладка слотов, включая пропуски между приёмами.
 var _committed_slots: Array[String] = []
-var _ability_picker: PanelContainer
-var _picker_grid: GridContainer
-var _picker_actions: HBoxContainer
-var _picker_target: int = -1
 var _items_session: GameSession
 var _item_picker: BattleItemPicker
 ## Временные портреты поверх поля: движение не меняет настоящие UI-узлы.
@@ -148,7 +136,6 @@ func _ready() -> void:
 	_arsenal_button.pressed.connect(_open_arsenal)
 	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.add_child(_arsenal_button)
 	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.move_child(_arsenal_button, 1)
-	_build_ability_picker()
 	_build_combat_item_picker()
 	_reorder = BattleChainReorderController.new()
 	_reorder.configure(self, _sequence_slots, _can_reorder_slots, _swap_draft_slots)
@@ -303,7 +290,6 @@ func _lab_checkpoint(step: Dictionary) -> void:
 func _open_arsenal() -> void:
 	if _combat == null or _is_playing_back or _combat.battle_state.flow.stage != BattleFlow.Stage.PREPARATION:
 		return
-	_hide_ability_picker()
 	_hide_combat_item_picker()
 	_arsenal_view.open_for(_combat.hero, _combat.battle_state.get_hero())
 
@@ -312,7 +298,7 @@ func _on_arsenal_saved(slots: Array[String]) -> void:
 	_committed_slots = slots.duplicate()
 	_set_draft_from_chain(slots)
 	_hero_chain = _draft_actions()
-	_refresh_phase_controls()
+	call_deferred("_refresh_phase_controls")
 
 
 func _equalize_enemy_cards() -> void:
@@ -330,7 +316,7 @@ func _equalize_enemy_cards() -> void:
 
 
 func _editing_allowed() -> bool:
-	if _combat == null or _is_playing_back:
+	if _combat == null or _is_playing_back or (_arsenal_view != null and _arsenal_view.visible):
 		return false
 	var stage: int = _combat.battle_state.flow.stage
 	return stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.RECONFIGURING]
@@ -482,7 +468,6 @@ func _on_combat_items_pressed() -> void:
 	if _item_picker.visible:
 		_hide_combat_item_picker()
 		return
-	_hide_ability_picker()
 	_item_picker.refresh_items(_items_session)
 	_item_picker.show()
 	_position_combat_item_picker()
@@ -533,81 +518,6 @@ func show_combat_item_result(result: Dictionary, session: GameSession) -> void:
 			_position_combat_item_picker()
 
 
-func _build_ability_picker() -> void:
-	# Контекстная панель, а не отдельный экран поверх боя.
-	_ability_picker = PanelContainer.new()
-	_ability_picker.name = "AbilityPicker"
-	_ability_picker.theme = preload("res://themes/hero_hud.tres")
-	_ability_picker.custom_minimum_size.x = 336.0
-	_ability_picker.mouse_filter = Control.MOUSE_FILTER_STOP
-	_ability_picker.z_index = 10
-	_ability_picker.visible = false
-	add_child(_ability_picker)
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_bottom", 10)
-	_ability_picker.add_child(margin)
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
-	margin.add_child(column)
-	var title_row := HBoxContainer.new()
-	column.add_child(title_row)
-	var title := Label.new()
-	title.text = "ПРИЁМЫ"
-	title.add_theme_color_override("font_color", Color("#e8c58a"))
-	title.add_theme_font_size_override("font_size", 15)
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_row.add_child(title)
-	var close_button := Button.new()
-	close_button.text = "×"
-	close_button.tooltip_text = "Закрыть список"
-	close_button.custom_minimum_size = Vector2(40, 40)
-	_style_picker_button(close_button)
-	close_button.pressed.connect(_hide_ability_picker)
-	title_row.add_child(close_button)
-	var scroll := ScrollContainer.new()
-	scroll.name = "AbilityPickerScroll"
-	scroll.custom_minimum_size.y = 74.0
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	column.add_child(scroll)
-	_picker_grid = GridContainer.new()
-	_picker_grid.columns = 1
-	_picker_grid.add_theme_constant_override("h_separation", 6)
-	_picker_grid.add_theme_constant_override("v_separation", int(PICKER_ROW_SPACING))
-	scroll.add_child(_picker_grid)
-	_picker_actions = HBoxContainer.new()
-	_picker_actions.add_theme_constant_override("separation", 6)
-	column.add_child(_picker_actions)
-
-
-func _style_picker_button(button: Button) -> void:
-	# Общая тёмная палитра со штатной темой боевого HUD.
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color("#192a38")
-	normal.border_color = Color("#546779")
-	normal.set_border_width_all(1)
-	normal.set_corner_radius_all(6)
-	button.add_theme_stylebox_override("normal", normal)
-	var hover: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
-	hover.bg_color = Color("#25394a")
-	hover.border_color = Color("#e0bd7a")
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("focus", hover)
-	var pressed: StyleBoxFlat = hover.duplicate() as StyleBoxFlat
-	pressed.bg_color = Color("#3e3524")
-	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_stylebox_override("hover_pressed", pressed)
-	var disabled: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
-	disabled.bg_color = Color("#17212a")
-	disabled.border_color = Color("#303e49")
-	button.add_theme_stylebox_override("disabled", disabled)
-	button.add_theme_font_size_override("font_size", 14)
-	button.add_theme_constant_override("icon_max_width", PICKER_ICON_WIDTH)
-
-
 func _on_slot_pressed(index: int, slot: BattleAbilitySlot) -> void:
 	if _reorder != null and _reorder.consume_selection(index):
 		return
@@ -616,116 +526,9 @@ func _on_slot_pressed(index: int, slot: BattleAbilitySlot) -> void:
 	_on_slot_selected(index)
 
 
-func _on_slot_selected(index: int) -> void:
-	if not _editing_allowed():
-		return
-	if _ability_picker.visible and _picker_target == index:
-		_hide_ability_picker()
-		return
-	_hide_combat_item_picker()
-	_picker_target = index
-	_populate_ability_picker(index)
-	_ability_picker.show()
-	_position_ability_picker()
-	# После раскладки Container его фактический размер может уточниться.
-	call_deferred("_position_ability_picker")
-
-
-func _populate_ability_picker(index: int) -> void:
-	for child in _picker_grid.get_children():
-		_picker_grid.remove_child(child)
-		child.queue_free()
-	for child in _picker_actions.get_children():
-		_picker_actions.remove_child(child)
-		child.queue_free()
-	var actor: BattleParticipant = _combat.battle_state.get_hero()
-	var available: Array[AbilityDefinition] = AbilityCatalog.available_abilities(actor)
-	var shown: int = 0
-	for ability in available:
-		var choice := Button.new()
-		choice.custom_minimum_size = Vector2(PICKER_CHOICE_WIDTH, PICKER_CHOICE_HEIGHT)
-		choice.clip_text = true
-		choice.expand_icon = true
-		choice.text = ability.display_name
-		choice.icon = BattleAbilitySlot.visual_icon(ability)
-		choice.tooltip_text = BattleAbilityTooltip.describe(ability, actor, index)
-		var reason: String = AbilityCatalog.unavailable_reason(actor, ability.ability_id)
-		if not reason.is_empty() and not choice.tooltip_text.contains(reason):
-			choice.tooltip_text += "\nНедоступно: " + reason
-		choice.disabled = not reason.is_empty()
-		_style_picker_button(choice)
-		choice.custom_minimum_size.x = PICKER_CHOICE_WIDTH - 50.0
-		_touch_info.attach_long_press(choice, func() -> String: return choice.tooltip_text)
-		choice.pressed.connect(_on_choice_pressed.bind(choice, index, ability.ability_id))
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 4)
-		row.add_child(choice)
-		var info := Button.new()
-		info.text = "ⓘ"
-		info.custom_minimum_size = Vector2(46, PICKER_CHOICE_HEIGHT)
-		info.pressed.connect(_touch_info.show_text.bind(choice.tooltip_text))
-		row.add_child(info)
-		_picker_grid.add_child(row)
-		shown += 1
-	var scroll: ScrollContainer = _picker_grid.get_parent() as ScrollContainer
-	scroll.custom_minimum_size.y = minf(PICKER_MAX_LIST_HEIGHT, maxf(PICKER_CHOICE_HEIGHT, float(shown) * (PICKER_CHOICE_HEIGHT + PICKER_ROW_SPACING)))
-	if not _planner_editing[index].is_empty():
-		_add_picker_action("✕ Убрать", "Очистить ячейку", true, _clear_draft.bind(index))
-
-
-func _add_picker_action(caption: String, hint: String, enabled: bool, callback: Callable) -> void:
-	var button := Button.new()
-	button.text = caption
-	button.tooltip_text = hint
-	button.disabled = not enabled
-	button.custom_minimum_size.y = 42.0
-	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_style_picker_button(button)
-	button.pressed.connect(callback)
-	_picker_actions.add_child(button)
-
-
-func _position_ability_picker() -> void:
-	if not _ability_picker.visible or _picker_target < 0:
-		return
-	if _picker_target >= _sequence_slots.get_child_count():
-		return
-	var slot: Control = _sequence_slots.get_child(_picker_target) as Control
-	var rect: Rect2 = slot.get_global_rect()
-	var size_needed: Vector2 = _ability_picker.get_combined_minimum_size()
-	_ability_picker.size = size_needed
-	var local_pos: Vector2 = rect.position - global_position
-	var x: float = clampf(local_pos.x + rect.size.x * 0.5 - size_needed.x * 0.5,
-		8.0, maxf(8.0, size.x - size_needed.x - 8.0))
-	var y: float = local_pos.y - size_needed.y - 8.0
-	if y < 8.0:
-		y = local_pos.y + rect.size.y + 8.0
-	y = clampf(y, 8.0, maxf(8.0, size.y - size_needed.y - 8.0))
-	_ability_picker.position = Vector2(x, y)
-
-
-func _on_choice_pressed(choice: Button, index: int, ability_id: String) -> void:
-	if _touch_info.consume_long_press(choice):
-		return
-	_choose_ability(index, ability_id)
-
-
-func _choose_ability(index: int, ability_id: String) -> void:
-	if not _editing_allowed() or index < 0 or index >= _planner_editing.size():
-		return
-	if not AbilityCatalog.can_prepare(_combat.battle_state.get_hero(), ability_id):
-		return
-	_planner_editing[index] = ability_id
-	_hide_ability_picker()
-	_refresh_phase_controls()
-
-
-func _clear_draft(index: int) -> void:
-	if not _editing_allowed() or index < 0 or index >= _planner_editing.size():
-		return
-	_planner_editing[index] = ""
-	_hide_ability_picker()
-	_refresh_phase_controls()
+func _on_slot_selected(_index: int) -> void:
+	if _editing_allowed() and _combat.battle_state.flow.stage == BattleFlow.Stage.PREPARATION:
+		_open_arsenal()
 
 
 func _can_reorder_slots() -> bool:
@@ -736,32 +539,15 @@ func _swap_draft_slots(from_index: int, to_index: int) -> void:
 	if not _editing_allowed():
 		return
 	_planner_editing = BattleChainReorderController.moved(_planner_editing, from_index, to_index)
-	_hide_ability_picker()
 	_refresh_phase_controls()
-
-
-func _hide_ability_picker() -> void:
-	_ability_picker.hide()
-	_picker_target = -1
-
-
-func _point_is_on_slot(point: Vector2) -> bool:
-	for node in _sequence_slots.get_children():
-		var slot: Control = node as Control
-		if slot != null and slot.get_global_rect().has_point(point):
-			return true
-	return false
 
 
 func _input(event: InputEvent) -> void:
 	if _reorder != null:
 		_reorder.handle_input(event)
-	var abilities_open: bool = _ability_picker != null and _ability_picker.visible
-	var items_open: bool = _item_picker != null and _item_picker.visible
-	if not abilities_open and not items_open:
+	if _item_picker == null or not _item_picker.visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
-		_hide_ability_picker()
 		_hide_combat_item_picker()
 		get_viewport().set_input_as_handled()
 		return
@@ -772,9 +558,7 @@ func _input(event: InputEvent) -> void:
 		point = event.position
 	else:
 		return
-	if abilities_open and not _ability_picker.get_global_rect().has_point(point) and not _point_is_on_slot(point):
-		_hide_ability_picker()
-	if items_open and not _item_picker.get_global_rect().has_point(point) and not _combat_items_button.get_global_rect().has_point(point):
+	if not _item_picker.get_global_rect().has_point(point) and not _combat_items_button.get_global_rect().has_point(point):
 		_hide_combat_item_picker()
 
 
@@ -795,7 +579,7 @@ func _commit_draft() -> bool:
 		return false
 	_hero_chain = actions.duplicate()
 	_committed_slots = _planner_editing.duplicate()
-	if _combat.hero != null:
+	if _combat.hero != null and _combat.battle_state.flow.stage == BattleFlow.Stage.PREPARATION:
 		_combat.hero.save_action_slots(_committed_slots)
 	return true
 
@@ -813,7 +597,6 @@ func _on_punch_pressed() -> void:
 	if flow.stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES] and not _commit_draft():
 		# Не пересоздаём слоты: иначе Tween красного мигания мгновенно погибнет.
 		return
-	_hide_ability_picker()
 	_hide_combat_item_picker()
 	_is_playing_back = true
 	var result: Dictionary = _combat.play_phase(_hero_chain, _enemy_chain)
@@ -1346,9 +1129,6 @@ func _refresh_phase_controls() -> void:
 	_refresh_accuracy_and_dodge()
 	var flow: BattleFlow = _combat.battle_state.flow
 	var stage: int = flow.stage
-	var editable: bool = _editing_allowed()
-	if not editable and _ability_picker.visible:
-		_hide_ability_picker()
 	_refresh_chain_slots()
 	_refresh_combat_items_button()
 	# Кнопка остаётся доступной, чтобы по нажатию мигнули пустые слоты.
@@ -1402,7 +1182,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var key_event := event as InputEventKey
 	if not key_event.pressed or key_event.echo:
 		return
-	if _ability_picker.visible or (_item_picker != null and _item_picker.visible):
+	if (_arsenal_view != null and _arsenal_view.visible) or (_item_picker != null and _item_picker.visible):
 		return
 	if key_event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and not _punch_button.disabled:
 		_on_punch_pressed()

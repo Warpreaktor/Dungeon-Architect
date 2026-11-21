@@ -92,6 +92,8 @@ func _draw() -> void:
 							mark = Color("#e49c54")
 					"monster":
 						mark = Color("#b95059")
+					"trap":
+						mark = Color("#c782c8")
 					"stairs_down":
 						mark = Color("#6bca9d")
 				if mark.a > 0.0:
@@ -142,6 +144,8 @@ func _draw_minimap_overlay() -> void:
 					"chest":
 						if not session.is_chest_open(entity):
 							mark = Color(1.0, 0.75, 0.32, 0.95)
+					"trap":
+						mark = Color(0.88, 0.44, 0.88, 0.95)
 					"door":
 						mark = Color(1.0, 0.77, 0.39, 0.90)
 					"stairs_down":

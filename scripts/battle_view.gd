@@ -724,7 +724,7 @@ func _play_phase_events(phase_events: Array) -> void:
 		else:
 			_playback.parallel().tween_property(portrait, "position", _impact_idle[actor_id], clash_intro_seconds)
 		_playback.parallel().tween_property(portrait, "scale", Vector2.ONE * _impact_scale, clash_intro_seconds)
-	for group in BattleClashTimeline.group_events(phase_events):
+	for group in BattleClashTimeline.group_events(phase_events, true):
 		var group_events: Array[Dictionary] = group["events"]
 		if bool(group.get("is_clash", false)):
 			_queue_clash_animation(group_events)

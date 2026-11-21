@@ -102,7 +102,7 @@ func _initialize() -> void:
 			found_first_tick = true
 		elif found_first_tick and str(event.get("type", "")) in ["action_start", "reload"]:
 			first_tick_actors.append(str(event.get("actor_id", "")))
-	assert(first_tick_actors == [e.participant_id, h.participant_id])
+	assert(first_tick_actors == [h.participant_id, e.participant_id])
 
 	var lethal := BattleState.new()
 	var victim: BattleParticipant = _fighter(lethal.hero_id, "heroes")
@@ -117,6 +117,9 @@ func _initialize() -> void:
 		victim_chain.append("basic_strike")
 	assert(bool(BattlePhaseTestDriver.run_phase(lethal, victim_chain, attacker.action_chain).get("success", false)))
 	assert(lethal.is_defeat)
+	var lethal_actions: Array[String] = []
 	for event in lethal.last_phase_events:
-		assert(not (event.get("type", "") == "action_start" and event.get("actor_id", "") == victim.participant_id))
+		if event.get("type", "") == "action_start":
+			lethal_actions.append(str(event.get("actor_id", "")))
+	assert(lethal_actions == [victim.participant_id, attacker.participant_id])
 	quit()

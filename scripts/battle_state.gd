@@ -464,8 +464,9 @@ func _resolve_tick(steps: Dictionary, opponent_id: String, tick: int, selected_t
 		"hero_reload": bool(hero_step.get("reload", false)),
 		"enemy_reload": bool(enemy_step.get("reload", false)),
 		"support_reload": bool(support_step.get("reload", false))})
-	var actor_ids: Array[String] = [hero_id, opponent_id]
-	var order: Array[String] = tick_policy.order_for_tick(participants, steps, actor_ids)
+	var order: Array[String] = [hero_id]
+	if not opponent_id.is_empty():
+		order.append(opponent_id)
 	for actor_id in order:
 		if is_defeat or (is_victory and not (actor_id == hero_id and bool(steps[actor_id].get("reload", false)))):
 			break

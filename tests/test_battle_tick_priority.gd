@@ -32,11 +32,11 @@ func _initialize() -> void:
 	for event in battle.last_phase_events:
 		if event.type in ["block", "attack", "reload"]:
 			decisions.append(str(event.actor_id) + ":" + str(event.type))
-	assert(decisions == ["enemy:block", "hero:attack", "hero:block", "enemy:attack", "hero:attack", "enemy:reload", "enemy:block", "hero:reload"])
+	assert(decisions == ["hero:attack", "enemy:block", "hero:block", "enemy:attack", "hero:attack", "enemy:reload", "hero:reload", "enemy:block"])
 	var next: Dictionary = BattlePhaseTestDriver.run_phase(battle, hero_chain, enemy_chain)
 	assert(next.success and next.ticks == 4) # каждый круг заканчивается отдыхом
 	assert(not battle.last_phase_events[0].hero_reload)
-	assert(battle.last_phase_events[-1].type == "reload" and battle.last_phase_events[-1].actor_id == "hero")
+	assert(battle.last_phase_events[-1].type == "block" and battle.last_phase_events[-1].actor_id == "enemy")
 	assert(battle.last_phase_events[0].enemy_slot == 1)
 
 	# При равном приоритете два блока ставятся в порядке герой -> монстр.

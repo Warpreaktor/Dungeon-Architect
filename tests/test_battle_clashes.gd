@@ -66,7 +66,6 @@ func _initialize() -> void:
 	assert(replay.get("events", []) == result.get("events", []))
 
 	var targeting: BattleState = _battle()
-	targeting.get_participant(targeting.support_enemy_id).is_targetable = true
 	var targeted: Dictionary = targeting.run_phase(["basic_strike", "basic_strike", "guard"], targeting.get_enemy().action_chain)
 	var second_target: Array[Dictionary] = _clash_events(targeted["events"], 1)
 	var targeted_support: bool = false
@@ -74,6 +73,16 @@ func _initialize() -> void:
 		if event.get("type", "") == "attack" and event.get("actor_id", "") == targeting.hero_id and event.get("target_id", "") == targeting.support_enemy_id:
 			targeted_support = true
 	assert(targeted_support)
+
+	var alternating: BattleState = _battle()
+	var alternating_result: Dictionary = alternating.run_phase(
+		["basic_strike", "basic_strike", "basic_strike"], alternating.get_enemy().action_chain)
+	assert(bool(alternating_result.get("success", false)))
+	var hero_targets: Array[String] = []
+	for event in alternating_result.get("events", []):
+		if event.get("type", "") == "attack" and event.get("actor_id", "") == alternating.hero_id:
+			hero_targets.append(str(event.get("target_id", "")))
+	assert(hero_targets == [alternating.enemy_id, alternating.support_enemy_id, alternating.enemy_id])
 
 	var dead: BattleState = _battle()
 	dead.get_enemy().health = 0

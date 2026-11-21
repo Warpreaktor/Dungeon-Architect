@@ -3,53 +3,114 @@ extends PanelContainer
 
 signal info_requested(content: String)
 
-const ICON_SIZE: Vector2 = Vector2(104.0, 120.0)
+const PORTRAIT_SIZE: Vector2 = Vector2(128.0, 148.0)
 const SLOT_SIZE: Vector2 = Vector2(40.0, 40.0)
-const PANEL_HORIZONTAL_PADDING: float = 24.0
 const SLOT_SEPARATION: int = 3
-const CONTENT_MARGIN: int = 10
-const HEALTH_FONT_SIZE: int = 12
-const CONTENT_SEPARATION: int = 9
+const CONTENT_MARGIN: int = 14
+const CONTENT_SEPARATION: int = 10
+const ROW_SEPARATION: int = 14
+const STAT_SEPARATION: int = 9
+const STAT_ICON_SIZE: Vector2 = Vector2(24.0, 24.0)
+const PRECISION_SEPARATION: int = 16
+const NAME_FONT_SIZE: int = 20
+const STAT_FONT_SIZE: int = 13
+const PRECISION_FONT_SIZE: int = 12
+const ATTACK_FONT_SIZE: int = 18
 const MUTED_COLOR: Color = Color("#8d9ba9")
+const STAT_COLOR: Color = Color(0.91, 0.76, 0.53, 1.0)
+const DODGE_COLOR: Color = Color(0.52, 0.89, 0.76, 1.0)
+const DEFENSE_IDLE_COLOR: Color = Color(0.55, 0.60, 0.67, 0.65)
+const HEALTH_METER_SCENE: PackedScene = preload("res://scenes/health_meter.tscn")
+const ATTACK_ICON: Texture2D = preload("res://assets/hud/attack.png")
+const DEFENSE_ICON: Texture2D = preload("res://assets/hud/shield.png")
 
 var _portrait: TextureRect
 var _name: Label
-var _health: Label
+var _health: HealthMeter
+var _attack: Label
+var _strength: Label
+var _agility: Label
+var _defense: Label
+var _defense_icon: TextureRect
+var _dodge: Label
+var _accuracy: Label
 var _slots: HBoxContainer
 var _revealed: Dictionary = {}
 var _participant: BattleParticipant
 
 
 func _ready() -> void:
-	size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var margin := MarginContainer.new()
 	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
 		margin.add_theme_constant_override(side, CONTENT_MARGIN)
 	add_child(margin)
-	var column := VBoxContainer.new()
-	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	column.add_theme_constant_override("separation", CONTENT_SEPARATION)
-	margin.add_child(column)
-	_name = Label.new()
-	_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_name.add_theme_color_override("font_color", Color("#e9c895"))
-	column.add_child(_name)
+	var row := VBoxContainer.new()
+	row.add_theme_constant_override("separation", CONTENT_SEPARATION)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	margin.add_child(row)
 	_portrait = TextureRect.new()
-	_portrait.custom_minimum_size = ICON_SIZE
+	_portrait.custom_minimum_size = PORTRAIT_SIZE
 	_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_portrait.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(_portrait)
-	_health = Label.new()
-	_health.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_health.add_theme_font_size_override("font_size", HEALTH_FONT_SIZE)
+	row.add_child(_portrait)
+	var column := VBoxContainer.new()
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_theme_constant_override("separation", CONTENT_SEPARATION)
+	row.add_child(column)
+	_name = Label.new()
+	_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_name.add_theme_font_size_override("font_size", NAME_FONT_SIZE)
+	column.add_child(_name)
+	_health = HEALTH_METER_SCENE.instantiate() as HealthMeter
 	column.add_child(_health)
+	_health.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
+	var stats := HBoxContainer.new()
+	stats.alignment = BoxContainer.ALIGNMENT_CENTER
+	stats.add_theme_constant_override("separation", STAT_SEPARATION)
+	column.add_child(stats)
+	_add_icon(stats, ATTACK_ICON)
+	_attack = _add_label(stats, ATTACK_FONT_SIZE)
+	_strength = _add_label(stats, STAT_FONT_SIZE, STAT_COLOR)
+	_agility = _add_label(stats, STAT_FONT_SIZE, STAT_COLOR)
+	_defense_icon = _add_icon(stats, DEFENSE_ICON)
+	_defense = _add_label(stats, ATTACK_FONT_SIZE)
+	var precision := HBoxContainer.new()
+	precision.alignment = BoxContainer.ALIGNMENT_CENTER
+	precision.add_theme_constant_override("separation", PRECISION_SEPARATION)
+	column.add_child(precision)
+	_dodge = _add_label(precision, PRECISION_FONT_SIZE, DODGE_COLOR)
+	_accuracy = _add_label(precision, PRECISION_FONT_SIZE, STAT_COLOR)
 	_slots = HBoxContainer.new()
 	_slots.alignment = BoxContainer.ALIGNMENT_CENTER
 	_slots.add_theme_constant_override("separation", SLOT_SEPARATION)
 	column.add_child(_slots)
+
+
+func _add_label(parent: Container, font_size: int, tint: Color = Color.WHITE) -> Label:
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", tint)
+	parent.add_child(label)
+	return label
+
+
+func _add_icon(parent: Container, texture: Texture2D) -> TextureRect:
+	var icon := TextureRect.new()
+	icon.texture = texture
+	icon.custom_minimum_size = STAT_ICON_SIZE
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(icon)
+	return icon
 
 
 func portrait_node() -> TextureRect:
@@ -67,18 +128,40 @@ func configure(participant: BattleParticipant, portrait: Texture2D, display_name
 	_revealed.clear()
 	_refresh_slots()
 	refresh_health(participant)
+	refresh_stats(participant)
 	highlight_cursor(participant.action_cursor)
 
 
 func refresh_health(participant: BattleParticipant) -> void:
 	if participant == null:
 		return
-	set_health(participant.health, participant.max_health)
+	_health.set_health(participant.health, participant.max_health)
 	_portrait.modulate = Color.WHITE if participant.is_alive() else MUTED_COLOR
 
 
 func set_health(health: int, maximum: int) -> void:
-	_health.text = "%d / %d HP" % [health, maximum]
+	_health.set_health(health, maximum, true)
+
+
+func refresh_stats(participant: BattleParticipant) -> void:
+	if participant == null:
+		return
+	_attack.text = str(participant.melee_attack())
+	_strength.text = "СИЛ %d" % participant.strength
+	_agility.text = "ЛОВ %d" % participant.effective_agility()
+	set_block(participant.block_armor)
+	_dodge.text = "УКЛ %d%%" % participant.dodge_percent()
+	_accuracy.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + participant.accuracy_percent())
+
+
+func set_block(amount: int) -> void:
+	_defense.text = str(amount)
+	_defense_icon.modulate = Color.WHITE if amount > 0 else DEFENSE_IDLE_COLOR
+
+
+func set_precision(dodge: int, accuracy: int) -> void:
+	_dodge.text = "УКЛ %d%%" % dodge
+	_accuracy.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + accuracy)
 
 
 func reveal(index: int, ability_id: String) -> void:
@@ -102,7 +185,6 @@ func _refresh_slots() -> void:
 	if _participant == null:
 		return
 	var count: int = _participant.action_chain.size() + BattleChainPlanner.REST_TICKS
-	custom_minimum_size.x = (SLOT_SIZE.x + float(SLOT_SEPARATION)) * float(count) + PANEL_HORIZONTAL_PADDING
 	for index in range(count):
 		var button := Button.new()
 		button.custom_minimum_size = SLOT_SIZE

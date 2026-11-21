@@ -10,7 +10,7 @@ signal combat_log_line(message: String)
 signal item_use_requested(item_id: String)
 
 @onready var _hero_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroHealthMeter
-@onready var _enemy_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/EnemyCard/EnemyMargin/EnemyColumn/EnemyHealthMeter
+@onready var _enemy_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyHealthMeter
 @onready var _hero_portrait: TextureRect = %HeroPortrait
 @onready var _hero_attack_icon: TextureRect = %HeroAttackIcon
 @onready var _hero_attack_value: Label = %HeroAttackValue
@@ -39,6 +39,8 @@ signal item_use_requested(item_id: String)
 @onready var _enemy_sequence_slots: HBoxContainer = %EnemySequenceSlots
 @onready var _enemy_sequence_scroll: ScrollContainer = $OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides/EnemySequenceScroll
 @onready var _battlefield: HBoxContainer = $OuterMargin/Main/Battlefield
+@onready var _enemy_party: HBoxContainer = $OuterMargin/Main/Battlefield/EnemyParty
+@onready var _main_enemy_card: PanelContainer = $OuterMargin/Main/Battlefield/EnemyParty/EnemyCard
 @onready var _hero_chain_title: Label = %HeroChainTitle
 @onready var _enemy_chain_title: Label = %EnemyChainTitle
 
@@ -73,11 +75,12 @@ var _picker_actions: HBoxContainer
 var _picker_target: int = -1
 var _items_session: GameSession
 var _item_picker: BattleItemPicker
-## Два временных портрета поверх поля: движение не меняет настоящие UI-узлы.
+## Временные портреты поверх поля: движение не меняет настоящие UI-узлы.
 var _impact_layer: Control
 var _impact_portraits: Dictionary = {}
 var _impact_idle: Dictionary = {}
 var _impact_origin: Dictionary = {}
+var _impact_scale: float = 1.0
 var _impact_shields: Dictionary = {}
 var _shield_flash_tweens: Dictionary = {}
 var _status_presenter: BattleStatusPresenter
@@ -96,14 +99,22 @@ const SHIELD_FLASH_START_SCALE: float = 0.25
 const SHIELD_FLASH_PEAK_SCALE: float = 1.08
 const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 
+@export_range(0.0, 2.0, 0.01) var clash_intro_seconds: float = 0.56
+@export_range(0.0, 2.0, 0.01) var clash_outro_seconds: float = 0.42
+@export_range(0.0, 2.0, 0.01) var clash_tick_seconds: float = 0.20
+@export_range(0.0, 2.0, 0.01) var clash_action_start_seconds: float = 0.08
 @export_range(0.0, 2.0, 0.01) var clash_windup_seconds: float = 0.20
-@export_range(0.0, 2.0, 0.01) var clash_impact_seconds: float = 0.16
-@export_range(0.0, 2.0, 0.01) var clash_hold_seconds: float = 0.12
-@export_range(0.0, 2.0, 0.01) var clash_recover_seconds: float = 0.22
-@export_range(0.0, 2.0, 0.01) var clash_idle_seconds: float = 0.22
+@export_range(0.0, 2.0, 0.01) var clash_impact_seconds: float = 0.13
+@export_range(0.0, 2.0, 0.01) var clash_hold_seconds: float = 0.46
+@export_range(0.0, 2.0, 0.01) var clash_recover_seconds: float = 0.27
+@export_range(0.0, 2.0, 0.01) var clash_idle_seconds: float = 0.40
+@export_range(1.0, 3.0, 0.01) var clash_portrait_scale: float = 1.5
+@export_range(0.0, 2.0, 0.01) var clash_idle_gap_fraction: float = 0.35
 @export_range(0.0, 1.0, 0.01) var clash_recoil_fraction: float = 0.18
-@export_range(0.0, 1.0, 0.01) var clash_contact_gap_fraction: float = 0.22
+@export_range(0.0, 1.0, 0.01) var clash_contact_overlap_fraction: float = 0.14
 @export_range(0.0, 1.0, 0.01) var clash_cast_icon_fraction: float = 0.42
+@export_range(0.0, 1.0, 0.01) var clash_formation_vertical_gap_fraction: float = 0.12
+@export_range(0.0, 1.0, 0.01) var clash_formation_vertical_padding_fraction: float = 0.06
 
 
 
@@ -137,9 +148,11 @@ func _ready() -> void:
 	_support_enemy_view = BattleSupportEnemyView.new()
 	_support_enemy_view.info_requested.connect(_touch_info.show_text)
 	_support_enemy_view.name = "SupportEnemy"
-	_support_enemy_view.theme = ($OuterMargin/Main/Battlefield/EnemyCard as PanelContainer).theme
-	_battlefield.add_child(_support_enemy_view)
+	_support_enemy_view.theme = _main_enemy_card.theme
+	_enemy_party.add_child(_support_enemy_view)
 	_support_enemy_view.hide()
+	_enemy_health_meter.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
+	_enemy_party.resized.connect(_equalize_enemy_cards)
 	_result_text.text = "Твой ход"
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.24)
@@ -186,6 +199,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	if support_definition.monster_id == combat.enemy_definition.monster_id:
 		support_name += " (2)"
 	_support_enemy_view.configure(support, portrait, support_name, support_definition.portrait_flip_h)
+	call_deferred("_equalize_enemy_cards")
 	if support != null:
 		_status_presenter.setup({combat.battle_state.support_enemy_id: _support_enemy_view.portrait_node()})
 	if hero.definition != null:
@@ -239,6 +253,20 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_refresh_enemy_slots()
 	_result_text.text = ""
 	_refresh_phase_controls()
+
+
+func _equalize_enemy_cards() -> void:
+	_main_enemy_card.custom_minimum_size.y = 0.0
+	_support_enemy_view.custom_minimum_size.y = 0.0
+	if not _support_enemy_view.visible:
+		return
+	var gap: float = float(_enemy_party.get_theme_constant("separation"))
+	var card_width: float = maxf((_enemy_party.size.x - gap) / float(_enemy_party.get_child_count()), 0.0)
+	var content_height: float = maxf(_main_enemy_card.get_combined_minimum_size().y,
+		_support_enemy_view.get_combined_minimum_size().y)
+	var side: float = minf(maxf(card_width, content_height), _enemy_party.size.y)
+	_main_enemy_card.custom_minimum_size.y = side
+	_support_enemy_view.custom_minimum_size.y = side
 
 
 func _editing_allowed() -> bool:
@@ -773,6 +801,14 @@ func _create_impact_layer() -> void:
 	var actor_ids: Array[String] = ["hero", "enemy"]
 	if _combat.battle_state.get_participant(BattleState.SUPPORT_ENEMY_ID) != null:
 		actor_ids.append(BattleState.SUPPORT_ENEMY_ID)
+	var portrait_sizes: Dictionary = {"hero": _hero_portrait.size, "enemy": _enemy_portrait.size}
+	if actor_ids.has(BattleState.SUPPORT_ENEMY_ID):
+		portrait_sizes[BattleState.SUPPORT_ENEMY_ID] = _support_enemy_view.portrait_node().size
+	var available_height: float = _battlefield.size.y * (1.0 - clash_formation_vertical_padding_fraction * 2.0)
+	_impact_scale = BattleClashGeometry.fit_formation_scale(available_height, portrait_sizes,
+		clash_portrait_scale, clash_formation_vertical_gap_fraction)
+	var idle_positions: Dictionary = BattleClashGeometry.formation_positions(center, portrait_sizes,
+		_impact_scale, clash_idle_gap_fraction, clash_formation_vertical_gap_fraction)
 	for actor_id in actor_ids:
 		var original: TextureRect = _hero_portrait if actor_id == "hero" else (_enemy_portrait if actor_id == "enemy" else _support_enemy_view.portrait_node())
 		if original == null or original.texture == null:
@@ -788,10 +824,7 @@ func _create_impact_layer() -> void:
 		portrait.pivot_offset = portrait.size * 0.5
 		portrait.position = original.global_position - global_position
 		_impact_origin[actor_id] = portrait.position
-		var idle_x: float = center.x - portrait.size.x * 1.12 if actor_id == "hero" else center.x + portrait.size.x * 0.12
-		if actor_id == BattleState.SUPPORT_ENEMY_ID:
-			idle_x = original.global_position.x - global_position.x
-		_impact_idle[actor_id] = Vector2(idle_x, center.y - portrait.size.y * 0.5)
+		_impact_idle[actor_id] = idle_positions[actor_id]
 		_impact_layer.add_child(portrait)
 		_impact_portraits[actor_id] = portrait
 		var shield_icon := TextureRect.new()
@@ -840,11 +873,11 @@ func _play_phase_events(phase_events: Array) -> void:
 	for actor_id in _impact_portraits:
 		var portrait: TextureRect = _impact_portraits[actor_id]
 		if first_intro:
-			_playback.tween_property(portrait, "position", _impact_idle[actor_id], clash_recover_seconds)
+			_playback.tween_property(portrait, "position", _impact_idle[actor_id], clash_intro_seconds)
 			first_intro = false
 		else:
-			_playback.parallel().tween_property(portrait, "position", _impact_idle[actor_id], clash_recover_seconds)
-		_playback.parallel().tween_property(portrait, "scale", Vector2(1.5, 1.5), clash_recover_seconds)
+			_playback.parallel().tween_property(portrait, "position", _impact_idle[actor_id], clash_intro_seconds)
+		_playback.parallel().tween_property(portrait, "scale", Vector2.ONE * _impact_scale, clash_intro_seconds)
 	for group in BattleClashTimeline.group_events(phase_events):
 		var group_events: Array[Dictionary] = group["events"]
 		if bool(group.get("is_clash", false)):
@@ -857,11 +890,11 @@ func _play_phase_events(phase_events: Array) -> void:
 	for actor_id in _impact_portraits:
 		var portrait: TextureRect = _impact_portraits[actor_id]
 		if first_return:
-			_playback.tween_property(portrait, "position", _impact_origin[actor_id], clash_recover_seconds)
+			_playback.tween_property(portrait, "position", _impact_origin[actor_id], clash_outro_seconds)
 			first_return = false
 		else:
-			_playback.parallel().tween_property(portrait, "position", _impact_origin[actor_id], clash_recover_seconds)
-		_playback.parallel().tween_property(portrait, "scale", Vector2.ONE, clash_recover_seconds)
+			_playback.parallel().tween_property(portrait, "position", _impact_origin[actor_id], clash_outro_seconds)
+		_playback.parallel().tween_property(portrait, "scale", Vector2.ONE, clash_outro_seconds)
 	_playback.tween_callback(_clear_impact_layer)
 	_playback.tween_callback(_after_phase_playback)
 
@@ -873,8 +906,11 @@ func _queue_clash_animation(group_events: Array[Dictionary]) -> void:
 		var kind: String = str(event.get("type", ""))
 		if kind in ["tick", "action_start", "block"]:
 			_playback.tween_callback(_display_phase_event.bind(event))
-			if kind == "action_start":
+			if kind == "tick":
+				_playback.tween_interval(clash_tick_seconds)
+			elif kind == "action_start":
 				_playback.tween_callback(_show_clash_ability.bind(event))
+				_playback.tween_interval(clash_action_start_seconds)
 		else:
 			outcomes.append(event)
 		if kind == "attack":
@@ -885,34 +921,33 @@ func _queue_clash_animation(group_events: Array[Dictionary]) -> void:
 	if attackers.is_empty():
 		_playback.tween_interval(clash_idle_seconds)
 	else:
+		var windup_positions: Dictionary = {}
 		var first_actor: bool = true
 		for actor_id in attackers:
 			var portrait: TextureRect = _impact_portraits[actor_id]
 			var target: TextureRect = _impact_portraits[attackers[actor_id]]
 			var direction: float = signf((_impact_idle[attackers[actor_id]] + target.size * 0.5).x - (_impact_idle[actor_id] + portrait.size * 0.5).x)
 			var windup: Vector2 = _impact_idle[actor_id] - Vector2(direction * portrait.size.x * clash_recoil_fraction, 0.0)
+			windup_positions[actor_id] = windup
 			if first_actor:
 				_playback.tween_property(portrait, "position", windup, clash_windup_seconds)
 				first_actor = false
 			else:
 				_playback.parallel().tween_property(portrait, "position", windup, clash_windup_seconds)
+		var sizes: Dictionary = {}
+		for actor_id in _impact_portraits:
+			sizes[actor_id] = (_impact_portraits[actor_id] as TextureRect).size
+		var contacts: Dictionary = BattleClashGeometry.contact_positions(_impact_idle, sizes, attackers, clash_contact_overlap_fraction, _impact_scale)
+		var approach_duration: float = BattleClashGeometry.approach_seconds(clash_impact_seconds, windup_positions, contacts, sizes)
 		var first_contact: bool = true
-		for actor_id in attackers:
+		for actor_id in contacts:
 			var portrait: TextureRect = _impact_portraits[actor_id]
-			var target: TextureRect = _impact_portraits[attackers[actor_id]]
-			var actor_center: Vector2 = _impact_idle[actor_id] + portrait.size * 0.5
-			var target_center: Vector2 = _impact_idle[attackers[actor_id]] + target.size * 0.5
-			var direction: float = signf(target_center.x - actor_center.x)
-			var middle: Vector2 = (actor_center + target_center) * 0.5
-			var contact_x: float = middle.x - portrait.size.x * (0.5 + direction * clash_contact_gap_fraction)
-			if not attackers.has(attackers[actor_id]):
-				contact_x = target.position.x - portrait.size.x * 0.5 if direction > 0.0 else target.position.x + target.size.x - portrait.size.x * 0.5
-			var contact: Vector2 = Vector2(contact_x, _impact_idle[actor_id].y)
+			var contact: Vector2 = contacts[actor_id]
 			if first_contact:
-				_playback.tween_property(portrait, "position", contact, clash_impact_seconds).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+				_playback.tween_property(portrait, "position", contact, approach_duration).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
 				first_contact = false
 			else:
-				_playback.parallel().tween_property(portrait, "position", contact, clash_impact_seconds).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+				_playback.parallel().tween_property(portrait, "position", contact, approach_duration).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
 	for event in outcomes:
 		if str(event.get("type", "")) == "attack":
 			_playback.tween_callback(_impact.bind(event))
@@ -1103,6 +1138,7 @@ func _flash_shield(actor_id: String) -> void:
 
 func _set_block_display(actor_id: String, amount: int) -> void:
 	if actor_id == BattleState.SUPPORT_ENEMY_ID:
+		_support_enemy_view.set_block(amount)
 		return
 	var value: Label = _hero_defense_value if actor_id == "hero" else _enemy_defense_value
 	var icon: TextureRect = _hero_defense_icon if actor_id == "hero" else _enemy_defense_icon
@@ -1203,6 +1239,7 @@ func _set_accuracy_and_dodge_from_event(event: Dictionary) -> void:
 		return
 	var target_id: String = str(event.get("target_id", ""))
 	if target_id == BattleState.SUPPORT_ENEMY_ID:
+		_support_enemy_view.set_precision(int(event.get("dodge_after", 0)), int(event.get("accuracy_after", 0)))
 		return
 	var dodge_label: Label = _hero_dodge_value if target_id == "hero" else _enemy_dodge_value
 	var accuracy_label: Label = _hero_accuracy_value if target_id == "hero" else _enemy_accuracy_value
@@ -1223,6 +1260,8 @@ func _refresh_accuracy_and_dodge() -> void:
 	_hero_accuracy_value.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + hero.accuracy_percent())
 	_enemy_dodge_value.text = "УКЛ %d%%" % enemy.dodge_percent()
 	_enemy_accuracy_value.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + enemy.accuracy_percent())
+	if _support_enemy_view != null:
+		_support_enemy_view.refresh_stats(_combat.battle_state.get_participant(BattleState.SUPPORT_ENEMY_ID))
 	_hero_dodge_value.tooltip_text = "Собственное уклонение, без учёта меткости противника"
 	_enemy_dodge_value.tooltip_text = "Собственное уклонение, без учёта меткости противника"
 

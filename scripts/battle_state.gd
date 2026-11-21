@@ -72,7 +72,6 @@ func add_support_enemy(definition: MonsterDefinition) -> BattleParticipant:
 	if existing != null:
 		return existing
 	var participant: BattleParticipant = BattleParticipant.from_monster(definition, support_enemy_id)
-	participant.is_targetable = false
 	participant.action_chain = MonsterCardDraw.draw(definition, participant, rng)
 	participants[support_enemy_id] = participant
 	support_enemy_definition = definition

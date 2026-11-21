@@ -13,7 +13,7 @@ func _initialize() -> void:
 	assert(main != support and main.action_chain.size() > 0 and support.action_chain.size() > 0)
 	assert(battle.enemy_ids() == [battle.enemy_id, battle.support_enemy_id])
 	var attack: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
-	assert(battle.create_context().target_ids("hero", attack) == [battle.enemy_id])
+	assert(battle.create_context().target_ids("hero", attack) == [battle.enemy_id, battle.support_enemy_id])
 	assert(battle.create_context().target_ids(battle.enemy_id, attack) == [battle.hero_id])
 	assert(battle.create_context().target_ids(battle.support_enemy_id, attack) == [battle.hero_id])
 	var ally: BattleParticipant = BattleParticipant.from_hero(source, "hero_ally")

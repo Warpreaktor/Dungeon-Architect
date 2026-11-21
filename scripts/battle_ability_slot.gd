@@ -96,7 +96,7 @@ func configure_recharge(index: int) -> void:
 	_slot_icon.visible = false
 	_empty_icon.visible = true
 	_empty_icon.text = "Zz"
-	tooltip_text = "Отдых: один пропущенный такт"
+	tooltip_text = "Отдых: завершает фазу и возвращает все приёмы"
 	_info_button.visible = true
 
 

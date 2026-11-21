@@ -85,6 +85,11 @@ var _visible_support_hp: int = 0
 var _visible_hero_max: int = 0
 var _visible_enemy_max: int = 0
 var _visible_support_max: int = 0
+var _manual_started: bool = false
+var _selected_manual_slot: int = -2
+var _selected_manual_target: String = ""
+var _target_row: HBoxContainer
+var _enemy_intent: Label
 
 
 # Длительность визуальной вспышки совпадает с паузой события «Блок».
@@ -136,6 +141,19 @@ func _ready() -> void:
 	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.add_child(_arsenal_button)
 	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.move_child(_arsenal_button, 1)
 	_build_combat_item_picker()
+	_target_row = HBoxContainer.new()
+	_target_row.name = "ManualTargets"
+	_target_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn.add_child(_target_row)
+	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn.move_child(_target_row, 1)
+	_target_row.hide()
+	_enemy_intent = Label.new()
+	_enemy_intent.name = "NextEnemyAction"
+	_enemy_intent.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_enemy_intent.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn.add_child(_enemy_intent)
+	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn.move_child(_enemy_intent, 2)
+	_enemy_intent.hide()
 	_reorder = BattleChainReorderController.new()
 	_reorder.configure(self, _sequence_slots, _can_reorder_slots, _swap_draft_slots)
 	_touch_info = TouchInfoOverlay.new()
@@ -190,6 +208,9 @@ func _basic_strike_damage(actor: BattleParticipant) -> int:
 
 func begin(combat: CombatSession, hero: HeroState) -> void:
 	_combat = combat
+	_manual_started = false
+	_selected_manual_slot = -2
+	_selected_manual_target = ""
 	var support_definition: MonsterDefinition = combat.support_enemy_definition if combat.support_enemy_definition != null else combat.enemy_definition
 	var support: BattleParticipant = combat.battle_state.get_participant(combat.battle_state.support_enemy_id)
 	var portrait: Texture2D = support_definition.portrait if support_definition.portrait != null else support_definition.icon
@@ -285,6 +306,8 @@ func _equalize_enemy_cards() -> void:
 
 
 func _editing_allowed() -> bool:
+	if _manual_started:
+		return false
 	if _combat == null or _is_playing_back or (_arsenal_view != null and _arsenal_view.visible):
 		return false
 	var stage: int = _combat.battle_state.flow.stage
@@ -313,12 +336,16 @@ func _refresh_chain_slots() -> void:
 		_sequence_slots.remove_child(child)
 		child.queue_free()
 	var editable: bool = _editing_allowed()
-	for index in range(_planner_editing.size()):
-		var action_id: String = _planner_editing[index]
+	var displayed: Array[String] = _hero_chain if _manual_started else _planner_editing
+	var available: Array[int] = _combat.battle_state.manual_available_slots() if _manual_started else []
+	for index in range(displayed.size()):
+		var action_id: String = displayed[index]
 		var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
 		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_sequence_slots.add_child(slot)
-		slot.configure(index, ability, editable, _combat.battle_state.get_hero())
+		slot.configure(index, ability, available.has(index) if _manual_started else editable, _combat.battle_state.get_hero())
+		if _manual_started and not available.has(index):
+			slot.modulate = Color(0.48, 0.48, 0.48)
 		slot.slot_selected.connect(_on_slot_pressed.bind(slot))
 		slot.info_requested.connect(_touch_info.show_text)
 		_touch_info.attach_long_press(slot, func() -> String: return slot.tooltip_text)
@@ -326,10 +353,15 @@ func _refresh_chain_slots() -> void:
 	# переставляемых слота и не сохраняется в HeroState.
 	var rest_slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 	_sequence_slots.add_child(rest_slot)
-	rest_slot.configure_recharge(_planner_editing.size())
+	rest_slot.configure_recharge(displayed.size())
+	if _manual_started and not _is_playing_back and _combat.battle_state.flow.stage != BattleFlow.Stage.FINISHED:
+		rest_slot.disabled = false
 	rest_slot.info_requested.connect(_touch_info.show_text)
 	_resize_chain_slots()
-	_highlight_next_actions()
+	if _manual_started:
+		_highlight_manual_selection()
+	else:
+		_highlight_next_actions()
 
 
 func _resize_chain_slots() -> void:
@@ -392,6 +424,9 @@ func _highlight_next_actions() -> void:
 	var hero: BattleParticipant = _combat.battle_state.get_hero()
 	var enemy: BattleParticipant = _combat.battle_state.get_enemy()
 	if hero == null or enemy == null:
+		return
+	if _manual_started:
+		_highlight_manual_selection()
 		return
 	# После завершения отдыха курсор героя уже на первом слоте.
 	var hero_index: int = hero.action_cursor
@@ -497,6 +532,16 @@ func _on_slot_pressed(index: int, slot: BattleAbilitySlot) -> void:
 
 
 func _on_slot_selected(_index: int) -> void:
+	if _manual_started:
+		if _is_playing_back or _combat.battle_state.flow.stage == BattleFlow.Stage.FINISHED:
+			return
+		if _index < _hero_chain.size() and not _combat.battle_state.manual_available_slots().has(_index):
+			return
+		_selected_manual_slot = -1 if _index == _hero_chain.size() else _index
+		_selected_manual_target = ""
+		_result_text.text = "Выбран отдых" if _selected_manual_slot == -1 else "Выбрано: %s" % AbilityCatalog.get_ability(_hero_chain[_selected_manual_slot]).display_name
+		_refresh_phase_controls()
+		return
 	if _editing_allowed() and _combat.battle_state.flow.stage == BattleFlow.Stage.PREPARATION:
 		_open_arsenal()
 
@@ -557,28 +602,40 @@ func _commit_draft() -> bool:
 func _on_punch_pressed() -> void:
 	if _combat == null or _punch_button.disabled:
 		return
-	var flow: BattleFlow = _combat.battle_state.flow
-	if flow.stage == BattleFlow.Stage.RECONFIGURING:
-		if _commit_draft():
-			_combat.confirm_tactic_change()
-			_result_text.text = "Алгоритм сохранён."
-			_refresh_phase_controls()
-		return
-	if flow.stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES] and not _commit_draft():
-		# Не пересоздаём слоты: иначе Tween красного мигания мгновенно погибнет.
-		return
-	_hide_combat_item_picker()
-	_is_playing_back = true
-	var result: Dictionary = _combat.play_phase(_hero_chain, _enemy_chain)
-	if not bool(result.get("success", false)):
-		_is_playing_back = false
-		_result_text.text = str(result.get("reason", "Фаза недоступна"))
+	if not _manual_started:
+		if not _commit_draft():
+			return
+		var prepared: Dictionary = _combat.prepare_manual_combat(_hero_chain)
+		if not bool(prepared.get("success", false)):
+			_result_text.text = str(prepared.get("reason", "Не удалось подготовить бой"))
+			return
+		_manual_started = true
+		_punch_button.icon = null
+		_selected_manual_slot = -2
+		_selected_manual_target = ""
+		_hide_combat_item_picker()
+		_result_text.text = "Выбери приём и цель"
 		_refresh_phase_controls()
 		return
+	if _selected_manual_slot == -2:
+		_result_text.text = "Выбери карту или отдых"
+		return
+	if _selected_manual_slot >= 0 and _selected_manual_target.is_empty():
+		_result_text.text = "Выбери цель"
+		return
+	_hide_combat_item_picker()
+	var result: Dictionary = _combat.play_manual_tick(_selected_manual_slot, _selected_manual_target)
+	if not bool(result.get("success", false)):
+		_result_text.text = str(result.get("reason", "Такт недоступен"))
+		_refresh_manual_targets()
+		return
+	_is_playing_back = true
+	_selected_manual_slot = -2
+	_selected_manual_target = ""
 	_punch_button.disabled = true
-	_guard_button.disabled = true
 	_combat_items_button.disabled = true
-	combat_log_line.emit("Бой · фаза %d" % int(result.get("phase_number", 0)))
+	_target_row.hide()
+	_enemy_intent.hide()
 	_play_phase_events(result.get("events", []))
 
 
@@ -816,8 +873,12 @@ func _display_phase_event(event: Dictionary) -> void:
 				_support_enemy_view.set_chain(_combat.battle_state.get_participant(actor_id))
 		"tick":
 			_conceal_enemy_actions()
-			_highlight_slots(int(event.get("hero_slot", -1)), int(event.get("enemy_slot", -1)),
-				bool(event.get("hero_reload", false)), bool(event.get("enemy_reload", false)))
+			if _manual_started:
+				var hero_slot: int = _hero_chain.size() if bool(event.get("hero_reload", false)) else int(event.get("hero_slot", -1))
+				_highlight_slots(hero_slot, int(event.get("enemy_slot", -1)))
+			else:
+				_highlight_slots(int(event.get("hero_slot", -1)), int(event.get("enemy_slot", -1)),
+					bool(event.get("hero_reload", false)), bool(event.get("enemy_reload", false)))
 			if _support_enemy_view != null:
 				var support_slot: int = int(event.get("support_slot", -1))
 				var support: BattleParticipant = _combat.battle_state.get_participant(BattleState.SUPPORT_ENEMY_ID)
@@ -1058,8 +1119,11 @@ func _after_phase_playback() -> void:
 		combat_log_line.emit("Бой окончен: поражение %s" % _hero_name.text)
 		_show_defeat()
 	else:
-		combat_log_line.emit("Фаза %d завершена" % _combat.battle_state.flow.phase_number)
-		_result_text.text = "Фаза %d завершена." % _combat.battle_state.flow.phase_number
+		if _manual_started:
+			_result_text.text = "Выбери следующий приём или отдых"
+		else:
+			combat_log_line.emit("Фаза %d завершена" % _combat.battle_state.flow.phase_number)
+			_result_text.text = "Фаза %d завершена." % _combat.battle_state.flow.phase_number
 		_refresh_phase_controls()
 
 
@@ -1101,25 +1165,86 @@ func _refresh_phase_controls() -> void:
 	if _combat == null:
 		return
 	_refresh_accuracy_and_dodge()
-	var flow: BattleFlow = _combat.battle_state.flow
-	var stage: int = flow.stage
+	var stage: int = _combat.battle_state.flow.stage
 	_refresh_chain_slots()
 	_refresh_combat_items_button()
-	# Кнопка остаётся доступной, чтобы по нажатию мигнули пустые слоты.
-	_punch_button.disabled = (_is_playing_back or stage == BattleFlow.Stage.EXECUTING or stage == BattleFlow.Stage.FINISHED)
-	match stage:
-		BattleFlow.Stage.PREPARATION:
-			_punch_button.text = "Начать бой"
-		BattleFlow.Stage.RECONFIGURING:
-			_punch_button.text = "Сохранить алгоритм"
-		_:
-			_punch_button.text = "Следующая фаза"
-	# Свободная перестановка доступна прямо в слотах между фазами.
 	_guard_button.visible = false
-	_arsenal_button.visible = stage == BattleFlow.Stage.PREPARATION
+	_arsenal_button.visible = not _manual_started and stage == BattleFlow.Stage.PREPARATION
 	_arsenal_button.disabled = _is_playing_back
-	_guard_button.disabled = _is_playing_back or stage == BattleFlow.Stage.EXECUTING or stage == BattleFlow.Stage.FINISHED
-	_guard_button.text = "Отмена" if stage == BattleFlow.Stage.RECONFIGURING else "Изменить тактику"
+	if not _manual_started:
+		_punch_button.text = "Начать бой"
+		_punch_button.disabled = _is_playing_back or stage != BattleFlow.Stage.PREPARATION
+		_target_row.hide()
+		_enemy_intent.hide()
+		return
+	_refresh_manual_targets()
+	_update_enemy_intent()
+	_punch_button.text = "Выполнить такт"
+	_punch_button.disabled = _is_playing_back or stage == BattleFlow.Stage.FINISHED or _selected_manual_slot == -2 or (_selected_manual_slot >= 0 and _selected_manual_target.is_empty())
+	if _selected_manual_slot == -1:
+		_punch_button.text = "Отдых"
+
+
+func _highlight_manual_selection() -> void:
+	if _sequence_slots == null:
+		return
+	for index in range(_sequence_slots.get_child_count()):
+		var selected: bool = (_selected_manual_slot == -1 and index == _hero_chain.size()) or index == _selected_manual_slot
+		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(selected)
+
+
+func _refresh_manual_targets() -> void:
+	for child in _target_row.get_children():
+		_target_row.remove_child(child)
+		child.queue_free()
+	_target_row.visible = _manual_started and not _is_playing_back and _selected_manual_slot >= 0
+	if not _target_row.visible:
+		return
+	var ability: AbilityDefinition = AbilityCatalog.get_ability(_hero_chain[_selected_manual_slot])
+	var targets: Array[String] = _combat.battle_state.create_context().target_ids("hero", ability)
+	if not targets.has(_selected_manual_target):
+		_selected_manual_target = targets[0] if targets.size() == 1 else ""
+	for id in targets:
+		var target: BattleParticipant = _combat.battle_state.get_participant(id)
+		var button := Button.new()
+		button.custom_minimum_size = Vector2(112, 38)
+		button.toggle_mode = true
+		button.button_pressed = id == _selected_manual_target
+		if id == "hero":
+			button.text = _hero_name.text
+		elif id == "enemy":
+			button.text = _enemy_name.text
+		else:
+			button.text = _combat.support_enemy_definition.display_name + " (2)" if _combat.support_enemy_definition != null else id
+		button.disabled = target == null or not target.is_alive()
+		button.pressed.connect(_choose_manual_target.bind(id))
+		_target_row.add_child(button)
+	if targets.is_empty():
+		_result_text.text = "Нет доступных целей для этого приёма"
+
+
+func _choose_manual_target(id: String) -> void:
+	_selected_manual_target = id
+	_result_text.text = "Цель выбрана. Выполни такт."
+	_refresh_phase_controls()
+
+
+func _update_enemy_intent() -> void:
+	_enemy_intent.visible = _manual_started and not _is_playing_back and _combat.battle_state.flow.stage != BattleFlow.Stage.FINISHED
+	if not _enemy_intent.visible:
+		return
+	var next_step: Dictionary = _combat.battle_state.manual_next_enemy_step()
+	if next_step.is_empty():
+		_enemy_intent.text = "Противники больше не действуют. Осталось завершить отдых."
+		return
+	var actor_id: String = str(next_step.get("actor_id", ""))
+	var opponent_name: String = _enemy_name.text
+	if actor_id == BattleState.SUPPORT_ENEMY_ID and _combat.support_enemy_definition != null:
+		opponent_name = _combat.support_enemy_definition.display_name + " (2)"
+	var action_id: String = str(next_step.get("action_id", ""))
+	var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
+	var action_name: String = "Отдых" if bool(next_step.get("reload", false)) else (ability.display_name if ability != null else "Неизвестный приём")
+	_enemy_intent.text = "Следующий противник: %s · %s" % [opponent_name, action_name]
 
 
 func _show_victory() -> void:

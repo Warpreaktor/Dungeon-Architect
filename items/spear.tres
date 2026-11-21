@@ -12,4 +12,3 @@ category = 3
 stackable = false
 equipment_slot = 1
 weapon_damage = 2
-attack_ability_id = "weapon_spear_strike"

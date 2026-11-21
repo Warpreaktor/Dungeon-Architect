@@ -20,7 +20,6 @@ enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 ## Собственный урон оружия, без скрытой атаки персонажа.
 @export_range(0, 999, 1) var weapon_damage: int = 0
 @export var weapon_kind: WeaponKind = WeaponKind.MELEE
-@export var attack_ability_id: String = ""
 @export var defense_bonus: int = 0
 @export_range(0, 999, 1) var max_durability: int = 0
 @export_range(0, 9999, 1) var healing_amount: int = 0

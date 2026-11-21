@@ -18,13 +18,6 @@ static func known_ability_ids(participant: BattleParticipant) -> Array[String]:
 	for id in participant.personal_ability_ids + participant.learned_ability_ids:
 		if get_ability(id) != null and not ids.has(id):
 			ids.append(id)
-	if participant.team_id == "heroes":
-		if not ids.has("weapon_fist_strike"):
-			ids.append("weapon_fist_strike")
-		var weapon: ItemDefinition = ItemCatalog.get_item(participant.equipped_weapon_id)
-		if weapon != null and weapon.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON and not weapon.attack_ability_id.is_empty():
-			if get_ability(weapon.attack_ability_id) != null and not ids.has(weapon.attack_ability_id):
-				ids.append(weapon.attack_ability_id)
 	for id in COMMON_EQUIPMENT_ABILITIES:
 		if not ids.has(id) and _has_equipment(participant, int(COMMON_EQUIPMENT_ABILITIES[id])):
 			ids.append(id)

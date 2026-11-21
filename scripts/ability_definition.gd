@@ -19,7 +19,6 @@ const UNLIMITED_RANGE: int = -1
 @export_range(-1, 999, 1) var maximum_range: int = UNLIMITED_RANGE
 ## Сила применяется только к ближним атакующим эффектам.
 @export var damage_delivery: DamageDelivery = DamageDelivery.MELEE
-@export var ignore_weapon_damage: bool = false
 @export var requirements: Array[AbilityRequirementDefinition] = []
 @export var effects: Array[AbilityEffectDefinition] = []
 ## Необязательные затраты для будущих способностей: {"mana": 4, "rage": 2}.

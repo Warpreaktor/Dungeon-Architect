@@ -8,7 +8,7 @@ const SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 
 var _hero: HeroState
 var _actor: BattleParticipant
-var _skills_row: HBoxContainer
+var _skills_grid: GridContainer
 var _details: AcceptDialog
 var _panel: PanelContainer
 var _arsenal_content: VBoxContainer
@@ -101,14 +101,11 @@ func _build_interface() -> void:
 	slots_label.text = "БОЕВЫЕ НАВЫКИ"
 	slots_label.add_theme_color_override("font_color", Color("#e8c58a"))
 	_arsenal_content.add_child(slots_label)
-	var slots_scroll := ScrollContainer.new()
-	slots_scroll.custom_minimum_size = Vector2(0, 122)
-	slots_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	slots_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_arsenal_content.add_child(slots_scroll)
-	_skills_row = HBoxContainer.new()
-	_skills_row.add_theme_constant_override("separation", 8)
-	slots_scroll.add_child(_skills_row)
+	_skills_grid = GridContainer.new()
+	_skills_grid.columns = 4
+	_skills_grid.add_theme_constant_override("h_separation", 8)
+	_skills_grid.add_theme_constant_override("v_separation", 8)
+	_arsenal_content.add_child(_skills_grid)
 
 	_details = AcceptDialog.new()
 	_details.title = "Приём"
@@ -179,11 +176,15 @@ func _resize_panel() -> void:
 	if _content_layout != null:
 		_content_layout.vertical = width < 860.0
 		_profile_content.custom_minimum_size.x = 0.0 if _content_layout.vertical else 320.0
+		if _skills_grid != null:
+			var side: float = 60.0 if width < 440.0 else (88.0 if _content_layout.vertical else 112.0)
+			for skill in _skills_grid.get_children():
+				skill.custom_minimum_size = Vector2(side, side)
 
 
 func _refresh() -> void:
-	for child in _skills_row.get_children():
-		_skills_row.remove_child(child)
+	for child in _skills_grid.get_children():
+		_skills_grid.remove_child(child)
 		child.queue_free()
 	if _hero == null or _actor == null:
 		return
@@ -193,8 +194,10 @@ func _refresh() -> void:
 		if not AbilityCatalog.can_prepare(_actor, ability.ability_id):
 			continue
 		var slot: BattleAbilitySlot = SLOT_SCENE.instantiate() as BattleAbilitySlot
-		_skills_row.add_child(slot)
-		slot.custom_minimum_size = Vector2(112, 112)
+		_skills_grid.add_child(slot)
+		var panel_width: float = _panel.custom_minimum_size.x
+		var side: float = 60.0 if panel_width < 440.0 else (88.0 if panel_width < 860.0 else 112.0)
+		slot.custom_minimum_size = Vector2(side, side)
 		slot.configure(index, ability, true, _actor)
 		var selected: bool = active.has(ability.ability_id)
 		slot.set_current(selected)

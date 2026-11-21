@@ -469,9 +469,15 @@ func _complete_rest(actor_id: String, tick: int) -> void:
 	resting.last_rest_tick = tick
 	events.append({"type": "reload", "actor_id": actor_id, "tick": tick, "slot_index": -1})
 	events.append_array(resting.owner_phase_status_damage_events(actor_id))
+	var before_health: int = resting.health
+	var before_maximum: int = resting.max_health
 	for expired_id in resting.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, tick):
 		events.append({"type": "status_removed", "actor_id": actor_id,
 			"target_id": actor_id, "status_id": expired_id, "removed": true})
+	if before_maximum != resting.max_health:
+		events.append({"type": "hp_limit_changed", "actor_id": actor_id,
+			"target_id": actor_id, "hp_after": resting.health, "hp_max": resting.max_health,
+			"hp_difference": resting.health - before_health})
 	resting.advance_consumable_phase()
 	update_outcome()
 

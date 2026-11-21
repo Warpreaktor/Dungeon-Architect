@@ -152,8 +152,12 @@ func equip_shield(item: ItemDefinition) -> void:
 
 
 ## Лечит не выше максимума, возвращает фактически восстановленное здоровье.
+func effective_max_health() -> int:
+	return BattleStatusRules.health_limit(max_health, overworld_statuses)
+
+
 func restore_health(amount: int) -> int:
-	var restored: int = mini(maxi(amount, 0), maxi(max_health - health, 0))
+	var restored: int = mini(maxi(amount, 0), maxi(effective_max_health() - health, 0))
 	health += restored
 	return restored
 
@@ -216,7 +220,7 @@ func apply_potion(item: ItemDefinition) -> Dictionary:
 		ItemDefinition.ConsumableEffect.HEAL, ItemDefinition.ConsumableEffect.NONE:
 			if item.healing_amount <= 0:
 				return {"used": false, "message": "Предмет нельзя использовать."}
-			if health >= max_health:
+			if health >= effective_max_health():
 				return {"used": false, "message": "Здоровье уже полное."}
 			var healed := restore_health(item.healing_amount)
 			return {"used": healed > 0, "message": "+%d HP" % healed}
@@ -293,6 +297,10 @@ func reset_exploration_phase() -> void:
 		status["steps_until_tick"] = int(status.get("interval_steps", exploration_phase_length()))
 		status["applied_tick"] = -1
 		status["skip_partial_phase"] = false
+		var instances: Array = status.get("instance_ticks", [])
+		for instance in instances:
+			instance["applied_tick"] = -1
+			instance["skip_partial_phase"] = false
 
 
 func advance_overworld_statuses() -> Array[Dictionary]:
@@ -312,12 +320,17 @@ func advance_overworld_statuses() -> Array[Dictionary]:
 			health = maxi(health - int(entry["damage"]), 0)
 			events.append({"status_id": str(status_id), "label": str(status.get("label", status_id)),
 				"damage": before - health, "ticks_remaining": maxi(int(status.get("ticks", 0)) - 1, 0)})
+		var old_limit: int = effective_max_health()
 		BattleStatusRules.advance(single, clock)
 		if single.has(status_id):
-			status["steps_until_tick"] = interval
-			overworld_statuses[status_id] = single[status_id]
+			var updated: Dictionary = single[status_id]
+			updated["steps_until_tick"] = interval
+			overworld_statuses[status_id] = updated
 		else:
 			overworld_statuses.erase(status_id)
+		var new_limit: int = effective_max_health()
+		if new_limit > old_limit and health > 0:
+			health = mini(health + new_limit - old_limit, new_limit)
 		if health <= 0:
 			break
 	return events

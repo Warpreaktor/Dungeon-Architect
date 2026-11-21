@@ -9,6 +9,7 @@ var team_id: String = ""
 var is_targetable: bool = true
 var is_passive: bool = false
 var max_health: int = 0
+var _base_max_health: int = 0
 var health: int = 0
 var strength: int = 0
 var agility: int = 0
@@ -66,7 +67,9 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant.accuracy_bonus = source.definition.accuracy_bonus if source.definition != null else 0
 	participant.learned_ability_ids = source.learned_ability_ids.duplicate()
 	participant.action_slot_capacity = source.action_slot_capacity()
+	participant._base_max_health = participant._hero_snapshot.max_health
 	participant.refresh_from_hero()
+	participant._sync_status_health_limit(false)
 	return participant
 
 
@@ -78,6 +81,7 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 	participant.team_id = "enemies"
 	participant.definition_id = source.monster_id
 	participant.max_health = source.max_health
+	participant._base_max_health = source.max_health
 	participant.health = source.max_health
 	participant.strength = source.strength
 	participant.agility = source.agility
@@ -97,7 +101,7 @@ func refresh_from_hero() -> void:
 	if _hero_snapshot == null:
 		return
 	_equipment.set_snapshot(_hero_snapshot)
-	max_health = _hero_snapshot.max_health
+	max_health = BattleStatusRules.health_limit(_hero_snapshot.max_health, statuses)
 	health = _hero_snapshot.health
 	strength = _hero_snapshot.strength
 	agility = _hero_snapshot.agility
@@ -144,6 +148,7 @@ func sync_consumable_from_hero(source: HeroState) -> void:
 	_hero_snapshot = source.copy_for_battle()
 	_equipment.set_snapshot(_hero_snapshot)
 	refresh_from_hero()
+	_sync_status_health_limit(false)
 
 
 func prepare_block(base_armor: int) -> void:
@@ -234,6 +239,15 @@ func status_modifier(stat: int) -> int:
 func apply_status(effect: AbilityEffectDefinition, tick: int) -> void:
 	var partial_phase: bool = not is_resting and action_cursor > 0
 	BattleStatusRules.apply(statuses, effect, tick, partial_phase)
+	_sync_status_health_limit(false)
+
+
+func remove_status(status_id: String) -> bool:
+	if not statuses.has(status_id):
+		return false
+	statuses.erase(status_id)
+	_sync_status_health_limit(true)
+	return true
 
 
 func has_damaged_armor() -> bool:
@@ -261,7 +275,30 @@ func owner_phase_status_damage_events(actor_id: String) -> Array[Dictionary]:
 
 
 func advance_status_clock(clock: int, current_tick: int = -1) -> Array[String]:
-	return BattleStatusRules.advance(statuses, clock, current_tick)
+	var expired: Array[String] = BattleStatusRules.advance(statuses, clock, current_tick)
+	_sync_status_health_limit(true)
+	return expired
+
+
+func _sync_status_health_limit(restore_on_expiration: bool) -> void:
+	if _base_max_health <= 0:
+		return
+	var old_maximum: int = max_health
+	var adjusted: int = BattleStatusRules.health_limit(_base_max_health, statuses)
+	if adjusted == old_maximum:
+		health = mini(health, adjusted)
+		if _hero_snapshot != null:
+			_hero_snapshot.health = health
+			_hero_snapshot.overworld_statuses = statuses.duplicate(true)
+		return
+	var next_health: int = health
+	if restore_on_expiration and adjusted > old_maximum and health > 0:
+		next_health += adjusted - old_maximum
+	max_health = adjusted
+	health = mini(next_health, max_health)
+	if _hero_snapshot != null:
+		_hero_snapshot.health = health
+		_hero_snapshot.overworld_statuses = statuses.duplicate(true)
 
 
 func advance_consumable_phase() -> void:

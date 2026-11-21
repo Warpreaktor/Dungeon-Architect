@@ -2,6 +2,14 @@ class_name BattleStatusRules
 extends RefCounted
 
 
+static func health_limit(base_maximum: int, statuses: Dictionary) -> int:
+	var reduction_percent: int = 0
+	for status in statuses.values():
+		reduction_percent += int(status.get("max_health_reduction_percent", 0)) * int(status.get("stacks", 1))
+	var reduction: int = ceili(float(base_maximum) * float(reduction_percent) / float(BattleMath.PERCENT_SCALE))
+	return maxi(base_maximum - reduction, 1)
+
+
 static func modifier(statuses: Dictionary, stat: int) -> int:
 	var total: int = 0
 	for active in statuses.values():
@@ -16,8 +24,14 @@ static func apply(statuses: Dictionary, effect: AbilityEffectDefinition, tick: i
 	if policy == AbilityEffectDefinition.Stack.ONCE and not previous.is_empty():
 		return
 	var stacks: int = int(previous.get("stacks", 0)) + 1 if policy == AbilityEffectDefinition.Stack.ADD else 1
+	if effect.max_health_reduction_percent > 0 and stacks > effect.max_stacks:
+		return
+	var instance_ticks: Array = previous.get("instance_ticks", []).duplicate(true) if policy == AbilityEffectDefinition.Stack.ADD else []
+	if effect.max_health_reduction_percent > 0:
+		instance_ticks.append({"ticks": effect.duration_ticks, "applied_tick": tick,
+			"skip_partial_phase": partial_phase})
 	statuses[effect.status_id] = {
-		"label": previous.get("label", effect.status_id),
+		"label": previous.get("label", effect.status_label if not effect.status_label.is_empty() else effect.status_id),
 		"amount": effect.amount,
 		"modifier": effect.effective_status_modifier(),
 		"stat": effect.effective_status_stat(),
@@ -26,6 +40,8 @@ static func apply(statuses: Dictionary, effect: AbilityEffectDefinition, tick: i
 		"stacks": stacks,
 		"applied_tick": tick,
 		"tick_damage": effect.tick_damage,
+		"max_health_reduction_percent": effect.max_health_reduction_percent,
+		"instance_ticks": instance_ticks,
 		"skip_partial_phase": effect.tick_damage <= 0
 			and effect.effective_status_clock() == AbilityEffectDefinition.Clock.OWNER_PHASE
 			and partial_phase
@@ -52,6 +68,26 @@ static func advance(statuses: Dictionary, clock: int, current_tick: int = -1) ->
 		var status: Dictionary = statuses[status_id]
 		if int(status.get("clock", AbilityEffectDefinition.Clock.LEGACY_HERO_PHASE)) != clock:
 			continue
+		var instances: Array = status.get("instance_ticks", [])
+		if not instances.is_empty():
+			var remaining: Array = []
+			for item in instances:
+				var instance: Dictionary = item.duplicate()
+				if bool(instance.get("skip_partial_phase", false)):
+					instance["skip_partial_phase"] = false
+				elif current_tick < 0 or int(instance.get("applied_tick", -1)) != current_tick:
+					instance["ticks"] = int(instance["ticks"]) - 1
+				if int(instance["ticks"]) > 0:
+					remaining.append(instance)
+			if remaining.is_empty():
+				statuses.erase(status_id)
+				expired.append(str(status_id))
+			else:
+				status["instance_ticks"] = remaining
+				status["stacks"] = remaining.size()
+				status["ticks"] = int(remaining[0]["ticks"])
+				statuses[status_id] = status
+			continue
 		if current_tick >= 0 and int(status.get("applied_tick", -1)) == current_tick and int(status.get("tick_damage", 0)) <= 0:
 			continue
 		if clock == AbilityEffectDefinition.Clock.OWNER_PHASE and bool(status.get("skip_partial_phase", false)):
@@ -73,6 +109,9 @@ static func describe(status: Dictionary) -> String:
 	var damage: int = int(status.get("tick_damage", 0)) * stacks
 	if damage > 0:
 		parts.append("Урон за фазу: %d HP" % damage)
+	var hp_reduction: int = int(status.get("max_health_reduction_percent", 0))
+	if hp_reduction > 0:
+		parts.append("Максимум HP: −%d%% за стек; стеков: %d" % [hp_reduction, stacks])
 	var value: int = int(status.get("modifier", 0)) * stacks
 	if value != 0:
 		var label: String = "Модификатор"
@@ -85,5 +124,12 @@ static func describe(status: Dictionary) -> String:
 	if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.INCOMING_ATTACK:
 		parts.append("Осталось входящих атак: %d" % int(status.get("ticks", 0)))
 	else:
-		parts.append("Осталось фаз: %d" % int(status.get("ticks", 0)))
+		var instances: Array = status.get("instance_ticks", [])
+		if instances.is_empty():
+			parts.append("Осталось фаз: %d" % int(status.get("ticks", 0)))
+		else:
+			var remaining: Array[String] = []
+			for instance in instances:
+				remaining.append(str(int(instance.get("ticks", 0))))
+			parts.append("Осталось фаз по стекам: %s" % ", ".join(remaining))
 	return ". ".join(parts)

@@ -93,25 +93,41 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					"damage_bonus_percent": recipient.block_attack_bonus_percent,
 					"hp_after": recipient.health, "hp_max": recipient.max_health})
 			AbilityEffectDefinition.Kind.HEAL:
-				var healed: int = recipient.restore_health(maxi(effect.amount, ceili(float(recipient.max_health) * float(effect.heal_percent_max) / float(BattleMath.PERCENT_SCALE))))
+				var healed: int = 0
+				if effect.heal_if_health_at_most_percent == 0 or (recipient.health * BattleMath.PERCENT_SCALE <= recipient.max_health * effect.heal_if_health_at_most_percent):
+					healed = recipient.restore_health(maxi(effect.amount, ceili(float(recipient.max_health) * float(effect.heal_percent_max) / float(BattleMath.PERCENT_SCALE))))
 				event_list.append({"type": "heal", "actor_id": actor_id, "target_id": recipient.participant_id,
 					"ability_id": ability_id, "healed": healed,
 					"hp_after": recipient.health, "hp_max": recipient.max_health})
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
 				if not recipient.is_alive():
 					continue
+				if effect.requires_health_damage and int(last_hit.get("damage", 0)) <= 0:
+					continue
 				if effect.requires_hit and (last_hit.is_empty() or bool(last_hit.get("dodged", false))):
 					continue
 				if effect.requires_unblocked_hit and (last_hit.is_empty() or bool(last_hit.get("dodged", false)) or bool(last_hit.get("was_blocking", false))):
 					continue
+				var before_health: int = recipient.health
+				var before_max_health: int = recipient.max_health
+				var previous_status: Dictionary = recipient.statuses.get(effect.status_id, {})
+				var before_stacks: int = int(previous_status.get("stacks", 0))
 				recipient.apply_status(effect, context.current_tick)
+				var current_status: Dictionary = recipient.statuses.get(effect.status_id, {})
+				if effect.max_health_reduction_percent > 0 and int(current_status.get("stacks", 0)) == before_stacks:
+					continue
 				event_list.append({"type": "status_applied", "actor_id": actor_id,
 					"target_id": recipient.participant_id, "ability_id": ability_id, "status_id": effect.status_id,
-					"duration_ticks": effect.duration_ticks,
+					"duration_ticks": effect.duration_ticks, "hp_after": recipient.health, "hp_max": recipient.max_health,
 					"dodge_after": recipient.dodge_percent(),
 					"effective_dodge_after": recipient.dodge_chance_against(
 						context.opponent_for(recipient.participant_id)),
 					"accuracy_after": recipient.accuracy_percent()})
+				if recipient.max_health != before_max_health:
+					event_list.append({"type": "hp_limit_changed", "actor_id": actor_id,
+						"target_id": recipient.participant_id, "status_id": effect.status_id,
+						"hp_after": recipient.health, "hp_max": recipient.max_health,
+						"hp_difference": recipient.health - before_health})
 				# Если цель уже отдыхала ранее в этом же такте, кровь тоже
 				# должна снять HP за эту фазу. Другой порядок покрыт BattleState.
 				if effect.tick_damage > 0 and recipient.last_rest_tick == context.current_tick:
@@ -122,11 +138,16 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 						event_list.append({"type": "status_removed", "actor_id": recipient.participant_id,
 							"target_id": recipient.participant_id, "status_id": expired_id, "removed": true})
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:
-				var removed: bool = recipient.statuses.has(effect.status_id)
-				recipient.statuses.erase(effect.status_id)
+				var before_health: int = recipient.health
+				var before_max_health: int = recipient.max_health
+				var removed: bool = recipient.remove_status(effect.status_id)
 				event_list.append({"type": "status_removed", "actor_id": actor_id,
 					"target_id": recipient.participant_id, "ability_id": ability_id, "status_id": effect.status_id,
 					"removed": removed})
+				if recipient.max_health != before_max_health:
+					event_list.append({"type": "hp_limit_changed", "actor_id": actor_id,
+						"target_id": recipient.participant_id, "hp_after": recipient.health,
+						"hp_max": recipient.max_health, "hp_difference": recipient.health - before_health})
 			AbilityEffectDefinition.Kind.WAIT:
 				event_list.append({"type": "wait", "actor_id": actor_id, "target_id": recipient.participant_id,
 					"ability_id": ability_id})

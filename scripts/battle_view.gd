@@ -82,6 +82,9 @@ var _reorder: BattleChainReorderController
 var _visible_hero_hp: int = 0
 var _visible_enemy_hp: int = 0
 var _visible_support_hp: int = 0
+var _visible_hero_max: int = 0
+var _visible_enemy_max: int = 0
+var _visible_support_max: int = 0
 var _lab_panel: BattleLabPlaybackPanel
 var _lab_steps: Array[Dictionary] = []
 var _lab_step_index: int = 0
@@ -231,11 +234,14 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_enemy_portrait.texture = combat.enemy_definition.portrait if combat.enemy_definition.portrait != null else combat.enemy_definition.icon
 	_enemy_portrait.flip_h = combat.enemy_definition.portrait_flip_h
 	_enemy_portrait.modulate = Color.WHITE
-	_hero_health_meter.set_health(hero.health, hero.max_health)
+	_hero_health_meter.set_health(hero.health, hero.effective_max_health())
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
 	_visible_hero_hp = hero.health
 	_visible_enemy_hp = combat.enemy_health
 	_visible_support_hp = support.health if support != null else 0
+	_visible_hero_max = hero.effective_max_health()
+	_visible_enemy_max = combat.enemy_definition.max_health
+	_visible_support_max = combat.support_enemy_definition.max_health if support != null else 0
 	_status_presenter.reset()
 	_status_presenter.sync(_combat.battle_state.participants)
 	# В рамках прохождения сохраняем именно позиции, включая пустые слоты.
@@ -505,7 +511,8 @@ func show_combat_item_result(result: Dictionary, session: GameSession) -> void:
 		return
 	if bool(result.get("used", false)):
 		_visible_hero_hp = session.hero.health
-		_hero_health_meter.set_health(_visible_hero_hp, session.hero.max_health, true)
+		_visible_hero_max = session.hero.effective_max_health()
+		_hero_health_meter.set_health(_visible_hero_hp, _visible_hero_max, true)
 		_hero_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_hero()))
 		_result_text.text = str(result.get("message", ""))
 	elif not str(result.get("message", "")).is_empty():
@@ -887,15 +894,31 @@ func _display_phase_event(event: Dictionary) -> void:
 			var healed: int = int(event.get("healed", 0))
 			if actor_id == "hero":
 				_visible_hero_hp += healed
-				_hero_health_meter.set_health(_visible_hero_hp, _combat.hero.max_health, true)
+				_hero_health_meter.set_health(_visible_hero_hp, _visible_hero_max, true)
 			elif actor_id == "enemy":
 				_visible_enemy_hp += healed
-				_enemy_health_meter.set_health(_visible_enemy_hp, _combat.enemy_max_health, true)
+				_enemy_health_meter.set_health(_visible_enemy_hp, _visible_enemy_max, true)
 			elif actor_id == BattleState.SUPPORT_ENEMY_ID:
 				_visible_support_hp += healed
-				_support_enemy_view.set_health(_visible_support_hp, _combat.battle_state.get_participant(actor_id).max_health)
+				_support_enemy_view.set_health(_visible_support_hp, _visible_support_max)
 			if healed > 0:
 				_spawn_number(str(event.get("target_id", "")), "+%d" % healed, Color("#70d994"))
+		"hp_limit_changed":
+			var target_id: String = str(event.get("target_id", ""))
+			var actual_hp: int = int(event.get("hp_after", 0))
+			var actual_max: int = int(event.get("hp_max", 0))
+			if target_id == "hero":
+				_visible_hero_hp = actual_hp
+				_visible_hero_max = actual_max
+				_hero_health_meter.set_health(actual_hp, actual_max, true)
+			elif target_id == "enemy":
+				_visible_enemy_hp = actual_hp
+				_visible_enemy_max = actual_max
+				_enemy_health_meter.set_health(actual_hp, actual_max, true)
+			elif target_id == BattleState.SUPPORT_ENEMY_ID and _support_enemy_view != null:
+				_visible_support_hp = actual_hp
+				_visible_support_max = actual_max
+				_support_enemy_view.set_health(actual_hp, actual_max)
 		"status_applied":
 			_set_accuracy_and_dodge_from_event(event)
 			_status_presenter.flash(str(event.get("target_id", "")), str(event.get("status_id", "")))
@@ -906,13 +929,13 @@ func _display_phase_event(event: Dictionary) -> void:
 			var amount: int = int(event.get("damage", 0))
 			if target_id == "hero":
 				_visible_hero_hp -= amount
-				_hero_health_meter.set_health(_visible_hero_hp, _combat.hero.max_health, true)
+				_hero_health_meter.set_health(_visible_hero_hp, _visible_hero_max, true)
 			elif target_id == "enemy":
 				_visible_enemy_hp -= amount
-				_enemy_health_meter.set_health(_visible_enemy_hp, _combat.enemy_max_health, true)
+				_enemy_health_meter.set_health(_visible_enemy_hp, _visible_enemy_max, true)
 			elif target_id == BattleState.SUPPORT_ENEMY_ID:
 				_visible_support_hp -= amount
-				_support_enemy_view.set_health(_visible_support_hp, _combat.battle_state.get_participant(target_id).max_health)
+				_support_enemy_view.set_health(_visible_support_hp, _visible_support_max)
 			if amount > 0:
 				_spawn_number(target_id, "−%d" % amount, Color("#ed4444"), 18.0)
 		"reload":
@@ -953,13 +976,13 @@ func _impact(event: Dictionary) -> void:
 		_spawn_number(target_id, "0", Color("#c1cad2"))
 	if target_id == "hero":
 		_visible_hero_hp -= hp_damage
-		_hero_health_meter.set_health(_visible_hero_hp, _combat.hero.max_health, true)
+		_hero_health_meter.set_health(_visible_hero_hp, _visible_hero_max, true)
 	elif target_id == "enemy":
 		_visible_enemy_hp -= hp_damage
-		_enemy_health_meter.set_health(_visible_enemy_hp, _combat.enemy_max_health, true)
+		_enemy_health_meter.set_health(_visible_enemy_hp, _visible_enemy_max, true)
 	elif target_id == BattleState.SUPPORT_ENEMY_ID:
 		_visible_support_hp -= hp_damage
-		_support_enemy_view.set_health(_visible_support_hp, _combat.battle_state.get_participant(target_id).max_health)
+		_support_enemy_view.set_health(_visible_support_hp, _visible_support_max)
 	if hp_damage > 0:
 		target.modulate = Color("#ff6464")
 	elif shield_damage > 0:
@@ -1062,8 +1085,10 @@ func _after_phase_playback() -> void:
 		if passive != null:
 			_support_enemy_view.highlight_cursor(passive.action_cursor)
 			_support_enemy_view.refresh_health(passive)
-	_hero_health_meter.set_health(_combat.hero.health, _combat.hero.max_health, true)
-	_enemy_health_meter.set_health(_combat.enemy_health, _combat.enemy_max_health, true)
+	_visible_hero_max = _combat.hero.effective_max_health()
+	_visible_enemy_max = _combat.enemy_max_health
+	_hero_health_meter.set_health(_combat.hero.health, _visible_hero_max, true)
+	_enemy_health_meter.set_health(_combat.enemy_health, _visible_enemy_max, true)
 	if _combat.battle_state.get_enemy() != null and not _combat.battle_state.get_enemy().is_alive():
 		_enemy_portrait.modulate = Color("#87909c")
 	# При нескольких ударах за фазу щит мог сломаться не на последнем.

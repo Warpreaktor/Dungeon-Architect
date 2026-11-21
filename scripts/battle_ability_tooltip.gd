@@ -38,8 +38,12 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 					lines.append("Лечение: %d%% максимального HP цели" % effect.heal_percent_max)
 				else:
 					lines.append("Лечение: %d HP (не выше максимума)" % maxi(effect.amount, 0))
+				if effect.heal_if_health_at_most_percent > 0:
+					lines.append("При HP не выше %d%%" % effect.heal_if_health_at_most_percent)
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
-				if effect.tick_damage > 0:
+				if effect.max_health_reduction_percent > 0:
+					lines.append("Максимум HP: −%d%% за стек; максимум стеков: %d; %s" % [effect.max_health_reduction_percent, effect.max_stacks, effect.status_duration_description()])
+				elif effect.tick_damage > 0:
 					lines.append("Кровотечение: −%d HP за отдых цели, %s" % [effect.tick_damage, effect.status_duration_description()])
 				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.ACCURACY:
 					lines.append("Меткость цели: %+d п.п. %s" % [effect.effective_status_modifier(), effect.status_duration_description()])

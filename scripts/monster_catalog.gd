@@ -10,6 +10,7 @@ const DEFINITIONS := {
 	"lobar": preload("res://monsters/lobar.tres"),
 	"kadavr": preload("res://monsters/kadavr.tres"),
 	"skeleton": preload("res://monsters/skeleton.tres"),
+	"fallen_hero": preload("res://monsters/fallen_hero.tres"),
 	"rabbit_cadaver": preload("res://monsters/rabbit_cadaver.tres")
 }
 

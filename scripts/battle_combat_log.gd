@@ -68,6 +68,9 @@ static func format_event(event: Dictionary, hero_name: String, enemy_name: Strin
 			return "    %s: %s, +%d HP (%d/%d)" % [actor,
 				ability_name(str(event.get("ability_id", ""))), int(event.get("healed", 0)),
 				int(event.get("hp_after", 0)), int(event.get("hp_max", 0))]
+		"hp_limit_changed":
+			return "    %s: предел здоровья %d/%d HP" % [target,
+				int(event.get("hp_after", 0)), int(event.get("hp_max", 0))]
 		"status_tick":
 			return "    %s: кровотечение −%d HP (%d/%d)" % [actor,
 				int(event.get("damage", 0)), int(event.get("hp_after", 0)), int(event.get("hp_max", 0))]

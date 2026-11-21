@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/fallen_hero/battle_memory.png" id="3_icon"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+kind = 0
+recipient = 1
+damage_multiplier = 0.8
+vs_rest_multiplier = 1.6
+accuracy_offset_percent = -15
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "fallen_hero_battle_memory"
+display_name = "Память о битве"
+description = "Удар с множителем {effect_0_damage_multiplier}; по отдыхающей цели {effect_0_vs_rest_multiplier}. Меткость атаки {effect_0_accuracy_offset_percent} п.п. от текущей."
+icon = ExtResource("3_icon")
+category = 0
+target = 1
+effects = Array[Resource]([SubResource("Effect0")])

@@ -7,6 +7,7 @@ signal info_requested(actor_id: String, status_id: String)
 const STATUS_ICONS: Dictionary = {
 	"bleeding": preload("res://assets/abilities/statuses/bleeding.png"),
 	"petushan_accuracy_down": preload("res://assets/abilities/statuses/accuracy_down.png"),
+	"fallen_hero_infection": preload("res://assets/abilities/fallen_hero/rotten_bite.png"),
 	"rabbit_master_mark": preload("res://assets/abilities/statuses/rabbit_master_mark.png")
 }
 const STATUS_MARKER_GAP: float = 0.04

@@ -16,6 +16,7 @@ const HIT_OUT_SECONDS: float = 0.24
 const HIT_COLOR: Color = Color(1.0, 0.25, 0.25, 1.0)
 const STATUS_TEXTURES: Dictionary = {
 	"bleeding": preload("res://assets/abilities/statuses/bleeding.png"),
+	"fallen_hero_infection": preload("res://assets/abilities/fallen_hero/rotten_bite.png"),
 	"strength": preload("res://assets/icons/potion_strength_small.png"),
 	"vitality": preload("res://assets/icons/potion_vitality_small.png"),
 	"vision": preload("res://assets/icons/potion_vision_small.png")
@@ -124,11 +125,11 @@ func display_member(member: HeroState) -> void:
 	visible = true
 	_portrait.texture = member.definition.portrait if member.definition != null else null
 	var name_text: String = member.definition.display_name if member.definition != null else "Герой"
-	_portrait.tooltip_text = "%s: %d/%d HP" % [name_text, member.health, member.max_health]
-	var max_health: int = maxi(member.max_health, 1)
+	_portrait.tooltip_text = "%s: %d/%d HP" % [name_text, member.health, member.effective_max_health()]
+	var max_health: int = member.effective_max_health()
 	_health_bar.max_value = float(max_health)
 	_health_bar.value = float(clampi(member.health, 0, max_health))
-	_health.text = "%d / %d" % [member.health, member.max_health]
+	_health.text = "%d / %d" % [member.health, member.effective_max_health()]
 	_health.add_theme_color_override("font_color", HEALTH_TEXT_DISABLED_COLOR if member.health <= 0 else HEALTH_TEXT_COLOR)
 	_normal_tint = Color(0.55, 0.55, 0.55) if member.health <= 0 else Color.WHITE
 	if _hit_tween == null or not _hit_tween.is_running():
@@ -205,7 +206,7 @@ func _on_portrait_input(event: InputEvent) -> void:
 	if not tapped:
 		return
 	var name_text: String = _member.definition.display_name if _member.definition != null else "Герой"
-	var description: String = "Здоровье: %d / %d" % [_member.health, _member.max_health]
+	var description: String = "Здоровье: %d / %d" % [_member.health, _member.effective_max_health()]
 	var effects: String = _member.active_effects_summary()
 	if not effects.is_empty():
 		description += "\n" + effects

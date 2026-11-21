@@ -13,6 +13,7 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 @export var recipient: Recipient = Recipient.TARGET
 @export_range(0, 9999, 1) var amount: int = 0
 @export var status_id: String = ""
+@export var status_label: String = ""
 ## Configurable damage rules. Only meaningful for DAMAGE.
 @export_range(0.0, 10.0, 0.01) var damage_multiplier: float = 1.0
 @export_range(0.0, 10.0, 0.01) var first_slot_multiplier: float = 0.0
@@ -38,6 +39,10 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 @export_range(-100, 100, 1) var accuracy_offset_percent: int = 0
 ## Дебафф после атаки требует попадания (обычное попадание или через блок).
 @export var requires_hit: bool = false
+@export var requires_health_damage: bool = false
+@export_range(0, 100, 1) var max_health_reduction_percent: int = 0
+@export_range(1, 99, 1) var max_stacks: int = 99
+@export_range(0, 100, 1) var heal_if_health_at_most_percent: int = 0
 ## Совместимость ресурсов стартовых способностей Волчи.
 @export var modifier_kind: Stat = Stat.NONE
 @export var stack_mode: Stack = Stack.REFRESH

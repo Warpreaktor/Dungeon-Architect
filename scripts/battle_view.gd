@@ -88,7 +88,6 @@ var _visible_support_max: int = 0
 var _manual_started: bool = false
 var _selected_manual_slot: int = -2
 var _target_outlines: Dictionary = {}
-var _enemy_intent: Label
 
 
 # Длительность визуальной вспышки совпадает с паузой события «Блок».
@@ -139,13 +138,6 @@ func _ready() -> void:
 	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.add_child(_arsenal_button)
 	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.move_child(_arsenal_button, 1)
 	_build_combat_item_picker()
-	_enemy_intent = Label.new()
-	_enemy_intent.name = "NextEnemyAction"
-	_enemy_intent.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_enemy_intent.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn.add_child(_enemy_intent)
-	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn.move_child(_enemy_intent, 2)
-	_enemy_intent.hide()
 	_reorder = BattleChainReorderController.new()
 	_reorder.configure(self, _sequence_slots, _can_reorder_slots, _swap_draft_slots)
 	_touch_info = TouchInfoOverlay.new()
@@ -180,7 +172,7 @@ func _ready() -> void:
 	_bind_target_portrait(_support_enemy_view.portrait_node(), BattleState.SUPPORT_ENEMY_ID)
 	_enemy_health_meter.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
 	_enemy_party.resized.connect(_equalize_enemy_cards)
-	_result_text.text = "Твой ход"
+	_result_text.text = ""
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.24)
 
@@ -538,11 +530,7 @@ func _on_slot_selected(_index: int) -> void:
 			_play_selected_manual_action("")
 			return
 		_selected_manual_slot = -2 if _selected_manual_slot == requested_slot else requested_slot
-		if _selected_manual_slot >= 0:
-			var ability: AbilityDefinition = AbilityCatalog.get_ability(_hero_chain[_selected_manual_slot])
-			_result_text.text = "Выбери цель для «%s»" % ability.display_name
-		else:
-			_result_text.text = "Выбери приём"
+		_result_text.text = ""
 		_refresh_phase_controls()
 		return
 	if _editing_allowed() and _combat.battle_state.flow.stage == BattleFlow.Stage.PREPARATION:
@@ -614,7 +602,7 @@ func _on_punch_pressed() -> void:
 	_manual_started = true
 	_punch_button.hide()
 	_hide_combat_item_picker()
-	_result_text.text = "Выбери карту, затем нажми на цель"
+	_result_text.text = ""
 	_refresh_phase_controls()
 
 
@@ -637,7 +625,6 @@ func _play_selected_manual_action(target_id: String) -> void:
 	_selected_manual_slot = -2
 	_punch_button.disabled = true
 	_combat_items_button.disabled = true
-	_enemy_intent.hide()
 	_refresh_target_outlines()
 	_play_phase_events(result.get("events", []))
 
@@ -1108,11 +1095,7 @@ func _after_phase_playback() -> void:
 		combat_log_line.emit("Бой окончен: поражение %s" % _hero_name.text)
 		_show_defeat()
 	else:
-		if _manual_started:
-			_result_text.text = "Выбери следующий приём или отдых"
-		else:
-			combat_log_line.emit("Фаза %d завершена" % _combat.battle_state.flow.phase_number)
-			_result_text.text = "Фаза %d завершена." % _combat.battle_state.flow.phase_number
+		_result_text.text = ""
 		_refresh_phase_controls()
 
 
@@ -1164,10 +1147,8 @@ func _refresh_phase_controls() -> void:
 	if not _manual_started:
 		_punch_button.text = "Начать бой"
 		_punch_button.disabled = _is_playing_back or stage != BattleFlow.Stage.PREPARATION
-		_enemy_intent.hide()
 		_refresh_target_outlines()
 		return
-	_update_enemy_intent()
 	_refresh_target_outlines()
 
 
@@ -1222,24 +1203,6 @@ func _refresh_target_outlines() -> void:
 		outline.visible = valid_targets.has(str(actor_id))
 		var portrait: TextureRect = outline.get_parent() as TextureRect
 		portrait.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if outline.visible else Control.CURSOR_ARROW
-
-
-func _update_enemy_intent() -> void:
-	_enemy_intent.visible = _manual_started and not _is_playing_back and _combat.battle_state.flow.stage != BattleFlow.Stage.FINISHED
-	if not _enemy_intent.visible:
-		return
-	var next_step: Dictionary = _combat.battle_state.manual_next_enemy_step()
-	if next_step.is_empty():
-		_enemy_intent.text = "Противники больше не действуют. Осталось завершить отдых."
-		return
-	var actor_id: String = str(next_step.get("actor_id", ""))
-	var opponent_name: String = _enemy_name.text
-	if actor_id == BattleState.SUPPORT_ENEMY_ID and _combat.support_enemy_definition != null:
-		opponent_name = _combat.support_enemy_definition.display_name + " (2)"
-	var action_id: String = str(next_step.get("action_id", ""))
-	var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
-	var action_name: String = "Отдых" if bool(next_step.get("reload", false)) else (ability.display_name if ability != null else "Неизвестный приём")
-	_enemy_intent.text = "Следующий противник: %s · %s" % [opponent_name, action_name]
 
 
 func _show_victory() -> void:

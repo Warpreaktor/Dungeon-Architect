@@ -36,7 +36,7 @@ var last_blocked_damage: int:
 		return battle_state.last_blocked_damage
 
 
-func _init(monster: MonsterDefinition = null, participant: HeroState = null, secondary: MonsterDefinition = null) -> void:
+func _init(monster: MonsterDefinition = null, participant: HeroState = null, secondary: MonsterDefinition = null, rng_seed: int = -1) -> void:
 	var selected: MonsterDefinition = monster if monster != null else MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID)
 	var bond: BattleBondDefinition = selected.battle_bond
 	if bond != null and (not MonsterCatalog.has(bond.companion_monster_id)
@@ -45,7 +45,7 @@ func _init(monster: MonsterDefinition = null, participant: HeroState = null, sec
 	enemy_definition = MonsterCatalog.get_monster(bond.companion_monster_id) if bond != null else selected
 	support_enemy_definition = selected if bond != null else secondary
 	hero = participant if participant != null else HeroState.new()
-	battle_state = BattleState.begin(enemy_definition, hero)
+	battle_state = BattleState.begin(enemy_definition, hero, rng_seed)
 	if support_enemy_definition != null:
 		battle_state.add_support_enemy(support_enemy_definition)
 	if bond != null:

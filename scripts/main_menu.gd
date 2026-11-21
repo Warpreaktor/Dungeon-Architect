@@ -3,6 +3,7 @@ extends Control
 
 ## Главный экран и выбор сохранённого подземелья для обычной игры.
 ## Сохранения прохождения здесь намеренно отсутствуют до отдельного этапа.
+signal laboratory_requested
 signal editor_requested
 signal game_requested(data: DungeonMap, hero_id: String)
 
@@ -24,6 +25,12 @@ var _thumbnails: Array[Texture2D] = []
 
 func _ready() -> void:
 	%PlayButton.pressed.connect(_open_library)
+	var laboratory_button := Button.new()
+	laboratory_button.text = "Лаборатория боя"
+	laboratory_button.custom_minimum_size = Vector2(240, 58)
+	laboratory_button.pressed.connect(func() -> void: laboratory_requested.emit())
+	laboratory_button.visible = OS.has_feature("debug")
+	%HomeActions.add_child(laboratory_button)
 	%EditorButton.pressed.connect(func() -> void: editor_requested.emit())
 	%BackButton.pressed.connect(_back_to_home)
 	_start_button.pressed.connect(_start_selected)

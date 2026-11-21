@@ -59,6 +59,7 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant.team_id = "heroes"
 	participant.definition_id = source.definition.hero_id if source.definition != null else ""
 	participant._hero_snapshot = source.copy_for_battle()
+	participant.statuses = participant._hero_snapshot.overworld_statuses.duplicate(true)
 	participant._equipment.set_snapshot(participant._hero_snapshot)
 	participant.personal_ability_ids = source.definition.personal_ability_ids.duplicate() if source.definition != null else []
 	participant.base_dodge_percent = source.definition.base_dodge_percent if source.definition != null else 0
@@ -105,11 +106,11 @@ func refresh_from_hero() -> void:
 	equipped_shield_id = _hero_snapshot.equipped_shield_id
 	effects = {
 		"strength_bonus": _hero_snapshot.strength_bonus,
-		"strength_steps": _hero_snapshot.strength_steps,
+		"strength_phases": _hero_snapshot.strength_phases,
 		"vitality_percent": _hero_snapshot.vitality_percent,
-		"vitality_steps": _hero_snapshot.vitality_steps,
+		"vitality_phases": _hero_snapshot.vitality_phases,
 		"vision_bonus": _hero_snapshot.vision_bonus,
-		"vision_steps": _hero_snapshot.vision_steps
+		"vision_phases": _hero_snapshot.vision_phases
 	}
 
 
@@ -263,6 +264,12 @@ func advance_status_clock(clock: int, current_tick: int = -1) -> Array[String]:
 	return BattleStatusRules.advance(statuses, clock, current_tick)
 
 
+func advance_consumable_phase() -> void:
+	if _hero_snapshot != null:
+		_hero_snapshot.advance_phase_effects()
+		refresh_from_hero()
+
+
 func end_phase() -> void:
 	# Бонус блока и активный блок живут до следующего соответствующего удара,
 	# даже если между действиями была перезарядка или граница фазы.
@@ -275,4 +282,5 @@ func is_alive() -> bool:
 
 func commit_hero_result(destination: HeroState) -> void:
 	if destination != null and _hero_snapshot != null:
+		_hero_snapshot.overworld_statuses = statuses.duplicate(true)
 		destination.apply_battle_result(_hero_snapshot)

@@ -166,24 +166,8 @@ func _on_status_info_requested(actor_id: String, status_id: String) -> void:
 	if actor == null or not actor.statuses.has(status_id):
 		return
 	var status: Dictionary = actor.statuses[status_id]
-	var title: String = "Кровотечение" if status_id == "bleeding" else ("Снижение меткости" if status_id == "petushan_accuracy_down" else status_id)
-	var lines: Array[String] = []
-	var tick_damage: int = int(status.get("tick_damage", 0))
-	if tick_damage > 0:
-		lines.append("Урон за отдых: %d HP" % tick_damage)
-	var modifier: int = int(status.get("modifier", 0))
-	if modifier != 0:
-		match int(status.get("stat", AbilityEffectDefinition.Stat.NONE)):
-			AbilityEffectDefinition.Stat.ACCURACY:
-				lines.append("Меткость: %+d п.п." % modifier)
-			AbilityEffectDefinition.Stat.AGILITY:
-				lines.append("Ловкость: %+d" % modifier)
-			AbilityEffectDefinition.Stat.DODGE_PERCENT:
-				lines.append("Уклонение: %+d п.п." % modifier)
-			_:
-				lines.append("Модификатор: %+d" % modifier)
-	lines.append("Осталось фаз: %d" % int(status.get("ticks", 0)))
-	_touch_info.show_info(title, "\n".join(lines))
+	var title: String = "Кровотечение" if status_id == "bleeding" else ("Снижение меткости" if status_id == "petushan_accuracy_down" else str(status.get("label", status_id)))
+	_touch_info.show_info(title, BattleStatusRules.describe(status))
 
 
 func _basic_strike_damage(actor: BattleParticipant) -> int:

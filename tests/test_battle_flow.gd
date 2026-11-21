@@ -69,18 +69,39 @@ func _initialize() -> void:
 	assert(not bad.run_phase(empty, enemy_chain).success)
 	assert(bad.flow.stage == BattleFlow.Stage.PREPARATION)
 
-	# Смертельный удар досрочно завершает фазу, не давая ответить мёртвому врагу.
+	# Смертельный удар пропускает оставшиеся карты, но не обязательный отдых.
 	var finisher := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), hero)
 	finisher.get_enemy().health = 1
 	var killing_chain: Array[String] = ["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib"]
 	var killing: Dictionary = finisher.run_phase(killing_chain, enemy_chain)
 	assert(killing.success and finisher.is_victory)
 	assert(finisher.flow.stage == BattleFlow.Stage.FINISHED)
-	assert(finisher.flow.completed_ticks == 1)
+	assert(finisher.flow.completed_ticks == 1 + BattleChainPlanner.REST_TICKS)
+	assert(finisher.get_hero().completed_phases == 1)
 	assert(not finisher.run_phase(killing_chain, enemy_chain).success)
 	var attacks: int = 0
 	for event in finisher.last_phase_events:
 		if event.type == "attack":
 			attacks += 1
 	assert(attacks == 1)
+	var wounded := HeroState.new(HeroCatalog.get_hero("petushan"))
+	assert(wounded.apply_overworld_status("bleeding", "Кровотечение", 1, 3, wounded.exploration_phase_length()))
+	for step in range(wounded.exploration_phase_length() - 1):
+		assert(wounded.advance_overworld_statuses().is_empty())
+	var encounter := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), wounded)
+	encounter.get_enemy().health = 1
+	assert(int(encounter.get_hero().statuses["bleeding"]["ticks"]) == 3)
+	assert(encounter.run_phase(killing_chain, enemy_chain).success)
+	assert(encounter.is_victory)
+	encounter.get_hero().commit_hero_result(wounded)
+	assert(int(wounded.overworld_statuses["bleeding"]["ticks"]) == 2)
+	for step in range(wounded.exploration_phase_length() - 1):
+		assert(wounded.advance_overworld_statuses().is_empty())
+	assert(wounded.advance_overworld_statuses().size() == 1)
+	assert(int(wounded.overworld_statuses["bleeding"]["ticks"]) == 1)
+	wounded.health = 1
+	var fatal := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), wounded)
+	fatal.get_enemy().health = 1
+	assert(fatal.run_phase(killing_chain, enemy_chain).success)
+	assert(fatal.is_defeat and not fatal.is_victory)
 	quit()

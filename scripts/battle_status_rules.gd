@@ -17,6 +17,7 @@ static func apply(statuses: Dictionary, effect: AbilityEffectDefinition, tick: i
 		return
 	var stacks: int = int(previous.get("stacks", 0)) + 1 if policy == AbilityEffectDefinition.Stack.ADD else 1
 	statuses[effect.status_id] = {
+		"label": previous.get("label", effect.status_id),
 		"amount": effect.amount,
 		"modifier": effect.effective_status_modifier(),
 		"stat": effect.effective_status_stat(),
@@ -29,6 +30,8 @@ static func apply(statuses: Dictionary, effect: AbilityEffectDefinition, tick: i
 			and effect.effective_status_clock() == AbilityEffectDefinition.Clock.OWNER_PHASE
 			and partial_phase
 	}
+	if previous.has("interval_steps"):
+		statuses[effect.status_id]["interval_steps"] = previous["interval_steps"]
 
 
 static func ticking_entries(statuses: Dictionary, clock: int) -> Array[Dictionary]:
@@ -62,3 +65,25 @@ static func advance(statuses: Dictionary, clock: int, current_tick: int = -1) ->
 		else:
 			statuses[status_id] = status
 	return expired
+
+
+static func describe(status: Dictionary) -> String:
+	var parts: Array[String] = []
+	var stacks: int = maxi(int(status.get("stacks", 1)), 1)
+	var damage: int = int(status.get("tick_damage", 0)) * stacks
+	if damage > 0:
+		parts.append("Урон за фазу: %d HP" % damage)
+	var value: int = int(status.get("modifier", 0)) * stacks
+	if value != 0:
+		var label: String = "Модификатор"
+		match int(status.get("stat", AbilityEffectDefinition.Stat.NONE)):
+			AbilityEffectDefinition.Stat.AGILITY: label = "Ловкость"
+			AbilityEffectDefinition.Stat.ACCURACY: label = "Меткость"
+			AbilityEffectDefinition.Stat.DODGE_PERCENT: label = "Уклонение"
+			AbilityEffectDefinition.Stat.ATTACK_POWER: label = "Атака"
+		parts.append("%s: %+d" % [label, value])
+	if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.INCOMING_ATTACK:
+		parts.append("Осталось входящих атак: %d" % int(status.get("ticks", 0)))
+	else:
+		parts.append("Осталось фаз: %d" % int(status.get("ticks", 0)))
+	return ". ".join(parts)

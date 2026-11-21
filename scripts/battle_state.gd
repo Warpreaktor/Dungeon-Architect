@@ -365,6 +365,7 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
 	var hero_actions_done: int = 0
 	var hero_rest_finished: bool = false
+	var initial_hero_phases: int = hero_actor.completed_phases
 	while (hero_actions_done < current_hero_chain.size() or not hero_rest_finished) and not is_victory and not is_defeat:
 		var clash: Dictionary = BattleClashPlanner.next_opponent(participants, enemy_ids(), next_enemy_clash_cursor)
 		var opponent_id: String = str(clash.get("actor_id", ""))
@@ -405,17 +406,7 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 				continue
 			var step: Dictionary = steps[actor_id]
 			if bool(step["reload"]):
-				var resting: BattleParticipant = get_participant(actor_id)
-				resting.completed_phases += 1
-				resting.last_rest_tick = tick
-				events.append_array(resting.owner_phase_status_damage_events(actor_id))
-				update_outcome()
-				if is_victory or is_defeat:
-					break
-				for expired_id in resting.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, tick):
-					events.append({"type": "status_removed", "actor_id": actor_id,
-						"target_id": actor_id, "status_id": expired_id, "removed": true})
-				events.append({"type": "reload", "actor_id": actor_id, "tick": tick, "slot_index": -1})
+				_complete_rest(actor_id, tick)
 				continue
 			var action_id: String = str(step["action_id"])
 			events.append({"type": "action_start", "actor_id": actor_id,
@@ -432,8 +423,19 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 					"slot_index": int(step["slot_index"]), "tick": tick, "premature": true})
 		flow.mark_tick()
 		flow.grant_half_health_reconfiguration(hero_actor.health, hero_actor.max_health)
-	if not is_victory and not is_defeat:
+	# После последнего врага пропускаются неисполненные карты, но не отдых.
+	if is_victory and hero_actor.is_alive() and hero_actor.completed_phases == initial_hero_phases:
+		var rest_tick: int = flow.completed_ticks + 1
+		hero_actor.action_cursor = 0
+		hero_actor.is_resting = true
+		events.append({"type": "tick", "tick": rest_tick, "opponent_id": "",
+			"hero_slot": -1, "enemy_slot": -1, "support_slot": -1,
+			"hero_reload": true, "enemy_reload": false, "support_reload": false})
+		_complete_rest(hero_id, rest_tick)
+		flow.mark_tick()
+	if hero_actor.completed_phases > initial_hero_phases:
 		end_phase()
+	if not is_victory and not is_defeat:
 		flow.complete_phase()
 	else:
 		flow.finish_battle()
@@ -445,6 +447,19 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 	last_phase_events = events.slice(start_event)
 	return {"success": true, "events": last_phase_events, "finished": flow.stage == BattleFlow.Stage.FINISHED,
 		"phase_number": flow.phase_number, "hero_hp": hero_actor.health, "ticks": flow.completed_ticks}
+
+
+func _complete_rest(actor_id: String, tick: int) -> void:
+	var resting: BattleParticipant = get_participant(actor_id)
+	resting.completed_phases += 1
+	resting.last_rest_tick = tick
+	events.append({"type": "reload", "actor_id": actor_id, "tick": tick, "slot_index": -1})
+	events.append_array(resting.owner_phase_status_damage_events(actor_id))
+	for expired_id in resting.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, tick):
+		events.append({"type": "status_removed", "actor_id": actor_id,
+			"target_id": actor_id, "status_id": expired_id, "removed": true})
+	resting.advance_consumable_phase()
+	update_outcome()
 
 
 func default_chain(participant_id: String) -> Array[String]:
@@ -486,8 +501,8 @@ func update_outcome() -> void:
 	var support: BattleParticipant = get_participant(support_enemy_id)
 	if support != null and enemy != null and not enemy.is_alive():
 		support.is_targetable = true
-	is_victory = enemy != null and not any_living_enemy
-	is_defeat = hero != null and not hero.is_alive() and not is_victory
+	is_defeat = hero != null and not hero.is_alive()
+	is_victory = enemy != null and not any_living_enemy and not is_defeat
 
 
 ## Завершение фазы обрабатывает временные эффекты, но не сбрасывает бонус блока.
@@ -523,6 +538,9 @@ func perform_basic_attack(_legacy_attack_damage: int = 0) -> int:
 	turn_index += 1
 	if not is_victory:
 		_counterattack()
+	elif get_hero().is_alive():
+		_complete_rest(hero_id, flow.completed_ticks + 1)
+		end_phase()
 	return damage
 
 

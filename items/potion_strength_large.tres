@@ -7,9 +7,9 @@
 script = ExtResource("1_script")
 item_id = "potion_strength_large"
 display_name = "Большое зелье силы"
-description = "Повышает атаку на 4 на 16 шагов."
+description = "Повышает атаку на 4 на 4 фазы."
 icon = ExtResource("2_icon")
 category = 1
 consumable_effect = 2
 effect_value = 4
-effect_duration_steps = 16
+effect_duration_phases = 4

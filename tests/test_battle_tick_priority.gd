@@ -51,7 +51,7 @@ func _initialize() -> void:
 	# Герой убивает монстра первым ударом: у монстра нет ответа.
 	var lethal: BattleState = _battle(100, 1, 10)
 	assert(lethal.run_phase(["basic_strike", "guard", "basic_strike"], ["basic_strike"]).success)
-	assert(lethal.is_victory and not lethal.is_defeat and lethal.flow.completed_ticks == 1)
+	assert(lethal.is_victory and not lethal.is_defeat and lethal.flow.completed_ticks == 1 + BattleChainPlanner.REST_TICKS)
 	var enemy_attacks: int = 0
 	for event in lethal.last_phase_events:
 		if event.type == "attack" and event.actor_id == "enemy":

@@ -151,11 +151,11 @@ func _show_item(index: int) -> void:
 		ItemDefinition.ConsumableEffect.HEAL:
 			details += "\nВосстанавливает: до %d HP" % item.healing_amount
 		ItemDefinition.ConsumableEffect.ATTACK:
-			details += "\nАтака: +%d на %d шагов" % [item.effect_value, item.effect_duration_steps]
+			details += "\nАтака: +%d на %d фаз" % [item.effect_value, item.effect_duration_phases]
 		ItemDefinition.ConsumableEffect.RESIST:
-			details += "\nПолучаемый урон: −%d%% на %d шагов" % [item.effect_value, item.effect_duration_steps]
+			details += "\nПолучаемый урон: −%d%% на %d фаз" % [item.effect_value, item.effect_duration_phases]
 		ItemDefinition.ConsumableEffect.VISION:
-			details += "\nОбзор: +%d на %d шагов" % [item.effect_value, item.effect_duration_steps]
+			details += "\nОбзор: +%d на %d фаз" % [item.effect_value, item.effect_duration_phases]
 		_:
 			if item.healing_amount > 0:
 				details += "\nВосстанавливает: до %d HP" % item.healing_amount

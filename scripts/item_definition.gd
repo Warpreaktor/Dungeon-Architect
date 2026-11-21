@@ -25,4 +25,4 @@ enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 @export_range(0, 9999, 1) var healing_amount: int = 0
 @export var consumable_effect: ConsumableEffect = ConsumableEffect.NONE
 @export_range(0, 9999, 1) var effect_value: int = 0
-@export_range(0, 9999, 1) var effect_duration_steps: int = 0
+@export_range(0, 9999, 1) var effect_duration_phases: int = 0

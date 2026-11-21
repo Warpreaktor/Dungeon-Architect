@@ -178,17 +178,14 @@ func _effect_entries(member: HeroState) -> Array[Dictionary]:
 	for status_id in member.overworld_statuses:
 		var status: Dictionary = member.overworld_statuses[status_id]
 		var label: String = str(status.get("label", status_id))
-		result.append({
-			"id": str(status_id), "name": label,
-			"description": "%d урона через %d шагов. Осталось срабатываний: %d." % [
-				int(status.get("damage", 0)), int(status.get("steps_until_tick", 0)), int(status.get("ticks_remaining", 0))]
-		})
-	if member.strength_steps > 0:
-		result.append({"id": "strength", "name": "Усиление атаки", "description": "Атака +%d, осталось шагов: %d." % [member.strength_bonus, member.strength_steps]})
-	if member.vitality_steps > 0:
-		result.append({"id": "vitality", "name": "Живучесть", "description": "Получаемый урон −%d%%, осталось шагов: %d." % [member.vitality_percent, member.vitality_steps]})
-	if member.vision_steps > 0:
-		result.append({"id": "vision", "name": "Всевиденье", "description": "Бонус обзора +%d, осталось шагов: %d." % [member.vision_bonus, member.vision_steps]})
+		result.append({"id": str(status_id), "name": label,
+			"description": BattleStatusRules.describe(status)})
+	if member.strength_phases > 0:
+		result.append({"id": "strength", "name": "Усиление атаки", "description": "Атака +%d, осталось фаз: %d." % [member.strength_bonus, member.strength_phases]})
+	if member.vitality_phases > 0:
+		result.append({"id": "vitality", "name": "Живучесть", "description": "Получаемый урон −%d%%, осталось фаз: %d." % [member.vitality_percent, member.vitality_phases]})
+	if member.vision_phases > 0:
+		result.append({"id": "vision", "name": "Всевиденье", "description": "Бонус обзора +%d, осталось фаз: %d." % [member.vision_bonus, member.vision_phases]})
 	return result
 
 

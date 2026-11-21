@@ -27,13 +27,14 @@ var last_shield_broken: String = ""
 
 # Временные эффекты принадлежат прохождению, а не карте или ресурсам предметов.
 var strength_bonus: int = 0
-var strength_steps: int = 0
+var strength_phases: int = 0
 var vitality_percent: int = 0
-var vitality_steps: int = 0
+var vitality_phases: int = 0
 var vision_bonus: int = 0
-var vision_steps: int = 0
-## Отдельный слой эффектов исследования карты: ловушки и будущие вредные зоны.
+var vision_phases: int = 0
+## Активные состояния героя; боевой снимок использует тот же формат.
 var overworld_statuses: Dictionary = {}
+var _potion_phase_progress: int = 0
 
 
 
@@ -201,7 +202,7 @@ func consume_shield_block(incoming: int, maximum_absorption: int = -1) -> int:
 ## Щит не защищает пассивно, но базовая броня и зелья работают по-прежнему.
 func take_damage(incoming: int) -> int:
 	var remaining: int = maxi(incoming, 0)
-	if vitality_steps > 0 and vitality_percent > 0 and remaining > 0:
+	if vitality_phases > 0 and vitality_percent > 0 and remaining > 0:
 		remaining = maxi(1, int(float(remaining) * float(100 - vitality_percent) / 100.0))
 	health = maxi(health - remaining, 0)
 	return remaining
@@ -221,39 +222,49 @@ func apply_potion(item: ItemDefinition) -> Dictionary:
 			return {"used": healed > 0, "message": "+%d HP" % healed}
 		ItemDefinition.ConsumableEffect.ATTACK:
 			strength_bonus = maxi(strength_bonus, item.effect_value)
-			strength_steps = maxi(strength_steps, item.effect_duration_steps)
+			strength_phases = maxi(strength_phases, item.effect_duration_phases)
 			_recalculate_equipment_stats()
-			return {"used": true, "message": "Атака +%d (%d шагов)" % [strength_bonus, strength_steps]}
+			return {"used": true, "message": "Атака +%d (%d фаз)" % [strength_bonus, strength_phases]}
 		ItemDefinition.ConsumableEffect.RESIST:
 			vitality_percent = maxi(vitality_percent, clampi(item.effect_value, 0, 90))
-			vitality_steps = maxi(vitality_steps, item.effect_duration_steps)
-			return {"used": true, "message": "Получаемый урон −%d%% (%d шагов)" % [vitality_percent, vitality_steps]}
+			vitality_phases = maxi(vitality_phases, item.effect_duration_phases)
+			return {"used": true, "message": "Получаемый урон −%d%% (%d фаз)" % [vitality_percent, vitality_phases]}
 		ItemDefinition.ConsumableEffect.VISION:
 			vision_bonus = maxi(vision_bonus, item.effect_value)
-			vision_steps = maxi(vision_steps, item.effect_duration_steps)
-			return {"used": true, "message": "Обзор +%d (%d шагов)" % [vision_bonus, vision_steps]}
+			vision_phases = maxi(vision_phases, item.effect_duration_phases)
+			return {"used": true, "message": "Обзор +%d (%d фаз)" % [vision_bonus, vision_phases]}
 	return {"used": false, "message": "Предмет нельзя использовать."}
 
 
-## Длительность отсчитывается по успешным шагам героя, не по кадровому времени.
+func exploration_phase_length() -> int:
+	return action_slot_capacity() + BattleChainPlanner.REST_TICKS
+
+
 func advance_effects() -> void:
-	if strength_steps > 0:
-		strength_steps -= 1
-		if strength_steps == 0:
+	_potion_phase_progress += 1
+	if _potion_phase_progress >= exploration_phase_length():
+		_potion_phase_progress = 0
+		advance_phase_effects()
+
+
+func advance_phase_effects() -> void:
+	if strength_phases > 0:
+		strength_phases -= 1
+		if strength_phases == 0:
 			strength_bonus = 0
 			_recalculate_equipment_stats()
-	if vitality_steps > 0:
-		vitality_steps -= 1
-		if vitality_steps == 0:
+	if vitality_phases > 0:
+		vitality_phases -= 1
+		if vitality_phases == 0:
 			vitality_percent = 0
-	if vision_steps > 0:
-		vision_steps -= 1
-		if vision_steps == 0:
+	if vision_phases > 0:
+		vision_phases -= 1
+		if vision_phases == 0:
 			vision_bonus = 0
 
 
 func has_vision_effect() -> bool:
-	return vision_steps > 0 and vision_bonus > 0
+	return vision_phases > 0 and vision_bonus > 0
 
 
 func apply_overworld_status(status_id: String, label: String, damage: int, ticks: int, interval_steps: int) -> bool:
@@ -261,61 +272,68 @@ func apply_overworld_status(status_id: String, label: String, damage: int, ticks
 	if clean_id.is_empty() or damage <= 0 or ticks <= 0 or interval_steps <= 0:
 		return false
 	var current: Dictionary = overworld_statuses.get(clean_id, {})
-	overworld_statuses[clean_id] = {
-		"label": label if not label.strip_edges().is_empty() else clean_id.capitalize(),
-		"damage": maxi(damage, int(current.get("damage", 0))),
-		"ticks_remaining": maxi(ticks, int(current.get("ticks_remaining", 0))),
-		"interval_steps": interval_steps,
-		"steps_until_tick": mini(int(current.get("steps_until_tick", interval_steps)), interval_steps) if not current.is_empty() else interval_steps
-	}
+	var effect := AbilityEffectDefinition.new()
+	effect.kind = AbilityEffectDefinition.Kind.APPLY_STATUS
+	effect.status_id = clean_id
+	effect.status_clock = AbilityEffectDefinition.Clock.OWNER_PHASE
+	effect.duration_ticks = maxi(ticks, int(current.get("ticks", 0)))
+	effect.tick_damage = maxi(damage, int(current.get("tick_damage", 0)))
+	BattleStatusRules.apply(overworld_statuses, effect, -1, false)
+	var status: Dictionary = overworld_statuses[clean_id]
+	status["label"] = label if not label.strip_edges().is_empty() else clean_id
+	status["interval_steps"] = interval_steps
+	status["steps_until_tick"] = mini(int(current.get("steps_until_tick", interval_steps)), interval_steps)
 	return true
+
+
+func reset_exploration_phase() -> void:
+	_potion_phase_progress = 0
+	for status_id in overworld_statuses:
+		var status: Dictionary = overworld_statuses[status_id]
+		status["steps_until_tick"] = int(status.get("interval_steps", exploration_phase_length()))
+		status["applied_tick"] = -1
+		status["skip_partial_phase"] = false
 
 
 func advance_overworld_statuses() -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	for status_id in overworld_statuses.keys():
 		var status: Dictionary = overworld_statuses[status_id]
-		var remaining_steps: int = int(status.get("steps_until_tick", 0)) - 1
-		status["steps_until_tick"] = remaining_steps
-		if remaining_steps > 0:
-			overworld_statuses[status_id] = status
+		var clock: int = int(status.get("clock", AbilityEffectDefinition.Clock.OWNER_PHASE))
+		if clock == AbilityEffectDefinition.Clock.INCOMING_ATTACK:
 			continue
-		var damage: int = maxi(int(status.get("damage", 0)), 0)
-		var health_before: int = health
-		take_damage(damage)
-		var applied: int = health_before - health
-		var ticks_remaining: int = int(status.get("ticks_remaining", 0)) - 1
-		events.append({
-			"status_id": str(status_id),
-			"label": str(status.get("label", status_id)),
-			"damage": applied,
-			"ticks_remaining": maxi(ticks_remaining, 0)
-		})
-		if ticks_remaining <= 0:
-			overworld_statuses.erase(status_id)
+		var interval: int = maxi(int(status.get("interval_steps", exploration_phase_length())), 1)
+		status["steps_until_tick"] = int(status.get("steps_until_tick", interval)) - 1
+		if int(status["steps_until_tick"]) > 0:
+			continue
+		var single: Dictionary = {status_id: status}
+		for entry in BattleStatusRules.ticking_entries(single, clock):
+			var before: int = health
+			health = maxi(health - int(entry["damage"]), 0)
+			events.append({"status_id": str(status_id), "label": str(status.get("label", status_id)),
+				"damage": before - health, "ticks_remaining": maxi(int(status.get("ticks", 0)) - 1, 0)})
+		BattleStatusRules.advance(single, clock)
+		if single.has(status_id):
+			status["steps_until_tick"] = interval
+			overworld_statuses[status_id] = single[status_id]
 		else:
-			status["ticks_remaining"] = ticks_remaining
-			status["steps_until_tick"] = maxi(int(status.get("interval_steps", 1)), 1)
-			overworld_statuses[status_id] = status
+			overworld_statuses.erase(status_id)
+		if health <= 0:
+			break
 	return events
 
 
 func active_effects_summary() -> String:
 	var parts: Array[String] = []
-	if strength_steps > 0:
-		parts.append("Сила +%d · %d ш." % [strength_bonus, strength_steps])
-	if vitality_steps > 0:
-		parts.append("Живучесть %d%% · %d ш." % [vitality_percent, vitality_steps])
-	if vision_steps > 0:
-		parts.append("Всевиденье +%d · %d ш." % [vision_bonus, vision_steps])
+	if strength_phases > 0:
+		parts.append("Сила +%d · %d ф." % [strength_bonus, strength_phases])
+	if vitality_phases > 0:
+		parts.append("Живучесть %d%% · %d ф." % [vitality_percent, vitality_phases])
+	if vision_phases > 0:
+		parts.append("Всевиденье +%d · %d ф." % [vision_bonus, vision_phases])
 	for status_id in overworld_statuses:
 		var status: Dictionary = overworld_statuses[status_id]
-		parts.append("%s %d×%d · %d ш." % [
-			str(status.get("label", status_id)),
-			int(status.get("damage", 0)),
-			int(status.get("ticks_remaining", 0)),
-			int(status.get("steps_until_tick", 0))
-		])
+		parts.append("%s · %s" % [str(status.get("label", status_id)), BattleStatusRules.describe(status)])
 	return "  |  ".join(parts)
 
 
@@ -338,11 +356,13 @@ func copy_for_battle() -> HeroState:
 	copy.shield_durabilities = shield_durabilities.duplicate(true)
 	copy.last_shield_broken = last_shield_broken
 	copy.strength_bonus = strength_bonus
-	copy.strength_steps = strength_steps
+	copy.strength_phases = strength_phases
 	copy.vitality_percent = vitality_percent
-	copy.vitality_steps = vitality_steps
+	copy.vitality_phases = vitality_phases
 	copy.vision_bonus = vision_bonus
-	copy.vision_steps = vision_steps
+	copy.vision_phases = vision_phases
+	copy.overworld_statuses = overworld_statuses.duplicate(true)
+	copy.reset_exploration_phase()
 	return copy
 
 
@@ -356,4 +376,12 @@ func apply_battle_result(snapshot: HeroState) -> void:
 	equipped_shield_id = snapshot.equipped_shield_id
 	shield_durabilities = snapshot.shield_durabilities.duplicate(true)
 	last_shield_broken = snapshot.last_shield_broken
+	strength_bonus = snapshot.strength_bonus
+	strength_phases = snapshot.strength_phases
+	vitality_percent = snapshot.vitality_percent
+	vitality_phases = snapshot.vitality_phases
+	vision_bonus = snapshot.vision_bonus
+	vision_phases = snapshot.vision_phases
+	overworld_statuses = snapshot.overworld_statuses.duplicate(true)
+	reset_exploration_phase()
 	_recalculate_equipment_stats()

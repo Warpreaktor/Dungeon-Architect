@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 trap_id = "spikes"
 display_name = "Шипы"
-description = "Нажимная плита раскрывает шипы: герой получает мгновенный урон и кровотечение, после чего ловушка разряжается."
+description = "Нажимная плита раскрывает шипы: мгновенный урон {direct_damage} HP, кровотечение {overworld_status_damage} HP за фазу на {status_duration_phases}.{after_trigger}"
 icon = ExtResource("2_icon")
 direct_damage = 2
 overworld_status_id = "bleeding"

@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 item_id = "potion_health_small"
 display_name = "Малое зелье здоровья"
-description = "Восстанавливает до 8 единиц здоровья."
+description = "Восстанавливает до {healing_amount} HP."
 icon = ExtResource("2_icon")
 category = 1
 consumable_effect = 1

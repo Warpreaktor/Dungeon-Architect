@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 item_id = "potion_vision_large"
 display_name = "Большое зелье всевиденья"
-description = "Расширяет обзор на 1 клетку на 4 фазы."
+description = "Расширяет обзор на {vision_cells} на {duration_phases}."
 icon = ExtResource("2_icon")
 category = 1
 consumable_effect = 4

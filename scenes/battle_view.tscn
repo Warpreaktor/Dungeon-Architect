@@ -128,7 +128,6 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "СИЛ 0"
-tooltip_text = "Сила: +0,5 урона ближнего боя за очко"
 
 [node name="HeroAgilityValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
@@ -137,7 +136,6 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "ЛОВ 0"
-tooltip_text = "Ловкость: +0,5 урона дальнего боя за очко"
 
 [node name="HeroDefenseIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
@@ -177,8 +175,7 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 12
-text = "МЕТ 100%"
-tooltip_text = "Меткость: +1% за каждое очко Ловкости"
+text = "МЕТ"
 
 [node name="EnemyParty" type="HBoxContainer" parent="OuterMargin/Main/Battlefield"]
 layout_mode = 2
@@ -270,7 +267,6 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "СИЛ 0"
-tooltip_text = "Сила: +0,5 урона ближнего боя за очко"
 
 [node name="EnemyAgilityValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 unique_name_in_owner = true
@@ -279,7 +275,6 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "ЛОВ 0"
-tooltip_text = "Ловкость: +0,5 урона дальнего боя за очко"
 
 [node name="EnemyDefenseIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 unique_name_in_owner = true
@@ -319,8 +314,7 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 12
-text = "МЕТ 100%"
-tooltip_text = "Меткость: +1% за каждое очко Ловкости"
+text = "МЕТ"
 
 [node name="BottomPanel" type="PanelContainer" parent="OuterMargin/Main"]
 layout_mode = 2
@@ -406,7 +400,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(180, 54)
 layout_mode = 2
 focus_mode = 2
-text = "Удар кулаком  ·  1"
+text = "Удар кулаком"
 
 [node name="CombatItemsButton" type="Button" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions"]
 unique_name_in_owner = true

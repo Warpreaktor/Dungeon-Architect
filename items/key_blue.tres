@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 item_id = "key_blue"
 display_name = "Голубой ключ"
-description = "Открывает одну дверь с голубой замком."
+description = "Открывает дверь с замком цвета «{lock_color}»."
 icon = ExtResource("2_icon")
 category = 0
 default_quantity = 1

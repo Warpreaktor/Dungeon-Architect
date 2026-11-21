@@ -65,7 +65,7 @@ func refresh_items(session: GameSession) -> void:
 		choice.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		choice.add_theme_constant_override("icon_max_width", 32)
 		choice.custom_minimum_size = Vector2(282, 52)
-		choice.tooltip_text = item.description
+		choice.tooltip_text = item.get_description()
 		if item.consumable_effect in [ItemDefinition.ConsumableEffect.HEAL, ItemDefinition.ConsumableEffect.NONE] and session.hero.health >= session.hero.max_health:
 			choice.disabled = true
 			choice.tooltip_text += "\nЗдоровье полное"

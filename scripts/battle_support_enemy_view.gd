@@ -80,6 +80,8 @@ func _ready() -> void:
 	_attack = _add_label(stats, ATTACK_FONT_SIZE)
 	_strength = _add_label(stats, STAT_FONT_SIZE, STAT_COLOR)
 	_agility = _add_label(stats, STAT_FONT_SIZE, STAT_COLOR)
+	_strength.tooltip_text = BattleAttributeTooltip.strength_description()
+	_agility.tooltip_text = BattleAttributeTooltip.agility_description()
 	_defense_icon = _add_icon(stats, DEFENSE_ICON)
 	_defense = _add_label(stats, ATTACK_FONT_SIZE)
 	var precision := HBoxContainer.new()
@@ -88,6 +90,7 @@ func _ready() -> void:
 	column.add_child(precision)
 	_dodge = _add_label(precision, PRECISION_FONT_SIZE, DODGE_COLOR)
 	_accuracy = _add_label(precision, PRECISION_FONT_SIZE, STAT_COLOR)
+	_accuracy.tooltip_text = BattleAttributeTooltip.accuracy_description()
 	_slots = HBoxContainer.new()
 	_slots.alignment = BoxContainer.ALIGNMENT_CENTER
 	_slots.add_theme_constant_override("separation", SLOT_SEPARATION)

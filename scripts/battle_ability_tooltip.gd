@@ -7,8 +7,9 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 	if ability == null:
 		return ""
 	var lines: Array[String] = [ability.display_name]
-	if not ability.description.strip_edges().is_empty():
-		lines.append(ability.description.strip_edges())
+	var description: String = ability.get_description().strip_edges()
+	if not description.is_empty():
+		lines.append(description)
 	match ability.target:
 		AbilityDefinition.Target.SELF:
 			lines.append("Цель: на себя")
@@ -39,19 +40,21 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 					lines.append("Лечение: %d HP (не выше максимума)" % maxi(effect.amount, 0))
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
 				if effect.tick_damage > 0:
-					lines.append("Кровотечение: −%d HP за отдых цели, %d фазы" % [effect.tick_damage, effect.duration_ticks])
+					lines.append("Кровотечение: −%d HP за отдых цели, %s" % [effect.tick_damage, effect.status_duration_description()])
 				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.ACCURACY:
-					lines.append("Меткость цели: %d%% на %d фазы" % [effect.effective_status_modifier(), effect.duration_ticks])
+					lines.append("Меткость цели: %+d п.п. %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
 				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.DODGE_PERCENT:
-					lines.append("Уклонение: %+d%% до следующей входящей атаки" % effect.effective_status_modifier())
+					lines.append("Уклонение: %+d п.п. %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
 				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.ATTACK_POWER:
-					lines.append("Мощность атак: %+d на %d фазы" % [effect.effective_status_modifier(), effect.duration_ticks])
+					lines.append("Мощность атак: %+d %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
+				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.AGILITY:
+					lines.append("Ловкость: %+d %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
 				else:
-					lines.append("Эффект «%s»: %d на %d ед. времени" % [effect.status_id, effect.effective_status_modifier(), effect.duration_ticks])
+					lines.append("Эффект «%s»: %d %s" % [effect.status_id, effect.effective_status_modifier(), effect.status_duration_description()])
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:
 				lines.append("Снимает эффект «%s»" % effect.status_id)
 			AbilityEffectDefinition.Kind.WAIT:
-				if ability.description.strip_edges().is_empty():
+				if description.is_empty():
 					lines.append("Пропуск действия")
 	for requirement in ability.requirements:
 		match requirement.kind:

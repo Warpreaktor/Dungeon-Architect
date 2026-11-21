@@ -26,3 +26,12 @@ enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 @export var consumable_effect: ConsumableEffect = ConsumableEffect.NONE
 @export_range(0, 9999, 1) var effect_value: int = 0
 @export_range(0, 9999, 1) var effect_duration_phases: int = 0
+
+
+func get_description() -> String:
+	var values: Dictionary = DescriptionTemplate.numeric_values(self)
+	values["duration_phases"] = DescriptionTemplate.phases(effect_duration_phases)
+	values["vision_cells"] = DescriptionTemplate.quantity(effect_value, "клетку", "клетки", "клеток")
+	if item_id in LockCatalog.LOCK_IDS:
+		values["lock_color"] = LockCatalog.label(item_id)
+	return DescriptionTemplate.render(description, values)

@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 item_id = "potion_vitality_medium"
 display_name = "Среднее зелье живучести"
-description = "Снижает входящий урон на 25% на 3 фазы."
+description = "Снижает входящий урон на {effect_value}% на {duration_phases}."
 icon = ExtResource("2_icon")
 category = 1
 consumable_effect = 3

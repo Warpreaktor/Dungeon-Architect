@@ -18,9 +18,9 @@ enum Rank { COMMON, ELITE, BOSS }
 @export_range(0, 8, 1) var max_intermission_actions: int = 1
 @export var starting_resources: Dictionary = {}
 ## Обязательные карты в колоде на бой (порядок фиксирован).
-## Если не заданы, первая карта из personal_ability_ids обязательна.
+## Если не заданы, обязательная карта берётся из personal_ability_ids.
 @export var guaranteed_card_ids: Array[String] = []
-## Количество случайных карт из оставшегося пула. По умолчанию одна.
+## Количество случайных карт из оставшегося пула.
 ## Суммарный размер ограничен base_action_slots.
 @export_range(0, 8, 1) var random_card_count: int = 1
 ## Сколько действий в алгоритме доступно без артефактов и усилений.
@@ -31,7 +31,7 @@ enum Rank { COMMON, ELITE, BOSS }
 @export_range(0, 999, 1) var agility: int = 0
 ## Base probability of avoiding an attack, without active buffs.
 @export_range(0, 100, 1) var base_dodge_percent: int = 0
-## Дополнительные очки меткости сверх бонуса +1 за Ловкость.
+## Дополнительные очки меткости сверх вклада Ловкости.
 @export_range(0, 999, 1) var accuracy_bonus: int = 0
 ## Legacy unused field; armor will be modeled independently.
 @export_range(0, 999, 1) var defense: int = 0

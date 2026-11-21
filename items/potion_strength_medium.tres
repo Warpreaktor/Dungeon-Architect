@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 item_id = "potion_strength_medium"
 display_name = "Среднее зелье силы"
-description = "Повышает атаку на 3 на 3 фазы."
+description = "Бонус атаки: +{effect_value}. Действует {duration_phases}."
 icon = ExtResource("2_icon")
 category = 1
 consumable_effect = 2

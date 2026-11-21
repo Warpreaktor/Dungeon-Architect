@@ -137,10 +137,20 @@ func _ready() -> void:
 	_touch_info = TouchInfoOverlay.new()
 	add_child(_touch_info)
 	_item_picker.info_requested.connect(_touch_info.show_text)
+	for label in [_hero_strength_value, _enemy_strength_value]:
+		label.tooltip_text = BattleAttributeTooltip.strength_description()
+	for label in [_hero_agility_value, _enemy_agility_value]:
+		label.tooltip_text = BattleAttributeTooltip.agility_description()
+	for label in [_hero_accuracy_value, _enemy_accuracy_value]:
+		label.tooltip_text = BattleAttributeTooltip.accuracy_description()
+	_touch_info.attach_tap(_hero_strength_value, func() -> String: return _hero_strength_value.tooltip_text)
+	_touch_info.attach_tap(_enemy_strength_value, func() -> String: return _enemy_strength_value.tooltip_text)
+	_touch_info.attach_tap(_hero_agility_value, func() -> String: return _hero_agility_value.tooltip_text)
+	_touch_info.attach_tap(_enemy_agility_value, func() -> String: return _enemy_agility_value.tooltip_text)
 	_touch_info.attach_tap(_hero_dodge_value, func() -> String: return _hero_dodge_value.tooltip_text)
 	_touch_info.attach_tap(_enemy_dodge_value, func() -> String: return _enemy_dodge_value.tooltip_text)
-	_touch_info.attach_tap(_hero_accuracy_value, func() -> String: return "Меткость\n" + _hero_accuracy_value.text + " — итоговая меткость героя")
-	_touch_info.attach_tap(_enemy_accuracy_value, func() -> String: return "Меткость\n" + _enemy_accuracy_value.text + " — итоговая меткость противника")
+	_touch_info.attach_tap(_hero_accuracy_value, func() -> String: return "Меткость\n" + _hero_accuracy_value.text + " — итоговая меткость героя\n" + _hero_accuracy_value.tooltip_text)
+	_touch_info.attach_tap(_enemy_accuracy_value, func() -> String: return "Меткость\n" + _enemy_accuracy_value.text + " — итоговая меткость противника\n" + _enemy_accuracy_value.tooltip_text)
 	_default_attack_icon = _hero_attack_icon.texture
 	_status_presenter = BattleStatusPresenter.new(self)
 	_status_presenter.info_requested.connect(_on_status_info_requested)

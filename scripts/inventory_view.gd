@@ -128,7 +128,7 @@ func _show_item(index: int) -> void:
 		return
 	_item_icon.texture = item.icon
 	_item_name.text = item.display_name
-	_item_description.text = item.description
+	_item_description.text = item.get_description()
 	_use_feedback.text = ""
 	_use_button.visible = item.category == ItemDefinition.Category.CONSUMABLE or item.category == ItemDefinition.Category.EQUIPMENT
 	if item.category == ItemDefinition.Category.EQUIPMENT:
@@ -151,11 +151,11 @@ func _show_item(index: int) -> void:
 		ItemDefinition.ConsumableEffect.HEAL:
 			details += "\nВосстанавливает: до %d HP" % item.healing_amount
 		ItemDefinition.ConsumableEffect.ATTACK:
-			details += "\nАтака: +%d на %d фаз" % [item.effect_value, item.effect_duration_phases]
+			details += "\nАтака: +%d на %s" % [item.effect_value, DescriptionTemplate.phases(item.effect_duration_phases)]
 		ItemDefinition.ConsumableEffect.RESIST:
-			details += "\nПолучаемый урон: −%d%% на %d фаз" % [item.effect_value, item.effect_duration_phases]
+			details += "\nПолучаемый урон: −%d%% на %s" % [item.effect_value, DescriptionTemplate.phases(item.effect_duration_phases)]
 		ItemDefinition.ConsumableEffect.VISION:
-			details += "\nОбзор: +%d на %d фаз" % [item.effect_value, item.effect_duration_phases]
+			details += "\nОбзор: +%d на %s" % [item.effect_value, DescriptionTemplate.phases(item.effect_duration_phases)]
 		_:
 			if item.healing_amount > 0:
 				details += "\nВосстанавливает: до %d HP" % item.healing_amount

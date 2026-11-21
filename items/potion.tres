@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 item_id = "potion"
 display_name = "Зелье здоровья"
-description = "Целебное зелье, восстанавливающее здоровье героя."
+description = "Восстанавливает до {healing_amount} HP."
 icon = ExtResource("2_icon")
 category = 1
 default_quantity = 1

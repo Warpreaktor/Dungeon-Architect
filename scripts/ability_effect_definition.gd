@@ -66,6 +66,22 @@ func effective_stack_policy() -> int:
 	return stack_policy if stack_policy != Stack.REFRESH else stack_mode
 
 
+func status_duration_description() -> String:
+	if effective_status_clock() == Clock.INCOMING_ATTACK:
+		return "до следующей входящей атаки" if duration_ticks == 1 else "на %s" % DescriptionTemplate.quantity(duration_ticks, "входящую атаку", "входящие атаки", "входящих атак")
+	return "на %s" % DescriptionTemplate.phases(duration_ticks)
+
+
+func stack_description() -> String:
+	match effective_stack_policy():
+		Stack.ADD:
+			return "Повторные применения складываются."
+		Stack.ONCE:
+			return "Одинаковые эффекты не складываются."
+		_:
+			return "Повтор обновляет длительность."
+
+
 func validation_error() -> String:
 	if amount < 0 or duration_ticks < 0 or hit_count <= 0 or damage_multiplier < 0.0 or tick_damage < 0:
 		return "Отрицательные параметры эффекта"

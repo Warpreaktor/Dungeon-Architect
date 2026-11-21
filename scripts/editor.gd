@@ -461,7 +461,7 @@ func _build_interface() -> void:
 		_add_tool_button(trap_tools, {
 			"id": "trap:" + trap.trap_id,
 			"label": trap.display_name,
-			"hint": trap.description if not trap.description.is_empty() else "Ловушка: %s" % trap.display_name,
+			"hint": trap.get_description() if not trap.get_description().is_empty() else "Ловушка: %s" % trap.display_name,
 			"icon": trap.icon
 		})
 

@@ -49,7 +49,8 @@ func show_floor_transition(step_count: int, next_name: String) -> void:
 func show_defeat(step_count: int, victor: MonsterDefinition) -> void:
 	_eyebrow.text = "ПУТЬ ОБОРВАЛСЯ"
 	_title.text = "ГЕРОЙ ПАЛ"
-	_description.text = "Тебя одолели обитатели катакомб. Попробуй ещё раз."
+	_description.text = "Твоё имущество осталось в подземелье. Воскресни и верни его."
+	_retry_button.text = "Воскреснуть"
 	_emblem.texture = victor.icon
 	var frame := _card.get_theme_stylebox("panel").duplicate(true) as StyleBoxFlat
 	frame.border_color = Color("#ba6b66")

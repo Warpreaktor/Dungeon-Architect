@@ -307,7 +307,7 @@ func _draw_cell(x: int, y: int) -> void:
 			draw_rect(rect, Color(0.24, 0.65, 0.95, 0.30))
 		else:
 			draw_rect(rect, Color(0.85, 0.25, 0.35, 0.24))
-	var entities_here := map_data.entities_at(x, y)
+	var entities_here: Array = game_session.entities_at(x, y) if mode == "play" and game_session != null else map_data.entities_at(x, y)
 	for entity in entities_here:
 		if mode == "play" and game_session != null and game_session.is_entity_removed(entity):
 			continue

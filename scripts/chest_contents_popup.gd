@@ -138,6 +138,8 @@ func _toggle_group(category: String) -> void:
 
 
 func configure(entity_id: String, contents: Array[String], gold_amount: int = 5, is_monster: bool = false, random_mode: bool = true, hidden: bool = false, quantities: Dictionary = {}, monster_ids: Array[String] = []) -> void:
+	_random_check.show()
+	_hidden_check.show()
 	_entity_id = entity_id
 	_editing_monster = is_monster
 	_title.text = "Настройки монстров" if is_monster else "Содержимое сундука"
@@ -229,3 +231,10 @@ func _save() -> void:
 	else:
 		contents_changed.emit(_entity_id, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities)
 	hide()
+
+
+func configure_exit(entity: Dictionary) -> void:
+	configure(str(entity["id"]), DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity), false, false, false, DungeonMap.chest_item_quantities(entity))
+	_title.text = "Награда за прохождение"
+	_random_check.hide()
+	_hidden_check.hide()

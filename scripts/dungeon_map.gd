@@ -206,7 +206,7 @@ func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amou
 			normalized.append(item_id)
 	var amount: int = clampi(gold_amount, 1, 999999)
 	for entity in entities:
-		if str(entity.get("id", "")) != chest_id or str(entity.get("type", "")) != "chest":
+		if str(entity.get("id", "")) != chest_id or str(entity.get("type", "")) not in ["chest", "stairs_down"]:
 			continue
 		var current: Dictionary = entity.get("properties", {})
 		var item_amounts: Dictionary = _normalize_reward_quantities(normalized, quantities, current, "item_quantities", "gold_amount", amount)

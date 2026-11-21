@@ -32,6 +32,10 @@ var encounter_target := Vector2i(-1, -1)
 var debug_open_map: bool = false # Только для теста редактора, никогда не сериализуется.
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
+var fallen_encounters: Array = []
+var claimed_exit_rewards: Dictionary = {}
+var _next_fallen_id: int = 0
+var _death_recorded: bool = false
 var _floor_states: Dictionary = {} # Состояние посещённых карт только в памяти этого прохождения.
 
 
@@ -136,6 +140,8 @@ func enter_map(next_map: DungeonMap) -> bool:
 	if map_data != null:
 		_floor_states[map_data.map_id] = {
 			"map": map_data,
+			"fallen": fallen_encounters.duplicate(true),
+			"exit_rewards": claimed_exit_rewards.duplicate(true),
 			"position": player_pos,
 			"removed": removed_entities.duplicate(true),
 			"chests": opened_chests.duplicate(true),
@@ -146,6 +152,8 @@ func enter_map(next_map: DungeonMap) -> bool:
 		}
 	var saved: Dictionary = _floor_states.get(next_map.map_id, {})
 	map_data = saved.get("map", next_map)
+	fallen_encounters = saved.get("fallen", []).duplicate(true)
+	claimed_exit_rewards = saved.get("exit_rewards", {}).duplicate(true)
 	player_pos = saved.get("position", spawn)
 	removed_entities = saved.get("removed", {}).duplicate(true)
 	opened_chests = saved.get("chests", {}).duplicate(true)
@@ -217,8 +225,16 @@ func is_trap_disarmed(entity: Dictionary) -> bool:
 	return disarmed_traps.has(str(entity.get("id", "")))
 
 
+func entities_at(x: int, y: int) -> Array:
+	var result: Array = map_data.entities_at(x, y)
+	for entity in fallen_encounters:
+		if int(entity["x"]) == x and int(entity["y"]) == y:
+			result.append(entity)
+	return result
+
+
 func _find_active_entity(cell: Vector2i, kind: String) -> Dictionary:
-	for entity in map_data.entities_at(cell.x, cell.y):
+	for entity in entities_at(cell.x, cell.y):
 		if str(entity["type"]) == kind and not is_entity_removed(entity):
 			return entity
 	return {}
@@ -233,7 +249,7 @@ func pending_monster_definitions() -> Array[MonsterDefinition]:
 	var result: Array[MonsterDefinition] = []
 	if not has_pending_encounter():
 		return result
-	for entity in map_data.entities:
+	for entity in map_data.entities + fallen_encounters:
 		if str(entity.get("id", "")) != encounter_monster_id or str(entity.get("type", "")) != "monster":
 			continue
 		for monster_id in DungeonMap.monster_party_ids(entity):
@@ -250,30 +266,35 @@ func pending_monster_definition() -> MonsterDefinition:
 ## Победа снимает монстра только в сессии, затем повторяет вход в клетку
 ## через обычные правила дверей, сундуков и находок.
 func win_pending_encounter() -> bool:
-	if not has_pending_encounter():
+	if not has_pending_encounter() or hero == null or hero.health <= 0:
 		return false
 	var target: Vector2i = encounter_target
 	var defeated_id: String = encounter_monster_id
 	var defeated: Dictionary = {}
-	for entity in map_data.entities:
+	for entity in map_data.entities + fallen_encounters:
 		if str(entity.get("id", "")) == defeated_id and str(entity.get("type", "")) == "monster":
 			defeated = entity
 			break
 	removed_entities[defeated_id] = true
+	if defeated.has("fallen_rewards"):
+		fallen_encounters.erase(defeated)
 	encounter_monster_id = ""
 	encounter_target = Vector2i(-1, -1)
-	var moved: bool = move_by(target.x - player_pos.x, target.y - player_pos.y)
+	var rewards: Array[Dictionary] = []
 	if not defeated.is_empty():
-		var rewards: Array[Dictionary] = _resolve_rewards(
-			DungeonMap.monster_loot_contents(defeated),
-			DungeonMap.monster_loot_is_random(defeated),
-			DungeonMap.monster_gold_amount(defeated),
-			DungeonMap.monster_item_quantities(defeated))
+		if defeated.has("fallen_rewards"):
+			rewards.assign(defeated["fallen_rewards"])
+		else:
+			rewards = _resolve_rewards(
+				DungeonMap.monster_loot_contents(defeated),
+				DungeonMap.monster_loot_is_random(defeated),
+				DungeonMap.monster_gold_amount(defeated),
+				DungeonMap.monster_item_quantities(defeated))
 		for reward in rewards:
-			_receive_item(str(reward["item_id"]), int(reward["quantity"]))
+			_receive_item(str(reward["item_id"]), int(reward["quantity"]), reward.get("durabilities", []))
 		if not rewards.is_empty():
 			_activate_message_at(target, "monster_defeated", defeated_id, rewards)
-	return moved
+	return move_by(target.x - player_pos.x, target.y - player_pos.y)
 
 
 ## Отдаём события ровно один раз; они не являются всплывающими игровыми сообщениями.
@@ -441,7 +462,9 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 		_activate_message_at(target, "enter")
 	_refresh_visibility()
 	# Пока лестница завершает приключение. Позже здесь появится переход на другую карту.
-	if not _find_active_entity(target, "stairs_down").is_empty():
+	var stairs: Dictionary = _find_active_entity(target, "stairs_down")
+	if not stairs.is_empty():
+		_claim_exit_reward(stairs)
 		is_completed = true
 	return true
 
@@ -488,7 +511,7 @@ func _open_chest(chest: Dictionary) -> void:
 
 
 ## Общая логика подбора. Описание предмета — Resource, состояние находок — GameSession.
-func _receive_item(item_id: String, quantity: int) -> void:
+func _receive_item(item_id: String, quantity: int, durabilities: Array = []) -> void:
 	if item_id == "key_yellow":
 		item_id = "key"
 	var item := ItemCatalog.get_item(item_id)
@@ -500,7 +523,12 @@ func _receive_item(item_id: String, quantity: int) -> void:
 		carried_items[item_id] = int(carried_items.get(item_id, 0)) + quantity
 		if item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
 			for index in range(quantity):
-				hero.register_shield(item)
+				if index < durabilities.size():
+					var values: Array = hero.shield_durabilities.get(item_id, [])
+					values.append(int(durabilities[index]))
+					hero.shield_durabilities[item_id] = values
+				else:
+					hero.register_shield(item)
 		if item.category == ItemDefinition.Category.EQUIPMENT:
 			# Первая находка заполняет пустой слот; следующую можно надеть вручную.
 			if item.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON and hero.equipped_weapon_id.is_empty():
@@ -628,3 +656,142 @@ func _refresh_visibility() -> void:
 			if contains(x, y):
 				visible[y][x] = true
 				revealed[y][x] = true
+
+
+func _claim_exit_reward(stairs: Dictionary) -> void:
+	var entity_id: String = str(stairs["id"])
+	if claimed_exit_rewards.has(entity_id):
+		return
+	claimed_exit_rewards[entity_id] = true
+	var rewards: Array[Dictionary] = _resolve_rewards(DungeonMap.chest_contents(stairs), false,
+		DungeonMap.chest_gold_amount(stairs), DungeonMap.chest_item_quantities(stairs))
+	for reward in rewards:
+		_receive_item(str(reward["item_id"]), int(reward["quantity"]))
+	if not rewards.is_empty():
+		_message_events.append({"text": "Награда за прохождение подземелья", "activation": "exit_reward", "loot": rewards})
+
+
+func _fallen_loot() -> Array[Dictionary]:
+	var rewards: Array[Dictionary] = []
+	var gold: int = 0
+	for member in party_members():
+		gold += member.gold
+	if gold > 0:
+		rewards.append({"item_id": "gold", "quantity": gold})
+	for item_id in carried_items:
+		var quantity: int = int(carried_items[item_id])
+		if quantity <= 0:
+			continue
+		var reward: Dictionary = {"item_id": item_id, "quantity": quantity}
+		var values: Array = []
+		for member in party_members():
+			values.append_array(member.shield_durabilities.get(item_id, []))
+		if not values.is_empty():
+			reward["durabilities"] = values.slice(0, quantity)
+		rewards.append(reward)
+	return rewards
+
+
+func _fallen_slot(cell: Vector2i, spawn: Vector2i) -> Dictionary:
+	if not can_enter(cell) or not _find_active_entity(cell, "door").is_empty():
+		return {}
+	var monster: Dictionary = _find_active_entity(cell, "monster")
+	if not monster.is_empty():
+		if monster.has("fallen_rewards") and DungeonMap.monster_party_ids(monster).size() < DungeonMap.MAX_MONSTERS_PER_ENCOUNTER:
+			return {"entity": monster}
+		return {}
+	if cell == spawn:
+		return {}
+	return {"cell": cell}
+
+
+func _nearest_fallen_slot(origin: Vector2i, spawn: Vector2i) -> Dictionary:
+	var queue: Array[Vector2i] = [origin]
+	var visited: Dictionary = {}
+	visited[origin] = true
+	var cursor: int = 0
+	while cursor < queue.size():
+		var cell: Vector2i = queue[cursor]
+		cursor += 1
+		var slot: Dictionary = _fallen_slot(cell, spawn)
+		if not slot.is_empty():
+			return slot
+		for direction in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
+			var neighbor: Vector2i = cell + direction
+			if visited.has(neighbor) or not can_enter(neighbor) or not _find_active_entity(neighbor, "door").is_empty():
+				continue
+			visited[neighbor] = true
+			queue.append(neighbor)
+	if visited.has(spawn):
+		return _fallen_slot(spawn, Vector2i(-1, -1))
+	return {}
+
+
+func record_defeat() -> bool:
+	if _death_recorded:
+		return true
+	if hero == null or hero.health > 0:
+		return false
+	var spawn: Vector2i = map_data.find_entity_position("player_spawn")
+	var original: Array = fallen_encounters.duplicate(true)
+	var original_counter: int = _next_fallen_id
+	var rewards: Array[Dictionary] = _fallen_loot()
+	for index in range(party_members().size()):
+		var slot: Dictionary = _nearest_fallen_slot(player_pos, spawn)
+		if slot.is_empty():
+			fallen_encounters = original
+			_next_fallen_id = original_counter
+			return false
+		var encounter: Dictionary
+		if slot.has("entity"):
+			encounter = slot["entity"]
+			var properties: Dictionary = encounter["properties"]
+			var extra: Array = properties.get("monster_ids", [])
+			extra.append("skeleton")
+			properties["monster_ids"] = extra
+		else:
+			var cell: Vector2i = slot["cell"]
+			_next_fallen_id += 1
+			encounter = {"id": "fallen_%d" % _next_fallen_id, "type": "monster", "x": cell.x, "y": cell.y,
+				"properties": {"monster_id": "skeleton", "loot_mode": "fixed"}, "fallen_rewards": []}
+			fallen_encounters.append(encounter)
+		if index == 0:
+			encounter["fallen_rewards"].append_array(rewards)
+	carried_items.clear()
+	keys = 0
+	potions = 0
+	for member in party_members():
+		member.gold = 0
+		member.unequip_item(member.equipped_weapon_id)
+		member.unequip_item(member.equipped_shield_id)
+		member.shield_durabilities.clear()
+	_death_recorded = true
+	return true
+
+
+func resurrect_party() -> bool:
+	if not _death_recorded and not record_defeat():
+		return false
+	var spawn: Vector2i = map_data.find_entity_position("player_spawn")
+	if not can_enter(spawn):
+		return false
+	var restored: Array[HeroState] = []
+	for member in party_members():
+		var fresh := HeroState.new(member.definition)
+		fresh.learned_ability_ids.assign(member.learned_ability_ids)
+		fresh.saved_action_slots.assign(member.saved_action_slots)
+		restored.append(fresh)
+	party = restored
+	hero = party[0]
+	player_pos = spawn
+	encounter_monster_id = ""
+	encounter_target = Vector2i(-1, -1)
+	pending_chest_id = ""
+	is_completed = false
+	_death_recorded = false
+	_message_events.clear()
+	_trigger_events.clear()
+	_party_damage_events.clear()
+	last_event_message = ""
+	_refresh_visibility()
+	return true

@@ -77,7 +77,7 @@ func _draw() -> void:
 				continue
 			if miniature and scale * CELL_SIZE < 3.0:
 				continue
-			for entity in data.entities_at(x, y):
+			for entity in session.entities_at(x, y):
 				if session.is_entity_removed(entity):
 					continue
 				if _is_hidden_from_hero(entity):
@@ -132,7 +132,7 @@ func _draw_minimap_overlay() -> void:
 				draw_line(top_left, bottom_left, line_color, line_width, true)
 			if not _is_open_neighbor(data, x + 1, y):
 				draw_line(top_right, bottom_right, line_color, line_width, true)
-			for entity in data.entities_at(x, y):
+			for entity in session.entities_at(x, y):
 				if session.is_entity_removed(entity) or _is_hidden_from_hero(entity):
 					continue
 				var mark := Color.TRANSPARENT

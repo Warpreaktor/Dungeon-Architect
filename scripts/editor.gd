@@ -148,6 +148,7 @@ const TEST_OPTION_OPEN_MAP := 1
 var _load_paths: Array[String] = []
 var _load_list: ItemList
 var _library_actions: HBoxContainer
+var _stairs_reward_button: Button
 var _unlink_stairs_button: Button
 var _linking_stairs_id: String = ""
 var _pending_next_map: DungeonMap
@@ -671,6 +672,9 @@ func _create_dialogs() -> void:
 	_unlink_stairs_button = _button("Без перехода", "Оставить лестницу финальным выходом", _unlink_selected_stairs)
 	_unlink_stairs_button.visible = false
 	library_layout.add_child(_unlink_stairs_button)
+	_stairs_reward_button = _button("Награда", "Настроить награду за прохождение", _edit_stairs_reward)
+	_stairs_reward_button.hide()
+	library_layout.add_child(_stairs_reward_button)
 
 	_rename_dialog = ConfirmationDialog.new()
 	_rename_dialog.title = "Переименование карты"
@@ -1210,6 +1214,7 @@ func _on_stairs_tapped(stairs_id: String) -> void:
 	_load_dialog.ok_button_text = "Связать"
 	_library_actions.visible = false
 	_unlink_stairs_button.visible = true
+	_stairs_reward_button.show()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == stairs_id:
 			var linked_id := DungeonMap.stairs_target_id(entity)
@@ -1220,6 +1225,15 @@ func _on_stairs_tapped(stairs_id: String) -> void:
 					break
 			break
 	_load_dialog.popup_centered(Vector2i(720, 530))
+
+
+func _edit_stairs_reward() -> void:
+	for entity in map_data.entities:
+		if str(entity.get("id", "")) == _linking_stairs_id:
+			_load_dialog.hide()
+			_chest_popup.configure_exit(entity)
+			_chest_popup.popup_centered_clamped(Vector2i(470, 530), 0.9)
+			return
 
 
 func _link_selected_stairs() -> void:
@@ -1586,6 +1600,7 @@ func _show_load() -> void:
 	_load_dialog.ok_button_text = "Загрузить"
 	_library_actions.visible = true
 	_unlink_stairs_button.visible = false
+	_stairs_reward_button.hide()
 	_refresh_library()
 	if _load_paths.is_empty():
 		_set_status("Библиотека пуста. Сначала сохрани карту.")
@@ -2080,7 +2095,8 @@ func _try_move_player(dx: int, dy: int) -> void:
 			await _canvas.player_step_finished
 			if not is_play_mode or game_session != moving_session:
 				return
-			moving_session.open_pending_chest()
+			if not moving_session.is_party_defeated():
+				moving_session.open_pending_chest()
 		elif moving_session.has_party_damage_events():
 			await _canvas.player_step_finished
 			if not is_play_mode or game_session != moving_session:
@@ -2250,7 +2266,9 @@ func _show_end_view(defeated: bool) -> void:
 				_pending_next_map = null
 	_victory_view = VICTORY_VIEW_SCENE.instantiate() as VictoryView
 	add_child(_victory_view)
-	if _pending_next_map != null and not defeated:
+	if defeated:
+		_victory_view.retry_requested.connect(_resurrect_after_defeat)
+	elif _pending_next_map != null:
 		_victory_view.retry_requested.connect(_enter_next_floor)
 	else:
 		_victory_view.retry_requested.connect(_restart_test_after_victory)
@@ -2259,7 +2277,12 @@ func _show_end_view(defeated: bool) -> void:
 		_victory_view.set_exit_text("В меню")
 	if defeated:
 		_victory_view.show_defeat(game_session.steps, game_session.pending_monster_definition())
-		_set_status("Герой пал в сражении. Приключение не завершено.")
+		if game_session.record_defeat():
+			_canvas.queue_redraw()
+			_refresh_map_overlays()
+			_set_status("Герой пал. Его имущество осталось у скелета.")
+		else:
+			_set_status("Не удалось разместить скелета; имущество сохранено.")
 	else:
 		if _pending_next_map != null:
 			_victory_view.show_floor_transition(game_session.steps, _pending_next_map.display_name)
@@ -2293,6 +2316,23 @@ func _enter_next_floor() -> void:
 	_refresh_map_overlays()
 	_collect_game_messages()
 	_set_status("Ты вошёл в «%s»." % game_session.map_data.display_name)
+
+
+func _resurrect_after_defeat() -> void:
+	if game_session == null or not game_session.resurrect_party():
+		_set_status("Нет места для скелета. Воскрешение невозможно без потери имущества.")
+		return
+	_clear_held_movement()
+	_pending_game_messages.clear()
+	_remove_victory_view()
+	_canvas.set_game_session(game_session)
+	_canvas.zoom = DungeonCanvas.PLAY_START_ZOOM
+	_canvas.center_on_cell(game_session.player_pos)
+	_update_mode_ui()
+	_refresh_stats()
+	_refresh_map_overlays()
+	_canvas.grab_focus()
+	_set_status("Герой воскрес. Верни своё имущество, победив скелета.")
 
 
 func _restart_test_after_victory() -> void:

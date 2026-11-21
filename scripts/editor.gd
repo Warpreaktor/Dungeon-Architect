@@ -23,6 +23,7 @@ const GAME_NOTICE_SCENE: PackedScene = preload("res://scenes/game_notice.tscn")
 const CHEST_CONTENTS_SCENE: PackedScene = preload("res://scenes/chest_contents_popup.tscn")
 const DOOR_PROPERTIES_SCENE: PackedScene = preload("res://scenes/door_properties_popup.tscn")
 const TRIGGER_PROPERTIES_SCENE: PackedScene = preload("res://scenes/trigger_properties_popup.tscn")
+const ARSENAL_VIEW_SCRIPT: Script = preload("res://scripts/battle_arsenal_view.gd")
 const BATTLE_VIEW_SCENE: PackedScene = preload("res://scenes/battle_view.tscn")
 const VICTORY_VIEW_SCENE: PackedScene = preload("res://scenes/victory_view.tscn")
 const MESSAGE_EDITOR_SCENE: PackedScene = preload("res://scenes/message_editor_popup.tscn")
@@ -83,6 +84,7 @@ var _startup_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
 var _test_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
 var _editor_header: PanelContainer
 var _floating_console: FloatingDebugConsole
+var _arsenal_view: BattleArsenalView
 var _game_command_bar: GameCommandBar
 var _game_system_menu: GameSystemMenu
 var _map_screen: MapScreen
@@ -395,6 +397,7 @@ func _build_interface() -> void:
 	# Экранные команды — отдельная сцена, не часть HUD персонажа.
 	_game_command_bar = GAME_COMMAND_BAR_SCENE.instantiate() as GameCommandBar
 	_game_command_bar.inventory_requested.connect(_toggle_inventory)
+	_game_command_bar.arsenal_requested.connect(_open_arsenal)
 	_game_command_bar.menu_requested.connect(_open_game_system_menu)
 	_game_command_bar.map_requested.connect(_toggle_map_screen)
 	_game_command_bar.visible = false
@@ -412,6 +415,9 @@ func _build_interface() -> void:
 	_game_system_menu.continue_requested.connect(_close_game_system_menu)
 	_game_system_menu.leave_requested.connect(_leave_from_game_system_menu)
 	add_child(_game_system_menu)
+	_arsenal_view = ARSENAL_VIEW_SCRIPT.new() as BattleArsenalView
+	_arsenal_view.closed.connect(_on_arsenal_closed)
+	add_child(_arsenal_view)
 	_inventory_view = INVENTORY_VIEW_SCENE.instantiate() as InventoryView
 	_inventory_view.closed.connect(_on_inventory_closed)
 	_inventory_view.item_use_requested.connect(_on_inventory_use_requested)
@@ -1977,6 +1983,21 @@ func _update_mode_ui() -> void:
 		control.modulate = Color(1, 1, 1, 0.60) if is_play_mode else Color(1, 1, 1, 1)
 	_set_tool(selected_tool)
 	_update_history_buttons()
+
+
+func _open_arsenal() -> void:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible or _map_screen.visible:
+		return
+	_arsenal_view.open_for(game_session.hero)
+	_game_command_bar.visible = false
+	_dpad.visible = false
+
+
+func _on_arsenal_closed() -> void:
+	if is_play_mode and not _combat_active and _victory_view == null:
+		_game_command_bar.visible = true
+		_dpad.visible = true
+		_canvas.grab_focus()
 
 
 func _toggle_inventory() -> void:

@@ -51,10 +51,13 @@ const PICKER_CHOICE_HEIGHT: float = 70.0
 const PICKER_ROW_SPACING: float = 6.0
 const PICKER_MAX_LIST_HEIGHT: float = 260.0
 
+const ARSENAL_VIEW_SCRIPT: Script = preload("res://scripts/battle_arsenal_view.gd")
 const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 const MAX_CHAIN_SLOT_SIDE: float = 116.0
 const MIN_CHAIN_SLOT_SIDE: float = 64.0
 
+var _arsenal_view: BattleArsenalView
+var _arsenal_button: Button
 var _combat: CombatSession
 var _hero_attack_damage: int = 0
 var _attack_name: String = "Удар кулаком"
@@ -136,6 +139,15 @@ func _ready() -> void:
 	_guard_button.icon = preload("res://assets/hud/menu.png")
 	_punch_button.disabled = true
 	_guard_button.visible = false
+	_arsenal_view = ARSENAL_VIEW_SCRIPT.new() as BattleArsenalView
+	add_child(_arsenal_view)
+	_arsenal_view.saved.connect(_on_arsenal_saved)
+	_arsenal_button = Button.new()
+	_arsenal_button.text = "Арсенал"
+	_arsenal_button.custom_minimum_size = Vector2(108, 38)
+	_arsenal_button.pressed.connect(_open_arsenal)
+	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.add_child(_arsenal_button)
+	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.move_child(_arsenal_button, 1)
 	_build_ability_picker()
 	_build_combat_item_picker()
 	_reorder = BattleChainReorderController.new()
@@ -286,6 +298,21 @@ func _lab_checkpoint(step: Dictionary) -> void:
 	var stop: bool = _lab_step_mode == "action" or (_lab_step_mode == "tick" and bool(step["tick_end"]))
 	if stop and _playback != null and _playback.is_valid():
 		_playback.pause()
+
+
+func _open_arsenal() -> void:
+	if _combat == null or _is_playing_back or _combat.battle_state.flow.stage != BattleFlow.Stage.PREPARATION:
+		return
+	_hide_ability_picker()
+	_hide_combat_item_picker()
+	_arsenal_view.open_for(_combat.hero, _combat.battle_state.get_hero())
+
+
+func _on_arsenal_saved(slots: Array[String]) -> void:
+	_committed_slots = slots.duplicate()
+	_set_draft_from_chain(slots)
+	_hero_chain = _draft_actions()
+	_refresh_phase_controls()
 
 
 func _equalize_enemy_cards() -> void:
@@ -1335,6 +1362,8 @@ func _refresh_phase_controls() -> void:
 			_punch_button.text = "Следующая фаза"
 	# Свободная перестановка доступна прямо в слотах между фазами.
 	_guard_button.visible = false
+	_arsenal_button.visible = stage == BattleFlow.Stage.PREPARATION
+	_arsenal_button.disabled = _is_playing_back
 	_guard_button.disabled = _is_playing_back or stage == BattleFlow.Stage.EXECUTING or stage == BattleFlow.Stage.FINISHED
 	_guard_button.text = "Отмена" if stage == BattleFlow.Stage.RECONFIGURING else "Изменить тактику"
 

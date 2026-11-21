@@ -17,12 +17,6 @@ func _initialize() -> void:
 	assert(opponents.size() >= 2)
 	assert(opponents[0] == battle.enemy_id)
 	assert(opponents[1] == battle.support_enemy_id)
-	var steps: Array[Dictionary] = BattlePlaybackTimeline.split_events(events)
-	assert(not steps.is_empty())
-	var restored: Array[Dictionary] = []
-	for step in steps:
-		restored.append_array(step["events"])
-	assert(restored == events)
 	var main: BattleParticipant = battle.get_enemy()
 	var support: BattleParticipant = battle.get_participant(battle.support_enemy_id)
 	main.health = 0

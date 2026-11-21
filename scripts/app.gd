@@ -23,15 +23,8 @@ func _show_screen(screen: Control) -> void:
 func _open_menu() -> void:
 	var screen := MENU_SCENE.instantiate() as MainMenu
 	screen.editor_requested.connect(_open_editor)
-	screen.laboratory_requested.connect(_open_laboratory)
 	screen.game_requested.connect(_open_game)
 	_show_screen(screen)
-
-
-func _open_laboratory() -> void:
-	var laboratory := BattleLab.new()
-	laboratory.exit_requested.connect(_open_menu)
-	_show_screen(laboratory)
 
 
 func _open_editor() -> void:

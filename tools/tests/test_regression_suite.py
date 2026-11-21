@@ -19,8 +19,8 @@ class RegressionSuiteTests(unittest.TestCase):
             "test_reachability.gd",
             "test_traps.gd",
             "test_regression_phase_lifecycle.gd",
-            "test_regression_seed_and_lab_parity.gd",
-            "test_regression_group_and_playback.gd",
+            "test_regression_seed_determinism.gd",
+            "test_regression_group_combat.gd",
         }
         self.assertTrue(required <= found, f"Missing regression scripts: {sorted(required - found)}")
 

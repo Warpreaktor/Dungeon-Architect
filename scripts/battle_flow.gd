@@ -47,7 +47,7 @@ func finish_battle() -> bool:
 
 
 func can_use_item() -> bool:
-	return stage == Stage.BETWEEN_PHASES
+	return stage in [Stage.PREPARATION, Stage.BETWEEN_PHASES, Stage.RECONFIGURING]
 
 
 func grant_half_health_reconfiguration(current_hp: int, maximum_hp: int) -> void:

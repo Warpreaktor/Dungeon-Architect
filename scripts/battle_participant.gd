@@ -136,7 +136,7 @@ func ranged_attack() -> int:
 
 
 func sync_consumable_from_hero(source: HeroState) -> void:
-	## В межфазной паузе источник правды для зелья — GameSession.hero.
+	## В любой разрешённой паузе источник правды для зелья — GameSession.hero.
 	## Заменяем только копию HeroState, сохраняя курсор, статусы и бонус блока.
 	if source == null or _hero_snapshot == null:
 		return

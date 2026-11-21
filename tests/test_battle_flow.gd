@@ -4,7 +4,7 @@ extends SceneTree
 func _initialize() -> void:
 	var flow := BattleFlow.new()
 	assert(flow.stage == BattleFlow.Stage.PREPARATION)
-	assert(not flow.can_use_item())
+	assert(flow.can_use_item())
 	assert(not flow.complete_phase())
 	assert(not flow.request_reconfiguration())
 	assert(flow.start_phase())
@@ -17,6 +17,7 @@ func _initialize() -> void:
 	assert(not flow.complete_phase())
 	assert(flow.can_use_item())
 	assert(flow.request_reconfiguration()) # Бесплатная перестановка после каждой фазы.
+	assert(flow.can_use_item())
 	assert(not flow.request_reconfiguration())
 	assert(flow.cancel_reconfiguration())
 	flow.grant_half_health_reconfiguration(20, 40) # Ровно 50% не даёт разрешение.
@@ -28,7 +29,7 @@ func _initialize() -> void:
 	assert(flow.request_reconfiguration())
 	assert(not flow.request_reconfiguration())
 	assert(flow.stage == BattleFlow.Stage.RECONFIGURING)
-	assert(not flow.can_use_item()) # Только в обычной паузе.
+	assert(flow.can_use_item())
 	assert(flow.confirm_reconfiguration())
 	assert(not flow.confirm_reconfiguration())
 	assert(flow.start_phase() and flow.phase_number == 2)

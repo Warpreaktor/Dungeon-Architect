@@ -511,7 +511,7 @@ func _receive_item(item_id: String, quantity: int) -> void:
 		potions = int(carried_items.get("potion", 0))
 
 
-## Боевой пояс: только расходники, применимые к бойцу во время паузы.
+## Боевой пояс: только расходники, применимые к бойцу вне исполнения фазы.
 static func is_combat_item(item: ItemDefinition) -> bool:
 	if item == null or item.category != ItemDefinition.Category.CONSUMABLE:
 		return false
@@ -533,7 +533,7 @@ func combat_item_ids() -> Array[String]:
 
 
 ## Применение через модель. Нельзя использовать предмет в момент проигрывания
-## алгоритма или на подготовке; нельзя потратить один флакон дважды.
+## алгоритма; нельзя потратить один флакон дважды.
 func use_combat_item(item_id: String, battle: BattleState) -> Dictionary:
 	if battle == null or not battle.flow.can_use_item():
 		return {"used": false, "message": "Сейчас предмет недоступен."}

@@ -14,7 +14,7 @@ func _initialize() -> void:
 	var before: int = int(combat.battle_state.get_hero().statuses["bleeding"]["ticks"])
 	assert(before == duration)
 	var chain: Array[String] = ["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib"]
-	var result: Dictionary = combat.play_phase(chain, combat.battle_state.get_enemy().action_chain)
+	var result: Dictionary = BattlePhaseTestDriver.play_phase(combat, chain, combat.battle_state.get_enemy().action_chain)
 	assert(bool(result.get("success", false)))
 	assert(combat.is_victory and not combat.is_defeat)
 	assert(combat.battle_state.get_hero().completed_phases == 1)
@@ -31,6 +31,6 @@ func _initialize() -> void:
 	nearly_dead.health = 1
 	var fatal := BattleState.begin(enemy, nearly_dead, 1427)
 	fatal.get_enemy().health = 1
-	assert(bool(fatal.run_phase(chain, fatal.get_enemy().action_chain).get("success", false)))
+	assert(bool(BattlePhaseTestDriver.run_phase(fatal, chain, fatal.get_enemy().action_chain).get("success", false)))
 	assert(fatal.is_defeat and not fatal.is_victory)
 	quit()

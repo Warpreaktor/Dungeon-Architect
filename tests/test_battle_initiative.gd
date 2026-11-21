@@ -91,7 +91,7 @@ func _initialize() -> void:
 		hero_chain.append("guard")
 	e.action_chain = ["guard"]
 	s.action_chain = ["guard"]
-	var result: Dictionary = repeat.run_phase(hero_chain, e.action_chain)
+	var result: Dictionary = BattlePhaseTestDriver.run_phase(repeat, hero_chain, e.action_chain)
 	assert(bool(result.get("success", false)))
 	var first_tick_actors: Array[String] = []
 	var found_first_tick: bool = false
@@ -115,7 +115,7 @@ func _initialize() -> void:
 	var victim_chain: Array[String] = []
 	for slot in range(victim.action_slot_capacity):
 		victim_chain.append("basic_strike")
-	assert(bool(lethal.run_phase(victim_chain, attacker.action_chain).get("success", false)))
+	assert(bool(BattlePhaseTestDriver.run_phase(lethal, victim_chain, attacker.action_chain).get("success", false)))
 	assert(lethal.is_defeat)
 	for event in lethal.last_phase_events:
 		assert(not (event.get("type", "") == "action_start" and event.get("actor_id", "") == victim.participant_id))

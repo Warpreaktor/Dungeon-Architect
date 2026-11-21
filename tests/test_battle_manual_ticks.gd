@@ -41,7 +41,7 @@ func _initialize() -> void:
 	assert(battle.manual_available_slots() == [0, 1, 2])
 	var preview: Dictionary = battle.manual_next_enemy_step()
 	assert(preview.actor_id == "enemy" and preview.action_id == "basic_strike")
-	assert(not battle.run_phase(prepared, battle.get_enemy().action_chain).success)
+	assert(not battle.prepare_manual_combat(prepared).success)
 	assert(not battle.run_manual_tick(0, "hero").success)
 	assert(battle.flow.stage == BattleFlow.Stage.PREPARATION)
 	var first: Dictionary = battle.run_manual_tick(1, "hero")

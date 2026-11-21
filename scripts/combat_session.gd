@@ -2,7 +2,7 @@ class_name CombatSession
 extends RefCounted
 
 ## Совместимый фасад существующего боя. Расчёт теперь выполняет BattleState;
-## BattleView продолжает пользоваться прежними полями и hero_attack().
+## Объединяет данные боевого ядра с постоянным состоянием героя.
 var enemy_definition: MonsterDefinition
 var support_enemy_definition: MonsterDefinition
 var hero: HeroState
@@ -75,17 +75,6 @@ func hero_punch() -> int:
 	return hero_attack()
 
 
-## пробная двухтактовая фаза на уже имеющихся приёмах.
-## Старые hero_attack()/hero_block() сохраняются для регрессионных тестов.
-func play_phase(hero_chain: Array[String], enemy_chain: Array[String]) -> Dictionary:
-	var result: Dictionary = battle_state.run_phase(hero_chain, enemy_chain)
-	if bool(result.get("success", false)):
-		var battle_hero: BattleParticipant = battle_state.get_hero()
-		if battle_hero != null:
-			battle_hero.commit_hero_result(hero)
-	return result
-
-
 func prepare_manual_combat(hero_chain: Array[String]) -> Dictionary:
 	return battle_state.prepare_manual_combat(hero_chain)
 
@@ -97,11 +86,3 @@ func play_manual_tick(slot_index: int, target_id: String = "") -> Dictionary:
 		if battle_hero != null:
 			battle_hero.commit_hero_result(hero)
 	return result
-
-
-func request_tactic_change() -> bool:
-	return battle_state.flow.request_reconfiguration()
-
-
-func confirm_tactic_change() -> bool:
-	return battle_state.flow.confirm_reconfiguration()

@@ -6,7 +6,6 @@ func _initialize() -> void:
 	assert(flow.stage == BattleFlow.Stage.PREPARATION)
 	assert(flow.can_use_item())
 	assert(not flow.complete_phase())
-	assert(not flow.request_reconfiguration())
 	assert(flow.start_phase())
 	assert(flow.phase_number == 1 and flow.can_execute())
 	assert(not flow.start_phase()) # Нельзя запустить фазу повторно.
@@ -16,22 +15,7 @@ func _initialize() -> void:
 	assert(flow.complete_phase())
 	assert(not flow.complete_phase())
 	assert(flow.can_use_item())
-	assert(flow.request_reconfiguration()) # Бесплатная перестановка после каждой фазы.
 	assert(flow.can_use_item())
-	assert(not flow.request_reconfiguration())
-	assert(flow.cancel_reconfiguration())
-	flow.grant_half_health_reconfiguration(20, 40) # Ровно 50% не даёт разрешение.
-	assert(flow.reconfiguration_tokens == 0)
-	flow.grant_half_health_reconfiguration(19, 40)
-	assert(flow.reconfiguration_tokens == 1)
-	flow.grant_half_health_reconfiguration(10, 40)
-	assert(flow.reconfiguration_tokens == 1)
-	assert(flow.request_reconfiguration())
-	assert(not flow.request_reconfiguration())
-	assert(flow.stage == BattleFlow.Stage.RECONFIGURING)
-	assert(flow.can_use_item())
-	assert(flow.confirm_reconfiguration())
-	assert(not flow.confirm_reconfiguration())
 	assert(flow.start_phase() and flow.phase_number == 2)
 	assert(flow.finish_battle())
 	assert(not flow.finish_battle())
@@ -46,7 +30,7 @@ func _initialize() -> void:
 	var hero_chain: Array[String] = ["guard", "basic_strike", "guard"]
 	var enemy_chain: Array[String] = ["guard", "basic_strike"]
 	battle.get_enemy().action_chain = enemy_chain.duplicate()
-	var result: Dictionary = battle.run_phase(hero_chain, enemy_chain)
+	var result: Dictionary = BattlePhaseTestDriver.run_phase(battle, hero_chain, enemy_chain)
 	assert(result.success)
 	assert(battle.flow.phase_number == 1)
 	assert(battle.flow.completed_ticks == 4)
@@ -60,25 +44,25 @@ func _initialize() -> void:
 			effects.append(event.type)
 	assert(effects == ["block", "block", "attack", "attack", "block", "block"])
 	# Отдельный запуск фазы, новая пара действий, никакого повторного начала во время исполнения.
-	assert(battle.run_phase(hero_chain, enemy_chain).success)
+	assert(BattlePhaseTestDriver.run_phase(battle, hero_chain, enemy_chain).success)
 	assert(battle.flow.phase_number == 2)
 
 	# Нельзя запустить пустую цепочку, и состояние не меняется.
 	var bad := BattleState.begin(enemy, HeroState.new(HeroCatalog.get_hero("petushan")))
 	var empty: Array[String] = []
-	assert(not bad.run_phase(empty, enemy_chain).success)
+	assert(not BattlePhaseTestDriver.run_phase(bad, empty, enemy_chain).success)
 	assert(bad.flow.stage == BattleFlow.Stage.PREPARATION)
 
 	# Смертельный удар пропускает оставшиеся карты, но не обязательный отдых.
 	var finisher := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), hero)
 	finisher.get_enemy().health = 1
 	var killing_chain: Array[String] = ["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib"]
-	var killing: Dictionary = finisher.run_phase(killing_chain, enemy_chain)
+	var killing: Dictionary = BattlePhaseTestDriver.run_phase(finisher, killing_chain, enemy_chain)
 	assert(killing.success and finisher.is_victory)
 	assert(finisher.flow.stage == BattleFlow.Stage.FINISHED)
 	assert(finisher.flow.completed_ticks == 1 + BattleChainPlanner.REST_TICKS)
 	assert(finisher.get_hero().completed_phases == 1)
-	assert(not finisher.run_phase(killing_chain, enemy_chain).success)
+	assert(not BattlePhaseTestDriver.run_phase(finisher, killing_chain, enemy_chain).success)
 	var attacks: int = 0
 	for event in finisher.last_phase_events:
 		if event.type == "attack":
@@ -91,7 +75,7 @@ func _initialize() -> void:
 	var encounter := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), wounded)
 	encounter.get_enemy().health = 1
 	assert(int(encounter.get_hero().statuses["bleeding"]["ticks"]) == 3)
-	assert(encounter.run_phase(killing_chain, enemy_chain).success)
+	assert(BattlePhaseTestDriver.run_phase(encounter, killing_chain, enemy_chain).success)
 	assert(encounter.is_victory)
 	encounter.get_hero().commit_hero_result(wounded)
 	assert(int(wounded.overworld_statuses["bleeding"]["ticks"]) == 2)
@@ -102,6 +86,6 @@ func _initialize() -> void:
 	wounded.health = 1
 	var fatal := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), wounded)
 	fatal.get_enemy().health = 1
-	assert(fatal.run_phase(killing_chain, enemy_chain).success)
+	assert(BattlePhaseTestDriver.run_phase(fatal, killing_chain, enemy_chain).success)
 	assert(fatal.is_defeat and not fatal.is_victory)
 	quit()

@@ -201,7 +201,7 @@ func _reconfigure_enemy_for_phase() -> void:
 
 
 func _reconfigure_enemy_for_actor(actor_id: String) -> void:
-	if flow.stage not in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.RECONFIGURING]:
+	if flow.stage not in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES]:
 		return
 	var actor: BattleParticipant = get_participant(actor_id)
 	if actor == null or not actor.is_alive() or actor.action_cursor != 0:
@@ -309,7 +309,7 @@ static func same_arsenal(first: Array[String], second: Array[String]) -> bool:
 
 
 func configure_hero_chain(actions: Array[String]) -> Dictionary:
-	if not (flow.stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.RECONFIGURING]):
+	if not (flow.stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES]):
 		return {"success": false, "reason": "Сейчас нельзя изменить тактику"}
 	if get_hero() != null and actions.size() != get_hero().action_slot_capacity:
 		return {"success": false, "reason": "Цепочка содержит незаполненные слоты"}
@@ -331,108 +331,6 @@ func configure_hero_chain(actions: Array[String]) -> Dictionary:
 		hero.action_cursor = actions.size() if rest_pending else 0
 	hero.action_chain = actions.duplicate()
 	return {"success": true, "reason": ""}
-
-
-## Одна фаза включает полную цепочку ГЕРОЯ И его обязательный отдых.
-## Курсоры участников независимы, отдых всегда завершает круг героя.
-## Все события уже вычислены до визуального воспроизведения.
-func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dictionary:
-	if manual_combat_active:
-		return {"success": false, "reason": "Бой управляется вручную", "events": []}
-	var hero_actor: BattleParticipant = get_hero()
-	var enemy_actor: BattleParticipant = get_enemy()
-	if hero_actor == null or enemy_actor == null:
-		return {"success": false, "reason": "Нет участников боя", "events": []}
-	var current_hero_chain: Array[String] = hero_actor.action_chain
-	# Устаревший или временно недоступный приём врага даст ранний отдых,
-	# не разрушая всю фазу. Колода уже выбрана при создании боя.
-	# В ручных тестах состояние может создаваться без MonsterDefinition.
-	# В этом случае разрешаем однократную установку колоды перед первым тактом.
-	if enemy_actor.action_chain.is_empty() and flow.stage == BattleFlow.Stage.PREPARATION:
-		enemy_actor.action_chain = enemy_actions.duplicate()
-	enemy_actions = enemy_actor.action_chain.duplicate()
-	if enemy_actions.is_empty() or enemy_actions.size() > enemy_actor.action_slot_capacity or enemy_actions.size() > BattleChainPlanner.MAX_ACTIONS:
-		return {"success": false, "reason": "Некорректная цепочка противника", "events": []}
-	if flow.stage == BattleFlow.Stage.PREPARATION or flow.stage == BattleFlow.Stage.RECONFIGURING:
-		var was_reconfiguring: bool = flow.stage == BattleFlow.Stage.RECONFIGURING
-		var configured: Dictionary = configure_hero_chain(hero_actions)
-		if not bool(configured.get("success", false)):
-			return {"success": false, "reason": configured.get("reason", ""), "events": []}
-		current_hero_chain = hero_actor.action_chain
-		if was_reconfiguring and hero_actor.action_cursor < current_hero_chain.size():
-			# Старое разрешённое окно: вне обязательного отдыха начинаем заново.
-			hero_actor.action_cursor = 0
-	elif flow.stage == BattleFlow.Stage.BETWEEN_PHASES:
-		# После каждой фазы разрешена новая раскладка; отказ при пустых
-		# слотах остаётся за тем же валидатором, что и на старте боя.
-		var configured: Dictionary = configure_hero_chain(hero_actions)
-		if not bool(configured.get("success", false)):
-			return {"success": false, "reason": configured.get("reason", ""), "events": []}
-		current_hero_chain = hero_actor.action_chain
-	else:
-		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
-	var start_event: int = events.size()
-	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES:
-		_run_enemy_intermission()
-	if not is_victory and not is_defeat:
-		for actor_id in enemy_ids():
-			_reconfigure_enemy_for_actor(actor_id)
-	enemy_actions = enemy_actor.action_chain.duplicate()
-	if not flow.start_phase():
-		return {"success": false, "reason": "Сейчас нельзя запускать фазу", "events": []}
-	if flow.phase_number == 1:
-		locked_hero_arsenal = current_hero_chain.duplicate()
-	var hero_actions_done: int = 0
-	var hero_rest_finished: bool = false
-	var initial_hero_phases: int = hero_actor.completed_phases
-	while (hero_actions_done < current_hero_chain.size() or not hero_rest_finished) and not is_victory and not is_defeat:
-		var clash: Dictionary = BattleClashPlanner.next_opponent(participants, enemy_ids(), next_enemy_clash_cursor)
-		var opponent_id: String = str(clash.get("actor_id", ""))
-		if opponent_id.is_empty():
-			update_outcome()
-			break
-		next_enemy_clash_cursor = int(clash.get("next_cursor", next_enemy_clash_cursor))
-		var steps: Dictionary = {}
-		for actor_id in [hero_id, opponent_id]:
-			var actor: BattleParticipant = get_participant(actor_id)
-			if actor == null or not actor.is_alive():
-				continue
-			var step: Dictionary = BattleChainPlanner.next_step(actor.action_chain, actor.action_cursor)
-			steps[actor_id] = step
-			actor.action_cursor = int(step["next_cursor"])
-			actor.is_resting = bool(step["reload"])
-		var hero_step: Dictionary = steps.get(hero_id, {})
-		if bool(hero_step.get("reload", false)):
-			hero_rest_finished = hero_actions_done >= current_hero_chain.size()
-		else:
-			hero_actions_done += 1
-		_resolve_tick(steps, opponent_id, flow.completed_ticks + 1)
-		flow.mark_tick()
-		flow.grant_half_health_reconfiguration(hero_actor.health, hero_actor.max_health)
-	# После последнего врага пропускаются неисполненные карты, но не отдых.
-	if is_victory and hero_actor.is_alive() and hero_actor.completed_phases == initial_hero_phases:
-		var rest_tick: int = flow.completed_ticks + 1
-		hero_actor.action_cursor = 0
-		hero_actor.is_resting = true
-		events.append({"type": "tick", "tick": rest_tick, "opponent_id": "",
-			"hero_slot": -1, "enemy_slot": -1, "support_slot": -1,
-			"hero_reload": true, "enemy_reload": false, "support_reload": false})
-		_complete_rest(hero_id, rest_tick)
-		flow.mark_tick()
-	if hero_actor.completed_phases > initial_hero_phases:
-		end_phase()
-	if not is_victory and not is_defeat:
-		flow.complete_phase()
-	else:
-		flow.finish_battle()
-	hero_actor.is_resting = false
-	enemy_actor.is_resting = false
-	var remaining_support: BattleParticipant = get_participant(support_enemy_id)
-	if remaining_support != null:
-		remaining_support.is_resting = false
-	last_phase_events = events.slice(start_event)
-	return {"success": true, "events": last_phase_events, "finished": flow.stage == BattleFlow.Stage.FINISHED,
-		"phase_number": flow.phase_number, "hero_hp": hero_actor.health, "ticks": flow.completed_ticks}
 
 
 func prepare_manual_combat(actions: Array[String]) -> Dictionary:
@@ -534,7 +432,6 @@ func run_manual_tick(slot_index: int, target_id: String = "") -> Dictionary:
 	var tick: int = flow.completed_ticks + 1
 	_resolve_tick(steps, opponent_id, tick, target_id)
 	flow.mark_tick()
-	flow.grant_half_health_reconfiguration(hero.health, hero.max_health)
 	if hero.completed_phases > _manual_phase_start:
 		end_phase()
 		manual_used_slots.clear()
@@ -667,7 +564,7 @@ func end_phase() -> void:
 		(participant as BattleParticipant).end_phase()
 
 
-## Совместимость текущего экрана: удар героя, затем один ответ врага.
+## Совместимость прямых вызовов из старых тестов и режима карты.
 ## Оба урона рассчитываются тем же обработчиком, что и способности из .tres.
 func perform_basic_attack(_legacy_attack_damage: int = 0) -> int:
 	if is_victory or is_defeat or get_hero() == null:

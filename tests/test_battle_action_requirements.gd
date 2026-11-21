@@ -94,9 +94,9 @@ func _initialize() -> void:
 
 	# Устаревшая способность в готовой цепочке не срывает всю фазу.
 	var rest_battle := BattleState.begin(MonsterCatalog.get_monster("lobar"), wolf)
-	assert(rest_battle.run_phase(["guard", "basic_strike", "guard"], ["guard", "basic_strike"]).success)
+	assert(BattlePhaseTestDriver.run_phase(rest_battle, ["guard", "basic_strike", "guard"], ["guard", "basic_strike"]).success)
 	rest_battle.get_hero().personal_ability_ids.erase("basic_strike")
-	var sequence: Dictionary = rest_battle.run_phase(["guard", "basic_strike", "guard"], ["guard", "basic_strike"])
+	var sequence: Dictionary = BattlePhaseTestDriver.run_phase(rest_battle, ["guard", "basic_strike", "guard"], ["guard", "basic_strike"])
 	assert(sequence.success)
 	var saw_rest: bool = false
 	for event in sequence.events:
@@ -111,11 +111,11 @@ func _initialize() -> void:
 
 	var reorder_battle := BattleState.begin(MonsterCatalog.get_monster("lobar"), wolf)
 	var original: Array[String] = ["guard", "basic_strike", "guard"]
-	assert(reorder_battle.run_phase(original, ["guard", "basic_strike"]).success)
+	assert(BattlePhaseTestDriver.run_phase(reorder_battle, original, ["guard", "basic_strike"]).success)
 	var reordered: Array[String] = ["guard", "guard", "basic_strike"]
 	assert(reorder_battle.configure_hero_chain(reordered).success)
 	assert(reorder_battle.get_hero().action_cursor == 0)
-	assert(reorder_battle.run_phase(reordered, ["guard", "basic_strike"]).success)
+	assert(BattlePhaseTestDriver.run_phase(reorder_battle, reordered, ["guard", "basic_strike"]).success)
 	assert(not bool(reorder_battle.last_phase_events[0].get("hero_reload", false)))
 	var last_tick: Dictionary = {}
 	for event in reorder_battle.last_phase_events:

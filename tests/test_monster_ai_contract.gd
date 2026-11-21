@@ -101,7 +101,7 @@ func _initialize() -> void:
 	var hero_chain: Array[String] = []
 	for slot in range(hero.action_slot_capacity):
 		hero_chain.append(action_id)
-	var result: Dictionary = battle.run_phase(hero_chain, unchanged_chain)
+	var result: Dictionary = BattlePhaseTestDriver.run_phase(battle, hero_chain, unchanged_chain)
 	assert(bool(result.get("success", false)))
 	var support_events: int = 0
 	for event in result.get("events", []):

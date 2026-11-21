@@ -7,7 +7,7 @@ func _initialize() -> void:
 	var battle := BattleState.begin(enemy, hero, 2224)
 	assert(battle.add_support_enemy(enemy) != null)
 	var chain: Array[String] = ["volcha_wolf_instinct", "volcha_wolf_instinct", "volcha_wolf_instinct"]
-	var result: Dictionary = battle.run_phase(chain, battle.get_enemy().action_chain)
+	var result: Dictionary = BattlePhaseTestDriver.run_phase(battle, chain, battle.get_enemy().action_chain)
 	assert(bool(result.get("success", false)))
 	var events: Array = result["events"]
 	var opponents: Array[String] = []

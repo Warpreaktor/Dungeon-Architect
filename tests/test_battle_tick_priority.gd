@@ -26,14 +26,14 @@ func _initialize() -> void:
 	var hero_chain: Array[String] = ["basic_strike", "guard", "basic_strike"]
 	var enemy_chain: Array[String] = ["guard", "basic_strike"]
 	assert(battle.tick_policy.priority("volcha_wolf_lunge") == battle.tick_policy.other_priority)
-	var result: Dictionary = battle.run_phase(hero_chain, enemy_chain)
+	var result: Dictionary = BattlePhaseTestDriver.run_phase(battle, hero_chain, enemy_chain)
 	assert(result.success and result.ticks == 4)
 	var decisions: Array[String] = []
 	for event in battle.last_phase_events:
 		if event.type in ["block", "attack", "reload"]:
 			decisions.append(str(event.actor_id) + ":" + str(event.type))
 	assert(decisions == ["enemy:block", "hero:attack", "hero:block", "enemy:attack", "hero:attack", "enemy:reload", "enemy:block", "hero:reload"])
-	var next: Dictionary = battle.run_phase(hero_chain, enemy_chain)
+	var next: Dictionary = BattlePhaseTestDriver.run_phase(battle, hero_chain, enemy_chain)
 	assert(next.success and next.ticks == 4) # каждый круг заканчивается отдыхом
 	assert(not battle.last_phase_events[0].hero_reload)
 	assert(battle.last_phase_events[-1].type == "reload" and battle.last_phase_events[-1].actor_id == "hero")
@@ -41,7 +41,7 @@ func _initialize() -> void:
 
 	# При равном приоритете два блока ставятся в порядке герой -> монстр.
 	var both_guard: BattleState = _battle()
-	assert(both_guard.run_phase(["guard", "guard", "guard"], ["guard"]).success)
+	assert(BattlePhaseTestDriver.run_phase(both_guard, ["guard", "guard", "guard"], ["guard"]).success)
 	var first_two: Array[String] = []
 	for event in both_guard.last_phase_events:
 		if event.type == "block" and first_two.size() < 2:
@@ -50,7 +50,7 @@ func _initialize() -> void:
 
 	# Герой убивает монстра первым ударом: у монстра нет ответа.
 	var lethal: BattleState = _battle(100, 1, 10)
-	assert(lethal.run_phase(["basic_strike", "guard", "basic_strike"], ["basic_strike"]).success)
+	assert(BattlePhaseTestDriver.run_phase(lethal, ["basic_strike", "guard", "basic_strike"], ["basic_strike"]).success)
 	assert(lethal.is_victory and not lethal.is_defeat and lethal.flow.completed_ticks == 1 + BattleChainPlanner.REST_TICKS)
 	var enemy_attacks: int = 0
 	for event in lethal.last_phase_events:
@@ -79,7 +79,7 @@ func _initialize() -> void:
 	# Перезарядки существуют у обоих и не запускают никакого приёма.
 	var rests: BattleState = _battle(200, 200, 1)
 	for i in range(4):
-		assert(rests.run_phase(["guard", "guard", "guard"], ["guard", "guard"]).success)
+		assert(BattlePhaseTestDriver.run_phase(rests, ["guard", "guard", "guard"], ["guard", "guard"]).success)
 	var both_reloading: bool = false
 	for event in rests.events:
 		if event.type == "tick" and event.hero_reload and event.enemy_reload:

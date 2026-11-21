@@ -39,7 +39,7 @@ func _initialize() -> void:
 	var hero_chain: Array[String] = []
 	for _slot in range(battle.get_hero().action_slot_capacity):
 		hero_chain.append(known.ability_id)
-	var result: Dictionary = battle.run_phase(hero_chain, main.action_chain)
+	var result: Dictionary = BattlePhaseTestDriver.run_phase(battle, hero_chain, main.action_chain)
 	assert(bool(result.get("success", false)))
 	var actors: Array[String] = []
 	var opponents: Array[String] = []

@@ -15,7 +15,7 @@ func _initialize() -> void:
 	assert(BattleChainPlanner.action_at(enemy_chain, 3) == "guard")
 	assert(BattleChainPlanner.priority("guard") == 0)
 	assert(BattleChainPlanner.priority("basic_strike") > 0)
-	var result: Dictionary = state.run_phase(hero_chain, enemy_chain)
+	var result: Dictionary = BattlePhaseTestDriver.run_phase(state, hero_chain, enemy_chain)
 	assert(result.success and result.ticks == 4)
 	assert(state.flow.phase_number == 1)
 	var ticks: Array[Dictionary] = []
@@ -32,7 +32,7 @@ func _initialize() -> void:
 	assert(ticks[3].hero_reload and ticks[3].enemy_slot == 0)
 	assert(actions == ["enemy:guard", "hero:basic_strike", "hero:guard", "enemy:basic_strike", "hero:basic_strike", "enemy:guard"])
 	# Вторая фаза начинается с первого приёма, отдых завершил прошлую.
-	var next: Dictionary = state.run_phase(hero_chain, enemy_chain)
+	var next: Dictionary = BattlePhaseTestDriver.run_phase(state, hero_chain, enemy_chain)
 	assert(next.success and next.ticks == 4)
 	ticks.clear()
 	for event in state.last_phase_events:
@@ -43,11 +43,7 @@ func _initialize() -> void:
 	assert(state.get_enemy().action_cursor >= 0)
 	# Настройку в паузе без токена менять нельзя.
 	assert(not state.configure_hero_chain(["guard"]).success)
-	assert(not state.run_phase(["guard"], enemy_chain).success)
-	# Перенастройка начинает цепочку с начала.
-	state.flow.reconfiguration_tokens = 1
-	assert(state.flow.request_reconfiguration())
-	assert(state.configure_hero_chain(["guard", "basic_strike", "guard"]).success)
-	assert(state.flow.confirm_reconfiguration())
-	assert(state.run_phase(["guard", "basic_strike", "guard"], enemy_chain).success)
+	assert(not BattlePhaseTestDriver.run_phase(state, ["guard"], enemy_chain).success)
+	assert(not state.configure_hero_chain(["guard", "basic_strike", "guard"]).success)
+	assert(BattlePhaseTestDriver.run_phase(state, hero_chain, enemy_chain).success)
 	quit()

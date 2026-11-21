@@ -123,7 +123,6 @@ func _ready() -> void:
 	_sequence_scroll.resized.connect(_resize_chain_slots)
 	_enemy_sequence_scroll.resized.connect(_resize_chain_slots)
 	_punch_button.pressed.connect(_on_punch_pressed)
-	_guard_button.pressed.connect(_on_guard_pressed)
 	_combat_items_button.pressed.connect(_on_combat_items_pressed)
 	_combat_items_button.icon = preload("res://assets/icons/potion.png")
 	_combat_items_button.tooltip_text = "Боевые зелья"
@@ -311,7 +310,7 @@ func _editing_allowed() -> bool:
 	if _combat == null or _is_playing_back or (_arsenal_view != null and _arsenal_view.visible):
 		return false
 	var stage: int = _combat.battle_state.flow.stage
-	return stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.RECONFIGURING]
+	return stage == BattleFlow.Stage.PREPARATION
 
 
 func _set_draft_from_chain(slots: Array[String]) -> void:
@@ -637,20 +636,6 @@ func _on_punch_pressed() -> void:
 	_target_row.hide()
 	_enemy_intent.hide()
 	_play_phase_events(result.get("events", []))
-
-
-func _on_guard_pressed() -> void:
-	if _combat == null or _guard_button.disabled:
-		return
-	var flow: BattleFlow = _combat.battle_state.flow
-	if flow.stage == BattleFlow.Stage.RECONFIGURING:
-		_combat.battle_state.flow.cancel_reconfiguration()
-		_set_draft_from_chain(_committed_slots)
-		_result_text.text = "Изменения отменены"
-	elif flow.stage == BattleFlow.Stage.BETWEEN_PHASES and _combat.request_tactic_change():
-		_set_draft_from_chain(_committed_slots)
-		_result_text.text = "Перенастройка"
-	_refresh_phase_controls()
 
 
 func _create_impact_layer() -> void:

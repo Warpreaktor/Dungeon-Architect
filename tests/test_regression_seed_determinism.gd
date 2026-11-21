@@ -29,7 +29,7 @@ func _play(seed: int) -> Dictionary:
 	for index in range(2):
 		if state.is_victory or state.is_defeat:
 			break
-		var outcome: Dictionary = session.play_phase(hero_chain, state.get_enemy().action_chain)
+		var outcome: Dictionary = BattlePhaseTestDriver.play_phase(session, hero_chain, state.get_enemy().action_chain)
 		assert(bool(outcome.get("success", false)))
 		phases.append(outcome["events"].duplicate(true))
 	return {

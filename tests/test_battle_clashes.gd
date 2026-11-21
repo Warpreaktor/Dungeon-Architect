@@ -41,7 +41,7 @@ func _event_index(events: Array[Dictionary], kind: String, actor_id: String) -> 
 func _initialize() -> void:
 	var battle: BattleState = _battle()
 	var actions: Array[String] = ["basic_strike", "guard", "basic_strike"]
-	var result: Dictionary = battle.run_phase(actions, battle.get_enemy().action_chain)
+	var result: Dictionary = BattlePhaseTestDriver.run_phase(battle, actions, battle.get_enemy().action_chain)
 	assert(bool(result.get("success", false)))
 	var groups: Array[Dictionary] = BattleClashTimeline.group_events(result.get("events", []))
 	assert(groups.size() == BattleChainPlanner.phase_length(actions, []))
@@ -62,11 +62,11 @@ func _initialize() -> void:
 	assert(battle.get_participant(battle.support_enemy_id).action_cursor == 2)
 
 	var repeat: BattleState = _battle()
-	var replay: Dictionary = repeat.run_phase(actions, repeat.get_enemy().action_chain)
+	var replay: Dictionary = BattlePhaseTestDriver.run_phase(repeat, actions, repeat.get_enemy().action_chain)
 	assert(replay.get("events", []) == result.get("events", []))
 
 	var targeting: BattleState = _battle()
-	var targeted: Dictionary = targeting.run_phase(["basic_strike", "basic_strike", "guard"], targeting.get_enemy().action_chain)
+	var targeted: Dictionary = BattlePhaseTestDriver.run_phase(targeting, ["basic_strike", "basic_strike", "guard"], targeting.get_enemy().action_chain)
 	var second_target: Array[Dictionary] = _clash_events(targeted["events"], 1)
 	var targeted_support: bool = false
 	for event in second_target:
@@ -75,7 +75,7 @@ func _initialize() -> void:
 	assert(targeted_support)
 
 	var alternating: BattleState = _battle()
-	var alternating_result: Dictionary = alternating.run_phase(
+	var alternating_result: Dictionary = BattlePhaseTestDriver.run_phase(alternating,
 		["basic_strike", "basic_strike", "basic_strike"], alternating.get_enemy().action_chain)
 	assert(bool(alternating_result.get("success", false)))
 	var hero_targets: Array[String] = []

@@ -20,7 +20,7 @@ func _initialize() -> void:
 	var received: Array[String] = wolf.get_saved_action_slots()
 	received[0] = "volcha_wolf_instinct"
 	assert(wolf.get_saved_action_slots()[0] == "volcha_wolf_lunge")
-	assert(rooster.get_saved_action_slots() == rooster.definition.personal_ability_ids)
+	assert(rooster.get_saved_action_slots() == rooster.definition.personal_ability_ids.slice(0, rooster.action_slot_capacity()))
 	var copy: HeroState = wolf.copy_for_battle()
 	assert(copy.get_saved_action_slots() == wolf.get_saved_action_slots())
 	assert(copy.save_action_slots(["volcha_wolf_instinct", "", ""]))

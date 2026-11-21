@@ -5,33 +5,15 @@ signal saved(slots: Array[String])
 signal closed
 
 const SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
-const REORDER_SCRIPT: Script = preload("res://scripts/battle_chain_reorder_controller.gd")
-const TILE_SIZE := Vector2(112, 118)
-const DRAG_DISTANCE := 18.0
 
 var _hero: HeroState
 var _actor: BattleParticipant
-var _draft: Array[String] = []
-var _selected_slot: int = 0
-var _selected_ability: String = ""
-var _slots_row: HBoxContainer
-var _available_row: HBoxContainer
-var _hint: Label
+var _skills_row: HBoxContainer
 var _details: AcceptDialog
 var _panel: PanelContainer
 var _arsenal_content: VBoxContainer
 var _profile_content: VBoxContainer
-var _profile_button: Button
-var _heading_title: Label
-var _skills_button: Button
-var _reorder: BattleChainReorderController
-var _tile_buttons: Dictionary = {}
-var _drag_pointer: int = -1
-var _drag_touch: bool = false
-var _drag_start: Vector2 = Vector2.ZERO
-var _drag_id: String = ""
-var _dragging: bool = false
-var _drag_ghost: TextureRect
+var _content_layout: BoxContainer
 
 
 func _ready() -> void:
@@ -39,32 +21,20 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
 	_build_interface()
-	_reorder = REORDER_SCRIPT.new() as BattleChainReorderController
-	_reorder.configure(self, _slots_row, _can_reorder, _move_slot)
 
 
-func open_for(hero: HeroState, actor: BattleParticipant = null, show_profile: bool = false) -> void:
+func open_for(hero: HeroState, actor: BattleParticipant = null) -> void:
 	if hero == null:
 		return
 	_hero = hero
 	_actor = actor if actor != null else BattleParticipant.from_hero(hero)
-	_draft = hero.get_saved_action_slots()
-	for index in range(_draft.size()):
-		if not _draft[index].is_empty() and not AbilityCatalog.knows_ability(_actor, _draft[index]):
-			_draft[index] = ""
-	_selected_slot = 0
-	_selected_ability = ""
-	_hint.text = ""
 	visible = true
 	_refresh()
 	_refresh_profile()
-	_show_tab(show_profile)
+	_resize_panel()
 
 
 func dismiss() -> void:
-	_cancel_drag()
-	if _reorder != null:
-		_reorder.cancel()
 	visible = false
 	closed.emit()
 
@@ -83,140 +53,97 @@ func _build_interface() -> void:
 
 	_panel = PanelContainer.new()
 	_panel.theme = preload("res://themes/hero_hud.tres")
-	_panel.custom_minimum_size = Vector2(minf(1000.0, maxf(340.0, size.x - 32.0)), 398)
+	_panel.custom_minimum_size = Vector2(1080, 620)
 	center.add_child(_panel)
 	resized.connect(_resize_panel)
 
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 14)
+		margin.add_theme_constant_override("margin_" + side, 18)
 	_panel.add_child(margin)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", 12)
 	margin.add_child(column)
 
 	var heading := HBoxContainer.new()
 	column.add_child(heading)
-	_heading_title = Label.new()
-	_heading_title.text = "БОЕВОЙ АРСЕНАЛ"
-	_heading_title.add_theme_color_override("font_color", Color("#e8c58a"))
-	_heading_title.add_theme_font_size_override("font_size", 20)
-	_heading_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	heading.add_child(_heading_title)
-	_profile_button = Button.new()
-	_profile_button.text = "Персонаж"
-	_profile_button.custom_minimum_size = Vector2(112, 44)
-	_profile_button.pressed.connect(func() -> void: _show_tab(true))
-	heading.add_child(_profile_button)
-	_skills_button = Button.new()
-	_skills_button.text = "Приёмы"
-	_skills_button.custom_minimum_size = Vector2(112, 44)
-	_skills_button.pressed.connect(func() -> void: _show_tab(false))
-	heading.add_child(_skills_button)
+	var heading_title := Label.new()
+	heading_title.text = "ПЕРСОНАЖ"
+	heading_title.add_theme_color_override("font_color", Color("#e8c58a"))
+	heading_title.add_theme_font_size_override("font_size", 22)
+	heading_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_child(heading_title)
 	var close_button := Button.new()
 	close_button.text = "✕"
 	close_button.custom_minimum_size = Vector2(48, 44)
 	close_button.pressed.connect(dismiss)
 	heading.add_child(close_button)
 
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(scroll)
+	_content_layout = BoxContainer.new()
+	_content_layout.add_theme_constant_override("separation", 20)
+	_content_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_content_layout)
+
 	_profile_content = VBoxContainer.new()
+	_profile_content.custom_minimum_size.x = 320
 	_profile_content.add_theme_constant_override("separation", 12)
-	column.add_child(_profile_content)
+	_content_layout.add_child(_profile_content)
+
 	_arsenal_content = VBoxContainer.new()
+	_arsenal_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_arsenal_content.add_theme_constant_override("separation", 10)
-	column.add_child(_arsenal_content)
+	_content_layout.add_child(_arsenal_content)
 	var slots_label := Label.new()
-	slots_label.text = "АКТИВНЫЕ СЛОТЫ"
+	slots_label.text = "БОЕВЫЕ НАВЫКИ"
+	slots_label.add_theme_color_override("font_color", Color("#e8c58a"))
 	_arsenal_content.add_child(slots_label)
 	var slots_scroll := ScrollContainer.new()
-	slots_scroll.custom_minimum_size = Vector2(0, 108)
+	slots_scroll.custom_minimum_size = Vector2(0, 122)
 	slots_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	slots_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_arsenal_content.add_child(slots_scroll)
-	_slots_row = HBoxContainer.new()
-	_slots_row.add_theme_constant_override("separation", 8)
-	slots_scroll.add_child(_slots_row)
-
-	var available_label := Label.new()
-	available_label.text = "ДОСТУПНЫЕ ПРИЁМЫ"
-	_arsenal_content.add_child(available_label)
-	var available_scroll := ScrollContainer.new()
-	available_scroll.custom_minimum_size = Vector2(0, 134)
-	available_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	available_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_arsenal_content.add_child(available_scroll)
-	_available_row = HBoxContainer.new()
-	_available_row.add_theme_constant_override("separation", 8)
-	available_scroll.add_child(_available_row)
-
-	_hint = Label.new()
-	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_arsenal_content.add_child(_hint)
-	var actions := HBoxContainer.new()
-	_arsenal_content.add_child(actions)
-	var clear_button := Button.new()
-	clear_button.text = "Очистить выбранный слот"
-	clear_button.custom_minimum_size = Vector2(160, 44)
-	clear_button.pressed.connect(_clear_slot)
-	actions.add_child(clear_button)
-	var cancel := Button.new()
-	cancel.text = "Отмена"
-	cancel.custom_minimum_size = Vector2(90, 44)
-	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cancel.pressed.connect(dismiss)
-	actions.add_child(cancel)
-	var accept := Button.new()
-	accept.text = "Сохранить арсенал"
-	accept.custom_minimum_size = Vector2(155, 44)
-	accept.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	accept.pressed.connect(_save)
-	actions.add_child(accept)
+	_skills_row = HBoxContainer.new()
+	_skills_row.add_theme_constant_override("separation", 8)
+	slots_scroll.add_child(_skills_row)
 
 	_details = AcceptDialog.new()
 	_details.title = "Приём"
 	add_child(_details)
 
-	_drag_ghost = TextureRect.new()
-	_drag_ghost.custom_minimum_size = Vector2(72, 72)
-	_drag_ghost.size = Vector2(72, 72)
-	_drag_ghost.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_drag_ghost.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_drag_ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_drag_ghost.z_index = 50
-	_drag_ghost.modulate.a = 0.85
-	_drag_ghost.hide()
-	add_child(_drag_ghost)
-
-
-func _show_tab(profile: bool) -> void:
-	_heading_title.text = "ПЕРСОНАЖ" if profile else "БОЕВОЙ АРСЕНАЛ"
-	_profile_content.visible = profile
-	_arsenal_content.visible = not profile
-	_profile_button.disabled = profile
-	_skills_button.disabled = not profile
-
 
 func _refresh_profile() -> void:
 	for child in _profile_content.get_children():
+		_profile_content.remove_child(child)
 		child.queue_free()
 	if _hero == null or _hero.definition == null:
 		return
-	var layout := HBoxContainer.new()
-	layout.add_theme_constant_override("separation", 24)
-	_profile_content.add_child(layout)
+	var identity := HBoxContainer.new()
+	identity.add_theme_constant_override("separation", 12)
+	_profile_content.add_child(identity)
 	var portrait := TextureRect.new()
 	portrait.texture = _hero.definition.portrait
-	portrait.custom_minimum_size = Vector2(190, 220)
+	portrait.custom_minimum_size = Vector2(136, 156)
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	layout.add_child(portrait)
-	var stats := VBoxContainer.new()
-	stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	layout.add_child(stats)
+	identity.add_child(portrait)
+	var heading := VBoxContainer.new()
+	heading.add_theme_constant_override("separation", 8)
+	identity.add_child(heading)
+	var name := Label.new()
+	name.text = _hero.definition.display_name
+	name.add_theme_font_size_override("font_size", 20)
+	heading.add_child(name)
+	var hp := Label.new()
+	hp.text = "%d / %d HP" % [_hero.health, _hero.effective_max_health()]
+	hp.add_theme_color_override("font_color", Color("#dc7178"))
+	heading.add_child(hp)
+
 	var actor := BattleParticipant.from_hero(_hero)
 	var values: Array[String] = [
-		_hero.definition.display_name,
-		"Здоровье  %d / %d" % [_hero.health, _hero.effective_max_health()],
 		"Сила  %d" % _hero.strength,
 		"Ловкость  %d" % _hero.agility,
 		"Атака  %d" % actor.melee_attack(),
@@ -226,128 +153,73 @@ func _refresh_profile() -> void:
 		"Боевые слоты  %d" % _hero.action_slot_capacity(),
 		"Золото  %d" % _hero.gold
 	]
-	var weapon: ItemDefinition = ItemCatalog.get_item(_hero.equipped_weapon_id)
-	var shield: ItemDefinition = ItemCatalog.get_item(_hero.equipped_shield_id)
-	values.append("Оружие  %s" % (weapon.display_name if weapon != null else "Нет"))
-	values.append("Щит  %s" % (shield.display_name if shield != null else "Нет"))
+	var stats := GridContainer.new()
+	stats.columns = 2
+	stats.add_theme_constant_override("h_separation", 12)
+	stats.add_theme_constant_override("v_separation", 10)
+	_profile_content.add_child(stats)
 	for value in values:
 		var label := Label.new()
 		label.text = value
 		stats.add_child(label)
 
+	var weapon: ItemDefinition = ItemCatalog.get_item(_hero.equipped_weapon_id)
+	var shield: ItemDefinition = ItemCatalog.get_item(_hero.equipped_shield_id)
+	for value in ["Оружие  %s" % (weapon.display_name if weapon != null else "Нет"), "Щит  %s" % (shield.display_name if shield != null else "Нет")]:
+		var label := Label.new()
+		label.text = value
+		_profile_content.add_child(label)
+
 
 func _resize_panel() -> void:
-	if _panel != null:
-		_panel.custom_minimum_size.x = minf(1000.0, maxf(340.0, size.x - 32.0))
+	if _panel == null:
+		return
+	var width := minf(1180.0, maxf(320.0, size.x - 32.0))
+	_panel.custom_minimum_size = Vector2(width, minf(620.0, maxf(240.0, size.y - 32.0)))
+	if _content_layout != null:
+		_content_layout.vertical = width < 860.0
+		_profile_content.custom_minimum_size.x = 0.0 if _content_layout.vertical else 320.0
 
 
 func _refresh() -> void:
-	if _reorder != null:
-		_reorder.cancel()
-	for slot in _slots_row.get_children():
-		_slots_row.remove_child(slot)
-		slot.queue_free()
-	for index in range(_draft.size()):
-		var ability: AbilityDefinition = AbilityCatalog.get_ability(_draft[index])
-		var slot: BattleAbilitySlot = SLOT_SCENE.instantiate() as BattleAbilitySlot
-		_slots_row.add_child(slot)
-		slot.custom_minimum_size = Vector2(98, 98)
-		slot.configure(index, ability, true, _actor)
-		slot.slot_selected.connect(_select_slot)
-		slot.info_requested.connect(_show_details)
-		slot.set_current(index == _selected_slot)
-	var rest: BattleAbilitySlot = SLOT_SCENE.instantiate() as BattleAbilitySlot
-	_slots_row.add_child(rest)
-	rest.custom_minimum_size = Vector2(98, 98)
-	rest.configure_recharge(_draft.size())
-	rest.info_requested.connect(_show_details)
-
-	for child in _available_row.get_children():
-		_available_row.remove_child(child)
+	for child in _skills_row.get_children():
+		_skills_row.remove_child(child)
 		child.queue_free()
-	_tile_buttons.clear()
+	if _hero == null or _actor == null:
+		return
+	var active: Array[String] = _hero.get_saved_action_slots()
+	var index: int = 0
 	for ability in AbilityCatalog.available_abilities(_actor):
-		var tile := Button.new()
-		tile.custom_minimum_size = TILE_SIZE
-		tile.tooltip_text = BattleAbilityTooltip.describe(ability, _actor, _selected_slot)
-		var reason: String = AbilityCatalog.unavailable_reason(_actor, ability.ability_id)
-		tile.disabled = not reason.is_empty()
-		var content := VBoxContainer.new()
-		content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		content.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		content.add_theme_constant_override("separation", 2)
-		tile.add_child(content)
-		var icon := TextureRect.new()
-		icon.texture = BattleAbilitySlot.visual_icon(ability)
-		icon.custom_minimum_size = Vector2(64, 72)
-		icon.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		content.add_child(icon)
-		var name := Label.new()
-		name.text = ability.display_name
-		name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		name.add_theme_font_size_override("font_size", 12)
-		name.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		content.add_child(name)
-		var ability_id: String = ability.ability_id
-		tile.pressed.connect(_select_ability.bind(ability_id))
-		var info := Button.new()
-		info.name = "Info"
-		info.text = "ⓘ"
-		info.custom_minimum_size = Vector2(28, 28)
-		info.size = Vector2(28, 28)
-		info.position = Vector2(TILE_SIZE.x - 30.0, 2.0)
-		info.tooltip_text = "Описание приёма"
-		info.pressed.connect(_show_details.bind(tile.tooltip_text))
-		tile.add_child(info)
-		_available_row.add_child(tile)
-		_tile_buttons[ability_id] = tile
+		if not AbilityCatalog.can_prepare(_actor, ability.ability_id):
+			continue
+		var slot: BattleAbilitySlot = SLOT_SCENE.instantiate() as BattleAbilitySlot
+		_skills_row.add_child(slot)
+		slot.custom_minimum_size = Vector2(112, 112)
+		slot.configure(index, ability, true, _actor)
+		var selected: bool = active.has(ability.ability_id)
+		slot.set_current(selected)
+		slot.modulate = Color.WHITE if selected else Color(0.52, 0.54, 0.60)
+		slot.pressed.connect(_toggle_ability.bind(ability.ability_id))
+		slot.info_requested.connect(_show_details)
+		index += 1
 
 
-func _can_reorder() -> bool:
-	return visible and _arsenal_content.visible and not _dragging and _details != null and not _details.visible
-
-
-func _move_slot(from_index: int, to_index: int) -> void:
-	_draft = BattleChainReorderController.moved(_draft, from_index, to_index)
-	_selected_slot = to_index
-	_hint.text = "Порядок изменён. Сохрани арсенал, чтобы подтвердить."
-	_refresh()
-
-
-func _select_slot(index: int) -> void:
-	if _reorder != null and _reorder.consume_selection(index):
+func _toggle_ability(ability_id: String) -> void:
+	if _hero == null or not AbilityCatalog.can_prepare(_actor, ability_id):
 		return
-	_selected_slot = index
-	if not _selected_ability.is_empty():
-		_assign_ability(index, _selected_ability)
-	else:
+	var active: Array[String] = []
+	for id in _hero.get_saved_action_slots():
+		if not id.is_empty() and id != ability_id:
+			active.append(id)
+	if not _hero.get_saved_action_slots().has(ability_id):
+		if active.size() >= _hero.action_slot_capacity():
+			return
+		active.append(ability_id)
+	while active.size() < _hero.action_slot_capacity():
+		active.append("")
+	if _hero.save_action_slots(active):
 		_refresh()
-
-
-func _select_ability(ability_id: String) -> void:
-	_selected_ability = ability_id
-	_hint.text = ""
-
-
-func _assign_ability(index: int, ability_id: String) -> void:
-	if index < 0 or index >= _draft.size() or not AbilityCatalog.can_prepare(_actor, ability_id):
-		return
-	_draft[index] = ability_id
-	_selected_slot = index
-	_selected_ability = ""
-	_hint.text = ""
-	_refresh()
-
-
-func _clear_slot() -> void:
-	if _selected_slot < 0 or _selected_slot >= _draft.size():
-		return
-	_draft[_selected_slot] = ""
-	_refresh()
+		saved.emit(active.duplicate())
 
 
 func _show_details(content: String) -> void:
@@ -358,115 +230,6 @@ func _show_details(content: String) -> void:
 func _input(event: InputEvent) -> void:
 	if not visible:
 		return
-	if event.is_action_pressed("ui_cancel"):
-		if _details.visible:
-			_details.hide()
-		else:
-			dismiss()
+	if event.is_action_pressed("ui_cancel") and not _details.visible:
+		dismiss()
 		get_viewport().set_input_as_handled()
-		return
-	if not _arsenal_content.visible:
-		return
-	if _reorder != null:
-		_reorder.handle_input(event)
-	if event is InputEventScreenTouch:
-		var touch := event as InputEventScreenTouch
-		if touch.pressed:
-			if _drag_id.is_empty():
-				_begin_drag(touch.position, true, touch.index)
-		elif _drag_touch and touch.index == _drag_pointer:
-			_end_drag(touch.position)
-	elif event is InputEventScreenDrag:
-		var touch_drag := event as InputEventScreenDrag
-		if _drag_touch and touch_drag.index == _drag_pointer:
-			_move_drag(touch_drag.position)
-	elif event is InputEventMouseButton:
-		var mouse := event as InputEventMouseButton
-		if mouse.device == InputEvent.DEVICE_ID_EMULATION or mouse.button_index != MOUSE_BUTTON_LEFT:
-			return
-		if mouse.pressed and _drag_id.is_empty():
-			_begin_drag(mouse.position, false, -1)
-		elif not mouse.pressed and not _drag_touch:
-			_end_drag(mouse.position)
-	elif event is InputEventMouseMotion and not _drag_touch and not _drag_id.is_empty():
-		_move_drag((event as InputEventMouseMotion).position)
-
-
-func _begin_drag(point: Vector2, touch: bool, index: int) -> void:
-	if _details.visible:
-		return
-	for ability_id in _tile_buttons:
-		var tile: Button = _tile_buttons[ability_id]
-		if not tile.disabled and tile.get_global_rect().has_point(point):
-			var info: Control = tile.get_node("Info") as Control
-			if info.get_global_rect().has_point(point):
-				return
-			_drag_id = str(ability_id)
-			_drag_start = point
-			_drag_touch = touch
-			_drag_pointer = index
-			_dragging = false
-			return
-
-
-func _move_drag(point: Vector2) -> void:
-	if _drag_id.is_empty():
-		return
-	var delta := point - _drag_start
-	if not _dragging:
-		if delta.length() < DRAG_DISTANCE:
-			return
-		if absf(delta.x) > absf(delta.y) * 1.3:
-			_cancel_drag()
-			return
-		_dragging = true
-		var ability: AbilityDefinition = AbilityCatalog.get_ability(_drag_id)
-		_drag_ghost.texture = BattleAbilitySlot.visual_icon(ability)
-		_drag_ghost.show()
-	_drag_ghost.position = point - global_position - _drag_ghost.size * 0.5
-	for index in range(_draft.size()):
-		var slot: Control = _slots_row.get_child(index) as Control
-		slot.modulate = Color(1.0, 0.88, 0.56) if slot.get_global_rect().has_point(point) else Color.WHITE
-
-
-func _end_drag(point: Vector2) -> void:
-	if _dragging:
-		for index in range(_draft.size()):
-			var slot: Control = _slots_row.get_child(index) as Control
-			if slot.get_global_rect().has_point(point):
-				var ability_id := _drag_id
-				_cancel_drag()
-				_assign_ability(index, ability_id)
-				return
-	_cancel_drag()
-
-
-func _cancel_drag() -> void:
-	_drag_id = ""
-	_dragging = false
-	_drag_pointer = -1
-	_drag_ghost.hide()
-	if _slots_row != null:
-		for index in range(mini(_draft.size(), _slots_row.get_child_count())):
-			(_slots_row.get_child(index) as Control).modulate = Color.WHITE
-
-
-func _save() -> void:
-	if _hero == null or _actor == null:
-		return
-	var incomplete := false
-	for index in range(_draft.size()):
-		if _draft[index].is_empty():
-			incomplete = true
-			(_slots_row.get_child(index) as BattleAbilitySlot).flash_empty()
-	if incomplete:
-		return
-	for ability_id in _draft:
-		if not ability_id.is_empty() and not AbilityCatalog.can_prepare(_actor, ability_id):
-			_hint.text = "Недоступный приём: %s" % ability_id
-			return
-	if not _hero.save_action_slots(_draft):
-		_hint.text = "Количество слотов изменилось. Открой арсенал повторно."
-		return
-	saved.emit(_draft.duplicate())
-	dismiss()

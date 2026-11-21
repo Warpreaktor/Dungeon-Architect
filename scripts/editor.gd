@@ -1990,7 +1990,7 @@ func _open_character(member: HeroState) -> void:
 		return
 	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
-	_arsenal_view.open_for(member, null, true)
+	_arsenal_view.open_for(member)
 	_game_command_bar.visible = false
 	_dpad.visible = false
 

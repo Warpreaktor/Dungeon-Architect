@@ -7,7 +7,7 @@ func _initialize() -> void:
 	var state := BattleState.begin(MonsterCatalog.get_monster("hunter"), hero)
 	var actor: BattleParticipant = state.get_hero()
 	var target: BattleParticipant = state.get_enemy()
-	assert(actor.personal_ability_ids == ["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib"])
+	assert(actor.personal_ability_ids == ["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib", "petushan_feathers_up"])
 	var peck: AbilityDefinition = AbilityCatalog.get_ability("petushan_peck_while_hot")
 	var eye: AbilityDefinition = AbilityCatalog.get_ability("petushan_not_in_brow_but_eye")
 	var spur: AbilityDefinition = AbilityCatalog.get_ability("petushan_spur_under_rib")

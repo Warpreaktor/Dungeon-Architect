@@ -8,7 +8,7 @@ func _initialize() -> void:
 func _verify() -> void:
 	var hero := HeroState.new(HeroCatalog.get_hero("volcha"))
 	var initial: Array[String] = hero.get_saved_action_slots()
-	assert(initial == hero.definition.personal_ability_ids)
+	assert(initial == hero.definition.personal_ability_ids.slice(0, hero.action_slot_capacity()))
 	var monster := MonsterCatalog.get_monster("lobar")
 	var scene: PackedScene = load("res://scenes/battle_view.tscn") as PackedScene
 	var view := scene.instantiate() as BattleView

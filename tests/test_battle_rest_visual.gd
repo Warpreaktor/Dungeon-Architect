@@ -13,7 +13,7 @@ func _check() -> void:
 	var view: BattleView = scene.instantiate() as BattleView
 	root.add_child(view)
 	view.begin(CombatSession.new(MonsterCatalog.get_monster("hunter"), hero), hero)
-	assert(hero.get_saved_action_slots() == hero.definition.personal_ability_ids)
+	assert(hero.get_saved_action_slots() == hero.definition.personal_ability_ids.slice(0, hero.action_slot_capacity()))
 	assert((view.get_node("%HeroDefenseValue") as Label).text == "0")
 	assert((view.get_node("%EnemyDefenseValue") as Label).text == "0")
 	view._display_phase_event({"type": "block", "actor_id": "enemy", "target_id": "enemy", "armor": 2})

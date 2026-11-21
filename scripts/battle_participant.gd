@@ -319,5 +319,9 @@ func is_alive() -> bool:
 
 func commit_hero_result(destination: HeroState) -> void:
 	if destination != null and _hero_snapshot != null:
-		_hero_snapshot.overworld_statuses = statuses.duplicate(true)
+		var persistent: Dictionary = statuses.duplicate(true)
+		for status_id in persistent.keys():
+			if bool(persistent[status_id].get("battle_only", false)):
+				persistent.erase(status_id)
+		_hero_snapshot.overworld_statuses = persistent
 		destination.apply_battle_result(_hero_snapshot)

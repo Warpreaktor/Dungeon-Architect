@@ -311,8 +311,8 @@ static func same_arsenal(first: Array[String], second: Array[String]) -> bool:
 func configure_hero_chain(actions: Array[String]) -> Dictionary:
 	if not (flow.stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES]):
 		return {"success": false, "reason": "Сейчас нельзя изменить тактику"}
-	if get_hero() != null and actions.size() != get_hero().action_slot_capacity:
-		return {"success": false, "reason": "Цепочка содержит незаполненные слоты"}
+	if get_hero() != null and actions.size() > get_hero().action_slot_capacity:
+		return {"success": false, "reason": "Превышено число боевых слотов"}
 	if flow.phase_number > 0 and not same_arsenal(actions, locked_hero_arsenal):
 		return {"success": false, "reason": "Арсенал зафиксирован на весь бой. Можно менять только порядок приёмов."}
 	var hero: BattleParticipant = get_hero()
@@ -321,7 +321,7 @@ func configure_hero_chain(actions: Array[String]) -> Dictionary:
 	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES and hero.action_chain == actions:
 		return {"success": true, "reason": ""}
 	if flow.phase_number == 0:
-		var reason: String = BattleChainPlanner.validate(actions, hero, false)
+		var reason: String = BattleChainPlanner.validate(actions, hero, false) if not actions.is_empty() else ""
 		if not reason.is_empty():
 			return {"success": false, "reason": reason}
 	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES and hero.action_chain != actions:

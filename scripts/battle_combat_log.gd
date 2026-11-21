@@ -40,7 +40,7 @@ static func format_event(event: Dictionary, hero_name: String, enemy_name: Strin
 			return "    %s: подготовка, %s" % [actor, ability_name(str(event.get("ability_id", "")))]
 		"tick":
 			return "  Такт %d" % int(event.get("tick", 0))
-		"attack":
+		"attack", "counter":
 			if bool(event.get("dodged", false)):
 				return "    %s → %s: %s, уклонение" % [actor, target,
 					ability_name(str(event.get("ability_id", "")))]

@@ -83,7 +83,6 @@ func action_slot_capacity() -> int:
 
 
 func get_saved_action_slots() -> Array[String]:
-	## Выдаём копию: редактор боя не должен править сохранённый алгоритм до подтверждения.
 	var result: Array[String] = []
 	for index in range(action_slot_capacity()):
 		result.append(saved_action_slots[index] if index < saved_action_slots.size() else "")

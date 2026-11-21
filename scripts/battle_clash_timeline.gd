@@ -10,13 +10,15 @@ static func group_events(events: Array, split_actions: bool = false) -> Array[Di
 	for value in events:
 		var event: Dictionary = value
 		var kind: String = str(event.get("type", ""))
-		if kind == "tick" or (split_actions and action_started and kind in ["action_start", "reload"]):
+		if kind == "tick" or (split_actions and (
+				(kind == "counter" and not current.is_empty())
+				or (action_started and kind in ["action_start", "reload"]))):
 			if not current.is_empty():
 				groups.append({"is_clash": is_clash, "events": current})
 			current = []
 			is_clash = true
 			action_started = false
-		if kind in ["action_start", "reload"]:
+		if kind in ["action_start", "reload", "counter"]:
 			action_started = true
 		current.append(event)
 	if not current.is_empty():

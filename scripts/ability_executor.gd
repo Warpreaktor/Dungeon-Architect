@@ -44,6 +44,7 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 		event_list.append({"type": "resource_spent", "actor_id": actor_id,
 			"ability_id": ability_id, "resource_id": resource_id, "amount": cost, "remaining": remaining})
 	var last_hit: Dictionary = {}
+	var stance_counter_used: bool = false
 	for effect in ability.effects:
 		var recipient: BattleParticipant = actor if effect.recipient == AbilityEffectDefinition.Recipient.SELF else target
 		if recipient == null:
@@ -81,6 +82,17 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					last_hit["hit_index"] = hit_index
 					last_hit["hit_count"] = effect.hit_count
 					event_list.append(last_hit)
+					if not stance_counter_used and recipient.is_alive() and actor.is_alive() and recipient != actor:
+						for status in recipient.statuses.values():
+							var retaliation_multiplier: float = float(status.get("counter_damage_multiplier", 0.0))
+							if retaliation_multiplier > 0.0:
+								stance_counter_used = true
+								var retaliation: Dictionary = apply_damage(recipient, actor,
+									floori(recipient.melee_attack_value() * retaliation_multiplier),
+									str(status.get("counter_ability_id", "")), context.rng)
+								retaliation["type"] = "counter"
+								event_list.append(retaliation)
+								break
 					if protector != null and recipient == protector and protector.is_alive() and actor.is_alive() and context.counter_multiplier > 0.0:
 						var counter_damage: int = floori(protector.melee_attack_value() * context.counter_multiplier)
 						event_list.append(apply_damage(protector, actor, counter_damage, context.counter_ability_id, context.rng))

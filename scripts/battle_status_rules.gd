@@ -40,6 +40,9 @@ static func apply(statuses: Dictionary, effect: AbilityEffectDefinition, tick: i
 		"stacks": stacks,
 		"applied_tick": tick,
 		"tick_damage": effect.tick_damage,
+		"counter_damage_multiplier": effect.counter_damage_multiplier,
+		"counter_ability_id": effect.status_id,
+		"battle_only": effect.battle_only,
 		"max_health_reduction_percent": effect.max_health_reduction_percent,
 		"instance_ticks": instance_ticks,
 		"skip_partial_phase": effect.tick_damage <= 0
@@ -121,7 +124,9 @@ static func describe(status: Dictionary) -> String:
 			AbilityEffectDefinition.Stat.DODGE_PERCENT: label = "Уклонение"
 			AbilityEffectDefinition.Stat.ATTACK_POWER: label = "Атака"
 		parts.append("%s: %+d" % [label, value])
-	if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.INCOMING_ATTACK:
+	if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.BATTLE:
+		parts.append("До конца боя")
+	elif int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.INCOMING_ATTACK:
 		parts.append("Осталось входящих атак: %d" % int(status.get("ticks", 0)))
 	else:
 		var instances: Array = status.get("instance_ticks", [])

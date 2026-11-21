@@ -222,15 +222,10 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	for i in range(_committed_slots.size()):
 		if not _committed_slots[i].is_empty() and not AbilityCatalog.knows_ability(playable, _committed_slots[i]):
 			_committed_slots[i] = ""
-	for i in range(_committed_slots.size()):
-		if not _committed_slots[i].is_empty():
-			continue
-		for ability_id in hero.definition.personal_ability_ids:
-			if not _committed_slots.has(ability_id) and AbilityCatalog.knows_ability(playable, ability_id):
-				_committed_slots[i] = ability_id
-				break
-	_hero_chain = _committed_slots.duplicate()
-	hero.save_action_slots(_committed_slots)
+	_hero_chain.clear()
+	for ability_id in _committed_slots:
+		if not ability_id.is_empty():
+			_hero_chain.append(ability_id)
 	_enemy_chain = _combat.battle_state.default_chain("enemy")
 	_enemy_revealed.clear()
 	_refresh_enemy_slots()
@@ -650,7 +645,7 @@ func _queue_clash_animation(group_events: Array[Dictionary]) -> void:
 				_playback.tween_interval(clash_action_start_seconds)
 		else:
 			outcomes.append(event)
-		if kind == "attack":
+		if kind in ["attack", "counter"]:
 			var actor_id: String = str(event.get("actor_id", ""))
 			var target_id: String = str(event.get("target_id", ""))
 			if _impact_portraits.has(actor_id) and _impact_portraits.has(target_id):
@@ -686,7 +681,7 @@ func _queue_clash_animation(group_events: Array[Dictionary]) -> void:
 			else:
 				_playback.parallel().tween_property(portrait, "position", contact, approach_duration).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
 	for event in outcomes:
-		if str(event.get("type", "")) == "attack":
+		if str(event.get("type", "")) in ["attack", "counter"]:
 			_playback.tween_callback(_impact.bind(event))
 		else:
 			_playback.tween_callback(_display_phase_event.bind(event))
@@ -728,7 +723,7 @@ func _display_phase_event(event: Dictionary) -> void:
 	var actor_id: String = str(event.get("actor_id", ""))
 	var kind: String = str(event.get("type", ""))
 	# Удар записывается при контакте портретов, остальные события здесь.
-	if kind != "attack" and not (kind == "rest" and bool(event.get("premature", false))):
+	if kind not in ["attack", "counter"] and not (kind == "rest" and bool(event.get("premature", false))):
 		_emit_combat_event_log(event)
 	match kind:
 		"enemy_chain_changed":

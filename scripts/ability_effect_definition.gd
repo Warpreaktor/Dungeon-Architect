@@ -4,7 +4,7 @@ extends Resource
 ## Данные эффекта отделены от алгоритма его исполнения.
 enum Kind { DAMAGE, BLOCK, HEAL, APPLY_STATUS, REMOVE_STATUS, WAIT }
 enum Recipient { SELF, TARGET }
-enum Clock { LEGACY_HERO_PHASE, OWNER_PHASE, INCOMING_ATTACK }
+enum Clock { LEGACY_HERO_PHASE, OWNER_PHASE, INCOMING_ATTACK, BATTLE }
 enum Stack { REFRESH, ADD, ONCE }
 enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 
@@ -40,6 +40,8 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 ## Дебафф после атаки требует попадания (обычное попадание или через блок).
 @export var requires_hit: bool = false
 @export var requires_health_damage: bool = false
+@export_range(0.0, 10.0, 0.01) var counter_damage_multiplier: float = 0.0
+@export var battle_only: bool = false
 @export_range(0, 100, 1) var max_health_reduction_percent: int = 0
 @export_range(1, 99, 1) var max_stacks: int = 99
 @export_range(0, 100, 1) var heal_if_health_at_most_percent: int = 0
@@ -72,6 +74,8 @@ func effective_stack_policy() -> int:
 
 
 func status_duration_description() -> String:
+	if effective_status_clock() == Clock.BATTLE:
+		return "до конца боя"
 	if effective_status_clock() == Clock.INCOMING_ATTACK:
 		return "до следующей входящей атаки" if duration_ticks == 1 else "на %s" % DescriptionTemplate.quantity(duration_ticks, "входящую атаку", "входящие атаки", "входящих атак")
 	return "на %s" % DescriptionTemplate.phases(duration_ticks)

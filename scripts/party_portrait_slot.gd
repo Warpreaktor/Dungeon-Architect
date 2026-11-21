@@ -2,6 +2,7 @@ class_name PartyPortraitSlot
 extends VBoxContainer
 
 signal status_info_requested(title: String, description: String)
+signal character_requested(member: HeroState)
 
 # Размеры элементов одной карточки на карте: ширина всех зон совпадает.
 const PORTRAIT_SIDE: float = 90.0
@@ -205,9 +206,4 @@ func _on_portrait_input(event: InputEvent) -> void:
 		tapped = (event as InputEventScreenTouch).pressed
 	if not tapped:
 		return
-	var name_text: String = _member.definition.display_name if _member.definition != null else "Герой"
-	var description: String = "Здоровье: %d / %d" % [_member.health, _member.effective_max_health()]
-	var effects: String = _member.active_effects_summary()
-	if not effects.is_empty():
-		description += "\n" + effects
-	status_info_requested.emit(name_text, description)
+	character_requested.emit(_member)

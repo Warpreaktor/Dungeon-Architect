@@ -2,6 +2,7 @@ class_name HeroHUD
 extends MarginContainer
 
 signal status_info_requested(title: String, description: String)
+signal character_requested(member: HeroState)
 
 @onready var _party_row: HBoxContainer = $PartyRow
 var _slots: Array[PartyPortraitSlot] = []
@@ -22,6 +23,7 @@ func set_party(members: Array[HeroState]) -> void:
 		var slot := PartyPortraitSlot.new()
 		_party_row.add_child(slot)
 		slot.status_info_requested.connect(_forward_status_info)
+		slot.character_requested.connect(func(member: HeroState) -> void: character_requested.emit(member))
 		_slots.append(slot)
 	for i in range(_slots.size()):
 		if i < count:

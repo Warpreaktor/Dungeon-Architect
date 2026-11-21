@@ -30,8 +30,6 @@ signal item_use_requested(item_id: String)
 @onready var _enemy_defense_icon: TextureRect = %EnemyDefenseIcon
 @onready var _enemy_name: Label = %EnemyName
 @onready var _enemy_portrait: TextureRect = %EnemyPortrait
-@onready var _punch_button: Button = %PunchButton
-@onready var _guard_button: Button = %GuardButton
 @onready var _combat_items_button: Button = %CombatItemsButton
 @onready var _result_text: Label = %ResultText
 @onready var _sequence_slots: HBoxContainer = %SequenceSlots
@@ -44,16 +42,11 @@ signal item_use_requested(item_id: String)
 @onready var _hero_chain_title: Label = %HeroChainTitle
 @onready var _enemy_chain_title: Label = %EnemyChainTitle
 
-const ARSENAL_VIEW_SCRIPT: Script = preload("res://scripts/battle_arsenal_view.gd")
 const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 const MAX_CHAIN_SLOT_SIDE: float = 116.0
 const MIN_CHAIN_SLOT_SIDE: float = 64.0
 
-var _arsenal_view: BattleArsenalView
-var _arsenal_button: Button
 var _combat: CombatSession
-var _hero_attack_damage: int = 0
-var _attack_name: String = "Удар кулаком"
 var _defense_idle_color: Color = Color.WHITE
 var _default_attack_icon: Texture2D
 var _hero_chain: Array[String] = []
@@ -62,7 +55,6 @@ var _enemy_chain: Array[String] = []
 var _enemy_revealed: Dictionary = {}
 var _playback: Tween
 var _is_playing_back: bool = false
-var _planner_editing: Array[String] = []
 ## Зафиксированная раскладка слотов, включая пропуски между приёмами.
 var _committed_slots: Array[String] = []
 var _items_session: GameSession
@@ -78,7 +70,6 @@ var _shield_flash_tweens: Dictionary = {}
 var _status_presenter: BattleStatusPresenter
 var _support_enemy_view: BattleSupportEnemyView
 var _touch_info: TouchInfoOverlay
-var _reorder: BattleChainReorderController
 var _visible_hero_hp: int = 0
 var _visible_enemy_hp: int = 0
 var _visible_support_hp: int = 0
@@ -120,26 +111,11 @@ const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 func _ready() -> void:
 	_sequence_scroll.resized.connect(_resize_chain_slots)
 	_enemy_sequence_scroll.resized.connect(_resize_chain_slots)
-	_punch_button.pressed.connect(_on_punch_pressed)
 	_combat_items_button.pressed.connect(_on_combat_items_pressed)
 	_combat_items_button.icon = preload("res://assets/icons/potion.png")
 	_combat_items_button.tooltip_text = "Боевые зелья"
 	_combat_items_button.disabled = true
-	_guard_button.icon = preload("res://assets/hud/menu.png")
-	_punch_button.disabled = true
-	_guard_button.visible = false
-	_arsenal_view = ARSENAL_VIEW_SCRIPT.new() as BattleArsenalView
-	add_child(_arsenal_view)
-	_arsenal_view.saved.connect(_on_arsenal_saved)
-	_arsenal_button = Button.new()
-	_arsenal_button.text = "Арсенал"
-	_arsenal_button.custom_minimum_size = Vector2(108, 38)
-	_arsenal_button.pressed.connect(_open_arsenal)
-	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.add_child(_arsenal_button)
-	$OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceHeader.move_child(_arsenal_button, 1)
 	_build_combat_item_picker()
-	_reorder = BattleChainReorderController.new()
-	_reorder.configure(self, _sequence_slots, _can_reorder_slots, _swap_draft_slots)
 	_touch_info = TouchInfoOverlay.new()
 	add_child(_touch_info)
 	_item_picker.info_requested.connect(_touch_info.show_text)
@@ -210,13 +186,8 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	if hero.definition != null:
 		_hero_name.text = hero.definition.display_name
 		_hero_portrait.texture = hero.definition.portrait
-	_hero_attack_damage = _basic_strike_damage(_combat.battle_state.get_hero())
-	var equipped_weapon: ItemDefinition = ItemCatalog.get_item(hero.equipped_weapon_id)
-	_attack_name = "Удар: " + equipped_weapon.display_name if equipped_weapon != null else "Удар кулаком"
 	var weapon: ItemDefinition = ItemCatalog.get_item(hero.equipped_weapon_id)
 	var weapon_icon: Texture2D = weapon.icon if weapon != null else _default_attack_icon
-	_punch_button.text = "%s  ·  %d" % [_attack_name, _hero_attack_damage]
-	_punch_button.icon = weapon_icon
 	_hero_attack_icon.texture = weapon_icon
 	_hero_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_hero()))
 	_hero_strength_value.text = "СИЛ %d" % hero.strength
@@ -246,35 +217,25 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_visible_support_max = combat.support_enemy_definition.max_health if support != null else 0
 	_status_presenter.reset()
 	_status_presenter.sync(_combat.battle_state.participants)
-	# В рамках прохождения сохраняем именно позиции, включая пустые слоты.
 	_committed_slots = hero.get_saved_action_slots()
-	# Preserve positions but discard obsolete skills after a character's tree changed.
 	var playable: BattleParticipant = _combat.battle_state.get_hero()
 	for i in range(_committed_slots.size()):
 		if not _committed_slots[i].is_empty() and not AbilityCatalog.knows_ability(playable, _committed_slots[i]):
 			_committed_slots[i] = ""
-	_set_draft_from_chain(_committed_slots)
+	for i in range(_committed_slots.size()):
+		if not _committed_slots[i].is_empty():
+			continue
+		for ability_id in hero.definition.personal_ability_ids:
+			if not _committed_slots.has(ability_id) and AbilityCatalog.knows_ability(playable, ability_id):
+				_committed_slots[i] = ability_id
+				break
+	_hero_chain = _committed_slots.duplicate()
 	hero.save_action_slots(_committed_slots)
-	_hero_chain = _draft_actions()
 	_enemy_chain = _combat.battle_state.default_chain("enemy")
 	_enemy_revealed.clear()
 	_refresh_enemy_slots()
 	_result_text.text = ""
-	_refresh_phase_controls()
-
-
-func _open_arsenal() -> void:
-	if _combat == null or _is_playing_back or _combat.battle_state.flow.stage != BattleFlow.Stage.PREPARATION:
-		return
-	_hide_combat_item_picker()
-	_arsenal_view.open_for(_combat.hero, _combat.battle_state.get_hero())
-
-
-func _on_arsenal_saved(slots: Array[String]) -> void:
-	_committed_slots = slots.duplicate()
-	_set_draft_from_chain(slots)
-	_hero_chain = _draft_actions()
-	call_deferred("_refresh_phase_controls")
+	_start_prepared_combat()
 
 
 func _equalize_enemy_cards() -> void:
@@ -291,38 +252,11 @@ func _equalize_enemy_cards() -> void:
 	_support_enemy_view.custom_minimum_size.y = side
 
 
-func _editing_allowed() -> bool:
-	if _manual_started:
-		return false
-	if _combat == null or _is_playing_back or (_arsenal_view != null and _arsenal_view.visible):
-		return false
-	var stage: int = _combat.battle_state.flow.stage
-	return stage == BattleFlow.Stage.PREPARATION
-
-
-func _set_draft_from_chain(slots: Array[String]) -> void:
-	_planner_editing.clear()
-	var capacity: int = _combat.battle_state.get_hero().action_slot_capacity
-	for index in range(capacity):
-		_planner_editing.append(slots[index] if index < slots.size() else "")
-
-
-func _draft_actions() -> Array[String]:
-	var result: Array[String] = []
-	for action_id in _planner_editing:
-		if not action_id.is_empty():
-			result.append(action_id)
-	return result
-
-
 func _refresh_chain_slots() -> void:
-	if _reorder != null:
-		_reorder.cancel()
 	for child in _sequence_slots.get_children():
 		_sequence_slots.remove_child(child)
 		child.queue_free()
-	var editable: bool = _editing_allowed()
-	var displayed: Array[String] = _hero_chain if _manual_started else _planner_editing
+	var displayed: Array[String] = _hero_chain
 	var available: Array[int] = []
 	if _manual_started:
 		available = _combat.battle_state.manual_available_slots()
@@ -331,7 +265,7 @@ func _refresh_chain_slots() -> void:
 		var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
 		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_sequence_slots.add_child(slot)
-		slot.configure(index, ability, available.has(index) if _manual_started else editable, _combat.battle_state.get_hero())
+		slot.configure(index, ability, available.has(index), _combat.battle_state.get_hero())
 		if _manual_started and not available.has(index):
 			slot.modulate = Color(0.48, 0.48, 0.48)
 		slot.slot_selected.connect(_on_slot_pressed.bind(slot))
@@ -398,7 +332,7 @@ func _conceal_enemy_actions() -> void:
 
 func _highlight_slots(hero_index: int, enemy_index: int, hero_reloading: bool = false, enemy_reloading: bool = false) -> void:
 	for index in range(_sequence_slots.get_child_count()):
-		var active: bool = index == _planner_editing.size() if hero_reloading else index == hero_index
+		var active: bool = index == _hero_chain.size() if hero_reloading else index == hero_index
 		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(active)
 	for index in range(_enemy_sequence_slots.get_child_count()):
 		var active: bool = index == enemy_index if not enemy_reloading else index == _enemy_chain.size()
@@ -511,8 +445,6 @@ func show_combat_item_result(result: Dictionary, session: GameSession) -> void:
 
 
 func _on_slot_pressed(index: int, slot: BattleAbilitySlot) -> void:
-	if _reorder != null and _reorder.consume_selection(index):
-		return
 	if _touch_info.consume_long_press(slot):
 		return
 	_on_slot_selected(index)
@@ -533,24 +465,9 @@ func _on_slot_selected(_index: int) -> void:
 		_result_text.text = ""
 		_refresh_phase_controls()
 		return
-	if _editing_allowed() and _combat.battle_state.flow.stage == BattleFlow.Stage.PREPARATION:
-		_open_arsenal()
-
-
-func _can_reorder_slots() -> bool:
-	return _editing_allowed() and (_touch_info == null or not _touch_info.is_open())
-
-
-func _swap_draft_slots(from_index: int, to_index: int) -> void:
-	if not _editing_allowed():
-		return
-	_planner_editing = BattleChainReorderController.moved(_planner_editing, from_index, to_index)
-	_refresh_phase_controls()
 
 
 func _input(event: InputEvent) -> void:
-	if _reorder != null:
-		_reorder.handle_input(event)
 	if _item_picker == null or not _item_picker.visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
@@ -568,39 +485,14 @@ func _input(event: InputEvent) -> void:
 		_hide_combat_item_picker()
 
 
-func _commit_draft() -> bool:
-	# Незанятая позиция не считается действием. Показываем ошибку только
-	# красным миганием самих ячеек, без текстовых инструкций.
-	var missing: bool = false
-	for index in range(_planner_editing.size()):
-		if _planner_editing[index].is_empty():
-			missing = true
-			(_sequence_slots.get_child(index) as BattleAbilitySlot).flash_empty()
-	if missing:
-		return false
-	var actions: Array[String] = _draft_actions()
-	var response: Dictionary = _combat.battle_state.configure_hero_chain(actions)
-	if not bool(response.get("success", false)):
-		_result_text.text = str(response.get("reason", ""))
-		return false
-	_hero_chain = actions.duplicate()
-	_committed_slots = _planner_editing.duplicate()
-	if _combat.hero != null and _combat.battle_state.flow.stage == BattleFlow.Stage.PREPARATION:
-		_combat.hero.save_action_slots(_committed_slots)
-	return true
-
-
-func _on_punch_pressed() -> void:
-	if _combat == null or _punch_button.disabled or _manual_started:
-		return
-	if not _commit_draft():
+func _start_prepared_combat() -> void:
+	if _combat == null or _manual_started:
 		return
 	var prepared: Dictionary = _combat.prepare_manual_combat(_hero_chain)
 	if not bool(prepared.get("success", false)):
 		_result_text.text = str(prepared.get("reason", "Не удалось подготовить бой"))
 		return
 	_manual_started = true
-	_punch_button.hide()
 	_hide_combat_item_picker()
 	_result_text.text = ""
 	_refresh_phase_controls()
@@ -623,7 +515,6 @@ func _play_selected_manual_action(target_id: String) -> void:
 		return
 	_is_playing_back = true
 	_selected_manual_slot = -2
-	_punch_button.disabled = true
 	_combat_items_button.disabled = true
 	_refresh_target_outlines()
 	_play_phase_events(result.get("events", []))
@@ -1140,15 +1031,6 @@ func _refresh_phase_controls() -> void:
 	var stage: int = _combat.battle_state.flow.stage
 	_refresh_chain_slots()
 	_refresh_combat_items_button()
-	_guard_button.visible = false
-	_arsenal_button.visible = not _manual_started and stage == BattleFlow.Stage.PREPARATION
-	_arsenal_button.disabled = _is_playing_back
-	_punch_button.visible = not _manual_started
-	if not _manual_started:
-		_punch_button.text = "Начать бой"
-		_punch_button.disabled = _is_playing_back or stage != BattleFlow.Stage.PREPARATION
-		_refresh_target_outlines()
-		return
 	_refresh_target_outlines()
 
 
@@ -1231,16 +1113,3 @@ func _emit_victory() -> void:
 
 func _emit_defeat() -> void:
 	battle_lost.emit()
-
-
-func _unhandled_key_input(event: InputEvent) -> void:
-	if not event is InputEventKey:
-		return
-	var key_event := event as InputEventKey
-	if not key_event.pressed or key_event.echo:
-		return
-	if (_arsenal_view != null and _arsenal_view.visible) or (_item_picker != null and _item_picker.visible):
-		return
-	if key_event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and _punch_button.visible and not _punch_button.disabled:
-		_on_punch_pressed()
-		get_viewport().set_input_as_handled()

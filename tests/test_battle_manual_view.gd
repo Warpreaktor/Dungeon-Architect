@@ -12,8 +12,6 @@ func _initialize() -> void:
 	var view: BattleView = scene.instantiate() as BattleView
 	root.add_child(view)
 	view.begin(combat, hero)
-	assert(not view._manual_started)
-	view._on_punch_pressed()
 	assert(view._manual_started)
 	assert(combat.battle_state.manual_combat_active)
 	assert(combat.battle_state.flow.phase_number == 0)
@@ -23,7 +21,7 @@ func _initialize() -> void:
 	var ability: AbilityDefinition = AbilityCatalog.get_ability(prepared[0])
 	var valid_targets: Array[String] = combat.battle_state.create_context().target_ids("hero", ability)
 	assert(not valid_targets.is_empty())
-	assert(not view._punch_button.visible)
+	assert(not view.has_node("%PunchButton"))
 	assert(view._target_outlines[valid_targets[0]].visible)
 	view._on_target_portrait_input(_tap_event(), "hero")
 	assert(combat.battle_state.flow.completed_ticks == 0)

@@ -13,7 +13,7 @@ func _check() -> void:
 	var view: BattleView = scene.instantiate() as BattleView
 	root.add_child(view)
 	view.begin(CombatSession.new(MonsterCatalog.get_monster("hunter"), hero), hero)
-	assert(hero.get_saved_action_slots() == ["", "", ""])
+	assert(hero.get_saved_action_slots() == hero.definition.personal_ability_ids)
 	assert((view.get_node("%HeroDefenseValue") as Label).text == "0")
 	assert((view.get_node("%EnemyDefenseValue") as Label).text == "0")
 	view._display_phase_event({"type": "block", "actor_id": "enemy", "target_id": "enemy", "armor": 2})
@@ -26,11 +26,11 @@ func _check() -> void:
 	assert(theirs.get_child_count() == 3)
 	var hero_rest: BattleAbilitySlot = yours.get_child(3) as BattleAbilitySlot
 	var enemy_rest: BattleAbilitySlot = theirs.get_child(2) as BattleAbilitySlot
-	assert(hero_rest.disabled and enemy_rest.disabled)
+	assert(not hero_rest.disabled and enemy_rest.disabled)
 	assert(hero_rest.tooltip_text.contains("Отдых") and enemy_rest.tooltip_text.contains("Отдых"))
 	view._highlight_slots(-1, -1, true, true)
 	assert(hero_rest.has_theme_stylebox_override("disabled"))
 	assert(enemy_rest.has_theme_stylebox_override("disabled"))
-	assert(view._planner_editing.size() == 3)
+	assert(view._hero_chain.size() == hero.action_slot_capacity())
 	view.queue_free()
 	quit()

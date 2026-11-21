@@ -392,12 +392,12 @@ func _build_interface() -> void:
 	# Интерфейс героя — самостоятельная сцена, не часть логики редактора.
 	_hero_hud = HERO_HUD_SCENE.instantiate() as HeroHUD
 	_hero_hud.status_info_requested.connect(_on_party_status_info_requested)
+	_hero_hud.character_requested.connect(_open_character)
 	_hero_hud.visible = false
 	canvas_host.add_child(_hero_hud)
 	# Экранные команды — отдельная сцена, не часть HUD персонажа.
 	_game_command_bar = GAME_COMMAND_BAR_SCENE.instantiate() as GameCommandBar
 	_game_command_bar.inventory_requested.connect(_toggle_inventory)
-	_game_command_bar.arsenal_requested.connect(_open_arsenal)
 	_game_command_bar.menu_requested.connect(_open_game_system_menu)
 	_game_command_bar.map_requested.connect(_toggle_map_screen)
 	_game_command_bar.visible = false
@@ -1985,10 +1985,12 @@ func _update_mode_ui() -> void:
 	_update_history_buttons()
 
 
-func _open_arsenal() -> void:
+func _open_character(member: HeroState) -> void:
+	if _arsenal_view.visible:
+		return
 	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
-	_arsenal_view.open_for(game_session.hero)
+	_arsenal_view.open_for(member, null, true)
 	_game_command_bar.visible = false
 	_dpad.visible = false
 

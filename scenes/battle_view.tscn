@@ -395,26 +395,12 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 14
 
-[node name="PunchButton" type="Button" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(180, 54)
-layout_mode = 2
-focus_mode = 2
-text = "Удар кулаком"
-
 [node name="CombatItemsButton" type="Button" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(76, 54)
 layout_mode = 2
 focus_mode = 2
 text = "Зелья"
-
-[node name="GuardButton" type="Button" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(180, 54)
-layout_mode = 2
-focus_mode = 2
-text = "Блок"
 
 [node name="ResultText" type="Label" parent="OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions"]
 unique_name_in_owner = true

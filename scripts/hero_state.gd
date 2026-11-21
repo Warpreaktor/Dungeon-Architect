@@ -14,7 +14,7 @@ var defense: int = 0
 var gold: int = 0
 ## Общие способности, изученные в ходе приключения (не меняют HeroDefinition).
 var learned_ability_ids: Array[String] = []
-## Последняя подтверждённая раскладка алгоритма в текущем прохождении.
+## Подготовленный арсенал героя для следующих сражений.
 ## Пустые слоты сохраняются на месте. Данные принадлежат экземпляру героя.
 var saved_action_slots: Array[String] = []
 ## Будущие артефакты и эффекты смогут изменять число доступных слотов.
@@ -46,6 +46,10 @@ func _init(hero_definition: HeroDefinition = null) -> void:
 	agility = definition.agility
 	base_defense = definition.base_defense
 	_recalculate_equipment_stats()
+	for ability_id in definition.personal_ability_ids:
+		if saved_action_slots.size() >= action_slot_capacity():
+			break
+		saved_action_slots.append(ability_id)
 
 
 ## Ближний и дальний урон: собственная мощность оружия нужного типа +

@@ -210,6 +210,7 @@ func _launch(config: Dictionary) -> void:
 	_log.clear()
 	_message.text = ""
 	_battle.begin(combat, hero)
+	_battle.enable_lab_playback()
 	_battle.bind_combat_items(_session)
 
 

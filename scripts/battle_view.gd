@@ -90,6 +90,12 @@ var _reorder: BattleChainReorderController
 var _visible_hero_hp: int = 0
 var _visible_enemy_hp: int = 0
 var _visible_support_hp: int = 0
+var _lab_panel: BattleLabPlaybackPanel
+var _lab_steps: Array[Dictionary] = []
+var _lab_step_index: int = 0
+var _lab_step_mode: String = "action"
+var _lab_speed: float = 1.0
+
 
 # Длительность визуальной вспышки совпадает с паузой события «Блок».
 # Эти параметры меняют только анимацию, не время действия защиты.
@@ -247,6 +253,39 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_refresh_enemy_slots()
 	_result_text.text = ""
 	_refresh_phase_controls()
+
+
+func enable_lab_playback() -> void:
+	if _lab_panel != null:
+		return
+	_lab_panel = BattleLabPlaybackPanel.new()
+	_lab_panel.name = "LabPlayback"
+	add_child(_lab_panel)
+	_lab_panel.advance_requested.connect(_advance_lab_playback)
+	_lab_panel.speed_requested.connect(_set_lab_playback_speed)
+
+
+func _set_lab_playback_speed(multiplier: float) -> void:
+	_lab_speed = multiplier
+	if _playback != null and _playback.is_valid():
+		_playback.set_speed_scale(_lab_speed)
+
+
+func _advance_lab_playback(mode: String) -> void:
+	_lab_step_mode = mode
+	if _playback != null and _playback.is_valid() and not _playback.is_running():
+		_playback.play()
+
+
+func _lab_checkpoint(step: Dictionary) -> void:
+	_lab_step_index += 1
+	if _lab_panel == null:
+		return
+	var support_name: String = _combat.support_enemy_definition.display_name if _combat.support_enemy_definition != null else ""
+	_lab_panel.show_step(step["events"], _lab_step_index, int(step["tick"]), _hero_name.text, _enemy_name.text, support_name)
+	var stop: bool = _lab_step_mode == "action" or (_lab_step_mode == "tick" and bool(step["tick_end"]))
+	if stop and _playback != null and _playback.is_valid():
+		_playback.pause()
 
 
 func _equalize_enemy_cards() -> void:
@@ -760,6 +799,8 @@ func _on_punch_pressed() -> void:
 	_guard_button.disabled = true
 	_combat_items_button.disabled = true
 	combat_log_line.emit("Бой · фаза %d" % int(result.get("phase_number", 0)))
+	if _lab_panel != null:
+		_lab_panel.start_phase(int(result.get("phase_number", 0)))
 	_play_phase_events(result.get("events", []))
 
 
@@ -872,14 +913,22 @@ func _play_phase_events(phase_events: Array) -> void:
 		else:
 			_playback.parallel().tween_property(portrait, "position", _impact_idle[actor_id], clash_intro_seconds)
 		_playback.parallel().tween_property(portrait, "scale", Vector2.ONE * _impact_scale, clash_intro_seconds)
-	for group in BattleClashTimeline.group_events(phase_events):
-		var group_events: Array[Dictionary] = group["events"]
-		if bool(group.get("is_clash", false)):
-			_queue_clash_animation(group_events)
-		else:
-			for event in group_events:
-				_playback.tween_callback(_display_phase_event.bind(event))
-			_playback.tween_interval(clash_idle_seconds)
+	if _lab_panel != null:
+		_lab_step_index = 0
+		_lab_steps = BattlePlaybackTimeline.split_events(phase_events)
+		for step in _lab_steps:
+			var step_events: Array[Dictionary] = step["events"]
+			_queue_clash_animation(step_events)
+			_playback.tween_callback(_lab_checkpoint.bind(step))
+	else:
+		for group in BattleClashTimeline.group_events(phase_events):
+			var group_events: Array[Dictionary] = group["events"]
+			if bool(group.get("is_clash", false)):
+				_queue_clash_animation(group_events)
+			else:
+				for event in group_events:
+					_playback.tween_callback(_display_phase_event.bind(event))
+				_playback.tween_interval(clash_idle_seconds)
 	var first_return: bool = true
 	for actor_id in _impact_portraits:
 		var portrait: TextureRect = _impact_portraits[actor_id]
@@ -891,6 +940,8 @@ func _play_phase_events(phase_events: Array) -> void:
 		_playback.parallel().tween_property(portrait, "scale", Vector2.ONE, clash_outro_seconds)
 	_playback.tween_callback(_clear_impact_layer)
 	_playback.tween_callback(_after_phase_playback)
+	if _lab_panel != null:
+		_playback.set_speed_scale(_lab_speed)
 
 
 func _queue_clash_animation(group_events: Array[Dictionary]) -> void:
@@ -1186,6 +1237,8 @@ func _exit_tree() -> void:
 	if _impact_layer != null and is_instance_valid(_impact_layer):
 		_impact_layer.free()
 func _after_phase_playback() -> void:
+	if _lab_panel != null:
+		_lab_panel.finish_phase()
 	_is_playing_back = false
 	_refresh_accuracy_and_dodge()
 	_status_presenter.sync(_combat.battle_state.participants)

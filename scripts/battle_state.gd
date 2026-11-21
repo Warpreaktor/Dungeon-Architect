@@ -14,6 +14,9 @@ var enemy_definition: MonsterDefinition
 var current_enemy_profile_id: String = ""
 var initial_enemy_chain: Array[String] = []
 var locked_hero_arsenal: Array[String] = []
+var manual_combat_active: bool = false
+var manual_used_slots: Array[int] = []
+var _manual_phase_start: int = 0
 var enemy_intermission_usage: Dictionary = {}
 var support_enemy_definition: MonsterDefinition
 var support_initial_chain: Array[String] = []
@@ -334,6 +337,8 @@ func configure_hero_chain(actions: Array[String]) -> Dictionary:
 ## Курсоры участников независимы, отдых всегда завершает круг героя.
 ## Все события уже вычислены до визуального воспроизведения.
 func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dictionary:
+	if manual_combat_active:
+		return {"success": false, "reason": "Бой управляется вручную", "events": []}
 	var hero_actor: BattleParticipant = get_hero()
 	var enemy_actor: BattleParticipant = get_enemy()
 	if hero_actor == null or enemy_actor == null:
@@ -401,40 +406,7 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 			hero_rest_finished = hero_actions_done >= current_hero_chain.size()
 		else:
 			hero_actions_done += 1
-		var enemy_step: Dictionary = steps.get(enemy_id, {})
-		var support_step: Dictionary = steps.get(support_enemy_id, {})
-		var tick: int = flow.completed_ticks + 1
-		events.append({"type": "tick", "tick": tick, "opponent_id": opponent_id,
-			"hero_slot": int(hero_step.get("slot_index", -1)),
-			"enemy_slot": int(enemy_step.get("slot_index", -1)),
-			"support_slot": int(support_step.get("slot_index", -1)),
-			"hero_reload": bool(hero_step.get("reload", false)),
-			"enemy_reload": bool(enemy_step.get("reload", false)),
-			"support_reload": bool(support_step.get("reload", false))})
-		var actor_ids: Array[String] = [hero_id, opponent_id]
-		var order: Array[String] = tick_policy.order_for_tick(participants, steps, actor_ids)
-		for actor_id in order:
-			if is_victory or is_defeat:
-				break
-			if not steps.has(actor_id) or not get_participant(actor_id).is_alive():
-				continue
-			var step: Dictionary = steps[actor_id]
-			if bool(step["reload"]):
-				_complete_rest(actor_id, tick)
-				continue
-			var action_id: String = str(step["action_id"])
-			events.append({"type": "action_start", "actor_id": actor_id,
-				"ability_id": action_id, "slot_index": int(step["slot_index"]), "tick": tick})
-			var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
-			var context: BattleContext = create_context()
-			var target_id: String = opponent_id if actor_id == hero_id and context.target_ids(actor_id, ability).has(opponent_id) else context.choose_target_id(actor_id, ability)
-			var outcome: Dictionary = execute_ability(actor_id, target_id, action_id)
-			if not bool(outcome.get("success", false)):
-				events.append({"type": "failed", "actor_id": actor_id, "ability_id": action_id,
-					"slot_index": int(step["slot_index"]), "tick": tick,
-					"reason": outcome.get("reason", "Недоступно")})
-				events.append({"type": "rest", "actor_id": actor_id,
-					"slot_index": int(step["slot_index"]), "tick": tick, "premature": true})
+		_resolve_tick(steps, opponent_id, flow.completed_ticks + 1)
 		flow.mark_tick()
 		flow.grant_half_health_reconfiguration(hero_actor.health, hero_actor.max_health)
 	# После последнего врага пропускаются неисполненные карты, но не отдых.
@@ -461,6 +433,170 @@ func run_phase(hero_actions: Array[String], enemy_actions: Array[String]) -> Dic
 	last_phase_events = events.slice(start_event)
 	return {"success": true, "events": last_phase_events, "finished": flow.stage == BattleFlow.Stage.FINISHED,
 		"phase_number": flow.phase_number, "hero_hp": hero_actor.health, "ticks": flow.completed_ticks}
+
+
+func prepare_manual_combat(actions: Array[String]) -> Dictionary:
+	if flow.stage != BattleFlow.Stage.PREPARATION or flow.phase_number != 0:
+		return {"success": false, "reason": "Подготовка уже завершена"}
+	for actor_id in enemy_ids():
+		var actor: BattleParticipant = get_participant(actor_id)
+		if actor == null or not actor.is_alive():
+			continue
+		if actor.action_chain.is_empty() or actor.action_chain.size() > actor.action_slot_capacity or actor.action_chain.size() > BattleChainPlanner.MAX_ACTIONS:
+			return {"success": false, "reason": "Некорректная цепочка противника"}
+	var configured: Dictionary = configure_hero_chain(actions)
+	if not bool(configured.get("success", false)):
+		return configured
+	manual_combat_active = true
+	manual_used_slots.clear()
+	return {"success": true}
+
+
+func manual_available_slots() -> Array[int]:
+	var available: Array[int] = []
+	if not manual_combat_active or flow.stage == BattleFlow.Stage.FINISHED or is_victory or is_defeat:
+		return available
+	var hero: BattleParticipant = get_hero()
+	if hero == null:
+		return available
+	for slot in range(hero.action_chain.size()):
+		if not manual_used_slots.has(slot):
+			available.append(slot)
+	return available
+
+
+
+func manual_next_enemy_step() -> Dictionary:
+	if not manual_combat_active or is_victory or is_defeat or flow.stage == BattleFlow.Stage.FINISHED:
+		return {}
+	var clash: Dictionary = BattleClashPlanner.next_opponent(participants, enemy_ids(), next_enemy_clash_cursor)
+	var actor_id: String = str(clash.get("actor_id", ""))
+	if actor_id.is_empty():
+		return {}
+	var opponent: BattleParticipant = get_participant(actor_id)
+	var step: Dictionary = BattleChainPlanner.next_step(opponent.action_chain, opponent.action_cursor)
+	return {"actor_id": actor_id, "action_id": step["action_id"],
+		"slot_index": step["slot_index"], "reload": step["reload"]}
+
+
+func _begin_manual_phase() -> void:
+	_manual_phase_start = get_hero().completed_phases
+	flow.start_phase()
+	if flow.phase_number == 1:
+		locked_hero_arsenal = get_hero().action_chain.duplicate()
+
+
+func run_manual_tick(slot_index: int, target_id: String = "") -> Dictionary:
+	if not manual_combat_active or flow.stage == BattleFlow.Stage.FINISHED:
+		return {"success": false, "reason": "Ручной бой не подготовлен", "events": []}
+	if flow.stage not in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.EXECUTING]:
+		return {"success": false, "reason": "Сейчас нельзя выполнить такт", "events": []}
+	var hero: BattleParticipant = get_hero()
+	var enemy: BattleParticipant = get_enemy()
+	if hero == null or enemy == null or not hero.is_alive() or is_defeat:
+		return {"success": false, "reason": "Герой недоступен", "events": []}
+	var resting: bool = slot_index == -1
+	if not resting:
+		if is_victory:
+			return {"success": false, "reason": "Необходимо завершить победный отдых", "events": []}
+		if slot_index < 0 or slot_index >= hero.action_chain.size() or manual_used_slots.has(slot_index):
+			return {"success": false, "reason": "Карта уже использована или отсутствует", "events": []}
+		var ability: AbilityDefinition = AbilityCatalog.get_ability(hero.action_chain[slot_index])
+		var invalid_target: String = create_context().target_error(hero_id, target_id, ability)
+		if not invalid_target.is_empty():
+			return {"success": false, "reason": invalid_target, "events": []}
+	var start_event: int = events.size()
+	if flow.stage != BattleFlow.Stage.EXECUTING:
+		_begin_manual_phase()
+	var opponent_id: String = ""
+	if not is_victory:
+		var clash: Dictionary = BattleClashPlanner.next_opponent(participants, enemy_ids(), next_enemy_clash_cursor)
+		opponent_id = str(clash.get("actor_id", ""))
+		if opponent_id.is_empty():
+			update_outcome()
+			if not is_victory:
+				return {"success": false, "reason": "Нет действующего противника", "events": []}
+		else:
+			next_enemy_clash_cursor = int(clash.get("next_cursor", next_enemy_clash_cursor))
+	var steps: Dictionary = {}
+	steps[hero_id] = {"action_id": "" if resting else hero.action_chain[slot_index],
+		"slot_index": -1 if resting else slot_index, "reload": resting}
+	hero.is_resting = resting
+	if not opponent_id.is_empty():
+		var opponent: BattleParticipant = get_participant(opponent_id)
+		var enemy_step: Dictionary = BattleChainPlanner.next_step(opponent.action_chain, opponent.action_cursor)
+		steps[opponent_id] = enemy_step
+		opponent.action_cursor = int(enemy_step["next_cursor"])
+		opponent.is_resting = bool(enemy_step["reload"])
+	if not resting:
+		manual_used_slots.append(slot_index)
+	hero.action_cursor = 0 if resting else slot_index + 1
+	var tick: int = flow.completed_ticks + 1
+	_resolve_tick(steps, opponent_id, tick, target_id)
+	flow.mark_tick()
+	flow.grant_half_health_reconfiguration(hero.health, hero.max_health)
+	if hero.completed_phases > _manual_phase_start:
+		end_phase()
+		manual_used_slots.clear()
+		if not is_victory and not is_defeat:
+			flow.complete_phase()
+	if is_defeat or (is_victory and hero.completed_phases > _manual_phase_start):
+		flow.finish_battle()
+	hero.is_resting = false
+	for actor_id in enemy_ids():
+		var actor: BattleParticipant = get_participant(actor_id)
+		if actor != null:
+			actor.is_resting = false
+	last_phase_events = events.slice(start_event)
+	return {"success": true, "events": last_phase_events,
+		"finished": flow.stage == BattleFlow.Stage.FINISHED,
+		"awaiting_victory_rest": is_victory and flow.stage != BattleFlow.Stage.FINISHED,
+		"phase_number": flow.phase_number, "hero_hp": hero.health,
+		"ticks": flow.completed_ticks, "available_slots": manual_available_slots(),
+		"tick_performed": true}
+
+
+func _resolve_tick(steps: Dictionary, opponent_id: String, tick: int, selected_target_id: String = "") -> void:
+	var hero_step: Dictionary = steps.get(hero_id, {})
+	var enemy_step: Dictionary = steps.get(enemy_id, {})
+	var support_step: Dictionary = steps.get(support_enemy_id, {})
+	events.append({"type": "tick", "tick": tick, "opponent_id": opponent_id,
+		"hero_slot": int(hero_step.get("slot_index", -1)),
+		"enemy_slot": int(enemy_step.get("slot_index", -1)),
+		"support_slot": int(support_step.get("slot_index", -1)),
+		"hero_reload": bool(hero_step.get("reload", false)),
+		"enemy_reload": bool(enemy_step.get("reload", false)),
+		"support_reload": bool(support_step.get("reload", false))})
+	var actor_ids: Array[String] = [hero_id, opponent_id]
+	var order: Array[String] = tick_policy.order_for_tick(participants, steps, actor_ids)
+	for actor_id in order:
+		if is_defeat or (is_victory and not (actor_id == hero_id and bool(steps[actor_id].get("reload", false)))):
+			break
+		if not steps.has(actor_id) or not get_participant(actor_id).is_alive():
+			continue
+		var step: Dictionary = steps[actor_id]
+		if bool(step["reload"]):
+			_complete_rest(actor_id, tick)
+			continue
+		var action_id: String = str(step["action_id"])
+		events.append({"type": "action_start", "actor_id": actor_id,
+			"ability_id": action_id, "slot_index": int(step["slot_index"]), "tick": tick})
+		var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
+		var context: BattleContext = create_context()
+		var target_id: String = ""
+		if actor_id == hero_id and not selected_target_id.is_empty():
+			target_id = selected_target_id
+		elif actor_id == hero_id and context.target_ids(actor_id, ability).has(opponent_id):
+			target_id = opponent_id
+		else:
+			target_id = context.choose_target_id(actor_id, ability)
+		var outcome: Dictionary = execute_ability(actor_id, target_id, action_id)
+		if not bool(outcome.get("success", false)):
+			events.append({"type": "failed", "actor_id": actor_id, "ability_id": action_id,
+				"slot_index": int(step["slot_index"]), "tick": tick,
+				"reason": outcome.get("reason", "Недоступно")})
+			events.append({"type": "rest", "actor_id": actor_id,
+				"slot_index": int(step["slot_index"]), "tick": tick, "premature": true})
 
 
 func _complete_rest(actor_id: String, tick: int) -> void:

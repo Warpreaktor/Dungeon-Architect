@@ -86,6 +86,19 @@ func play_phase(hero_chain: Array[String], enemy_chain: Array[String]) -> Dictio
 	return result
 
 
+func prepare_manual_combat(hero_chain: Array[String]) -> Dictionary:
+	return battle_state.prepare_manual_combat(hero_chain)
+
+
+func play_manual_tick(slot_index: int, target_id: String = "") -> Dictionary:
+	var result: Dictionary = battle_state.run_manual_tick(slot_index, target_id)
+	if bool(result.get("success", false)):
+		var battle_hero: BattleParticipant = battle_state.get_hero()
+		if battle_hero != null:
+			battle_hero.commit_hero_result(hero)
+	return result
+
+
 func request_tactic_change() -> bool:
 	return battle_state.flow.request_reconfiguration()
 

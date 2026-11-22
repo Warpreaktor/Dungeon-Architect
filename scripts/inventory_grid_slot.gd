@@ -14,6 +14,8 @@ var _selected: bool = false
 var _cell_size: float = 54.0
 var _drag_drop_state: int = 0
 var _drag_state_source: String = ""
+var _mouse_press_started: bool = false
+var _mouse_dragged: bool = false
 
 
 func _ready() -> void:
@@ -73,15 +75,19 @@ func _apply_style() -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		activated.emit(slot_index)
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_mouse_press_started = true
+			_mouse_dragged = false
+		elif _mouse_press_started:
+			_mouse_press_started = false
+			if not _mouse_dragged and Rect2(Vector2.ZERO, size).has_point(event.position):
+				activated.emit(slot_index)
 		accept_event()
-	elif event is InputEventScreenTouch and event.pressed:
-		activated.emit(slot_index)
-		accept_event()
-
 
 func _get_drag_data(_at_position: Vector2) -> Variant:
+	_mouse_dragged = true
+	_mouse_press_started = false
 	if item_id.is_empty():
 		return null
 	var preview := TextureRect.new()
@@ -112,6 +118,8 @@ func _process(_delta: float) -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_DRAG_END and _icon != null:
+		_mouse_press_started = false
+		_mouse_dragged = false
 		set_drag_drop_state(0)
 
 

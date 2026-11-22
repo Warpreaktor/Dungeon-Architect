@@ -13,7 +13,6 @@ signal equipment_changed
 @onready var _item_name: Label = %ItemName
 @onready var _item_description: RichTextLabel = %ItemDescription
 @onready var _item_properties: Label = %ItemProperties
-@onready var _use_button: Button = %UseButton
 @onready var _use_feedback: Label = %UseFeedback
 @onready var _mannequin: EquipmentMannequin = %EquipmentMannequin
 @onready var _close_button: Button = %CloseButton
@@ -28,11 +27,16 @@ var _touch_started_at: int = 0
 var _touch_source: Dictionary = {}
 var _touch_dragging: bool = false
 var _touch_preview: TextureRect
+var _item_action_menu: PopupMenu
+var _popup_slot: int = -1
 
 
 
 func _ready() -> void:
-	_use_button.pressed.connect(_request_use_selected)
+	_item_action_menu = PopupMenu.new()
+	_item_action_menu.add_item("Использовать", 0)
+	_item_action_menu.id_pressed.connect(_on_item_action_pressed)
+	add_child(_item_action_menu)
 	_close_button.pressed.connect(close_by_player)
 	_mannequin.item_transferred.connect(_transfer_item)
 	_mannequin.slot_selected.connect(_select_equipped)
@@ -45,6 +49,8 @@ func open_for(session: GameSession) -> void:
 	if session == null or session.hero == null:
 		return
 	_session = session
+	_item_action_menu.hide()
+	_popup_slot = -1
 	_use_feedback.text = ""
 	_refresh_contents()
 	_resize_card()
@@ -69,7 +75,7 @@ func _refresh_contents() -> void:
 		var slot := InventoryGridSlot.new()
 		_bag_grid.add_child(slot)
 		slot.configure(index, definition, quantity, index == _selected_index, _bag_cell_size, _session)
-		slot.activated.connect(_show_item)
+		slot.activated.connect(_on_bag_slot_activated)
 		slot.transferred.connect(_transfer_item)
 	if _selected_index < 0:
 		_clear_item_info()
@@ -85,6 +91,8 @@ func _first_occupied_slot() -> int:
 
 
 func _transfer_item(from_kind: String, from_slot: Variant, to_kind: String, to_slot: Variant) -> void:
+	_item_action_menu.hide()
+	_popup_slot = -1
 	if _session == null or not _session.transfer_inventory_item(from_kind, from_slot, to_kind, to_slot):
 		return
 	_selected_index = int(to_slot) if to_kind == "bag" else -1
@@ -116,7 +124,42 @@ func _clear_item_info() -> void:
 	_item_name.text = ""
 	_item_description.text = ""
 	_item_properties.text = ""
-	_use_button.visible = false
+
+
+func _on_bag_slot_activated(index: int) -> void:
+	_item_action_menu.hide()
+	_popup_slot = -1
+	if _session == null or index < 0 or index >= _entries.size():
+		return
+	var item_id: String = _entries[index]
+	if item_id.is_empty():
+		return
+	_show_item(index)
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	if item == null or item.category != ItemDefinition.Category.CONSUMABLE:
+		return
+	var cells: Array[Node] = _bag_grid.get_children()
+	if index >= cells.size():
+		return
+	_popup_slot = index
+	var rect: Rect2 = (cells[index] as Control).get_global_rect()
+	var menu_size := Vector2i(164, 44)
+	var viewport_rect: Rect2 = get_viewport().get_visible_rect()
+	var popup_position := Vector2i(
+		clampi(int(rect.end.x) + 4, 0, maxi(0, int(viewport_rect.size.x) - menu_size.x)),
+		clampi(int(rect.position.y), 0, maxi(0, int(viewport_rect.size.y) - menu_size.y))
+	)
+	_item_action_menu.popup(Rect2i(popup_position, menu_size))
+
+
+func _on_item_action_pressed(action_id: int) -> void:
+	if action_id != 0 or _session == null or _popup_slot < 0 or _popup_slot >= _entries.size():
+		return
+	var item_id: String = _entries[_popup_slot]
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	_popup_slot = -1
+	if item != null and item.category == ItemDefinition.Category.CONSUMABLE:
+		item_use_requested.emit(item_id)
 
 
 func _show_item(index: int) -> void:
@@ -142,8 +185,6 @@ func _show_item_definition(item_id: String) -> void:
 	_item_name.text = item.display_name
 	_item_description.text = item.get_description()
 	_use_feedback.text = ""
-	_use_button.visible = item.category == ItemDefinition.Category.CONSUMABLE
-	_use_button.text = "Использовать"
 	var category := "Квестовый предмет"
 	match item.category:
 		ItemDefinition.Category.CONSUMABLE:
@@ -185,18 +226,9 @@ func _is_equipped(item_id: String) -> bool:
 	return item_id == _session.hero.equipped_weapon_id or item_id == _session.hero.equipped_shield_id
 
 
-func _request_use_selected() -> void:
-	if _selected_index < 0 or _selected_index >= _entries.size() or _session == null:
-		return
-	var item_id: String = _entries[_selected_index]
-	var item: ItemDefinition = ItemCatalog.get_item(item_id)
-	if item == null:
-		return
-	if item.category == ItemDefinition.Category.CONSUMABLE:
-		item_use_requested.emit(item_id)
-
-
 func show_use_result(item_id: String, message: String) -> void:
+	_item_action_menu.hide()
+	_popup_slot = -1
 	if _session == null:
 		return
 	_refresh_contents()
@@ -272,6 +304,10 @@ func _input(event: InputEvent) -> void:
 				var destination: Dictionary = _target_at(event.position)
 				if not destination.is_empty():
 					_transfer_item(str(_touch_source["kind"]), _touch_source["slot"], str(destination["kind"]), destination["slot"])
+			elif event.position.distance_to(_touch_origin) < 16.0 and str(_touch_source.get("kind", "")) == "bag":
+				var destination: Dictionary = _target_at(event.position)
+				if str(destination.get("kind", "")) == "bag" and destination.get("slot") == _touch_source["slot"]:
+					_on_bag_slot_activated(int(_touch_source["slot"]))
 			_cancel_touch_drag()
 	elif event is InputEventScreenDrag and event.index == _touch_index:
 		if not _touch_dragging and event.position.distance_to(_touch_origin) > 16.0 and Time.get_ticks_msec() - _touch_started_at >= 180:
@@ -330,6 +366,8 @@ func close_by_player() -> void:
 
 
 func dismiss() -> void:
+	_item_action_menu.hide()
+	_popup_slot = -1
 	_cancel_touch_drag()
 	hide()
 	_session = null

@@ -85,15 +85,10 @@ theme_override_constants/separation = 11
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="Title" type="Label" parent="Center/Card/Margins/Content/Header"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "РЮКЗАК ПУТЕШЕСТВЕННИКА"
-theme_override_font_sizes/font_size = 21
-theme_override_colors/font_color = Color(0.91, 0.74, 0.47, 1)
 
 [node name="CloseButton" type="Button" parent="Center/Card/Margins/Content/Header"]
 unique_name_in_owner = true
+size_flags_horizontal = 8
 custom_minimum_size = Vector2(104, 38)
 layout_mode = 2
 focus_mode = 2
@@ -138,10 +133,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="BagTitle" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Bag"]
-layout_mode = 2
-text = "СУМКА · 40 ЯЧЕЕК"
-theme_override_colors/font_color = Color(0.82, 0.66, 0.41, 1)
 
 [node name="BagGrid" type="GridContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/Bag"]
 unique_name_in_owner = true
@@ -157,10 +148,6 @@ custom_minimum_size = Vector2(320, 430)
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="EquipmentTitle" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/EquipmentArea"]
-layout_mode = 2
-text = "СНАРЯЖЕНИЕ"
-theme_override_colors/font_color = Color(0.82, 0.66, 0.41, 1)
 
 [node name="EquipmentMannequin" type="Control" parent="Center/Card/Margins/Content/BodyScroll/Columns/EquipmentArea"]
 unique_name_in_owner = true
@@ -205,11 +192,6 @@ unique_name_in_owner = true
 layout_mode = 2
 text = ""
 
-[node name="UseButton" type="Button" parent="Center/Card/Margins/Content/ItemDetails"]
-unique_name_in_owner = true
-layout_mode = 2
-custom_minimum_size = Vector2(115, 42)
-text = "Использовать"
 
 [node name="UseFeedback" type="Label" parent="Center/Card/Margins/Content/ItemDetails"]
 unique_name_in_owner = true

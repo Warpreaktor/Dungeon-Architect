@@ -36,6 +36,7 @@ var _dodge: Label
 var _accuracy: Label
 var _slots: HBoxContainer
 var _revealed: Dictionary = {}
+var _played: Dictionary = {}
 var _participant: BattleParticipant
 
 
@@ -133,6 +134,7 @@ func configure(participant: BattleParticipant, portrait: Texture2D, display_name
 	_portrait.texture = portrait
 	_portrait.flip_h = flip_h
 	_revealed.clear()
+	_played.clear()
 	_refresh_slots()
 	refresh_health(participant)
 	refresh_stats(participant)
@@ -175,12 +177,20 @@ func reveal(index: int, ability_id: String) -> void:
 	if _participant == null or index < 0 or index >= _participant.action_chain.size():
 		return
 	_revealed[index] = ability_id
+	_played[index] = true
 	_render_slot(index)
+
+
+func reset_played() -> void:
+	_played.clear()
+	for index in range(_slots.get_child_count()):
+		_render_slot(index)
 
 
 func set_chain(participant: BattleParticipant) -> void:
 	_participant = participant
 	_revealed.clear()
+	_played.clear()
 	_refresh_slots()
 	highlight_cursor(_participant.action_cursor if _participant != null else -1)
 
@@ -227,6 +237,7 @@ func _render_slot(index: int) -> void:
 		slot.text = "?"
 		slot.icon = null
 		slot.tooltip_text = ""
+	slot.modulate = BattleAbilitySlot.SPENT_MODULATE if _played.has(index) else Color.WHITE
 	var info: Button = slot.get_child(0) as Button
 	info.visible = not slot.tooltip_text.is_empty()
 

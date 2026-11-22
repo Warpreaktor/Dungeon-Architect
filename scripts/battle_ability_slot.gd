@@ -12,6 +12,7 @@ const SUPPORT_ICON: Texture2D = preload("res://assets/icons/stats/24x24/health.p
 const SPECIAL_ICON: Texture2D = preload("res://assets/icons/stats/24x24/attack.png")
 const REST_ICON: Texture2D = preload("res://assets/abilities/rest.png")
 const INFO_BUTTON_SIDE: float = 30.0
+const SPENT_MODULATE: Color = Color(0.48, 0.48, 0.48)
 
 
 @onready var _slot_number: Label = $SlotMargin/Row/Labels/SlotNumber

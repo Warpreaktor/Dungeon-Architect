@@ -51,6 +51,7 @@ var _hero_chain: Array[String] = []
 var _enemy_chain: Array[String] = []
 ## Карты врага раскрываются навсегда в рамках одной встречи.
 var _enemy_revealed: Dictionary = {}
+var _enemy_played: Dictionary = {}
 var _playback: Tween
 var _is_playing_back: bool = false
 ## Зафиксированная раскладка слотов, включая пропуски между приёмами.
@@ -222,6 +223,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 			_hero_chain.append(ability_id)
 	_enemy_chain = _combat.battle_state.default_chain("enemy")
 	_enemy_revealed.clear()
+	_enemy_played.clear()
 	_refresh_enemy_slots()
 	_result_text.text = ""
 	_start_prepared_combat()
@@ -307,6 +309,8 @@ func _refresh_enemy_slots() -> void:
 				slot.configure_hidden(index)
 		else:
 			slot.configure_recharge(index)
+		if _enemy_played.has(index):
+			slot.modulate = BattleAbilitySlot.SPENT_MODULATE
 		slot.info_requested.connect(_touch_info.show_text)
 	if not _is_playing_back:
 		_highlight_next_actions()
@@ -725,6 +729,7 @@ func _display_phase_event(event: Dictionary) -> void:
 			if actor_id == "enemy":
 				_enemy_chain = _combat.battle_state.get_enemy().action_chain.duplicate()
 				_enemy_revealed.clear()
+				_enemy_played.clear()
 				_refresh_enemy_slots()
 			elif actor_id == BattleState.SUPPORT_ENEMY_ID and _support_enemy_view != null:
 				_support_enemy_view.set_chain(_combat.battle_state.get_participant(actor_id))
@@ -747,9 +752,11 @@ func _display_phase_event(event: Dictionary) -> void:
 				var index: int = int(event.get("slot_index", -1))
 				if index >= 0 and index < _enemy_chain.size():
 					_enemy_revealed[index] = true
+					_enemy_played[index] = true
 					var slot: BattleAbilitySlot = _enemy_sequence_slots.get_child(index) as BattleAbilitySlot
 					slot.reveal_enemy_action(AbilityCatalog.get_ability(str(event.get("ability_id", ""))),
 						_combat.battle_state.get_enemy())
+					slot.modulate = BattleAbilitySlot.SPENT_MODULATE
 			elif actor_id == BattleState.SUPPORT_ENEMY_ID and _support_enemy_view != null:
 				_support_enemy_view.reveal(int(event.get("slot_index", -1)), str(event.get("ability_id", "")))
 		"block":
@@ -807,6 +814,12 @@ func _display_phase_event(event: Dictionary) -> void:
 			if amount > 0:
 				_spawn_number(target_id, "−%d" % amount, Color("#ed4444"), 18.0)
 		"reload":
+			if actor_id == "enemy":
+				_enemy_played.clear()
+				for slot in _enemy_sequence_slots.get_children():
+					(slot as BattleAbilitySlot).modulate = Color.WHITE
+			elif actor_id == BattleState.SUPPORT_ENEMY_ID and _support_enemy_view != null:
+				_support_enemy_view.reset_played()
 			_show_reload_icon(actor_id)
 		"failed":
 			# Текущий слот коротко вспыхивает красным, без текстовых предупреждений.

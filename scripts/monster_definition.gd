@@ -23,6 +23,8 @@ enum Rank { COMMON, ELITE, BOSS }
 ## Количество случайных карт из оставшегося пула.
 ## Суммарный размер ограничен base_action_slots.
 @export_range(0, 8, 1) var random_card_count: int = 1
+@export_range(0, 100, 1) var weapon_spawn_chance_percent: int = 0
+@export var weapon_replaced_ability_id: String = ""
 ## Сколько действий в алгоритме доступно без артефактов и усилений.
 @export_range(1, 8, 1) var base_action_slots: int = 3
 @export_range(1, 999, 1) var max_health: int = 1

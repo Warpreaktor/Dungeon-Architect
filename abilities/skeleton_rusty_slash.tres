@@ -14,7 +14,7 @@ damage_multiplier = 1.0
 [resource]
 script = ExtResource("1_script")
 ability_id = "skeleton_rusty_slash"
-display_name = "Ржавый разрез"
+display_name = "Ржавый взмах"
 description = "Базовый рубящий удар заржавевшим клинком."
 icon = ExtResource("3_icon")
 category = 0

@@ -6,7 +6,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/player_spawn.png" id="4_hero"]
 [ext_resource type="Texture2D" path="res://assets/icons/rabbit_symbiont.png" id="5_enemy"]
 [ext_resource type="PackedScene" path="res://scenes/health_meter.tscn" id="6_health_meter"]
-[ext_resource type="Texture2D" path="res://assets/hud/fist.png" id="7_fist"]
+[ext_resource type="Texture2D" path="res://assets/hud/attack.png" id="7_attack"]
 [ext_resource type="Texture2D" path="res://assets/hud/shield.png" id="8_shield"]
 [ext_resource type="Texture2D" path="res://assets/hud/attack.png" id="9_attack"]
 
@@ -110,7 +110,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 mouse_filter = 2
-texture = ExtResource("7_fist")
+texture = ExtResource("7_attack")
 expand_mode = 1
 stretch_mode = 5
 

@@ -121,15 +121,20 @@ func refresh_from_hero() -> void:
 ## Мощность оружия учитывается лишь для подходящего вида атаки.
 ## Монстры атакуют природными приёмами: их база — характеристики + эффект.
 func weapon_damage(kind: int) -> int:
-	return _equipment.weapon_damage(kind)
+	if _hero_snapshot != null:
+		return _equipment.weapon_damage(kind)
+	var weapon: ItemDefinition = ItemCatalog.get_item(equipped_weapon_id) if not equipped_weapon_id.is_empty() else null
+	return weapon.weapon_damage if weapon != null and weapon.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON and weapon.weapon_kind == kind else 0
 
 
-func melee_attack_value() -> float:
-	return BattleMath.melee_power(weapon_damage(ItemDefinition.WeaponKind.MELEE), int(effects.get("strength_bonus", 0)), strength)
+func melee_attack_value(include_equipment: bool = true) -> float:
+	var item_damage: int = weapon_damage(ItemDefinition.WeaponKind.MELEE) if include_equipment else 0
+	return BattleMath.melee_power(item_damage, int(effects.get("strength_bonus", 0)), strength)
 
 
-func ranged_attack_value() -> float:
-	return BattleMath.ranged_power(weapon_damage(ItemDefinition.WeaponKind.RANGED), int(effects.get("strength_bonus", 0)), effective_agility())
+func ranged_attack_value(include_equipment: bool = true) -> float:
+	var item_damage: int = weapon_damage(ItemDefinition.WeaponKind.RANGED) if include_equipment else 0
+	return BattleMath.ranged_power(item_damage, int(effects.get("strength_bonus", 0)), effective_agility())
 
 
 func melee_attack() -> int:

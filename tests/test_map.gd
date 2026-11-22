@@ -264,12 +264,12 @@ func _initialize() -> void:
 
 	var combat := CombatSession.new()
 	assert(combat.enemy_health == 3)
-	assert(combat.hero_punch() == 1)
+	assert(combat.hero_attack() == 1)
 	assert(not combat.is_victory)
-	assert(combat.hero_punch() == 1)
-	assert(combat.hero_punch() == 1 and combat.is_victory)
+	assert(combat.hero_attack() == 1)
+	assert(combat.hero_attack() == 1 and combat.is_victory)
 	assert(combat.enemy_health == 0)
-	assert(combat.hero_punch() == 0) # Победа выдаётся только однажды.
+	assert(combat.hero_attack() == 0) # Победа выдаётся только однажды.
 	assert(encounter.win_pending_encounter())
 	assert(not encounter.has_pending_encounter())
 	assert(encounter.is_entity_removed(monster))

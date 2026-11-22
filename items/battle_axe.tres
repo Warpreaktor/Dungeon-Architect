@@ -1,7 +1,9 @@
-[gd_resource type="Resource" script_class="ItemDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/item_definition.gd" id="1_script"]
 [ext_resource type="Texture2D" path="res://assets/icons/battle_axe.png" id="2_icon"]
+
+[ext_resource type="Texture2D" path="res://assets/abilities/monster_weapons/battle_axe.png" id="9_attack_icon"]
 
 [resource]
 script = ExtResource("1_script")
@@ -12,3 +14,4 @@ category = 3
 stackable = false
 equipment_slot = 1
 weapon_damage = 4
+monster_attack_icon = ExtResource("9_attack_icon")

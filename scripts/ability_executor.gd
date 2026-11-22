@@ -175,9 +175,9 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 	var equipment_and_stat: float = 0.0
 	match ability.damage_delivery:
 		AbilityDefinition.DamageDelivery.MELEE:
-			equipment_and_stat = actor.melee_attack_value()
+			equipment_and_stat = actor.melee_attack_value(actor.team_id != "enemies" or MonsterWeaponStrike.is_weapon_strike(ability.ability_id))
 		AbilityDefinition.DamageDelivery.RANGED:
-			equipment_and_stat = actor.ranged_attack_value()
+			equipment_and_stat = actor.ranged_attack_value(actor.team_id != "enemies" or MonsterWeaponStrike.is_weapon_strike(ability.ability_id))
 		# Для магии пока нет характеристики, применяем только мощность эффекта.
 	var base: float = equipment_and_stat + float(effect.amount)
 	var multiplier: float = effect.effective_damage_multiplier()

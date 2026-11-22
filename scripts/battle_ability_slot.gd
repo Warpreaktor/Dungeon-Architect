@@ -9,7 +9,7 @@ signal info_requested(content: String)
 const ATTACK_ICON: Texture2D = preload("res://assets/hud/attack.png")
 const DEFENSE_ICON: Texture2D = preload("res://assets/hud/shield.png")
 const SUPPORT_ICON: Texture2D = preload("res://assets/hud/heart.png")
-const SPECIAL_ICON: Texture2D = preload("res://assets/hud/fist.png")
+const SPECIAL_ICON: Texture2D = preload("res://assets/hud/attack.png")
 const INFO_BUTTON_SIDE: float = 30.0
 
 

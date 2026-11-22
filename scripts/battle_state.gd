@@ -216,6 +216,7 @@ func _reconfigure_enemy_for_actor(actor_id: String) -> void:
 	if profile_id == active_profile and (profile == null or not definition.reconsider_tactics_each_phase):
 		return
 	var planned: Array[String] = initial_chain.duplicate() if profile == null else MonsterAiPlanner.planned_chain(profile, actor, rng)
+	planned = MonsterWeaponStrike.replace_default_card(definition, actor, planned)
 	if planned.is_empty():
 		return
 	if actor_id == enemy_id:

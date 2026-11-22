@@ -71,8 +71,6 @@ func hero_block() -> Dictionary:
 	return result
 
 
-func hero_punch() -> int:
-	return hero_attack()
 
 
 func prepare_manual_combat(hero_chain: Array[String]) -> Dictionary:

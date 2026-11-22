@@ -42,6 +42,8 @@ static func _has_equipment(participant: BattleParticipant, slot: int) -> bool:
 
 
 static func get_ability(ability_id: String) -> AbilityDefinition:
+	if MonsterWeaponStrike.is_weapon_strike(ability_id):
+		return MonsterWeaponStrike.make_ability(ability_id)
 	return ResourceCatalog.load_by_id(ABILITY_DIRECTORY, ability_id) as AbilityDefinition
 
 

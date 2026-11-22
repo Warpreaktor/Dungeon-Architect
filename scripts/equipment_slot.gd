@@ -4,17 +4,34 @@ extends PanelContainer
 signal selected(slot_id: String)
 signal transferred(from_kind: String, from_slot: Variant, to_kind: String, to_slot: Variant)
 
+const EMPTY_ICONS: Dictionary = {
+	"head": preload("res://assets/icons/equipment_slots/helmet.png"),
+	"neck": preload("res://assets/icons/equipment_slots/amulet.png"),
+	"body": preload("res://assets/icons/equipment_slots/armor.png"),
+	"main_hand": preload("res://assets/icons/equipment_slots/sword.png"),
+	"off_hand": preload("res://assets/icons/equipment_slots/shield.png"),
+	"ring_left": preload("res://assets/icons/equipment_slots/ring.png"),
+	"ring_right": preload("res://assets/icons/equipment_slots/ring.png"),
+	"belt": preload("res://assets/icons/equipment_slots/belt.png"),
+	"gloves": preload("res://assets/icons/equipment_slots/gloves.png"),
+	"boots": preload("res://assets/icons/equipment_slots/boots.png")
+}
+const EMPTY_ICON_SHADER: Shader = preload("res://shaders/empty_equipment_icon.gdshader")
+
 var slot_id: String = ""
 var item_id: String = ""
 var session: GameSession
 var _icon: TextureRect
 var _glyph: Label
+var _empty_icon_material: ShaderMaterial
 var _last_visual_state: int = -1
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	custom_minimum_size = Vector2(58, 58)
+	_empty_icon_material = ShaderMaterial.new()
+	_empty_icon_material.shader = EMPTY_ICON_SHADER
 	_icon = TextureRect.new()
 	_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -41,8 +58,10 @@ func configure(next_slot_id: String, next_session: GameSession) -> void:
 	session = next_session
 	item_id = session.equipment_item_id(slot_id) if session != null else ""
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
-	_icon.texture = item.icon if item != null else null
-	_glyph.text = str(EquipmentSlotRules.SYMBOLS.get(slot_id, "")) if item == null else ""
+	var placeholder: Texture2D = EMPTY_ICONS.get(slot_id) as Texture2D
+	_icon.texture = item.icon if item != null else placeholder
+	_icon.material = null if item != null else _empty_icon_material
+	_glyph.text = "" if item != null or placeholder != null else str(EquipmentSlotRules.SYMBOLS.get(slot_id, ""))
 	_style(false)
 
 

@@ -47,6 +47,15 @@ var _floor_states: Dictionary = {} # Состояние посещённых к�
 
 
 static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID, open_map: bool = false) -> GameSession:
+	return start_for_party(map_ref, [hero_id], open_map)
+
+
+static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_map: bool = false) -> GameSession:
+	if hero_ids.is_empty() or hero_ids.size() > MAX_PARTY_SIZE:
+		return null
+	for hero_id in hero_ids:
+		if not HeroCatalog.has(hero_id):
+			return null
 	if map_ref == null:
 		return null
 	var spawn := map_ref.find_entity_position("player_spawn")
@@ -54,8 +63,9 @@ static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT
 		return null
 	var session := GameSession.new()
 	session.map_data = map_ref
-	session.hero = HeroState.new(HeroCatalog.get_hero(hero_id))
-	session.party.append(session.hero)
+	for hero_id in hero_ids:
+		session.party.append(HeroState.new(HeroCatalog.get_hero(hero_id)))
+	session.hero = session.party[0]
 	session.trap_random.randomize()
 	session.player_pos = spawn
 	session.debug_open_map = open_map

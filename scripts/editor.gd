@@ -80,8 +80,7 @@ var map_data: DungeonMap
 var standalone_game: bool = false
 var _startup_game_map: DungeonMap
 var _startup_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
-## Герой исключительно для тестового прохождения из редактора.
-var _test_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
+var _test_party_ids: Array[String] = [HeroCatalog.DEFAULT_HERO_ID]
 var _editor_header: PanelContainer
 var _floating_console: FloatingDebugConsole
 var _arsenal_view: BattleArsenalView
@@ -193,7 +192,7 @@ func _ready() -> void:
 	_reachability_refresh_timer.wait_time = 0.15
 	_reachability_refresh_timer.timeout.connect(_refresh_reachability)
 	add_child(_reachability_refresh_timer)
-	_load_test_hero_selection()
+	_load_test_party_selection()
 	_touch_info = TouchInfoOverlay.new()
 	add_child(_touch_info)
 	_build_interface()
@@ -582,8 +581,8 @@ func _create_dialogs() -> void:
 	_test_hero_panel = EditorTestHeroPanel.new()
 	_test_hero_panel.name = "Тестирование"
 	_settings_tabs.add_child(_test_hero_panel)
-	_test_hero_panel.select_hero(_test_hero_id)
-	_test_hero_panel.hero_selected.connect(_on_test_hero_selected)
+	_test_hero_panel.select_party(_test_party_ids)
+	_test_hero_panel.party_selected.connect(_on_test_party_selected)
 
 	# Диагностика остаётся доступной по запросу, но не забирает ширину у карты.
 	_issues_dialog = PopupPanel.new()
@@ -979,30 +978,47 @@ func _on_settings_option_selected(id: int) -> void:
 			_settings_dialog.popup_centered_clamped(Vector2i(490, 260))
 		SETTINGS_TEST_HERO:
 			_settings_tabs.current_tab = 1
-			_test_hero_panel.select_hero(_test_hero_id)
+			_test_hero_panel.select_party(_test_party_ids)
 			_settings_dialog.popup_centered_clamped(Vector2i(490, 260))
 
 
-func _on_test_hero_selected(selected_id: String) -> void:
-	if not HeroCatalog.has(selected_id):
+func _on_test_party_selected(hero_ids: Array[String]) -> void:
+	if hero_ids.is_empty() or hero_ids.size() > 2:
 		return
-	_test_hero_id = selected_id
+	for hero_id in hero_ids:
+		if not HeroCatalog.has(hero_id):
+			return
+	if hero_ids.size() == 2 and hero_ids[0] == hero_ids[1]:
+		return
+	_test_party_ids = hero_ids.duplicate()
 	var config := ConfigFile.new()
 	config.load(EDITOR_SETTINGS_PATH)
-	config.set_value("editor", "test_hero_id", _test_hero_id)
+	config.set_value("editor", "test_party_ids", _test_party_ids)
 	if config.save(EDITOR_SETTINGS_PATH) != OK:
-		_set_status("Не удалось сохранить тестового героя")
+		_set_status("Не удалось сохранить состав тестового отряда")
 
 
-func _load_test_hero_selection() -> void:
+func _load_test_party_selection() -> void:
 	if standalone_game:
 		return
 	var config := ConfigFile.new()
 	if config.load(EDITOR_SETTINGS_PATH) != OK:
 		return
-	var saved_id: String = str(config.get_value("editor", "test_hero_id", HeroCatalog.DEFAULT_HERO_ID))
-	if HeroCatalog.has(saved_id):
-		_test_hero_id = saved_id
+	var saved_ids: Variant = config.get_value("editor", "test_party_ids", [])
+	var valid_ids: Array[String] = []
+	if saved_ids is Array:
+		for entry in saved_ids:
+			var hero_id: String = str(entry)
+			if HeroCatalog.has(hero_id) and not valid_ids.has(hero_id):
+				valid_ids.append(hero_id)
+			if valid_ids.size() >= 2:
+				break
+	if valid_ids.is_empty():
+		var legacy_id: String = str(config.get_value("editor", "test_hero_id", HeroCatalog.DEFAULT_HERO_ID))
+		if HeroCatalog.has(legacy_id):
+			valid_ids.append(legacy_id)
+	if not valid_ids.is_empty():
+		_test_party_ids = valid_ids
 
 
 func _open_issues_dialog() -> void:
@@ -1897,11 +1913,11 @@ func _start_play_mode() -> void:
 	_settings_dialog.hide()
 	_clear_reachability()
 	_pending_next_map = null
-	var session := GameSession.start_for(
-		map_data,
-		_startup_hero_id if standalone_game else _test_hero_id,
-		false
-	)
+	var session: GameSession
+	if standalone_game:
+		session = GameSession.start_for(map_data, _startup_hero_id, false)
+	else:
+		session = GameSession.start_for_party(map_data, _test_party_ids, false)
 	if session == null:
 		_set_status("Нельзя начать тест: поставь на карте точку старта героя.")
 		return

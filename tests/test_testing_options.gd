@@ -21,6 +21,19 @@ func _initialize() -> void:
 	assert(test_session.is_revealed(9, 9))
 	assert(test_session.is_visible(9, 9))
 
+	var pair: Array[String] = ["volcha", "petushan"]
+	var party_session := GameSession.start_for_party(dungeon, pair)
+	assert(party_session != null)
+	assert(party_session.party_members().size() == 2)
+	assert(party_session.hero == party_session.party_members()[0])
+	assert(party_session.party_members()[0].definition.hero_id == "volcha")
+	assert(party_session.party_members()[1].definition.hero_id == "petushan")
+	assert(party_session.party_members()[0] != party_session.party_members()[1])
+	assert(not party_session.debug_open_map)
+	assert(GameSession.start_for_party(dungeon, []) == null)
+	assert(GameSession.start_for_party(dungeon, ["unknown"]) == null)
+	assert(JSON.stringify(dungeon.to_dict()) == original_json)
+
 	var next_normal_session := GameSession.start_for(dungeon)
 	assert(not next_normal_session.debug_open_map)
 	assert(not next_normal_session.is_revealed(9, 9))

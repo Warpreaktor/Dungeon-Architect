@@ -1,15 +1,15 @@
 class_name EditorTestHeroPanel
 extends MarginContainer
 
-signal hero_selected(hero_id: String)
+signal party_selected(hero_ids: Array[String])
 
 const PANEL_MARGIN: int = 12
 const PROPERTY_SPACING: int = 12
 const LABEL_FONT_SIZE: int = 15
-const HINT_FONT_SIZE: int = 13
 const HERO_SELECTOR_HEIGHT: int = 44
 
 var selector: OptionButton
+var second_selector: OptionButton
 
 
 func _init() -> void:
@@ -20,39 +20,80 @@ func _init() -> void:
 	properties.add_theme_constant_override("separation", PROPERTY_SPACING)
 	add_child(properties)
 	var title := Label.new()
-	title.text = "Тестовый герой"
+	title.text = "Отряд для тестирования"
 	title.add_theme_font_size_override("font_size", LABEL_FONT_SIZE)
 	title.add_theme_color_override("font_color", Color("#d5e0e7"))
 	properties.add_child(title)
-	selector = OptionButton.new()
-	selector.name = "TestHeroSelect"
-	selector.custom_minimum_size.y = HERO_SELECTOR_HEIGHT
-	selector.tooltip_text = "Герой для временного тестового прохождения карты"
+	var first_label := Label.new()
+	first_label.text = "Первый герой"
+	properties.add_child(first_label)
+	selector = _make_selector("TestHeroSelect")
+	properties.add_child(selector)
+	var second_label := Label.new()
+	second_label.text = "Второй герой"
+	properties.add_child(second_label)
+	second_selector = _make_selector("TestSecondHeroSelect", true)
+	properties.add_child(second_selector)
+
+
+func _make_selector(node_name: String, optional: bool = false) -> OptionButton:
+	var control := OptionButton.new()
+	control.name = node_name
+	control.custom_minimum_size.y = HERO_SELECTOR_HEIGHT
+	if optional:
+		control.add_item("Без второго героя")
+		control.set_item_metadata(0, "")
 	for hero_id in HeroCatalog.list_ids():
 		var definition: HeroDefinition = HeroCatalog.get_hero(hero_id)
 		if definition == null:
 			continue
-		selector.add_item(definition.display_name)
-		selector.set_item_metadata(selector.item_count - 1, hero_id)
-	selector.item_selected.connect(_on_selected)
-	properties.add_child(selector)
-	var info := Label.new()
-	info.text = "Выбор действует только при запуске «Тест» и не сохраняется в карте."
-	info.add_theme_font_size_override("font_size", HINT_FONT_SIZE)
-	info.add_theme_color_override("font_color", Color("#9ab0bf"))
-	properties.add_child(info)
+		control.add_item(definition.display_name)
+		control.set_item_metadata(control.item_count - 1, hero_id)
+	control.item_selected.connect(_on_selected)
+	return control
+
+
+func select_party(hero_ids: Array[String]) -> void:
+	var first_id: String = hero_ids[0] if not hero_ids.is_empty() else HeroCatalog.DEFAULT_HERO_ID
+	_select_id(selector, first_id)
+	var second_id: String = hero_ids[1] if hero_ids.size() > 1 else ""
+	_select_id(second_selector, second_id)
+	_refresh_second_selector()
 
 
 func select_hero(hero_id: String) -> void:
-	for index in range(selector.item_count):
-		if str(selector.get_item_metadata(index)) == hero_id:
-			selector.select(index)
+	select_party([hero_id])
+
+
+func _select_id(control: OptionButton, hero_id: String) -> void:
+	for index in range(control.item_count):
+		if str(control.get_item_metadata(index)) == hero_id:
+			control.select(index)
 			return
-	if selector.item_count > 0:
-		selector.select(0)
+	if control.item_count > 0:
+		control.select(0)
 
 
-func _on_selected(index: int) -> void:
-	if index < 0 or index >= selector.item_count:
-		return
-	hero_selected.emit(str(selector.get_item_metadata(index)))
+func selected_party() -> Array[String]:
+	var heroes: Array[String] = []
+	var first_id: String = str(selector.get_selected_metadata())
+	if HeroCatalog.has(first_id):
+		heroes.append(first_id)
+	var second_id: String = str(second_selector.get_selected_metadata())
+	if HeroCatalog.has(second_id) and second_id != first_id:
+		heroes.append(second_id)
+	return heroes
+
+
+func _refresh_second_selector() -> void:
+	var first_id: String = str(selector.get_selected_metadata())
+	for index in range(second_selector.item_count):
+		var second_id: String = str(second_selector.get_item_metadata(index))
+		second_selector.set_item_disabled(index, second_id == first_id)
+	if str(second_selector.get_selected_metadata()) == first_id:
+		_select_id(second_selector, "")
+
+
+func _on_selected(_index: int) -> void:
+	_refresh_second_selector()
+	party_selected.emit(selected_party())

@@ -44,6 +44,8 @@ func _run() -> void:
 	assert(tabs.get_tab_title(1) == "Тестирование")
 	var test_hero_select := tabs.get_node("Тестирование/TestProperties/TestHeroSelect") as OptionButton
 	assert(test_hero_select != null and test_hero_select.item_count == HeroCatalog.list_ids().size())
+	var second_hero_select := tabs.get_node("Тестирование/TestProperties/TestSecondHeroSelect") as OptionButton
+	assert(second_hero_select != null and second_hero_select.item_count == HeroCatalog.list_ids().size() + 1)
 	assert(settings_menu.get_popup().get_item_index(2) >= 0)
 	assert(tabs.get_tab_title(0) == "Свойства карты")
 	var properties := tabs.get_node("Свойства карты/MapProperties") as VBoxContainer

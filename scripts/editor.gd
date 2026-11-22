@@ -421,7 +421,7 @@ func _build_interface() -> void:
 	_inventory_view = INVENTORY_VIEW_SCENE.instantiate() as InventoryView
 	_inventory_view.closed.connect(_on_inventory_closed)
 	_inventory_view.item_use_requested.connect(_on_inventory_use_requested)
-	_inventory_view.equipment_requested.connect(_on_inventory_equipment_requested)
+	_inventory_view.equipment_changed.connect(_refresh_stats)
 	add_child(_inventory_view)
 	_game_notice = GAME_NOTICE_SCENE.instantiate() as GameNotice
 	_game_notice.visible = false
@@ -2034,21 +2034,6 @@ func _on_inventory_use_requested(item_id: String) -> void:
 			_canvas.center_on_cell(game_session.player_pos)
 		_canvas.queue_redraw()
 		_refresh_map_overlays()
-
-
-func _on_inventory_equipment_requested(item_id: String, equip: bool) -> void:
-	if not is_play_mode or game_session == null or not _inventory_view.visible:
-		return
-	var changed: bool = game_session.equip_item(item_id) if equip else game_session.unequip_item(item_id)
-	if not changed:
-		if equip:
-			var weapon: ItemDefinition = ItemCatalog.get_item(game_session.hero.equipped_weapon_id)
-			var item: ItemDefinition = ItemCatalog.get_item(item_id)
-			if item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD and weapon != null and weapon.two_handed:
-				_inventory_view.show_equipment_result(item_id, "Нельзя надеть щит: герой держит двуручное оружие.")
-		return
-	_inventory_view.show_equipment_result(item_id)
-	_refresh_stats()
 
 
 func _show_game_event(message: String) -> void:

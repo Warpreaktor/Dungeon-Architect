@@ -64,6 +64,18 @@ static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT
 	return session
 
 
+func equipment_item_id(slot_id: String) -> String:
+	if hero == null:
+		return ""
+	match slot_id:
+		"main_hand":
+			return hero.equipped_weapon_id
+		"off_hand":
+			return hero.equipped_shield_id
+		_:
+			return str(hero.equipped_accessories.get(slot_id, ""))
+
+
 func inventory_slot_ids() -> Array[String]:
 	if _inventory_order.size() != INVENTORY_SLOT_COUNT:
 		_inventory_order.resize(INVENTORY_SLOT_COUNT)
@@ -77,6 +89,10 @@ func inventory_slot_ids() -> Array[String]:
 		var count: int = int(carried_items[key])
 		if count > 0:
 			remaining[item_id] = 1 if item.stackable else count
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		var item_id: String = equipment_item_id(slot_id)
+		if not item_id.is_empty():
+			remaining[item_id] = maxi(0, int(remaining.get(item_id, 0)) - 1)
 	for index in range(_inventory_order.size()):
 		var item_id: String = _inventory_order[index]
 		if item_id.is_empty():
@@ -100,15 +116,111 @@ func inventory_slot_ids() -> Array[String]:
 
 
 func swap_inventory_slots(source: int, destination: int) -> bool:
-	if source < 0 or source >= INVENTORY_SLOT_COUNT or destination < 0 or destination >= INVENTORY_SLOT_COUNT:
+	return transfer_inventory_item("bag", source, "bag", destination)
+
+
+func _equipment_snapshot() -> Dictionary:
+	var current: Dictionary = {}
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		current[slot_id] = equipment_item_id(slot_id)
+	return current
+
+
+func _can_equip_layout(equipped: Dictionary) -> bool:
+	var weapon_id: String = str(equipped.get("main_hand", ""))
+	var weapon: ItemDefinition = ItemCatalog.get_item(weapon_id)
+	if weapon != null and weapon.two_handed and not str(equipped.get("off_hand", "")).is_empty():
 		return false
-	inventory_slot_ids()
-	if _inventory_order[source].is_empty():
-		return false
-	var existing: String = _inventory_order[destination]
-	_inventory_order[destination] = _inventory_order[source]
-	_inventory_order[source] = existing
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		var item_id: String = str(equipped.get(slot_id, ""))
+		if not item_id.is_empty() and not EquipmentSlotRules.accepts(slot_id, ItemCatalog.get_item(item_id)):
+			return false
 	return true
+
+
+func can_transfer_inventory_item(from_kind: String, from_slot: Variant, to_kind: String, to_slot: Variant) -> bool:
+	return _planned_inventory_transfer(from_kind, from_slot, to_kind, to_slot).size() > 0
+
+
+func transfer_inventory_item(from_kind: String, from_slot: Variant, to_kind: String, to_slot: Variant) -> bool:
+	var plan: Dictionary = _planned_inventory_transfer(from_kind, from_slot, to_kind, to_slot)
+	if plan.is_empty():
+		return false
+	_inventory_order = plan["bag"]
+	var equipped: Dictionary = plan["equipment"]
+	hero.equipped_weapon_id = str(equipped["main_hand"])
+	hero.equipped_shield_id = str(equipped["off_hand"])
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		if slot_id != "main_hand" and slot_id != "off_hand":
+			var item_id: String = str(equipped[slot_id])
+			if item_id.is_empty():
+				hero.equipped_accessories.erase(slot_id)
+			else:
+				hero.equipped_accessories[slot_id] = item_id
+	hero._recalculate_equipment_stats()
+	return true
+
+
+func _planned_inventory_transfer(from_kind: String, from_slot: Variant, to_kind: String, to_slot: Variant) -> Dictionary:
+	if hero == null or not (from_kind in ["bag", "equipment"]) or not (to_kind in ["bag", "equipment"]):
+		return {}
+	if (from_kind == "bag" and typeof(from_slot) != TYPE_INT) or (to_kind == "bag" and typeof(to_slot) != TYPE_INT):
+		return {}
+	var bag: Array[String] = inventory_slot_ids()
+	var equipped: Dictionary = _equipment_snapshot()
+	var source: String = ""
+	var target: String = ""
+	var source_index: int = -1
+	var target_index: int = -1
+	var source_slot: String = ""
+	var target_slot: String = ""
+	if from_kind == "bag":
+		source_index = int(from_slot)
+		if source_index < 0 or source_index >= bag.size():
+			return {}
+		source = bag[source_index]
+	else:
+		source_slot = str(from_slot)
+		if not equipped.has(source_slot):
+			return {}
+		source = str(equipped[source_slot])
+	if source.is_empty():
+		return {}
+	if to_kind == "bag":
+		target_index = int(to_slot)
+		if target_index < 0 or target_index >= bag.size():
+			return {}
+		target = bag[target_index]
+	else:
+		target_slot = str(to_slot)
+		if not equipped.has(target_slot):
+			return {}
+		target = str(equipped[target_slot])
+	if from_kind == to_kind and from_slot == to_slot:
+		return {}
+	if to_kind == "equipment" and not EquipmentSlotRules.accepts(target_slot, ItemCatalog.get_item(source)):
+		return {}
+	if from_kind == "equipment" and not target.is_empty() and not EquipmentSlotRules.accepts(source_slot, ItemCatalog.get_item(target)):
+		return {}
+	if from_kind == "bag":
+		bag[source_index] = target
+	else:
+		equipped[source_slot] = target
+	if to_kind == "bag":
+		bag[target_index] = source
+	else:
+		equipped[target_slot] = source
+	var current_weapon: ItemDefinition = ItemCatalog.get_item(str(equipped["main_hand"]))
+	if current_weapon != null and current_weapon.two_handed and not str(equipped["off_hand"]).is_empty():
+		var off_hand: String = str(equipped["off_hand"])
+		var free_index: int = bag.find("")
+		if free_index < 0:
+			return {}
+		bag[free_index] = off_hand
+		equipped["off_hand"] = ""
+	if not _can_equip_layout(equipped):
+		return {}
+	return {"bag": bag, "equipment": equipped}
 
 
 func party_members() -> Array[HeroState]:
@@ -642,7 +754,7 @@ func use_combat_item(item_id: String, battle: BattleState) -> Dictionary:
 
 
 ## Инвентарь лишь запрашивает действие: предметы и здоровье изменяет игровая сессия.
-## Снаряжение остаётся в рюкзаке и не расходуется при надевании.
+## Снаряжение не расходуется при надевании.
 func equip_item(item_id: String) -> bool:
 	if hero == null or int(carried_items.get(item_id, 0)) <= 0:
 		return false

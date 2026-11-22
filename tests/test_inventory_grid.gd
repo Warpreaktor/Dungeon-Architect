@@ -15,7 +15,8 @@ func _initialize() -> void:
 	session._receive_item("sword", 2)
 	var slots: Array[String] = session.inventory_slot_ids()
 	assert(slots.count("key") == 1)
-	assert(slots.count("sword") == 2)
+	assert(slots.count("sword") == 1)
+	assert(session.equipment_item_id("main_hand") == "sword")
 	var index: int = slots.find("key")
 	assert(index >= 0)
 	assert(session.swap_inventory_slots(index, 39))
@@ -28,7 +29,7 @@ func _initialize() -> void:
 	assert(session.inventory_slot_ids()[39] == "key")
 	assert(session._remove_carried_item("key", 1))
 	assert(session.inventory_slot_ids()[39].is_empty())
-	assert(session.inventory_slot_ids().count("sword") == 2)
+	assert(session.inventory_slot_ids().count("sword") == 1)
 
 	var view_scene := load("res://scenes/inventory_view.tscn") as PackedScene
 	assert(view_scene != null)

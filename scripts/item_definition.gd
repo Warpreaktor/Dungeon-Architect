@@ -4,7 +4,7 @@ extends Resource
 ## Статическое описание предмета; изменяемое количество хранится в игровой сессии.
 
 enum Category { QUEST, CONSUMABLE, CURRENCY, EQUIPMENT }
-enum EquipmentSlot { NONE, WEAPON, SHIELD }
+enum EquipmentSlot { NONE, WEAPON, SHIELD, HEAD, BODY, NECK, RING, BELT, GLOVES, BOOTS }
 enum WeaponKind { MELEE, RANGED }
 enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 

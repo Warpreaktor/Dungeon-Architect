@@ -21,6 +21,7 @@ var saved_action_slots: Array[String] = []
 var bonus_action_slots: int = 0
 var equipped_weapon_id: String = ""
 var equipped_shield_id: String = ""
+var equipped_accessories: Dictionary = {}
 ## Состояние экземпляров щитов: каждый найденный щит имеет собственную прочность.
 var shield_durabilities: Dictionary = {} # item_id -> Array[int]
 var last_shield_broken: String = ""
@@ -369,6 +370,7 @@ func copy_for_battle() -> HeroState:
 	copy.bonus_action_slots = bonus_action_slots
 	copy.equipped_weapon_id = equipped_weapon_id
 	copy.equipped_shield_id = equipped_shield_id
+	copy.equipped_accessories = equipped_accessories.duplicate(true)
 	copy.shield_durabilities = shield_durabilities.duplicate(true)
 	copy.last_shield_broken = last_shield_broken
 	copy.strength_bonus = strength_bonus
@@ -390,6 +392,7 @@ func apply_battle_result(snapshot: HeroState) -> void:
 	health = snapshot.health
 	equipped_weapon_id = snapshot.equipped_weapon_id
 	equipped_shield_id = snapshot.equipped_shield_id
+	equipped_accessories = snapshot.equipped_accessories.duplicate(true)
 	shield_durabilities = snapshot.shield_durabilities.duplicate(true)
 	last_shield_broken = snapshot.last_shield_broken
 	strength_bonus = snapshot.strength_bonus

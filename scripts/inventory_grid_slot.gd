@@ -3,13 +3,16 @@ extends PanelContainer
 
 signal activated(index: int)
 signal moved(from_index: int, to_index: int)
+signal transferred(from_kind: String, from_slot: Variant, to_kind: String, to_slot: Variant)
 
 var slot_index: int = -1
 var item_id: String = ""
+var session: GameSession
 var _icon: TextureRect
 var _count: Label
 var _selected: bool = false
 var _cell_size: float = 54.0
+var _drag_drop_state: int = 0
 
 
 func _ready() -> void:
@@ -35,7 +38,8 @@ func _ready() -> void:
 	_apply_style()
 
 
-func configure(index: int, definition: ItemDefinition, quantity: int, selected: bool, cell_size: float) -> void:
+func configure(index: int, definition: ItemDefinition, quantity: int, selected: bool, cell_size: float, next_session: GameSession = null) -> void:
+	session = next_session
 	slot_index = index
 	item_id = definition.item_id if definition != null else ""
 	_selected = selected
@@ -55,7 +59,7 @@ func configure(index: int, definition: ItemDefinition, quantity: int, selected: 
 func _apply_style() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.18, 0.24, 0.29, 1) if _selected else Color(0.055, 0.085, 0.12, 1)
-	style.border_color = Color(0.93, 0.73, 0.38, 1) if _selected else Color(0.3, 0.4, 0.46, 1)
+	style.border_color = Color(0.92, 0.73, 0.36) if _drag_drop_state == 1 else (Color(0.82, 0.28, 0.3) if _drag_drop_state == 2 else (Color(0.93, 0.73, 0.38, 1) if _selected else Color(0.3, 0.4, 0.46, 1)))
 	style.set_border_width_all(2 if _selected else 1)
 	style.set_corner_radius_all(4)
 	add_theme_stylebox_override("panel", style)
@@ -79,12 +83,21 @@ func _get_drag_data(_at_position: Vector2) -> Variant:
 	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	preview.custom_minimum_size = Vector2(_cell_size, _cell_size)
 	set_drag_preview(preview)
-	return {"inventory_slot": slot_index}
+	return {"kind": "bag", "slot": slot_index}
 
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
-	return data is Dictionary and data.has("inventory_slot") and int(data["inventory_slot"]) != slot_index
+	var valid: bool = data is Dictionary and data.has("kind") and data.has("slot") and session != null and session.can_transfer_inventory_item(str(data["kind"]), data["slot"], "bag", slot_index)
+	_drag_drop_state = 1 if valid else 2
+	_apply_style()
+	return valid
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_DRAG_END and _icon != null:
+		_drag_drop_state = 0
+		_apply_style()
 
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:
-	moved.emit(int(data["inventory_slot"]), slot_index)
+	transferred.emit(str(data["kind"]), data["slot"], "bag", slot_index)

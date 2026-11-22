@@ -6,10 +6,10 @@ extends Button
 signal slot_selected(index: int)
 signal info_requested(content: String)
 
-const ATTACK_ICON: Texture2D = preload("res://assets/hud/attack.png")
-const DEFENSE_ICON: Texture2D = preload("res://assets/hud/shield.png")
-const SUPPORT_ICON: Texture2D = preload("res://assets/hud/heart.png")
-const SPECIAL_ICON: Texture2D = preload("res://assets/hud/attack.png")
+const ATTACK_ICON: Texture2D = preload("res://assets/icons/stats/24x24/attack.png")
+const DEFENSE_ICON: Texture2D = preload("res://assets/icons/stats/24x24/defense.png")
+const SUPPORT_ICON: Texture2D = preload("res://assets/icons/stats/24x24/health.png")
+const SPECIAL_ICON: Texture2D = preload("res://assets/icons/stats/24x24/attack.png")
 const REST_ICON: Texture2D = preload("res://assets/abilities/rest.png")
 const INFO_BUTTON_SIDE: float = 30.0
 

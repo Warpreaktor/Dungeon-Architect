@@ -17,7 +17,7 @@ signal monster_configuration_changed(entity_id: String, party: Array[String], co
 const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Прочее"]
 const CATEGORY_ICONS := {
 	"Ключи": preload("res://assets/icons/key.png"),
-	"Зелья": preload("res://assets/icons/potion.png"),
+	"Зелья": preload("res://assets/icons/stats/24x24/potion.png"),
 	"Оружие": preload("res://assets/icons/sword.png"),
 	"Щиты": preload("res://assets/icons/shield.png"),
 	"Прочее": preload("res://assets/icons/gold.png"),

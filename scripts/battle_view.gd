@@ -12,7 +12,6 @@ signal item_use_requested(item_id: String)
 @onready var _hero_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroHealthMeter
 @onready var _enemy_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyHealthMeter
 @onready var _hero_portrait: TextureRect = %HeroPortrait
-@onready var _hero_attack_icon: TextureRect = %HeroAttackIcon
 @onready var _hero_attack_value: Label = %HeroAttackValue
 @onready var _hero_strength_value: Label = %HeroStrengthValue
 @onready var _hero_agility_value: Label = %HeroAgilityValue
@@ -48,7 +47,6 @@ const MIN_CHAIN_SLOT_SIDE: float = 64.0
 
 var _combat: CombatSession
 var _defense_idle_color: Color = Color.WHITE
-var _default_attack_icon: Texture2D
 var _hero_chain: Array[String] = []
 var _enemy_chain: Array[String] = []
 ## Карты врага раскрываются навсегда в рамках одной встречи.
@@ -112,7 +110,7 @@ func _ready() -> void:
 	_sequence_scroll.resized.connect(_resize_chain_slots)
 	_enemy_sequence_scroll.resized.connect(_resize_chain_slots)
 	_combat_items_button.pressed.connect(_on_combat_items_pressed)
-	_combat_items_button.icon = preload("res://assets/icons/potion.png")
+	_combat_items_button.icon = StatIconCatalog.icon("potion")
 	_combat_items_button.tooltip_text = "Боевые зелья"
 	_combat_items_button.disabled = true
 	_build_combat_item_picker()
@@ -133,7 +131,6 @@ func _ready() -> void:
 	_touch_info.attach_tap(_enemy_dodge_value, func() -> String: return _enemy_dodge_value.tooltip_text)
 	_touch_info.attach_tap(_hero_accuracy_value, func() -> String: return "Меткость\n" + _hero_accuracy_value.text + " — итоговая меткость героя\n" + _hero_accuracy_value.tooltip_text)
 	_touch_info.attach_tap(_enemy_accuracy_value, func() -> String: return "Меткость\n" + _enemy_accuracy_value.text + " — итоговая меткость противника\n" + _enemy_accuracy_value.tooltip_text)
-	_default_attack_icon = _hero_attack_icon.texture
 	_status_presenter = BattleStatusPresenter.new(self)
 	_status_presenter.info_requested.connect(_on_status_info_requested)
 	_status_presenter.setup({"hero": _hero_portrait, "enemy": _enemy_portrait})
@@ -186,12 +183,9 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	if hero.definition != null:
 		_hero_name.text = hero.definition.display_name
 		_hero_portrait.texture = hero.definition.portrait
-	var weapon: ItemDefinition = ItemCatalog.get_item(hero.equipped_weapon_id)
-	var weapon_icon: Texture2D = weapon.icon if weapon != null else _default_attack_icon
-	_hero_attack_icon.texture = weapon_icon
 	_hero_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_hero()))
-	_hero_strength_value.text = "СИЛ %d" % hero.strength
-	_hero_agility_value.text = "ЛОВ %d" % hero.agility
+	_hero_strength_value.text = "%d" % hero.strength
+	_hero_agility_value.text = "%d" % hero.agility
 	_refresh_accuracy_and_dodge()
 	_hero_defense_value.text = str(_combat.battle_state.get_hero().block_armor)
 	_defense_idle_color = Color(0.55, 0.60, 0.67, 0.65)
@@ -200,8 +194,8 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_enemy_name.text = combat.enemy_definition.display_name
 	_enemy_chain_title.text = _enemy_name.text.to_upper()
 	_enemy_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_enemy()))
-	_enemy_strength_value.text = "СИЛ %d" % _combat.battle_state.get_enemy().strength
-	_enemy_agility_value.text = "ЛОВ %d" % _combat.battle_state.get_enemy().agility
+	_enemy_strength_value.text = "%d" % _combat.battle_state.get_enemy().strength
+	_enemy_agility_value.text = "%d" % _combat.battle_state.get_enemy().agility
 	_enemy_defense_value.text = str(_combat.battle_state.get_enemy().block_armor)
 	_enemy_defense_icon.modulate = Color(0.55, 0.60, 0.67, 0.65)
 	_enemy_portrait.texture = combat.enemy_definition.portrait if combat.enemy_definition.portrait != null else combat.enemy_definition.icon
@@ -997,8 +991,8 @@ func _set_accuracy_and_dodge_from_event(event: Dictionary) -> void:
 		return
 	var dodge_label: Label = _hero_dodge_value if target_id == "hero" else _enemy_dodge_value
 	var accuracy_label: Label = _hero_accuracy_value if target_id == "hero" else _enemy_accuracy_value
-	dodge_label.text = "УКЛ %d%%" % int(event.get("dodge_after", 0))
-	accuracy_label.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + int(event.get("accuracy_after", 0)))
+	dodge_label.text = "%d%%" % int(event.get("dodge_after", 0))
+	accuracy_label.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + int(event.get("accuracy_after", 0)))
 
 
 func _refresh_accuracy_and_dodge() -> void:
@@ -1008,12 +1002,12 @@ func _refresh_accuracy_and_dodge() -> void:
 	var enemy: BattleParticipant = _combat.battle_state.get_enemy()
 	if hero == null or enemy == null:
 		return
-	_hero_agility_value.text = "ЛОВ %d" % hero.effective_agility()
-	_enemy_agility_value.text = "ЛОВ %d" % enemy.effective_agility()
-	_hero_dodge_value.text = "УКЛ %d%%" % hero.dodge_percent()
-	_hero_accuracy_value.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + hero.accuracy_percent())
-	_enemy_dodge_value.text = "УКЛ %d%%" % enemy.dodge_percent()
-	_enemy_accuracy_value.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + enemy.accuracy_percent())
+	_hero_agility_value.text = "%d" % hero.effective_agility()
+	_enemy_agility_value.text = "%d" % enemy.effective_agility()
+	_hero_dodge_value.text = "%d%%" % hero.dodge_percent()
+	_hero_accuracy_value.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + hero.accuracy_percent())
+	_enemy_dodge_value.text = "%d%%" % enemy.dodge_percent()
+	_enemy_accuracy_value.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + enemy.accuracy_percent())
 	if _support_enemy_view != null:
 		_support_enemy_view.refresh_stats(_combat.battle_state.get_participant(BattleState.SUPPORT_ENEMY_ID))
 	_hero_dodge_value.tooltip_text = "Собственное уклонение, без учёта меткости противника"

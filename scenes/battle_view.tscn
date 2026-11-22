@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/battle_view.gd" id="1_battle_script"]
 [ext_resource type="Theme" path="res://themes/hero_hud.tres" id="2_theme"]
@@ -6,9 +6,14 @@
 [ext_resource type="Texture2D" path="res://assets/icons/player_spawn.png" id="4_hero"]
 [ext_resource type="Texture2D" path="res://assets/icons/rabbit_symbiont.png" id="5_enemy"]
 [ext_resource type="PackedScene" path="res://scenes/health_meter.tscn" id="6_health_meter"]
-[ext_resource type="Texture2D" path="res://assets/hud/attack.png" id="7_attack"]
-[ext_resource type="Texture2D" path="res://assets/hud/shield.png" id="8_shield"]
-[ext_resource type="Texture2D" path="res://assets/hud/attack.png" id="9_attack"]
+[ext_resource type="Texture2D" path="res://assets/icons/stats/24x24/attack.png" id="7_attack"]
+[ext_resource type="Texture2D" path="res://assets/icons/stats/24x24/defense.png" id="8_shield"]
+[ext_resource type="Texture2D" path="res://assets/icons/stats/24x24/attack.png" id="9_attack"]
+
+[ext_resource type="Texture2D" path="res://assets/icons/stats/24x24/strength.png" id="stat_strength"]
+[ext_resource type="Texture2D" path="res://assets/icons/stats/24x24/agility.png" id="stat_agility"]
+[ext_resource type="Texture2D" path="res://assets/icons/stats/24x24/evasion.png" id="stat_evasion"]
+[ext_resource type="Texture2D" path="res://assets/icons/stats/24x24/accuracy.png" id="stat_accuracy"]
 
 [node name="BattleView" type="Control"]
 layout_mode = 1
@@ -103,7 +108,7 @@ layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
 alignment = 1
-theme_override_constants/separation = 9
+theme_override_constants/separation = 5
 
 [node name="HeroAttackIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
@@ -121,6 +126,14 @@ mouse_filter = 2
 theme_override_font_sizes/font_size = 18
 text = "1"
 
+[node name="HeroStrengthIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("stat_strength")
+expand_mode = 1
+stretch_mode = 5
+
 [node name="HeroStrengthValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -128,6 +141,14 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "СИЛ 0"
+
+[node name="HeroAgilityIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("stat_agility")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="HeroAgilityValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
@@ -158,7 +179,15 @@ layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
 alignment = 1
-theme_override_constants/separation = 16
+theme_override_constants/separation = 5
+
+[node name="HeroEvasionIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("stat_evasion")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="HeroDodgeValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
 unique_name_in_owner = true
@@ -168,6 +197,14 @@ theme_override_colors/font_color = Color(0.52, 0.89, 0.76, 1)
 theme_override_font_sizes/font_size = 12
 text = "УКЛ 0%"
 tooltip_text = "Уклонение: Ловкость + эффекты, минус меткость атакующего"
+
+[node name="HeroAccuracyIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("stat_accuracy")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="HeroAccuracyValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
 unique_name_in_owner = true
@@ -243,7 +280,7 @@ layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
 alignment = 1
-theme_override_constants/separation = 9
+theme_override_constants/separation = 5
 
 [node name="EnemyAttackIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 custom_minimum_size = Vector2(24, 24)
@@ -260,6 +297,14 @@ mouse_filter = 2
 theme_override_font_sizes/font_size = 18
 text = "0"
 
+[node name="EnemyStrengthIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("stat_strength")
+expand_mode = 1
+stretch_mode = 5
+
 [node name="EnemyStrengthValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -267,6 +312,14 @@ mouse_filter = 2
 theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "СИЛ 0"
+
+[node name="EnemyAgilityIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("stat_agility")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="EnemyAgilityValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 unique_name_in_owner = true
@@ -297,7 +350,15 @@ layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
 alignment = 1
-theme_override_constants/separation = 16
+theme_override_constants/separation = 5
+
+[node name="EnemyEvasionIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("stat_evasion")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="EnemyDodgeValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
 unique_name_in_owner = true
@@ -307,6 +368,14 @@ theme_override_colors/font_color = Color(0.52, 0.89, 0.76, 1)
 theme_override_font_sizes/font_size = 12
 text = "УКЛ 0%"
 tooltip_text = "Уклонение: Ловкость + эффекты, минус меткость атакующего"
+
+[node name="EnemyAccuracyIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("stat_accuracy")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="EnemyAccuracyValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
 unique_name_in_owner = true

@@ -134,21 +134,25 @@ func _refresh_profile() -> void:
 	name.text = _hero.definition.display_name
 	name.add_theme_font_size_override("font_size", 20)
 	heading.add_child(name)
+	var health_row := HBoxContainer.new()
+	health_row.add_theme_constant_override("separation", 5)
+	heading.add_child(health_row)
+	StatIconCatalog.add_icon(health_row, "health", 22.0)
 	var hp := Label.new()
 	hp.text = "%d / %d HP" % [_hero.health, _hero.effective_max_health()]
 	hp.add_theme_color_override("font_color", Color("#dc7178"))
-	heading.add_child(hp)
+	health_row.add_child(hp)
 
 	var actor := BattleParticipant.from_hero(_hero)
-	var values: Array[String] = [
-		"Сила  %d" % _hero.strength,
-		"Ловкость  %d" % _hero.agility,
-		"Атака  %d" % actor.melee_attack(),
-		"Защита  %d" % actor.block_armor,
-		"Уклонение  %d%%" % actor.dodge_percent(),
-		"Меткость  %d%%" % (BattleParticipant.PERCENT_SCALE + actor.accuracy_percent()),
-		"Боевые слоты  %d" % _hero.action_slot_capacity(),
-		"Золото  %d" % _hero.gold
+	var values: Array[Dictionary] = [
+		{"stat": "strength", "text": "Сила  %d" % _hero.strength},
+		{"stat": "agility", "text": "Ловкость  %d" % _hero.agility},
+		{"stat": "attack", "text": "Атака  %d" % actor.melee_attack()},
+		{"stat": "defense", "text": "Защита  %d" % actor.block_armor},
+		{"stat": "evasion", "text": "Уклонение  %d%%" % actor.dodge_percent()},
+		{"stat": "accuracy", "text": "Меткость  %d%%" % (BattleParticipant.PERCENT_SCALE + actor.accuracy_percent())},
+		{"stat": "combat_slots", "text": "Боевые слоты  %d" % _hero.action_slot_capacity()},
+		{"stat": "gold", "text": "Золото  %d" % _hero.gold}
 	]
 	var stats := GridContainer.new()
 	stats.columns = 2
@@ -156,9 +160,13 @@ func _refresh_profile() -> void:
 	stats.add_theme_constant_override("v_separation", 10)
 	_profile_content.add_child(stats)
 	for value in values:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		stats.add_child(row)
+		StatIconCatalog.add_icon(row, str(value["stat"]))
 		var label := Label.new()
-		label.text = value
-		stats.add_child(label)
+		label.text = str(value["text"])
+		row.add_child(label)
 
 	var weapon: ItemDefinition = ItemCatalog.get_item(_hero.equipped_weapon_id)
 	var shield: ItemDefinition = ItemCatalog.get_item(_hero.equipped_shield_id)

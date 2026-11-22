@@ -9,9 +9,9 @@ const SLOT_SEPARATION: int = 3
 const CONTENT_MARGIN: int = 14
 const CONTENT_SEPARATION: int = 10
 const ROW_SEPARATION: int = 14
-const STAT_SEPARATION: int = 9
+const STAT_SEPARATION: int = 5
 const STAT_ICON_SIZE: Vector2 = Vector2(24.0, 24.0)
-const PRECISION_SEPARATION: int = 16
+const PRECISION_SEPARATION: int = 5
 const NAME_FONT_SIZE: int = 20
 const STAT_FONT_SIZE: int = 13
 const PRECISION_FONT_SIZE: int = 12
@@ -21,8 +21,8 @@ const STAT_COLOR: Color = Color(0.91, 0.76, 0.53, 1.0)
 const DODGE_COLOR: Color = Color(0.52, 0.89, 0.76, 1.0)
 const DEFENSE_IDLE_COLOR: Color = Color(0.55, 0.60, 0.67, 0.65)
 const HEALTH_METER_SCENE: PackedScene = preload("res://scenes/health_meter.tscn")
-const ATTACK_ICON: Texture2D = preload("res://assets/hud/attack.png")
-const DEFENSE_ICON: Texture2D = preload("res://assets/hud/shield.png")
+const ATTACK_ICON: Texture2D = preload("res://assets/icons/stats/24x24/attack.png")
+const DEFENSE_ICON: Texture2D = preload("res://assets/icons/stats/24x24/defense.png")
 
 var _portrait: TextureRect
 var _name: Label
@@ -78,7 +78,9 @@ func _ready() -> void:
 	column.add_child(stats)
 	_add_icon(stats, ATTACK_ICON)
 	_attack = _add_label(stats, ATTACK_FONT_SIZE)
+	_add_icon(stats, StatIconCatalog.icon("strength"))
 	_strength = _add_label(stats, STAT_FONT_SIZE, STAT_COLOR)
+	_add_icon(stats, StatIconCatalog.icon("agility"))
 	_agility = _add_label(stats, STAT_FONT_SIZE, STAT_COLOR)
 	_strength.tooltip_text = BattleAttributeTooltip.strength_description()
 	_agility.tooltip_text = BattleAttributeTooltip.agility_description()
@@ -88,7 +90,9 @@ func _ready() -> void:
 	precision.alignment = BoxContainer.ALIGNMENT_CENTER
 	precision.add_theme_constant_override("separation", PRECISION_SEPARATION)
 	column.add_child(precision)
+	_add_icon(precision, StatIconCatalog.icon("evasion"))
 	_dodge = _add_label(precision, PRECISION_FONT_SIZE, DODGE_COLOR)
+	_add_icon(precision, StatIconCatalog.icon("accuracy"))
 	_accuracy = _add_label(precision, PRECISION_FONT_SIZE, STAT_COLOR)
 	_accuracy.tooltip_text = BattleAttributeTooltip.accuracy_description()
 	_slots = HBoxContainer.new()
@@ -150,11 +154,11 @@ func refresh_stats(participant: BattleParticipant) -> void:
 	if participant == null:
 		return
 	_attack.text = str(participant.melee_attack())
-	_strength.text = "СИЛ %d" % participant.strength
-	_agility.text = "ЛОВ %d" % participant.effective_agility()
+	_strength.text = "%d" % participant.strength
+	_agility.text = "%d" % participant.effective_agility()
 	set_block(participant.block_armor)
-	_dodge.text = "УКЛ %d%%" % participant.dodge_percent()
-	_accuracy.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + participant.accuracy_percent())
+	_dodge.text = "%d%%" % participant.dodge_percent()
+	_accuracy.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + participant.accuracy_percent())
 
 
 func set_block(amount: int) -> void:
@@ -163,8 +167,8 @@ func set_block(amount: int) -> void:
 
 
 func set_precision(dodge: int, accuracy: int) -> void:
-	_dodge.text = "УКЛ %d%%" % dodge
-	_accuracy.text = "МЕТ %d%%" % (BattleParticipant.PERCENT_SCALE + accuracy)
+	_dodge.text = "%d%%" % dodge
+	_accuracy.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + accuracy)
 
 
 func reveal(index: int, ability_id: String) -> void:

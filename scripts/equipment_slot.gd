@@ -25,6 +25,8 @@ var _icon: TextureRect
 var _glyph: Label
 var _empty_icon_material: ShaderMaterial
 var _last_visual_state: int = -1
+var _drag_state_source: String = ""
+var _virtual_two_handed: bool = false
 
 
 func _ready() -> void:
@@ -58,11 +60,28 @@ func configure(next_slot_id: String, next_session: GameSession) -> void:
 	session = next_session
 	item_id = session.equipment_item_id(slot_id) if session != null else ""
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	_virtual_two_handed = false
 	var placeholder: Texture2D = EMPTY_ICONS.get(slot_id) as Texture2D
 	_icon.texture = item.icon if item != null else placeholder
 	_icon.material = null if item != null else _empty_icon_material
+	_icon.modulate = Color.WHITE
 	_glyph.text = "" if item != null or placeholder != null else str(EquipmentSlotRules.SYMBOLS.get(slot_id, ""))
+	set_drag_drop_state(0)
+
+
+func show_virtual_item(texture: Texture2D) -> void:
+	_virtual_two_handed = true
+	_icon.texture = texture
+	_icon.material = null
+	_icon.modulate = Color(0.62, 0.66, 0.7, 0.73)
+	_glyph.text = ""
+	_last_visual_state = -1
 	_style(false)
+
+
+func set_drag_drop_state(state: int, source: String = "") -> void:
+	_drag_state_source = source if state != 0 else ""
+	_style(state == 1, state == 2)
 
 
 func _style(highlight: bool, invalid: bool = false) -> void:
@@ -71,7 +90,7 @@ func _style(highlight: bool, invalid: bool = false) -> void:
 		return
 	_last_visual_state = state
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.13, 0.24, 0.29, 0.95) if highlight else Color(0.06, 0.09, 0.14, 0.97)
+	style.bg_color = Color(0.13, 0.24, 0.29, 0.95) if highlight else (Color(0.075, 0.105, 0.15, 0.97) if _virtual_two_handed else Color(0.06, 0.09, 0.14, 0.97))
 	style.border_color = Color(0.82, 0.29, 0.30) if invalid else (Color(0.9, 0.72, 0.38) if highlight else Color(0.36, 0.49, 0.57))
 	style.set_border_width_all(2 if highlight else 1)
 	style.set_corner_radius_all(7)
@@ -101,13 +120,20 @@ func _get_drag_data(_pos: Vector2) -> Variant:
 
 func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
 	var accepted: bool = data is Dictionary and data.has("kind") and data.has("slot") and session != null and session.can_transfer_inventory_item(str(data["kind"]), data["slot"], "equipment", slot_id)
-	_style(accepted, not accepted)
+	set_drag_drop_state(1 if accepted else 2, "mouse")
 	return accepted
 
 
+func _process(_delta: float) -> void:
+	if _drag_state_source != "mouse":
+		return
+	if not get_viewport().gui_is_dragging() or not get_global_rect().has_point(get_global_mouse_position()):
+		set_drag_drop_state(0)
+
+
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_DRAG_END and _icon != null:
-		_style(false)
+	if what == NOTIFICATION_DRAG_END:
+		set_drag_drop_state(0)
 
 
 func _drop_data(_pos: Vector2, data: Variant) -> void:

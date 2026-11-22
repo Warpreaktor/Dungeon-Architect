@@ -32,7 +32,6 @@ func _ready() -> void:
 		slot.transferred.connect(func(kind: String, origin: Variant, dest_kind: String, dest: Variant) -> void: item_transferred.emit(kind, origin, dest_kind, dest))
 		slots[slot_id] = slot
 	resized.connect(_layout_slots)
-	_apply_two_handed_shadow()
 	_layout_slots()
 
 
@@ -42,13 +41,14 @@ func show_hero(session: GameSession) -> void:
 	for slot_id in slots:
 		var slot: EquipmentSlotControl = slots[slot_id]
 		slot.configure(str(slot_id), session)
+	_apply_two_handed_shadow()
 	_layout_slots()
 
 
 func _apply_two_handed_shadow() -> void:
 	if _session == null or _session.hero == null:
 		return
-	var off_hand: EquipmentSlot = slots.get("off_hand") as EquipmentSlot
+	var off_hand: EquipmentSlotControl = slots.get("off_hand") as EquipmentSlotControl
 	if off_hand == null or not off_hand.item_id.is_empty():
 		return
 	var weapon: ItemDefinition = ItemCatalog.get_item(_session.hero.equipped_weapon_id)

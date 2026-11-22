@@ -13,6 +13,7 @@ var _count: Label
 var _selected: bool = false
 var _cell_size: float = 54.0
 var _drag_drop_state: int = 0
+var _drag_state_source: String = ""
 
 
 func _ready() -> void:
@@ -56,11 +57,17 @@ func configure(index: int, definition: ItemDefinition, quantity: int, selected: 
 	_apply_style()
 
 
+func set_drag_drop_state(state: int, source: String = "") -> void:
+	_drag_drop_state = state
+	_drag_state_source = source if state != 0 else ""
+	_apply_style()
+
+
 func _apply_style() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.18, 0.24, 0.29, 1) if _selected else Color(0.055, 0.085, 0.12, 1)
 	style.border_color = Color(0.92, 0.73, 0.36) if _drag_drop_state == 1 else (Color(0.82, 0.28, 0.3) if _drag_drop_state == 2 else (Color(0.93, 0.73, 0.38, 1) if _selected else Color(0.3, 0.4, 0.46, 1)))
-	style.set_border_width_all(2 if _selected else 1)
+	style.set_border_width_all(2 if (_selected or _drag_drop_state != 0) else 1)
 	style.set_corner_radius_all(4)
 	add_theme_stylebox_override("panel", style)
 
@@ -88,15 +95,24 @@ func _get_drag_data(_at_position: Vector2) -> Variant:
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	var valid: bool = data is Dictionary and data.has("kind") and data.has("slot") and session != null and session.can_transfer_inventory_item(str(data["kind"]), data["slot"], "bag", slot_index)
-	_drag_drop_state = 1 if valid else 2
-	_apply_style()
+	set_drag_drop_state(1 if valid else 2, "mouse")
 	return valid
+
+
+func _process(_delta: float) -> void:
+	if _drag_state_source != "mouse":
+		return
+	var viewport := get_viewport()
+	if viewport == null or not viewport.gui_is_dragging():
+		set_drag_drop_state(0)
+		return
+	if not get_global_rect().has_point(get_global_mouse_position()):
+		set_drag_drop_state(0)
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_DRAG_END and _icon != null:
-		_drag_drop_state = 0
-		_apply_style()
+		set_drag_drop_state(0)
 
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:

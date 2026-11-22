@@ -1,0 +1,212 @@
+--- a/scripts/equipment_slot.gd
++++ b/scripts/equipment_slot.gd
+@@ -9,7 +9,9 @@
+ var session: GameSession
+ var _icon: TextureRect
+ var _glyph: Label
+-var _last_visual_state: int = -1
++var _drag_drop_state: int = 0
++var _drag_state_source: String = ""
++var _is_virtual_fill: bool = false
+ 
+ 
+ func _ready() -> void:
+@@ -33,7 +35,7 @@
+ 	_glyph.add_theme_font_size_override("font_size", 23)
+ 	add_child(_glyph)
+ 	_glyph.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+-	_style(false)
++	_apply_style()
+ 
+ 
+ func configure(next_slot_id: String, next_session: GameSession) -> void:
+@@ -41,18 +43,38 @@
+ 	session = next_session
+ 	item_id = session.equipment_item_id(slot_id) if session != null else ""
+ 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+-	_icon.texture = item.icon if item != null else null
+-	_glyph.text = str(EquipmentSlotRules.SYMBOLS.get(slot_id, "")) if item == null else ""
+-	_style(false)
++	_is_virtual_fill = false
++	if item != null:
++		_icon.texture = item.icon
++		_icon.modulate = Color.WHITE
++		_glyph.text = ""
++	else:
++		_icon.texture = null
++		_icon.modulate = Color.WHITE
++		_glyph.text = str(EquipmentSlotRules.SYMBOLS.get(slot_id, ""))
++	set_drag_drop_state(0)
+ 
+ 
+-func _style(highlight: bool, invalid: bool = false) -> void:
+-	var state: int = 2 if invalid else (1 if highlight else 0)
+-	if state == _last_visual_state:
+-		return
+-	_last_visual_state = state
++func show_virtual_item(texture: Texture2D) -> void:
++	item_id = ""
++	_is_virtual_fill = true
++	_icon.texture = texture
++	_icon.modulate = Color(0.42, 0.48, 0.56, 0.78)
++	_glyph.text = ""
++	_apply_style()
++
++
++func set_drag_drop_state(state: int, source: String = "") -> void:
++	_drag_drop_state = state
++	_drag_state_source = source if state != 0 else ""
++	_apply_style()
++
++
++func _apply_style() -> void:
++	var highlight: bool = _drag_drop_state == 1
++	var invalid: bool = _drag_drop_state == 2
+ 	var style := StyleBoxFlat.new()
+-	style.bg_color = Color(0.13, 0.24, 0.29, 0.95) if highlight else Color(0.06, 0.09, 0.14, 0.97)
++	style.bg_color = Color(0.13, 0.24, 0.29, 0.95) if highlight else (Color(0.075, 0.105, 0.15, 0.97) if _is_virtual_fill else Color(0.06, 0.09, 0.14, 0.97))
+ 	style.border_color = Color(0.82, 0.29, 0.30) if invalid else (Color(0.9, 0.72, 0.38) if highlight else Color(0.36, 0.49, 0.57))
+ 	style.set_border_width_all(2 if highlight else 1)
+ 	style.set_corner_radius_all(7)
+@@ -82,13 +104,24 @@
+ 
+ func _can_drop_data(_pos: Vector2, data: Variant) -> bool:
+ 	var accepted: bool = data is Dictionary and data.has("kind") and data.has("slot") and session != null and session.can_transfer_inventory_item(str(data["kind"]), data["slot"], "equipment", slot_id)
+-	_style(accepted, not accepted)
++	set_drag_drop_state(1 if accepted else 2, "mouse")
+ 	return accepted
+ 
+ 
++func _process(_delta: float) -> void:
++	if _drag_state_source != "mouse":
++		return
++	var viewport := get_viewport()
++	if viewport == null or not viewport.gui_is_dragging():
++		set_drag_drop_state(0)
++		return
++	if not get_global_rect().has_point(get_global_mouse_position()):
++		set_drag_drop_state(0)
++
++
+ func _notification(what: int) -> void:
+-	if what == NOTIFICATION_DRAG_END and _icon != null:
+-		_style(false)
++	if what == NOTIFICATION_DRAG_END:
++		set_drag_drop_state(0)
+ 
+ 
+ func _drop_data(_pos: Vector2, data: Variant) -> void:
+--- a/scripts/inventory_grid_slot.gd
++++ b/scripts/inventory_grid_slot.gd
+@@ -13,6 +13,7 @@
+ var _selected: bool = false
+ var _cell_size: float = 54.0
+ var _drag_drop_state: int = 0
++var _drag_state_source: String = ""
+ 
+ 
+ func _ready() -> void:
+@@ -56,11 +57,17 @@
+ 	_apply_style()
+ 
+ 
++func set_drag_drop_state(state: int, source: String = "") -> void:
++	_drag_drop_state = state
++	_drag_state_source = source if state != 0 else ""
++	_apply_style()
++
++
+ func _apply_style() -> void:
+ 	var style := StyleBoxFlat.new()
+ 	style.bg_color = Color(0.18, 0.24, 0.29, 1) if _selected else Color(0.055, 0.085, 0.12, 1)
+ 	style.border_color = Color(0.92, 0.73, 0.36) if _drag_drop_state == 1 else (Color(0.82, 0.28, 0.3) if _drag_drop_state == 2 else (Color(0.93, 0.73, 0.38, 1) if _selected else Color(0.3, 0.4, 0.46, 1)))
+-	style.set_border_width_all(2 if _selected else 1)
++	style.set_border_width_all(2 if (_selected or _drag_drop_state != 0) else 1)
+ 	style.set_corner_radius_all(4)
+ 	add_theme_stylebox_override("panel", style)
+ 
+@@ -88,15 +95,24 @@
+ 
+ func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
+ 	var valid: bool = data is Dictionary and data.has("kind") and data.has("slot") and session != null and session.can_transfer_inventory_item(str(data["kind"]), data["slot"], "bag", slot_index)
+-	_drag_drop_state = 1 if valid else 2
+-	_apply_style()
++	set_drag_drop_state(1 if valid else 2, "mouse")
+ 	return valid
++
++
++func _process(_delta: float) -> void:
++	if _drag_state_source != "mouse":
++		return
++	var viewport := get_viewport()
++	if viewport == null or not viewport.gui_is_dragging():
++		set_drag_drop_state(0)
++		return
++	if not get_global_rect().has_point(get_global_mouse_position()):
++		set_drag_drop_state(0)
+ 
+ 
+ func _notification(what: int) -> void:
+ 	if what == NOTIFICATION_DRAG_END and _icon != null:
+-		_drag_drop_state = 0
+-		_apply_style()
++		set_drag_drop_state(0)
+ 
+ 
+ func _drop_data(_at_position: Vector2, data: Variant) -> void:
+--- a/scripts/equipment_mannequin.gd
++++ b/scripts/equipment_mannequin.gd
+@@ -41,7 +41,19 @@
+ 	for slot_id in slots:
+ 		var slot: EquipmentSlot = slots[slot_id]
+ 		slot.configure(str(slot_id), session)
++	_apply_two_handed_shadow()
+ 	_layout_slots()
++
++
++func _apply_two_handed_shadow() -> void:
++	if _session == null or _session.hero == null:
++		return
++	var off_hand: EquipmentSlot = slots.get("off_hand") as EquipmentSlot
++	if off_hand == null or not off_hand.item_id.is_empty():
++		return
++	var weapon: ItemDefinition = ItemCatalog.get_item(_session.hero.equipped_weapon_id)
++	if weapon != null and weapon.two_handed and weapon.icon != null:
++		off_hand.show_virtual_item(weapon.icon)
+ 
+ 
+ func _layout_slots() -> void:
+--- a/scripts/inventory_view.gd
++++ b/scripts/inventory_view.gd
+@@ -301,14 +301,12 @@
+ 			var is_target: bool = not destination.is_empty() and str(destination["kind"]) == "bag" and int(destination["slot"]) == child.slot_index
+ 			var accepted: bool = is_target and _session.can_transfer_inventory_item(str(_touch_source["kind"]), _touch_source["slot"], "bag", child.slot_index)
+ 			var state: int = (1 if accepted else 2) if is_target else 0
+-			if child._drag_drop_state != state:
+-				child._drag_drop_state = state
+-				child._apply_style()
++			child.set_drag_drop_state(state, "touch")
+ 	for slot_id in _mannequin.slots:
+ 		var slot: EquipmentSlot = _mannequin.slots[slot_id]
+ 		var can_accept: bool = not destination.is_empty() and str(destination["kind"]) == "equipment" and str(destination["slot"]) == slot_id and _session.can_transfer_inventory_item(str(_touch_source["kind"]), _touch_source["slot"], "equipment", slot_id)
+ 		var is_target: bool = not destination.is_empty() and str(destination["kind"]) == "equipment" and str(destination["slot"]) == slot_id
+-		slot._style(can_accept, is_target and not can_accept)
++		slot.set_drag_drop_state((1 if can_accept else 2) if is_target else 0, "touch")
+ 
+ 
+ func _cancel_touch_drag() -> void:
+@@ -317,12 +315,10 @@
+ 	_touch_dragging = false
+ 	for child in _bag_grid.get_children():
+ 		if child is InventoryGridSlot:
+-			if child._drag_drop_state != 0:
+-				child._drag_drop_state = 0
+-				child._apply_style()
++			child.set_drag_drop_state(0)
+ 	for slot_id in _mannequin.slots:
+ 		var slot: EquipmentSlot = _mannequin.slots[slot_id]
+-		slot._style(false)
++		slot.set_drag_drop_state(0)
+ 	if _touch_preview != null:
+ 		_touch_preview.queue_free()
+ 		_touch_preview = null

@@ -301,14 +301,12 @@ func _update_touch_target(destination: Dictionary) -> void:
 			var is_target: bool = not destination.is_empty() and str(destination["kind"]) == "bag" and int(destination["slot"]) == child.slot_index
 			var accepted: bool = is_target and _session.can_transfer_inventory_item(str(_touch_source["kind"]), _touch_source["slot"], "bag", child.slot_index)
 			var state: int = (1 if accepted else 2) if is_target else 0
-			if child._drag_drop_state != state:
-				child._drag_drop_state = state
-				child._apply_style()
+			child.set_drag_drop_state(state, "touch")
 	for slot_id in _mannequin.slots:
 		var slot: EquipmentSlotControl = _mannequin.slots[slot_id]
 		var can_accept: bool = not destination.is_empty() and str(destination["kind"]) == "equipment" and str(destination["slot"]) == slot_id and _session.can_transfer_inventory_item(str(_touch_source["kind"]), _touch_source["slot"], "equipment", slot_id)
 		var is_target: bool = not destination.is_empty() and str(destination["kind"]) == "equipment" and str(destination["slot"]) == slot_id
-		slot._style(can_accept, is_target and not can_accept)
+		slot.set_drag_drop_state((1 if can_accept else 2) if is_target else 0, "touch")
 
 
 func _cancel_touch_drag() -> void:
@@ -317,12 +315,10 @@ func _cancel_touch_drag() -> void:
 	_touch_dragging = false
 	for child in _bag_grid.get_children():
 		if child is InventoryGridSlot:
-			if child._drag_drop_state != 0:
-				child._drag_drop_state = 0
-				child._apply_style()
+			child.set_drag_drop_state(0)
 	for slot_id in _mannequin.slots:
 		var slot: EquipmentSlotControl = _mannequin.slots[slot_id]
-		slot._style(false)
+		slot.set_drag_drop_state(0)
 	if _touch_preview != null:
 		_touch_preview.queue_free()
 		_touch_preview = null

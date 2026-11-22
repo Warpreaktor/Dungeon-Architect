@@ -9,8 +9,7 @@ signal equipment_requested(item_id: String, equip: bool)
 
 @onready var _card: PanelContainer = %Card
 @onready var _columns: GridContainer = %Columns
-@onready var _item_list: ItemList = %ItemList
-@onready var _empty_label: Label = %EmptyLabel
+@onready var _bag_grid: GridContainer = %BagGrid
 @onready var _gold_label: Label = %GoldLabel
 @onready var _attack_label: Label = %AttackLabel
 @onready var _strength_label: Label = %StrengthLabel
@@ -30,10 +29,11 @@ signal equipment_requested(item_id: String, equip: bool)
 
 var _session: GameSession
 var _entries: Array[String] = []
+var _selected_index: int = -1
+var _bag_cell_size: float = 52.0
 
 
 func _ready() -> void:
-	_item_list.item_selected.connect(_show_item)
 	_use_button.pressed.connect(_request_use_selected)
 	_close_button.pressed.connect(close_by_player)
 	get_viewport().size_changed.connect(_resize_card)
@@ -49,15 +49,14 @@ func open_for(session: GameSession) -> void:
 	_refresh_contents()
 	_resize_card()
 	show()
-	if _entries.is_empty():
-		_close_button.grab_focus()
-	else:
-		_item_list.grab_focus()
+	_close_button.grab_focus()
 
 
 func _refresh_contents() -> void:
-	_item_list.clear()
-	_entries.clear()
+	for child in _bag_grid.get_children():
+		_bag_grid.remove_child(child)
+		child.queue_free()
+	_entries = _session.inventory_slot_ids()
 	var hero: HeroState = _session.hero
 	_gold_label.text = "%d" % hero.gold
 	_attack_label.text = "%d" % hero.melee_attack()
@@ -67,42 +66,35 @@ func _refresh_contents() -> void:
 	_defense_label.text = "%d" % (shield_item.defense_bonus if shield_item != null else hero.defense)
 	_set_equipment(_weapon_icon, _weapon_name, hero.equipped_weapon_id, "Оружие: не найдено")
 	_set_equipment(_shield_icon, _shield_name, hero.equipped_shield_id, "Щит: не найден")
-
-	# Расходники лежат стопками, а каждый экземпляр экипировки виден отдельно.
-	var item_ids: Array[String] = []
-	for item_id in _session.carried_items.keys():
-		item_ids.append(str(item_id))
-	item_ids.sort()
-	for item_id in item_ids:
-		var definition: ItemDefinition = ItemCatalog.get_item(item_id)
-		if definition == null:
-			continue
-		var quantity: int = int(_session.carried_items.get(item_id, 0))
-		if quantity <= 0:
-			continue
-		if definition.stackable:
-			_add_entry(item_id, "%s  ×%d" % [definition.display_name, quantity], definition.icon)
-		else:
-			for index in range(quantity):
-				var label := definition.display_name
-				if definition.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
-					var values: Array = hero.shield_durabilities.get(item_id, [])
-					if index < values.size():
-						label += "  ·  %d/%d" % [int(values[index]), definition.max_durability]
-				if index == 0 and item_id in [hero.equipped_weapon_id, hero.equipped_shield_id]:
-					label += "  ·  надето"
-				_add_entry(item_id, label, definition.icon)
-	_empty_label.visible = _entries.is_empty()
-	if _entries.is_empty():
+	if _selected_index < 0 or _selected_index >= _entries.size() or _entries[_selected_index].is_empty():
+		_selected_index = _first_occupied_slot()
+	for index in range(_entries.size()):
+		var item_id: String = _entries[index]
+		var definition: ItemDefinition = ItemCatalog.get_item(item_id) if not item_id.is_empty() else null
+		var quantity: int = int(_session.carried_items.get(item_id, 0)) if definition != null and definition.stackable else 1
+		var slot := InventoryGridSlot.new()
+		_bag_grid.add_child(slot)
+		slot.configure(index, definition, quantity, index == _selected_index, _bag_cell_size)
+		slot.activated.connect(_show_item)
+		slot.moved.connect(_move_slot)
+	if _selected_index < 0:
 		_clear_item_info()
 	else:
-		_item_list.select(0)
-		_show_item(0)
+		_show_item(_selected_index)
 
 
-func _add_entry(item_id: String, label: String, icon: Texture2D) -> void:
-	_item_list.add_item(label, icon)
-	_entries.append(item_id)
+func _first_occupied_slot() -> int:
+	for index in range(_entries.size()):
+		if not _entries[index].is_empty():
+			return index
+	return -1
+
+
+func _move_slot(from_index: int, to_index: int) -> void:
+	if _session == null or not _session.swap_inventory_slots(from_index, to_index):
+		return
+	_selected_index = to_index
+	_refresh_contents()
 
 
 func _set_equipment(icon_node: TextureRect, name_node: Label, item_id: String, empty_text: String) -> void:
@@ -123,6 +115,14 @@ func _show_item(index: int) -> void:
 	if index < 0 or index >= _entries.size() or _session == null:
 		return
 	var item_id := _entries[index]
+	if item_id.is_empty():
+		return
+	_selected_index = index
+	for child in _bag_grid.get_children():
+		if child is InventoryGridSlot:
+			var definition: ItemDefinition = ItemCatalog.get_item(child.item_id) if not child.item_id.is_empty() else null
+			var quantity: int = int(_session.carried_items.get(child.item_id, 0)) if definition != null and definition.stackable else 1
+			child.configure(child.slot_index, definition, quantity, child.slot_index == _selected_index, _bag_cell_size)
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
 	if item == null:
 		return
@@ -177,11 +177,9 @@ func _is_equipped(item_id: String) -> bool:
 
 
 func _request_use_selected() -> void:
-	var selected: PackedInt32Array = _item_list.get_selected_items()
-	var index: int = selected[0] if not selected.is_empty() else -1
-	if index < 0 or index >= _entries.size() or _session == null:
+	if _selected_index < 0 or _selected_index >= _entries.size() or _session == null:
 		return
-	var item_id: String = _entries[index]
+	var item_id: String = _entries[_selected_index]
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
 	if item == null:
 		return
@@ -198,7 +196,6 @@ func show_use_result(item_id: String, message: String) -> void:
 	_refresh_contents()
 	var index: int = _entries.find(item_id)
 	if index >= 0:
-		_item_list.select(index)
 		_show_item(index)
 	_use_feedback.text = message
 
@@ -210,19 +207,24 @@ func show_equipment_result(item_id: String, message: String = "") -> void:
 	_refresh_contents()
 	var index: int = _entries.find(item_id)
 	if index >= 0:
-		_item_list.select(index)
 		_show_item(index)
 	_use_feedback.text = message
 
 
 func _resize_card() -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	# На узком экране список и описание идут друг под другом.
-	_columns.columns = 1 if viewport_size.x < 700.0 else 2
+	_columns.columns = 1 if viewport_size.x < 1050.0 else 2
 	_card.custom_minimum_size = Vector2(
-		minf(760.0, maxf(260.0, viewport_size.x - 28.0)),
-		minf(530.0, maxf(240.0, viewport_size.y - 28.0))
+		minf(1110.0, maxf(300.0, viewport_size.x - 24.0)),
+		minf(660.0, maxf(240.0, viewport_size.y - 24.0))
 	)
+	var available_width: float = _card.custom_minimum_size.x - 86.0
+	if _columns.columns == 2:
+		available_width -= 325.0
+	var cell: float = clampf((available_width - 9.0 * 4.0) / 10.0, 24.0, 56.0)
+	_bag_cell_size = cell
+	if _session != null:
+		_refresh_contents()
 
 
 func close_by_player() -> void:

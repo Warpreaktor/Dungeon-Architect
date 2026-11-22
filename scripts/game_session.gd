@@ -6,6 +6,7 @@ extends RefCounted
 const VISION_RADIUS := 1
 ## Число одновременных портретов в походном интерфейсе.
 const MAX_PARTY_SIZE: int = 4
+const INVENTORY_SLOT_COUNT: int = 40
 
 var map_data: DungeonMap
 var hero: HeroState
@@ -17,6 +18,7 @@ var steps: int = 0
 var keys: int = 0
 var potions: int = 0
 var carried_items: Dictionary = {} # Количество найденных предметов по ID, без интерфейса инвентаря.
+var _inventory_order: Array[String] = []
 var is_completed: bool = false # Выход достигнут в текущем прохождении.
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
@@ -60,6 +62,53 @@ static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT
 	session._activate_triggers_at(spawn)
 	session._activate_message_at(spawn, "enter")
 	return session
+
+
+func inventory_slot_ids() -> Array[String]:
+	if _inventory_order.size() != INVENTORY_SLOT_COUNT:
+		_inventory_order.resize(INVENTORY_SLOT_COUNT)
+		_inventory_order.fill("")
+	var remaining: Dictionary = {}
+	for key in carried_items:
+		var item_id: String = str(key)
+		var item: ItemDefinition = ItemCatalog.get_item(item_id)
+		if item == null:
+			continue
+		var count: int = int(carried_items[key])
+		if count > 0:
+			remaining[item_id] = 1 if item.stackable else count
+	for index in range(_inventory_order.size()):
+		var item_id: String = _inventory_order[index]
+		if item_id.is_empty():
+			continue
+		var count: int = int(remaining.get(item_id, 0))
+		if count > 0:
+			remaining[item_id] = count - 1
+		else:
+			_inventory_order[index] = ""
+	var ids: Array[String] = []
+	for key in remaining:
+		ids.append(str(key))
+	ids.sort()
+	for item_id in ids:
+		for entry in range(int(remaining[item_id])):
+			var empty_index: int = _inventory_order.find("")
+			if empty_index < 0:
+				break
+			_inventory_order[empty_index] = item_id
+	return _inventory_order.duplicate()
+
+
+func swap_inventory_slots(source: int, destination: int) -> bool:
+	if source < 0 or source >= INVENTORY_SLOT_COUNT or destination < 0 or destination >= INVENTORY_SLOT_COUNT:
+		return false
+	inventory_slot_ids()
+	if _inventory_order[source].is_empty():
+		return false
+	var existing: String = _inventory_order[destination]
+	_inventory_order[destination] = _inventory_order[source]
+	_inventory_order[source] = existing
+	return true
 
 
 func party_members() -> Array[HeroState]:
@@ -772,6 +821,7 @@ func record_defeat() -> bool:
 		if index == 0:
 			encounter["fallen_rewards"].append_array(rewards)
 	carried_items.clear()
+	_inventory_order.clear()
 	keys = 0
 	potions = 0
 	for member in party_members():

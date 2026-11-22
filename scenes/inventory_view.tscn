@@ -69,7 +69,7 @@ mouse_filter = 0
 [node name="Card" type="PanelContainer" parent="Center"]
 unique_name_in_owner = true
 layout_mode = 2
-custom_minimum_size = Vector2(720, 500)
+custom_minimum_size = Vector2(1110, 620)
 mouse_filter = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_card")
 
@@ -194,38 +194,25 @@ theme_override_constants/h_separation = 14
 theme_override_constants/v_separation = 12
 
 [node name="Bag" type="VBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns"]
-custom_minimum_size = Vector2(265, 235)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 7
+theme_override_constants/separation = 8
 
 [node name="BagTitle" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Bag"]
 layout_mode = 2
-text = "ПРЕДМЕТЫ"
+text = "СУМКА · 40 ЯЧЕЕК"
 theme_override_colors/font_color = Color(0.82, 0.66, 0.41, 1)
 
-[node name="ItemList" type="ItemList" parent="Center/Card/Margins/Content/BodyScroll/Columns/Bag"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(265, 210)
-layout_mode = 2
-mouse_filter = 1
-auto_height = true
-icon_mode = 1
-fixed_icon_size = Vector2i(36, 36)
-max_columns = 1
-select_mode = 0
-theme_override_font_sizes/font_size = 16
-theme_override_styles/panel = SubResource("StyleBoxFlat_list")
-theme_override_styles/selected = SubResource("StyleBoxFlat_selected")
-
-[node name="EmptyLabel" type="Label" parent="Center/Card/Margins/Content/BodyScroll/Columns/Bag"]
+[node name="BagGrid" type="GridContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/Bag"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Пока пусто"
-theme_override_colors/font_color = Color(0.68, 0.72, 0.76, 1)
+size_flags_horizontal = 3
+columns = 10
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
 
 [node name="Details" type="VBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns"]
-custom_minimum_size = Vector2(290, 235)
+custom_minimum_size = Vector2(290, 255)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8

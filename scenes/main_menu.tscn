@@ -4,6 +4,8 @@
 [ext_resource type="Texture2D" path="res://assets/stone_wall.png" id="2_stone"]
 [ext_resource type="Texture2D" path="res://assets/icons/commands/test.png" id="3_play"]
 [ext_resource type="Texture2D" path="res://assets/icons/commands/editor.png" id="4_editor"]
+[ext_resource type="Texture2D" path="res://assets/icons/commands/editor_mode_home.png" id="4_editor"]
+
 [ext_resource type="PackedScene" path="res://scenes/hero_selection.tscn" id="5_heroes"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]

@@ -1966,6 +1966,8 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 func _update_mode_ui() -> void:
 	_editor_header.visible = not standalone_game
 	_apply_editor_panels()
+	for control in [_file_menu, _settings_menu, _save_button, _undo_button, _redo_button, _layers_menu]:
+		control.visible = not is_play_mode and not standalone_game
 	_floating_console.set_game_controls_visible(is_play_mode or standalone_game)
 	_play_button.text = "Редактор" if is_play_mode else "Тест"
 	_set_command_icon(_play_button, "editor" if is_play_mode else "test")

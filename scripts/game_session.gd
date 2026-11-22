@@ -39,6 +39,8 @@ var _revealed_before_debug_open_map: Array = []
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
 var fallen_encounters: Array = []
+var ground_loot_containers: Array[Dictionary] = []
+var _ground_loot_counter: int = 0
 var claimed_exit_rewards: Dictionary = {}
 var _floor_states: Dictionary = {} # Состояние посещённых карт только в памяти этого прохождения.
 
@@ -90,10 +92,13 @@ func inventory_slot_ids() -> Array[String]:
 		var count: int = int(carried_items[key])
 		if count > 0:
 			remaining[item_id] = 1 if item.stackable else count
-	for slot_id in EquipmentSlotRules.SLOT_IDS:
-		var item_id: String = equipment_item_id(slot_id)
-		if not item_id.is_empty():
-			remaining[item_id] = maxi(0, int(remaining.get(item_id, 0)) - 1)
+	for member in party:
+		if member == null:
+			continue
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			var item_id: String = _member_equipment_id(member, slot_id)
+			if not item_id.is_empty():
+				remaining[item_id] = maxi(0, int(remaining.get(item_id, 0)) - 1)
 	for index in range(_inventory_order.size()):
 		var item_id: String = _inventory_order[index]
 		if item_id.is_empty():
@@ -230,21 +235,204 @@ func party_members() -> Array[HeroState]:
 	return members
 
 
+func _member_equipment_id(member: HeroState, slot_id: String) -> String:
+	match slot_id:
+		"main_hand":
+			return member.equipped_weapon_id
+		"off_hand":
+			return member.equipped_shield_id
+		_:
+			return str(member.equipped_accessories.get(slot_id, ""))
+
+
+func _clear_member_equipment(member: HeroState) -> void:
+	member.equipped_weapon_id = ""
+	member.equipped_shield_id = ""
+	member.equipped_accessories.clear()
+	member._recalculate_equipment_stats()
+
+
+func _append_ground_loot(cell: Vector2i, entries: Array[Dictionary]) -> void:
+	if entries.is_empty():
+		return
+	var container: Dictionary = ground_container_at(cell)
+	if not container.is_empty():
+		var contents: Array = container["loot"]
+		contents.append_array(entries)
+		return
+	_ground_loot_counter += 1
+	ground_loot_containers.append({
+		"id": "ground_%d" % _ground_loot_counter,
+		"x": cell.x, "y": cell.y,
+		"loot": entries.duplicate(true)
+	})
+
+
+func ground_container_at(cell: Vector2i) -> Dictionary:
+	for container in ground_loot_containers:
+		if int(container["x"]) == cell.x and int(container["y"]) == cell.y:
+			return container
+	return {}
+
+
+func ground_container_by_id(container_id: String) -> Dictionary:
+	for container in ground_loot_containers:
+		if str(container["id"]) == container_id:
+			return container
+	return {}
+
+
+func _shield_durability_for_drop(member: HeroState, item_id: String) -> int:
+	var values: Array = member.shield_durabilities.get(item_id, [])
+	if values.is_empty():
+		var shield: ItemDefinition = ItemCatalog.get_item(item_id)
+		return maxi(shield.max_durability, shield.defense_bonus) if shield != null else 0
+	var durability: int = int(values.pop_front())
+	member.shield_durabilities[item_id] = values
+	return durability
+
+
 func record_casualties() -> Array[HeroState]:
 	var casualties: Array[HeroState] = []
-	for index in range(party.size() - 1, -1, -1):
-		var member: HeroState = party[index]
+	for member in party:
+		if member != null and member.health <= 0:
+			casualties.append(member)
+	if casualties.is_empty():
+		return casualties
+	var bag: Array[String] = inventory_slot_ids()
+	var survivor: HeroState = null
+	for member in party:
 		if member != null and member.health > 0:
-			continue
-		party.remove_at(index)
-		if member != null:
-			casualties.push_front(member)
+			survivor = member
+			break
+	var ground: Array[Dictionary] = []
+	var death_gold: int = 0
 	for member in casualties:
+		var equipped_at_death: Dictionary = {}
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			var item_id: String = _member_equipment_id(member, slot_id)
+			if not item_id.is_empty():
+				equipped_at_death[slot_id] = item_id
+		var member_gold: int = member.gold
+		death_gold += member_gold
+		member.gold = 0
+		if survivor != null:
+			for item_id in equipped_at_death.values():
+				var item: ItemDefinition = ItemCatalog.get_item(str(item_id))
+				var empty_index: int = bag.find("")
+				if empty_index >= 0:
+					bag[empty_index] = str(item_id)
+				else:
+					carried_items[item_id] = maxi(int(carried_items.get(item_id, 0)) - 1, 0)
+					var entry: Dictionary = {"item_id": str(item_id), "quantity": 1}
+					if item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
+						entry["durabilities"] = [_shield_durability_for_drop(member, str(item_id))]
+					ground.append(entry)
+			for item_id in member.shield_durabilities.keys():
+				var values: Array = member.shield_durabilities[item_id]
+				var kept: Array = survivor.shield_durabilities.get(item_id, [])
+				kept.append_array(values)
+				survivor.shield_durabilities[item_id] = kept
+			member.shield_durabilities.clear()
+		_clear_member_equipment(member)
 		fallen_heroes.append(member)
-		fallen_hero_locations.append({"hero": member, "map_id": map_data.map_id, "position": player_pos})
-	if hero == null or not party.has(hero) or hero.health <= 0:
-		hero = party[0] if not party.is_empty() else null
+		fallen_hero_locations.append({
+			"hero": member, "map_id": map_data.map_id,
+			"position": player_pos, "equipment_at_death": equipped_at_death,
+			"gold_at_death": member_gold
+		})
+		party.erase(member)
+	if survivor == null:
+		for key in carried_items:
+			var item_id: String = str(key)
+			var amount: int = int(carried_items[key])
+			if amount <= 0:
+				continue
+			var entry: Dictionary = {"item_id": item_id, "quantity": amount}
+			var item: ItemDefinition = ItemCatalog.get_item(item_id)
+			if item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
+				var durabilities: Array = []
+				for member in casualties:
+					durabilities.append_array(member.shield_durabilities.get(item_id, []))
+				entry["durabilities"] = durabilities
+			ground.append(entry)
+		carried_items.clear()
+		bag.fill("")
+		for member in casualties:
+			member.shield_durabilities.clear()
+	if death_gold > 0:
+		ground.append({"item_id": "gold", "quantity": death_gold})
+	_inventory_order = bag
+	keys = int(carried_items.get("key", 0))
+	potions = int(carried_items.get("potion", 0))
+	_append_ground_loot(player_pos, ground)
+	hero = survivor
 	return casualties
+
+
+func _ground_loot_take_count(entry: Dictionary) -> int:
+	var item_id: String = str(entry.get("item_id", ""))
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	var quantity: int = int(entry.get("quantity", 0))
+	if hero == null or item == null or quantity <= 0:
+		return 0
+	if item.category == ItemDefinition.Category.CURRENCY:
+		return quantity
+	var bag: Array[String] = inventory_slot_ids()
+	if bag.find("") < 0 and not (item.stackable and bag.has(item_id)):
+		return 0
+	return quantity if item.stackable else 1
+
+
+func can_take_ground_loot(container_id: String, entry_index: int) -> bool:
+	var container: Dictionary = ground_container_by_id(container_id)
+	if container.is_empty() or is_party_defeated():
+		return false
+	var cell := Vector2i(int(container["x"]), int(container["y"]))
+	if absi(cell.x - player_pos.x) + absi(cell.y - player_pos.y) > 1:
+		return false
+	var loot: Array = container["loot"]
+	return entry_index >= 0 and entry_index < loot.size() and _ground_loot_take_count(loot[entry_index]) > 0
+
+
+func take_ground_loot(container_id: String, entry_index: int) -> int:
+	if not can_take_ground_loot(container_id, entry_index):
+		return 0
+	var container: Dictionary = ground_container_by_id(container_id)
+	var loot: Array = container["loot"]
+	var entry: Dictionary = loot[entry_index]
+	var item_id: String = str(entry["item_id"])
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	var amount: int = _ground_loot_take_count(entry)
+	if item.category == ItemDefinition.Category.CURRENCY:
+		hero.gold += amount
+	else:
+		var bag: Array[String] = inventory_slot_ids()
+		if not (item.stackable and bag.has(item_id)):
+			var free: int = bag.find("")
+			if free < 0:
+				return 0
+			bag[free] = item_id
+			_inventory_order = bag
+		carried_items[item_id] = int(carried_items.get(item_id, 0)) + amount
+		if item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
+			var durabilities: Array = entry.get("durabilities", [])
+			for i in range(amount):
+				var saved: Array = hero.shield_durabilities.get(item_id, [])
+				if not durabilities.is_empty():
+					saved.append(int(durabilities.pop_front()))
+				else:
+					saved.append(maxi(item.max_durability, item.defense_bonus))
+				hero.shield_durabilities[item_id] = saved
+			entry["durabilities"] = durabilities
+		keys = int(carried_items.get("key", 0))
+		potions = int(carried_items.get("potion", 0))
+	entry["quantity"] = int(entry["quantity"]) - amount
+	if int(entry["quantity"]) <= 0:
+		loot.remove_at(entry_index)
+	if loot.is_empty():
+		ground_loot_containers.erase(container)
+	return amount
 
 
 func abandon_pending_encounter() -> void:
@@ -310,6 +498,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 		_floor_states[map_data.map_id] = {
 			"map": map_data,
 			"fallen": fallen_encounters.duplicate(true),
+			"ground_loot": ground_loot_containers.duplicate(true),
 			"exit_rewards": claimed_exit_rewards.duplicate(true),
 			"position": player_pos,
 			"removed": removed_entities.duplicate(true),
@@ -323,6 +512,9 @@ func enter_map(next_map: DungeonMap) -> bool:
 	var saved: Dictionary = _floor_states.get(next_map.map_id, {})
 	map_data = saved.get("map", next_map)
 	fallen_encounters = saved.get("fallen", []).duplicate(true)
+	ground_loot_containers.clear()
+	for container in saved.get("ground_loot", []):
+		ground_loot_containers.append(container.duplicate(true))
 	claimed_exit_rewards = saved.get("exit_rewards", {}).duplicate(true)
 	player_pos = saved.get("position", spawn)
 	removed_entities = saved.get("removed", {}).duplicate(true)
@@ -412,6 +604,9 @@ func entities_at(x: int, y: int) -> Array:
 	for entity in fallen_encounters:
 		if int(entity["x"]) == x and int(entity["y"]) == y:
 			result.append(entity)
+	var container: Dictionary = ground_container_at(Vector2i(x, y))
+	if not container.is_empty():
+		result.append({"type": "ground_loot", "id": container["id"], "x": x, "y": y})
 	return result
 
 

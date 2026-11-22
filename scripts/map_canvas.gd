@@ -11,6 +11,7 @@ signal player_step_finished
 signal edit_action_committed(before: Dictionary, after: Dictionary)
 signal configurable_entity_tapped(kind: String, entity_id: String)
 signal message_cell_tapped(cell: Vector2i)
+signal ground_loot_tapped(container_id: String)
 
 const TILE_SIZE := 48.0
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
@@ -413,6 +414,9 @@ func _draw_entity(kind: String, origin: Vector2) -> void:
 			draw_rect(Rect2(origin + Vector2(14, 7), Vector2(20, 34)), Color("#b77a3c"))
 			draw_line(origin + Vector2(24, 8), origin + Vector2(24, 40), Color("#714222"), 2.0)
 			draw_circle(origin + Vector2(30, 26), 2.6, Color("#f3d380"))
+		"ground_loot":
+			_draw_entity("chest", origin)
+			draw_circle(origin + Vector2(37, 12), 5, Color("#e8c58a"))
 		"chest":
 			draw_rect(Rect2(origin + Vector2(8, 17), Vector2(32, 23)), Color("#382817"))
 			draw_rect(Rect2(origin + Vector2(10, 19), Vector2(28, 19)), Color("#a76a2d"))
@@ -653,6 +657,17 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 		map_edited.emit()
 
 
+func _request_ground_loot_at(point: Vector2) -> void:
+	if mode != "play" or game_session == null:
+		return
+	var cell: Vector2i = _screen_to_cell(point)
+	if not game_session.is_visible(cell.x, cell.y):
+		return
+	var container: Dictionary = game_session.ground_container_at(cell)
+	if not container.is_empty():
+		ground_loot_tapped.emit(str(container["id"]))
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		# На Android тач-событие дополнительно эмулирует мышь.
@@ -702,8 +717,12 @@ func _gui_input(event: InputEvent) -> void:
 						configurable_entity_tapped.emit("monster" if selected_tool.begins_with("monster:") else selected_tool, _settings_tool_pressed_id)
 					_settings_tool_pressed_id = ""
 				accept_event()
-			elif mode == "play" and event.pressed:
-				grab_focus()
+			elif mode == "play":
+				if event.pressed:
+					_mouse_down = event.position
+					grab_focus()
+				elif event.position.distance_to(_mouse_down) < TAP_MOVE_LIMIT:
+					_request_ground_loot_at(event.position)
 				accept_event()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			if mode == "play":
@@ -751,6 +770,8 @@ func _gui_input(event: InputEvent) -> void:
 			var tap_valid: bool = not _touch_invalid_tap and event.position.distance_to(start_point) < TAP_MOVE_LIMIT
 			_touch_positions.erase(event.index)
 			_touch_starts.erase(event.index)
+			if mode == "play" and tap_valid and _touch_positions.is_empty():
+				_request_ground_loot_at(event.position)
 			if mode == "edit" and selected_tool == "hand" and tap_valid:
 				_remember_touch_tap(event.position)
 			if mode == "edit" and selected_tool == "message" and tap_valid and _touch_positions.is_empty():

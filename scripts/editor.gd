@@ -173,6 +173,7 @@ var _held_move_keys: Array[int] = []
 var _blocked_hold_direction := Vector2i.ZERO
 var _hero_hud: HeroHUD
 var _inventory_view: InventoryView
+var _ground_loot_view: GroundLootView
 var _game_notice: GameNotice
 var _load_dialog: ConfirmationDialog
 var _export_dialog: FileDialog
@@ -355,6 +356,7 @@ func _build_interface() -> void:
 	_canvas.move_failed.connect(_on_move_failed)
 	_canvas.configurable_entity_tapped.connect(_on_configurable_entity_tapped)
 	_canvas.message_cell_tapped.connect(_on_message_cell_tapped)
+	_canvas.ground_loot_tapped.connect(_open_ground_loot)
 	canvas_host.add_child(_canvas)
 	# Накладная кнопка не участвует в расчёте ширины панели редактора.
 	var viewport_actions := Control.new()
@@ -410,6 +412,10 @@ func _build_interface() -> void:
 	_inventory_view.item_use_requested.connect(_on_inventory_use_requested)
 	_inventory_view.equipment_changed.connect(_refresh_stats)
 	add_child(_inventory_view)
+	_ground_loot_view = GroundLootView.new()
+	_ground_loot_view.closed.connect(_on_ground_loot_closed)
+	_ground_loot_view.loot_changed.connect(_on_ground_loot_changed)
+	add_child(_ground_loot_view)
 	_game_notice = GAME_NOTICE_SCENE.instantiate() as GameNotice
 	_game_notice.visible = false
 	canvas_host.add_child(_game_notice)
@@ -1819,7 +1825,7 @@ func _emit_menu_requested() -> void:
 
 
 func _open_game_system_menu() -> void:
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible or _map_screen.visible:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	_game_command_bar.visible = false
 	_dpad.visible = false
@@ -1843,7 +1849,7 @@ func _toggle_map_screen() -> void:
 	if _map_screen.visible:
 		_map_screen.dismiss_by_player()
 		return
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _inventory_view.visible or _game_system_menu.visible or _game_dialogue.visible:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _game_dialogue.visible:
 		return
 	_map_screen.open_for(game_session, _minimap_enabled)
 	_game_command_bar.visible = false
@@ -1904,6 +1910,7 @@ func _start_play_mode() -> void:
 	_editor_camera_zoom = _canvas.zoom
 	game_session = session
 	_inventory_view.dismiss()
+	_ground_loot_view.dismiss()
 	_game_system_menu.dismiss()
 	_map_screen.dismiss()
 	_pending_game_messages.clear()
@@ -1941,6 +1948,7 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 	_game_notice.clear()
 	_game_dialogue.dismiss()
 	_inventory_view.dismiss()
+	_ground_loot_view.dismiss()
 	_game_system_menu.dismiss()
 	_map_screen.dismiss()
 	_mini_map.visible = false
@@ -1988,7 +1996,7 @@ func _update_mode_ui() -> void:
 func _open_character(member: HeroState) -> void:
 	if _arsenal_view.visible:
 		return
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible or _map_screen.visible:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	_arsenal_view.open_for(member)
 	_game_command_bar.visible = false
@@ -2011,6 +2019,33 @@ func _toggle_inventory() -> void:
 		_inventory_view.open_for(game_session)
 		_game_command_bar.visible = false
 		_dpad.visible = false
+
+
+func _open_ground_loot(container_id: String) -> void:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
+		return
+	var container: Dictionary = game_session.ground_container_by_id(container_id)
+	if container.is_empty():
+		return
+	var cell := Vector2i(int(container["x"]), int(container["y"]))
+	if absi(cell.x - game_session.player_pos.x) + absi(cell.y - game_session.player_pos.y) > 1:
+		return
+	_ground_loot_view.open_for(game_session, container_id)
+	_game_command_bar.visible = false
+	_dpad.visible = false
+
+
+func _on_ground_loot_closed() -> void:
+	if is_play_mode and not _combat_active and _victory_view == null:
+		_game_command_bar.visible = true
+		_dpad.visible = true
+		_canvas.grab_focus()
+
+
+func _on_ground_loot_changed() -> void:
+	_canvas.queue_redraw()
+	_refresh_stats()
+	_refresh_map_overlays()
 
 
 func _on_inventory_closed() -> void:
@@ -2082,7 +2117,7 @@ func _log_trigger_events() -> void:
 
 
 func _try_move_player(dx: int, dy: int) -> void:
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _game_system_menu.visible or _map_screen.visible:
+	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	if _canvas.is_player_moving():
 		return
@@ -2109,6 +2144,10 @@ func _try_move_player(dx: int, dy: int) -> void:
 			await _canvas.player_step_finished
 			if not is_play_mode or game_session != moving_session:
 				return
+		elif not moving_session.ground_container_at(moving_session.player_pos).is_empty():
+			await _canvas.player_step_finished
+			if not is_play_mode or game_session != moving_session:
+				return
 	# Теперь сундук обновляется после прибытия, не во время движения.
 	_canvas.queue_redraw()
 	_refresh_map_overlays()
@@ -2125,6 +2164,10 @@ func _try_move_player(dx: int, dy: int) -> void:
 		return
 	if game_session.is_completed:
 		_show_victory_view()
+		return
+	var ground: Dictionary = game_session.ground_container_at(game_session.player_pos)
+	if not ground.is_empty():
+		_open_ground_loot(str(ground["id"]))
 		return
 	if not game_session.last_event_message.is_empty():
 		_show_game_event(game_session.last_event_message)
@@ -2256,6 +2299,9 @@ func _lose_combat() -> void:
 	_hero_hud.visible = true
 	_refresh_map_overlays()
 	_canvas.grab_focus()
+	var ground: Dictionary = game_session.ground_container_at(game_session.player_pos)
+	if not ground.is_empty():
+		_open_ground_loot(str(ground["id"]))
 
 
 ## Финальный экран не уничтожает карту и сессию, а лишь блокирует исследование.

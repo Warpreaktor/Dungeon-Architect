@@ -33,6 +33,7 @@ var last_event_message: String = ""
 var encounter_monster_id: String = ""
 var encounter_target := Vector2i(-1, -1)
 var debug_open_map: bool = false # Только для теста редактора, никогда не сериализуется.
+var _revealed_before_debug_open_map: Array = []
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
 var fallen_encounters: Array = []
@@ -353,6 +354,7 @@ func next_map_id() -> String:
 
 
 func _init_masks() -> void:
+	_revealed_before_debug_open_map.clear()
 	revealed.clear()
 	visible.clear()
 	for y in range(map_data.height):
@@ -817,7 +819,20 @@ func _collect_pickups_at(cell: Vector2i) -> void:
 		_append_event_message(pickup_message)
 
 
+func set_debug_open_map(enabled: bool) -> void:
+	if debug_open_map == enabled:
+		return
+	debug_open_map = enabled
+	if not enabled:
+		if _revealed_before_debug_open_map.size() == revealed.size():
+			revealed = _revealed_before_debug_open_map.duplicate(true)
+		_revealed_before_debug_open_map.clear()
+	_refresh_visibility()
+
+
 func _refresh_visibility() -> void:
+	if debug_open_map and _revealed_before_debug_open_map.is_empty():
+		_revealed_before_debug_open_map = revealed.duplicate(true)
 	for y in range(map_data.height):
 		for x in range(map_data.width):
 			visible[y][x] = debug_open_map

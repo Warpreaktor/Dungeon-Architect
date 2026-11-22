@@ -144,9 +144,6 @@ var _game_dialogue: GameDialogueView
 var _pending_game_messages: Array[Dictionary] = []
 var _editor_controls: Array[Control] = []
 var _play_button: Button
-var _testing_menu: MenuButton
-var _test_open_map: bool = false
-const TEST_OPTION_OPEN_MAP := 1
 var _load_paths: Array[String] = []
 var _load_list: ItemList
 var _library_actions: HBoxContainer
@@ -321,18 +318,6 @@ func _build_interface() -> void:
 	_play_button.custom_minimum_size.y = 44
 	toolbar.add_child(_play_button)
 
-	# Кнопка запуска всегда отдельная, шестерёнка меняет только параметры теста.
-	_testing_menu = MenuButton.new()
-	_testing_menu.name = "TestingMenu"
-	_testing_menu.icon = COMMAND_ICONS["settings"]
-	_testing_menu.custom_minimum_size = Vector2(44, 44)
-	_testing_menu.tooltip_text = "Настройки тестирования"
-	var testing_popup := _testing_menu.get_popup()
-	testing_popup.add_check_item("Открытая карта", TEST_OPTION_OPEN_MAP)
-	testing_popup.set_item_tooltip(0, "Запустить тест без тумана войны")
-	testing_popup.id_pressed.connect(_on_testing_option_selected)
-	toolbar.add_child(_testing_menu)
-	_register_editor_control(_testing_menu)
 
 	var workspace := HBoxContainer.new()
 	workspace.name = "EditorWorkspace"
@@ -414,6 +399,8 @@ func _build_interface() -> void:
 	_game_system_menu = GAME_SYSTEM_MENU_SCENE.instantiate() as GameSystemMenu
 	_game_system_menu.continue_requested.connect(_close_game_system_menu)
 	_game_system_menu.leave_requested.connect(_leave_from_game_system_menu)
+	_game_system_menu.test_open_map_changed.connect(_set_test_open_map)
+	_game_system_menu.console_changed.connect(_set_console_from_game_menu)
 	add_child(_game_system_menu)
 	_arsenal_view = ARSENAL_VIEW_SCRIPT.new() as BattleArsenalView
 	_arsenal_view.closed.connect(_on_arsenal_closed)
@@ -1512,6 +1499,12 @@ func _on_console_visibility_changed(opened: bool) -> void:
 		var index: int = popup.get_item_index(SETTINGS_CONSOLE)
 		if index >= 0:
 			popup.set_item_checked(index, opened)
+	if _game_system_menu != null:
+		_game_system_menu.sync_console(opened)
+
+
+func _set_console_from_game_menu(enabled: bool) -> void:
+	_floating_console.set_open(enabled)
 
 
 func _request_new() -> void:
@@ -1827,7 +1820,7 @@ func _open_game_system_menu() -> void:
 		return
 	_game_command_bar.visible = false
 	_dpad.visible = false
-	_game_system_menu.open_for(standalone_game)
+	_game_system_menu.open_for(standalone_game, game_session.debug_open_map, _floating_console.is_open())
 
 
 func _close_game_system_menu() -> void:
@@ -1873,12 +1866,14 @@ func _refresh_map_overlays() -> void:
 		_mini_overview.refresh()
 
 
-func _on_testing_option_selected(id: int) -> void:
-	if id != TEST_OPTION_OPEN_MAP:
+func _set_test_open_map(enabled: bool) -> void:
+	if game_session == null or not is_play_mode:
 		return
-	_test_open_map = not _test_open_map
-	var popup := _testing_menu.get_popup()
-	popup.set_item_checked(popup.get_item_index(TEST_OPTION_OPEN_MAP), _test_open_map)
+	game_session.set_debug_open_map(enabled)
+	_canvas.queue_redraw()
+	_refresh_map_overlays()
+	if _map_screen.visible:
+		_map_screen.open_for(game_session, _minimap_enabled)
 
 
 func _toggle_play_mode() -> void:
@@ -1896,7 +1891,7 @@ func _start_play_mode() -> void:
 	var session := GameSession.start_for(
 		map_data,
 		_startup_hero_id if standalone_game else _test_hero_id,
-		_test_open_map and not standalone_game
+		false
 	)
 	if session == null:
 		_set_status("Нельзя начать тест: поставь на карте точку старта героя.")
@@ -1964,9 +1959,9 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 
 
 func _update_mode_ui() -> void:
-	_editor_header.visible = not standalone_game
+	_editor_header.visible = not (is_play_mode or standalone_game)
 	_apply_editor_panels()
-	for control in [_file_menu, _settings_menu, _save_button, _undo_button, _redo_button, _layers_menu, _testing_menu]:
+	for control in [_file_menu, _settings_menu, _save_button, _undo_button, _redo_button, _layers_menu]:
 		control.visible = not is_play_mode and not standalone_game
 	_floating_console.set_game_controls_visible(is_play_mode or standalone_game)
 	_play_button.text = "Редактор" if is_play_mode else "Тест"
@@ -2391,7 +2386,10 @@ func _input(event: InputEvent) -> void:
 				return
 			if _game_system_menu.visible:
 				if event.keycode == KEY_ESCAPE:
-					_close_game_system_menu()
+					if _game_system_menu.settings_open():
+						_game_system_menu.close_settings()
+					else:
+						_close_game_system_menu()
 					get_viewport().set_input_as_handled()
 				elif event.keycode in [KEY_I, KEY_W, KEY_A, KEY_S, KEY_D]:
 					get_viewport().set_input_as_handled()

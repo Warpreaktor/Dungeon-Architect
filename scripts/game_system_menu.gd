@@ -1,32 +1,87 @@
 class_name GameSystemMenu
 extends CanvasLayer
 
-## Системный экран поверх пошагового прохождения.
-## Не ставим SceneTree на паузу: игровое управление блокируется владельцем.
 signal continue_requested
 signal leave_requested
+signal test_open_map_changed(enabled: bool)
+signal console_changed(enabled: bool)
 
 @onready var _card: PanelContainer = %Card
 @onready var _continue_button: Button = %ContinueButton
 @onready var _leave_button: Button = %LeaveButton
+@onready var _test_settings_button: Button = %TestSettingsButton
+
+var _settings_popup: PopupPanel
+var _open_map_button: CheckButton
+var _console_button: CheckButton
 
 
 func _ready() -> void:
 	_continue_button.pressed.connect(_on_continue_pressed)
 	_leave_button.pressed.connect(_on_leave_pressed)
+	_test_settings_button.pressed.connect(_open_settings)
+	_build_settings_popup()
 	get_viewport().size_changed.connect(_resize_card)
 	_resize_card()
 	hide()
 
 
-func open_for(standalone: bool) -> void:
-	_leave_button.text = "Главное меню" if standalone else "Редактор"
+func _build_settings_popup() -> void:
+	_settings_popup = PopupPanel.new()
+	_settings_popup.name = "SettingsPopup"
+	add_child(_settings_popup)
+	var margins := MarginContainer.new()
+	margins.add_theme_constant_override("margin_left", 20)
+	margins.add_theme_constant_override("margin_right", 20)
+	margins.add_theme_constant_override("margin_top", 18)
+	margins.add_theme_constant_override("margin_bottom", 18)
+	_settings_popup.add_child(margins)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 12)
+	margins.add_child(column)
+	var title := Label.new()
+	title.text = "Настройки"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(title)
+	_console_button = CheckButton.new()
+	_console_button.text = "Консоль"
+	_console_button.toggled.connect(func(enabled: bool) -> void: console_changed.emit(enabled))
+	column.add_child(_console_button)
+	_open_map_button = CheckButton.new()
+	_open_map_button.text = "Открытая карта"
+	_open_map_button.toggled.connect(func(enabled: bool) -> void: test_open_map_changed.emit(enabled))
+	column.add_child(_open_map_button)
+
+
+func open_for(standalone: bool, open_map: bool = false, console_open: bool = false) -> void:
+	_leave_button.text = "Главное меню" if standalone else "Выйти в редактор"
+	_open_map_button.set_pressed_no_signal(open_map)
+	_console_button.set_pressed_no_signal(console_open)
+	_settings_popup.hide()
 	show()
 	_continue_button.grab_focus()
 
 
 func dismiss() -> void:
+	_settings_popup.hide()
 	hide()
+
+
+func sync_console(opened: bool) -> void:
+	if _console_button != null:
+		_console_button.set_pressed_no_signal(opened)
+
+
+func settings_open() -> bool:
+	return _settings_popup.visible
+
+
+func close_settings() -> void:
+	_settings_popup.hide()
+
+
+func _open_settings() -> void:
+	_settings_popup.popup_centered(Vector2i(330, 180))
 
 
 func _resize_card() -> void:

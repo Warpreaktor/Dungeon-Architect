@@ -89,3 +89,10 @@ custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 text = "Главное меню"
 theme_override_styles/normal = SubResource("StyleBoxFlat_secondary")
+
+[node name="TestSettingsButton" type="Button" parent="Center/Card/Margins/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+text = "Настройки"
+theme_override_styles/normal = SubResource("StyleBoxFlat_secondary")

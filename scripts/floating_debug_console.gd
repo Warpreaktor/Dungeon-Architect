@@ -112,8 +112,8 @@ func is_open() -> bool:
 	return _panel.visible
 
 
-func set_game_controls_visible(is_game: bool) -> void:
-	_gear.visible = is_game
+func set_game_controls_visible(_is_game: bool) -> void:
+	_gear.visible = false
 
 
 func _fit_to_viewport() -> void:

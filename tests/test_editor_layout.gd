@@ -16,9 +16,8 @@ func _run() -> void:
 	var file_menu := toolbar.get_node("FileMenu") as MenuButton
 	var settings_menu := toolbar.get_node("SettingsMenu") as MenuButton
 	var layers_menu := toolbar.get_node("LayersMenu") as MenuButton
-	var testing_menu := toolbar.get_node("TestingMenu") as MenuButton
 	var issues_button := toolbar.get_node("IssuesToggle") as Button
-	assert(file_menu != null and settings_menu != null and layers_menu != null and testing_menu != null)
+	assert(file_menu != null and settings_menu != null and layers_menu != null)
 	assert(issues_button != null and not issues_button.visible)
 	assert(settings_menu.get_index() == file_menu.get_index() + 1)
 	assert(settings_menu.get_popup().get_item_index(1) >= 0)
@@ -28,7 +27,7 @@ func _run() -> void:
 	assert(brand.tooltip_text == "DUNGEON / ARCHITECT")
 	assert(file_menu.get_popup().get_item_index(2) >= 0) # Новая карта
 	assert(file_menu.get_popup().get_item_index(5) >= 0) # Экспорт JSON
-	assert(testing_menu.get_popup().get_item_index(1) >= 0) # Открытая карта
+	assert(not toolbar.has_node("TestingMenu"))
 
 	var workspace := editor.get_node("EditorLayout/EditorWorkspace") as HBoxContainer
 	var palette := workspace.get_node("PalettePanel") as PanelContainer

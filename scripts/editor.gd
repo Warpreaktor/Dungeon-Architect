@@ -2153,10 +2153,9 @@ func _try_move_player(dx: int, dy: int) -> void:
 	_refresh_map_overlays()
 	_refresh_stats()
 	_flash_party_damage()
-	if game_session.is_party_defeated():
-		if not game_session.last_event_message.is_empty():
-			_show_game_event(game_session.last_event_message)
-		_show_end_view(true)
+	var casualties: Array[HeroState] = game_session.take_casualty_events()
+	if not casualties.is_empty():
+		_show_defeat_view(casualties)
 		return
 	_log_trigger_events()
 	_collect_game_messages()
@@ -2261,8 +2260,9 @@ func _finish_combat() -> void:
 	_refresh_map_overlays()
 	_refresh_stats()
 	_flash_party_damage()
-	if game_session.is_party_defeated():
-		_show_end_view(true)
+	var casualties: Array[HeroState] = game_session.take_casualty_events()
+	if not casualties.is_empty():
+		_show_defeat_view(casualties)
 		return
 	_log_trigger_events()
 	_collect_game_messages()
@@ -2290,27 +2290,57 @@ func _lose_combat() -> void:
 	_canvas.center_on_cell(game_session.player_pos)
 	_canvas.queue_redraw()
 	_refresh_stats()
-	if game_session.is_party_defeated():
-		_show_end_view(true)
+	_show_defeat_view(game_session.take_casualty_events())
+
+
+func _show_defeat_view(casualties: Array[HeroState]) -> void:
+	if not is_play_mode or game_session == null or casualties.is_empty() or _victory_view != null:
 		return
+	_clear_held_movement()
+	_dpad.visible = false
+	_game_command_bar.visible = false
+	_mini_map.visible = false
+	_hero_hud.visible = false
+	_game_notice.clear()
+	_pending_next_map = null
+	_victory_view = VICTORY_VIEW_SCENE.instantiate() as VictoryView
+	add_child(_victory_view)
+	_victory_view.editor_requested.connect(_stop_play_mode)
+	if standalone_game:
+		_victory_view.set_exit_text("В меню")
+	if game_session.is_party_defeated():
+		_victory_view.show_game_over(game_session.steps, casualties)
+	else:
+		_victory_view.retry_requested.connect(_continue_after_defeat)
+		_victory_view.show_party_defeat(game_session.steps, casualties, game_session.hero)
+
+
+func _continue_after_defeat() -> void:
+	if game_session == null or game_session.is_party_defeated() or _victory_view == null or not _victory_view.is_party_defeat:
+		return
+	_remove_victory_view()
 	_game_command_bar.visible = true
 	_dpad.visible = true
 	_mini_map.visible = _minimap_enabled
 	_hero_hud.visible = true
+	_refresh_stats()
 	_refresh_map_overlays()
 	_canvas.grab_focus()
+	_log_trigger_events()
+	_collect_game_messages()
+	if _game_dialogue.visible:
+		return
+	if game_session.is_completed:
+		_show_victory_view()
+		return
 	var ground: Dictionary = game_session.ground_container_at(game_session.player_pos)
 	if not ground.is_empty():
 		_open_ground_loot(str(ground["id"]))
+	if not game_session.last_event_message.is_empty():
+		_show_game_event(game_session.last_event_message)
 
 
-## Финальный экран не уничтожает карту и сессию, а лишь блокирует исследование.
-## Позже эту же сцену можно будет использовать как экран завершения этажа.
 func _show_victory_view() -> void:
-	_show_end_view(false)
-
-
-func _show_end_view(defeated: bool) -> void:
 	if not is_play_mode or game_session == null or _victory_view != null or _game_dialogue.visible:
 		return
 	_dpad.visible = false
@@ -2319,35 +2349,29 @@ func _show_end_view(defeated: bool) -> void:
 	_hero_hud.visible = false
 	_game_notice.clear()
 	_pending_next_map = null
-	if not defeated:
-		var target_id: String = game_session.next_map_id()
-		if not target_id.is_empty():
-			_pending_next_map = _find_linked_map(target_id)
-			if _pending_next_map == null:
-				_set_status("Связанное подземелье не найдено. Проверь выбор карты у лестницы.")
-			elif _pending_next_map.find_entity_position("player_spawn").x < 0:
-				_set_status("На следующем уровне отсутствует точка старта героя.")
-				_pending_next_map = null
+	var target_id: String = game_session.next_map_id()
+	if not target_id.is_empty():
+		_pending_next_map = _find_linked_map(target_id)
+		if _pending_next_map == null:
+			_set_status("Связанное подземелье не найдено. Проверь выбор карты у лестницы.")
+		elif _pending_next_map.find_entity_position("player_spawn").x < 0:
+			_set_status("На следующем уровне отсутствует точка старта героя.")
+			_pending_next_map = null
 	_victory_view = VICTORY_VIEW_SCENE.instantiate() as VictoryView
 	add_child(_victory_view)
-	if not defeated:
-		if _pending_next_map != null:
-			_victory_view.retry_requested.connect(_enter_next_floor)
-		else:
-			_victory_view.retry_requested.connect(_restart_test_after_victory)
+	if _pending_next_map != null:
+		_victory_view.retry_requested.connect(_enter_next_floor)
+	else:
+		_victory_view.retry_requested.connect(_restart_test_after_victory)
 	_victory_view.editor_requested.connect(_stop_play_mode)
 	if standalone_game:
 		_victory_view.set_exit_text("В меню")
-	if defeated:
-		game_session.record_casualties()
-		_victory_view.show_game_over(game_session.steps)
+	if _pending_next_map != null:
+		_victory_view.show_floor_transition(game_session.steps, _pending_next_map.display_name)
+		_set_status("Следующий уровень: %s." % _pending_next_map.display_name)
 	else:
-		if _pending_next_map != null:
-			_victory_view.show_floor_transition(game_session.steps, _pending_next_map.display_name)
-			_set_status("Следующий уровень: %s." % _pending_next_map.display_name)
-		else:
-			_victory_view.show_result(game_session.steps)
-			_set_status("Приключение завершено: выход найден.")
+		_victory_view.show_result(game_session.steps)
+		_set_status("Приключение завершено: выход найден.")
 
 
 func _enter_next_floor() -> void:
@@ -2448,7 +2472,10 @@ func _input(event: InputEvent) -> void:
 				return
 			if _victory_view != null:
 				if event.keycode == KEY_ESCAPE:
-					_stop_play_mode()
+					if _victory_view.is_party_defeat:
+						_continue_after_defeat()
+					else:
+						_stop_play_mode()
 					get_viewport().set_input_as_handled()
 				elif event.keycode in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_A, KEY_S, KEY_D]:
 					get_viewport().set_input_as_handled()

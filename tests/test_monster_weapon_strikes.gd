@@ -24,23 +24,22 @@ func _initialize() -> void:
 		actor.equipped_weapon_id = ""
 		assert(AbilityExecutor.preview_damage(actor, ram, ram.effects[0]) == armed_ram)
 
-	for monster_id in ["skeleton", "fallen_hero"]:
-		var monster: MonsterDefinition = MonsterCatalog.get_monster(monster_id)
-		var fallback: String = monster.weapon_replaced_ability_id
-		assert(monster.weapon_spawn_chance_percent > 0)
-		var forced: MonsterDefinition = monster.duplicate(true) as MonsterDefinition
-		forced.weapon_spawn_chance_percent = 100
-		var a: BattleState = BattleState.begin(forced, null, 82)
-		var b: BattleState = BattleState.begin(forced, null, 82)
-		assert(a.get_enemy().equipped_weapon_id == b.get_enemy().equipped_weapon_id)
-		assert(not a.get_enemy().equipped_weapon_id.is_empty())
-		assert(a.get_enemy().action_chain == b.get_enemy().action_chain)
-		assert(a.get_enemy().action_chain.has(MonsterWeaponStrike.ability_id(a.get_enemy().equipped_weapon_id)))
-		assert(not a.get_enemy().action_chain.has(fallback))
-		forced.weapon_spawn_chance_percent = 0
-		var unarmed: BattleState = BattleState.begin(forced, null, 82)
-		assert(unarmed.get_enemy().equipped_weapon_id.is_empty())
-		assert(unarmed.get_enemy().action_chain.has(fallback))
+	var monster: MonsterDefinition = MonsterCatalog.get_monster("skeleton")
+	var fallback: String = monster.weapon_replaced_ability_id
+	assert(monster.weapon_spawn_chance_percent > 0)
+	var forced: MonsterDefinition = monster.duplicate(true) as MonsterDefinition
+	forced.weapon_spawn_chance_percent = 100
+	var a: BattleState = BattleState.begin(forced, null, 82)
+	var b: BattleState = BattleState.begin(forced, null, 82)
+	assert(a.get_enemy().equipped_weapon_id == b.get_enemy().equipped_weapon_id)
+	assert(not a.get_enemy().equipped_weapon_id.is_empty())
+	assert(a.get_enemy().action_chain == b.get_enemy().action_chain)
+	assert(a.get_enemy().action_chain.has(MonsterWeaponStrike.ability_id(a.get_enemy().equipped_weapon_id)))
+	assert(not a.get_enemy().action_chain.has(fallback))
+	forced.weapon_spawn_chance_percent = 0
+	var unarmed: BattleState = BattleState.begin(forced, null, 82)
+	assert(unarmed.get_enemy().equipped_weapon_id.is_empty())
+	assert(unarmed.get_enemy().action_chain.has(fallback))
 
 	var armed_skeleton: MonsterDefinition = MonsterCatalog.get_monster("skeleton").duplicate(true) as MonsterDefinition
 	armed_skeleton.weapon_spawn_chance_percent = 100

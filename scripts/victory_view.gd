@@ -6,6 +6,8 @@ extends CanvasLayer
 signal retry_requested
 signal editor_requested
 
+var is_party_defeat: bool = false
+
 @onready var _veil: ColorRect = %Veil
 @onready var _card: PanelContainer = %Card
 @onready var _steps_label: Label = %StepsLabel
@@ -13,6 +15,7 @@ signal editor_requested
 @onready var _title: Label = %Title
 @onready var _description: Label = %Description
 @onready var _emblem: TextureRect = %Emblem
+@onready var _top_line: ColorRect = %TopLine
 @onready var _retry_button: Button = %RetryButton
 @onready var _editor_button: Button = %EditorButton
 
@@ -45,17 +48,43 @@ func show_floor_transition(step_count: int, next_name: String) -> void:
 	_retry_button.text = "Продолжить"
 
 
-func show_game_over(step_count: int) -> void:
+func show_party_defeat(step_count: int, fallen: Array[HeroState], survivor: HeroState) -> void:
+	is_party_defeat = true
+	_apply_defeat_style(fallen)
+	_eyebrow.text = "ОТРЯД ПОНЁС ПОТЕРИ"
+	_title.text = "ГЕРОЙ ПОГИБ" if fallen.size() == 1 else "ГЕРОИ ПОГИБЛИ"
+	_description.text = "Погибли: %s\nПродолжает путь: %s" % [
+		_fallen_names(fallen), survivor.definition.display_name]
+	_steps_label.text = "Ходов сделано: %d" % step_count
+	_retry_button.text = "Продолжить"
+	_retry_button.grab_focus()
+
+
+func show_game_over(step_count: int, fallen: Array[HeroState]) -> void:
+	is_party_defeat = false
+	_apply_defeat_style(fallen)
 	_eyebrow.text = "ПОХОД ЗАВЕРШЁН"
 	_title.text = "GAME OVER"
-	_description.text = "Все герои отряда погибли."
+	_description.text = "Погибли: %s\nВ отряде не осталось живых героев." % _fallen_names(fallen)
+	_steps_label.text = "Ходов сделано: %d" % step_count
 	_retry_button.hide()
 	_editor_button.grab_focus()
-	_emblem.texture = null
+
+
+func _fallen_names(fallen: Array[HeroState]) -> String:
+	var names: Array[String] = []
+	for member in fallen:
+		if member != null and member.definition != null:
+			names.append(member.definition.display_name)
+	return ", ".join(names)
+
+
+func _apply_defeat_style(fallen: Array[HeroState]) -> void:
+	_emblem.texture = fallen[0].definition.portrait if not fallen.is_empty() else null
+	_top_line.color = Color("#ba6b66")
 	var frame := _card.get_theme_stylebox("panel").duplicate(true) as StyleBoxFlat
 	frame.border_color = Color("#ba6b66")
 	_card.add_theme_stylebox_override("panel", frame)
-	_steps_label.text = "Ходов сделано: %d" % step_count
 	_title.add_theme_color_override("font_color", Color("#e5a09d"))
 	_eyebrow.add_theme_color_override("font_color", Color("#d48e86"))
 

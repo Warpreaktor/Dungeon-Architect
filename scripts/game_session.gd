@@ -13,6 +13,7 @@ var hero: HeroState
 var party: Array[HeroState] = []
 var fallen_heroes: Array[HeroState] = []
 var fallen_hero_locations: Array[Dictionary] = []
+var _casualty_events: Array[HeroState] = []
 var trap_random: RandomNumberGenerator = RandomNumberGenerator.new()
 var _party_damage_events: Array[Dictionary] = []
 var player_pos := Vector2i(-1, -1)
@@ -38,7 +39,6 @@ var debug_open_map: bool = false # Только для теста редакто
 var _revealed_before_debug_open_map: Array = []
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
-var fallen_encounters: Array = []
 var ground_loot_containers: Array[Dictionary] = []
 var _ground_loot_counter: int = 0
 var claimed_exit_rewards: Dictionary = {}
@@ -371,6 +371,12 @@ func _shield_durability_for_drop(member: HeroState, item_id: String) -> int:
 	return durability
 
 
+func take_casualty_events() -> Array[HeroState]:
+	var events: Array[HeroState] = _casualty_events.duplicate()
+	_casualty_events.clear()
+	return events
+
+
 func record_casualties() -> Array[HeroState]:
 	var casualties: Array[HeroState] = []
 	for member in party:
@@ -455,6 +461,7 @@ func record_casualties() -> Array[HeroState]:
 	potions = int(carried_items.get("potion", 0))
 	_append_ground_loot(player_pos, ground)
 	hero = survivor
+	_casualty_events.append_array(casualties)
 	return casualties
 
 
@@ -583,7 +590,6 @@ func enter_map(next_map: DungeonMap) -> bool:
 	if map_data != null:
 		_floor_states[map_data.map_id] = {
 			"map": map_data,
-			"fallen": fallen_encounters.duplicate(true),
 			"ground_loot": ground_loot_containers.duplicate(true),
 			"exit_rewards": claimed_exit_rewards.duplicate(true),
 			"position": player_pos,
@@ -597,7 +603,6 @@ func enter_map(next_map: DungeonMap) -> bool:
 		}
 	var saved: Dictionary = _floor_states.get(next_map.map_id, {})
 	map_data = saved.get("map", next_map)
-	fallen_encounters = saved.get("fallen", []).duplicate(true)
 	ground_loot_containers.clear()
 	for container in saved.get("ground_loot", []):
 		ground_loot_containers.append(container.duplicate(true))
@@ -617,6 +622,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	_message_events.clear()
 	_trigger_events.clear()
 	_party_damage_events.clear()
+	_casualty_events.clear()
 	_init_masks()
 	if saved.has("revealed"):
 		revealed = saved["revealed"].duplicate(true)
@@ -687,9 +693,6 @@ func is_trap_revealed(entity: Dictionary) -> bool:
 
 func entities_at(x: int, y: int) -> Array:
 	var result: Array = map_data.entities_at(x, y)
-	for entity in fallen_encounters:
-		if int(entity["x"]) == x and int(entity["y"]) == y:
-			result.append(entity)
 	var container: Dictionary = ground_container_at(Vector2i(x, y))
 	if not container.is_empty():
 		result.append({"type": "ground_loot", "id": container["id"], "x": x, "y": y})
@@ -712,7 +715,7 @@ func pending_monster_definitions() -> Array[MonsterDefinition]:
 	var result: Array[MonsterDefinition] = []
 	if not has_pending_encounter():
 		return result
-	for entity in map_data.entities + fallen_encounters:
+	for entity in map_data.entities:
 		if str(entity.get("id", "")) != encounter_monster_id or str(entity.get("type", "")) != "monster":
 			continue
 		for monster_id in DungeonMap.monster_party_ids(entity):
@@ -734,25 +737,20 @@ func win_pending_encounter() -> bool:
 	var target: Vector2i = encounter_target
 	var defeated_id: String = encounter_monster_id
 	var defeated: Dictionary = {}
-	for entity in map_data.entities + fallen_encounters:
+	for entity in map_data.entities:
 		if str(entity.get("id", "")) == defeated_id and str(entity.get("type", "")) == "monster":
 			defeated = entity
 			break
 	removed_entities[defeated_id] = true
-	if defeated.has("fallen_rewards"):
-		fallen_encounters.erase(defeated)
 	encounter_monster_id = ""
 	encounter_target = Vector2i(-1, -1)
 	var rewards: Array[Dictionary] = []
 	if not defeated.is_empty():
-		if defeated.has("fallen_rewards"):
-			rewards.assign(defeated["fallen_rewards"])
-		else:
-			rewards = _resolve_rewards(
-				DungeonMap.monster_loot_contents(defeated),
-				DungeonMap.monster_loot_is_random(defeated),
-				DungeonMap.monster_gold_amount(defeated),
-				DungeonMap.monster_item_quantities(defeated))
+		rewards = _resolve_rewards(
+			DungeonMap.monster_loot_contents(defeated),
+			DungeonMap.monster_loot_is_random(defeated),
+			DungeonMap.monster_gold_amount(defeated),
+			DungeonMap.monster_item_quantities(defeated))
 		for reward in rewards:
 			_receive_item(str(reward["item_id"]), int(reward["quantity"]), reward.get("durabilities", []))
 		if not rewards.is_empty():

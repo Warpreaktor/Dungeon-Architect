@@ -80,9 +80,16 @@ func equipment_item_id(slot_id: String) -> String:
 
 
 func inventory_slot_ids() -> Array[String]:
-	if _inventory_order.size() != INVENTORY_SLOT_COUNT:
-		_inventory_order.resize(INVENTORY_SLOT_COUNT)
-		_inventory_order.fill("")
+	_inventory_order = _inventory_slots_snapshot()
+	return _inventory_order.duplicate()
+
+
+func _inventory_slots_snapshot() -> Array[String]:
+	var bag: Array[String] = []
+	bag.assign(_inventory_order)
+	if bag.size() != INVENTORY_SLOT_COUNT:
+		bag.resize(INVENTORY_SLOT_COUNT)
+		bag.fill("")
 	var remaining: Dictionary = {}
 	for key in carried_items:
 		var item_id: String = str(key)
@@ -99,26 +106,26 @@ func inventory_slot_ids() -> Array[String]:
 			var item_id: String = _member_equipment_id(member, slot_id)
 			if not item_id.is_empty():
 				remaining[item_id] = maxi(0, int(remaining.get(item_id, 0)) - 1)
-	for index in range(_inventory_order.size()):
-		var item_id: String = _inventory_order[index]
+	for index in range(bag.size()):
+		var item_id: String = bag[index]
 		if item_id.is_empty():
 			continue
 		var count: int = int(remaining.get(item_id, 0))
 		if count > 0:
 			remaining[item_id] = count - 1
 		else:
-			_inventory_order[index] = ""
+			bag[index] = ""
 	var ids: Array[String] = []
 	for key in remaining:
 		ids.append(str(key))
 	ids.sort()
 	for item_id in ids:
 		for entry in range(int(remaining[item_id])):
-			var empty_index: int = _inventory_order.find("")
+			var empty_index: int = bag.find("")
 			if empty_index < 0:
 				break
-			_inventory_order[empty_index] = item_id
-	return _inventory_order.duplicate()
+			bag[empty_index] = item_id
+	return bag
 
 
 func swap_inventory_slots(source: int, destination: int) -> bool:
@@ -144,6 +151,63 @@ func _can_equip_layout(equipped: Dictionary) -> bool:
 	return true
 
 
+func _is_shield(item_id: String) -> bool:
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	return item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD
+
+
+func _shield_layout(bag: Array[String], equipped: Dictionary) -> Dictionary:
+	var values_at: Dictionary = {}
+	var cursors: Dictionary = {}
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		var item_id: String = str(equipped.get(slot_id, ""))
+		if _is_shield(item_id):
+			var values: Array = hero.shield_durabilities.get(item_id, [])
+			var cursor: int = int(cursors.get(item_id, 0))
+			values_at["equipment:%s" % slot_id] = int(values[cursor]) if cursor < values.size() else _new_shield_durability(item_id)
+			cursors[item_id] = cursor + 1
+	for index in range(bag.size()):
+		var item_id: String = bag[index]
+		if _is_shield(item_id):
+			var values: Array = hero.shield_durabilities.get(item_id, [])
+			var cursor: int = int(cursors.get(item_id, 0))
+			values_at["bag:%d" % index] = int(values[cursor]) if cursor < values.size() else _new_shield_durability(item_id)
+			cursors[item_id] = cursor + 1
+	return values_at
+
+
+func _new_shield_durability(item_id: String) -> int:
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	return maxi(item.max_durability, item.defense_bonus) if item != null else 0
+
+
+func _apply_shield_layout(bag: Array[String], equipped: Dictionary, values_at: Dictionary) -> void:
+	var updated: Dictionary = hero.shield_durabilities.duplicate(true)
+	for item_id in updated.keys():
+		if _is_shield(str(item_id)):
+			updated.erase(item_id)
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		var item_id: String = str(equipped.get(slot_id, ""))
+		if _is_shield(item_id):
+			var values: Array = updated.get(item_id, [])
+			values.append(int(values_at.get("equipment:%s" % slot_id, _new_shield_durability(item_id))))
+			updated[item_id] = values
+	for index in range(bag.size()):
+		var item_id: String = bag[index]
+		if _is_shield(item_id):
+			var values: Array = updated.get(item_id, [])
+			values.append(int(values_at.get("bag:%d" % index, _new_shield_durability(item_id))))
+			updated[item_id] = values
+	hero.shield_durabilities = updated
+
+
+func inventory_shield_durability(index: int) -> int:
+	var bag: Array[String] = _inventory_slots_snapshot()
+	if index < 0 or index >= bag.size() or not _is_shield(bag[index]) or hero == null:
+		return 0
+	return int(_shield_layout(bag, _equipment_snapshot()).get("bag:%d" % index, 0))
+
+
 func can_transfer_inventory_item(from_kind: String, from_slot: Variant, to_kind: String, to_slot: Variant) -> bool:
 	return _planned_inventory_transfer(from_kind, from_slot, to_kind, to_slot).size() > 0
 
@@ -164,6 +228,7 @@ func transfer_inventory_item(from_kind: String, from_slot: Variant, to_kind: Str
 			else:
 				hero.equipped_accessories[slot_id] = item_id
 	hero._recalculate_equipment_stats()
+	_apply_shield_layout(_inventory_order, equipped, plan["shield_layout"])
 	return true
 
 
@@ -172,8 +237,9 @@ func _planned_inventory_transfer(from_kind: String, from_slot: Variant, to_kind:
 		return {}
 	if (from_kind == "bag" and typeof(from_slot) != TYPE_INT) or (to_kind == "bag" and typeof(to_slot) != TYPE_INT):
 		return {}
-	var bag: Array[String] = inventory_slot_ids()
+	var bag: Array[String] = _inventory_slots_snapshot()
 	var equipped: Dictionary = _equipment_snapshot()
+	var shield_layout: Dictionary = _shield_layout(bag, equipped)
 	var source: String = ""
 	var target: String = ""
 	var source_index: int = -1
@@ -208,6 +274,12 @@ func _planned_inventory_transfer(from_kind: String, from_slot: Variant, to_kind:
 		return {}
 	if from_kind == "equipment" and not target.is_empty() and not EquipmentSlotRules.accepts(source_slot, ItemCatalog.get_item(target)):
 		return {}
+	var source_location: String = "bag:%d" % source_index if from_kind == "bag" else "equipment:%s" % source_slot
+	var target_location: String = "bag:%d" % target_index if to_kind == "bag" else "equipment:%s" % target_slot
+	var source_durability: Variant = shield_layout.get(source_location)
+	var target_durability: Variant = shield_layout.get(target_location)
+	shield_layout.erase(source_location)
+	shield_layout.erase(target_location)
 	if from_kind == "bag":
 		bag[source_index] = target
 	else:
@@ -216,6 +288,10 @@ func _planned_inventory_transfer(from_kind: String, from_slot: Variant, to_kind:
 		bag[target_index] = source
 	else:
 		equipped[target_slot] = source
+	if source_durability != null:
+		shield_layout[target_location] = source_durability
+	if target_durability != null:
+		shield_layout[source_location] = target_durability
 	var current_weapon: ItemDefinition = ItemCatalog.get_item(str(equipped["main_hand"]))
 	if current_weapon != null and current_weapon.two_handed and not str(equipped["off_hand"]).is_empty():
 		var off_hand: String = str(equipped["off_hand"])
@@ -224,9 +300,12 @@ func _planned_inventory_transfer(from_kind: String, from_slot: Variant, to_kind:
 			return {}
 		bag[free_index] = off_hand
 		equipped["off_hand"] = ""
+		if shield_layout.has("equipment:off_hand"):
+			shield_layout["bag:%d" % free_index] = shield_layout["equipment:off_hand"]
+			shield_layout.erase("equipment:off_hand")
 	if not _can_equip_layout(equipped):
 		return {}
-	return {"bag": bag, "equipment": equipped}
+	return {"bag": bag, "equipment": equipped, "shield_layout": shield_layout}
 
 
 func party_members() -> Array[HeroState]:
@@ -300,11 +379,17 @@ func record_casualties() -> Array[HeroState]:
 	if casualties.is_empty():
 		return casualties
 	var bag: Array[String] = inventory_slot_ids()
+	var bag_shields: Dictionary = _shield_layout(bag, _equipment_snapshot()) if hero != null else {}
 	var survivor: HeroState = null
 	for member in party:
 		if member != null and member.health > 0:
 			survivor = member
 			break
+	if survivor != null:
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			var item_id: String = _member_equipment_id(survivor, slot_id)
+			if _is_shield(item_id):
+				bag_shields["equipment:%s" % slot_id] = survivor.current_shield_durability(item_id)
 	var ground: Array[Dictionary] = []
 	var death_gold: int = 0
 	for member in casualties:
@@ -313,32 +398,31 @@ func record_casualties() -> Array[HeroState]:
 			var item_id: String = _member_equipment_id(member, slot_id)
 			if not item_id.is_empty():
 				equipped_at_death[slot_id] = item_id
+		var durability_at_death: Dictionary = member.shield_durabilities.duplicate(true)
 		var member_gold: int = member.gold
 		death_gold += member_gold
 		member.gold = 0
 		if survivor != null:
-			for item_id in equipped_at_death.values():
-				var item: ItemDefinition = ItemCatalog.get_item(str(item_id))
-				var empty_index: int = bag.find("")
-				if empty_index >= 0:
-					bag[empty_index] = str(item_id)
+			for slot_id in equipped_at_death:
+				var item_id: String = str(equipped_at_death[slot_id])
+				var durability: int = _shield_durability_for_drop(member, item_id) if _is_shield(item_id) else 0
+				var free: int = bag.find("")
+				if free >= 0:
+					bag[free] = item_id
+					if _is_shield(item_id):
+						bag_shields["bag:%d" % free] = durability
 				else:
 					carried_items[item_id] = maxi(int(carried_items.get(item_id, 0)) - 1, 0)
-					var entry: Dictionary = {"item_id": str(item_id), "quantity": 1}
-					if item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
-						entry["durabilities"] = [_shield_durability_for_drop(member, str(item_id))]
+					var entry: Dictionary = {"item_id": item_id, "quantity": 1}
+					if _is_shield(item_id):
+						entry["durabilities"] = [durability]
 					ground.append(entry)
-			for item_id in member.shield_durabilities.keys():
-				var values: Array = member.shield_durabilities[item_id]
-				var kept: Array = survivor.shield_durabilities.get(item_id, [])
-				kept.append_array(values)
-				survivor.shield_durabilities[item_id] = kept
-			member.shield_durabilities.clear()
 		_clear_member_equipment(member)
 		fallen_heroes.append(member)
 		fallen_hero_locations.append({
 			"hero": member, "map_id": map_data.map_id,
 			"position": player_pos, "equipment_at_death": equipped_at_death,
+			"shield_durabilities_at_death": durability_at_death,
 			"gold_at_death": member_gold
 		})
 		party.erase(member)
@@ -349,8 +433,7 @@ func record_casualties() -> Array[HeroState]:
 			if amount <= 0:
 				continue
 			var entry: Dictionary = {"item_id": item_id, "quantity": amount}
-			var item: ItemDefinition = ItemCatalog.get_item(item_id)
-			if item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
+			if _is_shield(item_id):
 				var durabilities: Array = []
 				for member in casualties:
 					durabilities.append_array(member.shield_durabilities.get(item_id, []))
@@ -358,6 +441,11 @@ func record_casualties() -> Array[HeroState]:
 			ground.append(entry)
 		carried_items.clear()
 		bag.fill("")
+		for member in casualties:
+			member.shield_durabilities.clear()
+	else:
+		hero = survivor
+		_apply_shield_layout(bag, _equipment_snapshot(), bag_shields)
 		for member in casualties:
 			member.shield_durabilities.clear()
 	if death_gold > 0:
@@ -378,7 +466,7 @@ func _ground_loot_take_count(entry: Dictionary) -> int:
 		return 0
 	if item.category == ItemDefinition.Category.CURRENCY:
 		return quantity
-	var bag: Array[String] = inventory_slot_ids()
+	var bag: Array[String] = _inventory_slots_snapshot()
 	if bag.find("") < 0 and not (item.stackable and bag.has(item_id)):
 		return 0
 	return quantity if item.stackable else 1
@@ -407,24 +495,22 @@ func take_ground_loot(container_id: String, entry_index: int) -> int:
 	if item.category == ItemDefinition.Category.CURRENCY:
 		hero.gold += amount
 	else:
-		var bag: Array[String] = inventory_slot_ids()
+		var bag: Array[String] = _inventory_slots_snapshot()
+		var equipped: Dictionary = _equipment_snapshot()
+		var shield_layout: Dictionary = _shield_layout(bag, equipped)
 		if not (item.stackable and bag.has(item_id)):
 			var free: int = bag.find("")
 			if free < 0:
 				return 0
 			bag[free] = item_id
-			_inventory_order = bag
+			if _is_shield(item_id):
+				var durabilities: Array = entry.get("durabilities", [])
+				shield_layout["bag:%d" % free] = int(durabilities.pop_front()) if not durabilities.is_empty() else _new_shield_durability(item_id)
+				entry["durabilities"] = durabilities
+		_inventory_order = bag
 		carried_items[item_id] = int(carried_items.get(item_id, 0)) + amount
-		if item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
-			var durabilities: Array = entry.get("durabilities", [])
-			for i in range(amount):
-				var saved: Array = hero.shield_durabilities.get(item_id, [])
-				if not durabilities.is_empty():
-					saved.append(int(durabilities.pop_front()))
-				else:
-					saved.append(maxi(item.max_durability, item.defense_bonus))
-				hero.shield_durabilities[item_id] = saved
-			entry["durabilities"] = durabilities
+		if _is_shield(item_id):
+			_apply_shield_layout(bag, equipped, shield_layout)
 		keys = int(carried_items.get("key", 0))
 		potions = int(carried_items.get("potion", 0))
 	entry["quantity"] = int(entry["quantity"]) - amount
@@ -889,32 +975,63 @@ func _open_chest(chest: Dictionary) -> void:
 
 
 ## Общая логика подбора. Описание предмета — Resource, состояние находок — GameSession.
-func _receive_item(item_id: String, quantity: int, durabilities: Array = []) -> void:
+func _receive_item(item_id: String, quantity: int, durabilities: Array = []) -> int:
 	if item_id == "key_yellow":
 		item_id = "key"
-	var item := ItemCatalog.get_item(item_id)
-	if item == null or quantity <= 0:
-		return
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	if item == null or quantity <= 0 or hero == null:
+		return 0
 	if item.category == ItemDefinition.Category.CURRENCY:
 		hero.gold += quantity
-	else:
-		carried_items[item_id] = int(carried_items.get(item_id, 0)) + quantity
-		if item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD:
-			for index in range(quantity):
-				if index < durabilities.size():
-					var values: Array = hero.shield_durabilities.get(item_id, [])
-					values.append(int(durabilities[index]))
-					hero.shield_durabilities[item_id] = values
-				else:
-					hero.register_shield(item)
-		if item.category == ItemDefinition.Category.EQUIPMENT:
-			# Первая находка заполняет пустой слот; следующую можно надеть вручную.
-			if item.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON and hero.equipped_weapon_id.is_empty():
-				hero.equip_item(item)
-			elif item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD and hero.equipped_shield_id.is_empty():
-				hero.equip_item(item)
+		return quantity
+	var bag: Array[String] = _inventory_slots_snapshot()
+	var equipped: Dictionary = _equipment_snapshot()
+	var shield_layout: Dictionary = _shield_layout(bag, equipped)
+	var received: int = 0
+	var overflow_durabilities: Array = []
+	for index in range(quantity):
+		var location: String = ""
+		if item.stackable and bag.has(item_id):
+			location = "stack"
+		elif not item.stackable and item.category == ItemDefinition.Category.EQUIPMENT:
+			if item.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON and str(equipped["main_hand"]).is_empty():
+				if not (item.two_handed and not str(equipped["off_hand"]).is_empty()):
+					location = "equipment:main_hand"
+			elif item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD and str(equipped["off_hand"]).is_empty():
+				var weapon: ItemDefinition = ItemCatalog.get_item(str(equipped["main_hand"]))
+				if weapon == null or not weapon.two_handed:
+					location = "equipment:off_hand"
+		if location.is_empty():
+			var free: int = bag.find("")
+			if free >= 0:
+				location = "bag:%d" % free
+				bag[free] = item_id
+		if location.is_empty():
+			if _is_shield(item_id):
+				overflow_durabilities.append(int(durabilities[index]) if index < durabilities.size() else _new_shield_durability(item_id))
+			continue
+		if location.begins_with("equipment:"):
+			equipped[location.trim_prefix("equipment:")] = item_id
+		if _is_shield(item_id) and location != "stack":
+			shield_layout[location] = int(durabilities[index]) if index < durabilities.size() else _new_shield_durability(item_id)
+		received += 1
+	if received > 0:
+		carried_items[item_id] = int(carried_items.get(item_id, 0)) + received
+		_inventory_order = bag
+		hero.equipped_weapon_id = str(equipped["main_hand"])
+		hero.equipped_shield_id = str(equipped["off_hand"])
+		hero._recalculate_equipment_stats()
+		if _is_shield(item_id):
+			_apply_shield_layout(bag, equipped, shield_layout)
 		keys = int(carried_items.get("key", 0))
 		potions = int(carried_items.get("potion", 0))
+	var overflow: int = quantity - received
+	if overflow > 0:
+		var entry: Dictionary = {"item_id": item_id, "quantity": overflow}
+		if _is_shield(item_id):
+			entry["durabilities"] = overflow_durabilities
+		_append_ground_loot(player_pos, [entry])
+	return received
 
 
 ## Боевой пояс: только расходники, применимые к бойцу вне исполнения фазы.
@@ -961,13 +1078,35 @@ func use_combat_item(item_id: String, battle: BattleState) -> Dictionary:
 func equip_item(item_id: String) -> bool:
 	if hero == null or int(carried_items.get(item_id, 0)) <= 0:
 		return false
-	return hero.equip_item(ItemCatalog.get_item(item_id))
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	if item == null or item.category != ItemDefinition.Category.EQUIPMENT:
+		return false
+	var bag: Array[String] = _inventory_slots_snapshot()
+	var source: int = bag.find(item_id)
+	if source < 0:
+		return false
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		if EquipmentSlotRules.accepts(slot_id, item) and equipment_item_id(slot_id).is_empty():
+			if transfer_inventory_item("bag", source, "equipment", slot_id):
+				return true
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		if EquipmentSlotRules.accepts(slot_id, item) and equipment_item_id(slot_id) != item_id:
+			if transfer_inventory_item("bag", source, "equipment", slot_id):
+				return true
+	return false
 
 
 func unequip_item(item_id: String) -> bool:
-	if hero == null:
+	if hero == null or item_id.is_empty():
 		return false
-	return hero.unequip_item(item_id)
+	var bag: Array[String] = _inventory_slots_snapshot()
+	var free: int = bag.find("")
+	if free < 0:
+		return false
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		if equipment_item_id(slot_id) == item_id:
+			return transfer_inventory_item("equipment", slot_id, "bag", free)
+	return false
 
 
 ## Выполняется после ответной атаки; удаляем только сломанный экземпляр.
@@ -976,7 +1115,9 @@ func resolve_broken_shield() -> String:
 		return ""
 	var item_id: String = hero.last_shield_broken
 	hero.last_shield_broken = ""
-	_remove_carried_item(item_id, 1)
+	var count: int = int(carried_items.get(item_id, 0))
+	if count > 0:
+		carried_items[item_id] = count - 1
 	return item_id
 
 
@@ -998,7 +1139,32 @@ func _remove_carried_item(item_id: String, quantity: int) -> bool:
 	var current: int = int(carried_items.get(item_id, 0))
 	if quantity <= 0 or current < quantity:
 		return false
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	var bag: Array[String] = _inventory_slots_snapshot()
+	var shield_layout: Dictionary = _shield_layout(bag, _equipment_snapshot()) if hero != null and _is_shield(item_id) else {}
+	var equipped_count: int = 0
+	for member in party:
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			if _member_equipment_id(member, slot_id) == item_id:
+				equipped_count += 1
+	if current - quantity < equipped_count:
+		return false
+	if item != null and not item.stackable:
+		var count_in_bag: int = bag.count(item_id)
+		if count_in_bag < quantity:
+			return false
+		for removed in range(mini(count_in_bag, quantity)):
+			var index: int = bag.find(item_id)
+			bag[index] = ""
+			shield_layout.erase("bag:%d" % index)
+	elif current == quantity:
+		var index: int = bag.find(item_id)
+		if index >= 0:
+			bag[index] = ""
 	carried_items[item_id] = current - quantity
+	_inventory_order = bag
+	if _is_shield(item_id) and hero != null:
+		_apply_shield_layout(bag, _equipment_snapshot(), shield_layout)
 	keys = int(carried_items.get("key", 0))
 	potions = int(carried_items.get("potion", 0))
 	return true
@@ -1013,11 +1179,11 @@ func _collect_pickups_at(cell: Vector2i) -> void:
 		if item == null:
 			continue
 		var quantity: int = ItemCatalog.quantity_for_entity(entity)
-		_receive_item(item_id, quantity)
+		var received: int = _receive_item(item_id, quantity)
 		removed_entities[str(entity["id"])] = true
-		# Это запись в свёрнутую техническую консоль, не всплывающее игровое сообщение.
-		var pickup_message := "Получено: %s ×%d" % [item.display_name, quantity]
-		_append_event_message(pickup_message)
+		if received > 0:
+			var pickup_message := "Получено: %s ×%d" % [item.display_name, received]
+			_append_event_message(pickup_message)
 
 
 func set_debug_open_map(enabled: bool) -> void:

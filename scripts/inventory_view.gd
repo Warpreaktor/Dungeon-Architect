@@ -174,10 +174,10 @@ func _show_item(index: int) -> void:
 			var definition: ItemDefinition = ItemCatalog.get_item(child.item_id) if not child.item_id.is_empty() else null
 			var quantity: int = int(_session.carried_items.get(child.item_id, 0)) if definition != null and definition.stackable else 1
 			child.configure(child.slot_index, definition, quantity, child.slot_index == _selected_index, _bag_cell_size, _session)
-	_show_item_definition(item_id)
+	_show_item_definition(item_id, index)
 
 
-func _show_item_definition(item_id: String) -> void:
+func _show_item_definition(item_id: String, bag_index: int = -1) -> void:
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
 	if item == null:
 		return
@@ -214,8 +214,9 @@ func _show_item_definition(item_id: String) -> void:
 	if item.defense_bonus > 0:
 		details += "\nБлок: +%d" % item.defense_bonus
 		if item.max_durability > 0:
-			details += "\nПрочность: %d / %d" % [_session.hero.current_shield_durability(item_id), item.max_durability]
-	if _is_equipped(item_id):
+			var durability: int = _session.inventory_shield_durability(bag_index) if bag_index >= 0 else _session.hero.current_shield_durability(item_id)
+			details += "\nПрочность: %d / %d" % [durability, item.max_durability]
+	if bag_index < 0 and _is_equipped(item_id):
 		details += "\nНадето"
 	_item_properties.text = details.replace("\n", " · ")
 

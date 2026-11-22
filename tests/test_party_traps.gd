@@ -59,8 +59,9 @@ func _initialize() -> void:
 	follow_up.hero.health = 0
 	follow_up.move_by(1, 0)
 	assert(follow_up.hero.health > 0)
-	assert(follow_up.party_members()[0].health == 0)
-	assert(follow_up.party_members()[1].health > 0)
+	assert(follow_up.party_members().size() == 1)
+	assert(follow_up.fallen_heroes.size() == 1)
+	assert(follow_up.fallen_heroes[0].health == 0)
 
 	call_deferred("_verify_hud", members)
 

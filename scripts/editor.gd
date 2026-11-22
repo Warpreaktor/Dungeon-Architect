@@ -1119,7 +1119,10 @@ func _flash_party_damage() -> void:
 	if game_session == null:
 		return
 	for event in game_session.take_party_damage_events():
-		_hero_hud.flash_hero(int(event.get("hero_index", -1)))
+		var member: HeroState = event.get("member") as HeroState
+		var member_index: int = game_session.party_members().find(member)
+		if member_index >= 0:
+			_hero_hud.flash_hero(member_index)
 		_canvas.flash_player_damage()
 
 
@@ -2092,7 +2095,7 @@ func _try_move_player(dx: int, dy: int) -> void:
 			_start_combat()
 		return
 	if moved:
-		if not game_session.hero.has_vision_effect() and _canvas.zoom < DungeonCanvas.PLAY_MIN_ZOOM:
+		if (game_session.hero == null or not game_session.hero.has_vision_effect()) and _canvas.zoom < DungeonCanvas.PLAY_MIN_ZOOM:
 			_canvas.zoom = DungeonCanvas.PLAY_MIN_ZOOM
 		_canvas.animate_player_step(previous_pos, moving_session.player_pos)
 		if not moving_session.pending_chest_id.is_empty():
@@ -2239,10 +2242,20 @@ func _lose_combat() -> void:
 		_battle_view = null
 	_combat_active = false
 	_canvas.zoom = _pre_combat_zoom
+	game_session.record_casualties()
+	game_session.abandon_pending_encounter()
 	_canvas.center_on_cell(game_session.player_pos)
 	_canvas.queue_redraw()
 	_refresh_stats()
-	_show_end_view(true)
+	if game_session.is_party_defeated():
+		_show_end_view(true)
+		return
+	_game_command_bar.visible = true
+	_dpad.visible = true
+	_mini_map.visible = _minimap_enabled
+	_hero_hud.visible = true
+	_refresh_map_overlays()
+	_canvas.grab_focus()
 
 
 ## Финальный экран не уничтожает карту и сессию, а лишь блокирует исследование.
@@ -2271,23 +2284,17 @@ func _show_end_view(defeated: bool) -> void:
 				_pending_next_map = null
 	_victory_view = VICTORY_VIEW_SCENE.instantiate() as VictoryView
 	add_child(_victory_view)
-	if defeated:
-		_victory_view.retry_requested.connect(_resurrect_after_defeat)
-	elif _pending_next_map != null:
-		_victory_view.retry_requested.connect(_enter_next_floor)
-	else:
-		_victory_view.retry_requested.connect(_restart_test_after_victory)
+	if not defeated:
+		if _pending_next_map != null:
+			_victory_view.retry_requested.connect(_enter_next_floor)
+		else:
+			_victory_view.retry_requested.connect(_restart_test_after_victory)
 	_victory_view.editor_requested.connect(_stop_play_mode)
 	if standalone_game:
 		_victory_view.set_exit_text("В меню")
 	if defeated:
-		_victory_view.show_defeat(game_session.steps, game_session.pending_monster_definition())
-		if game_session.record_defeat():
-			_canvas.queue_redraw()
-			_refresh_map_overlays()
-			_set_status("Герой пал. Его имущество осталось у скелета.")
-		else:
-			_set_status("Не удалось разместить скелета; имущество сохранено.")
+		game_session.record_casualties()
+		_victory_view.show_game_over(game_session.steps)
 	else:
 		if _pending_next_map != null:
 			_victory_view.show_floor_transition(game_session.steps, _pending_next_map.display_name)
@@ -2321,23 +2328,6 @@ func _enter_next_floor() -> void:
 	_refresh_map_overlays()
 	_collect_game_messages()
 	_set_status("Ты вошёл в «%s»." % game_session.map_data.display_name)
-
-
-func _resurrect_after_defeat() -> void:
-	if game_session == null or not game_session.resurrect_party():
-		_set_status("Нет места для скелета. Воскрешение невозможно без потери имущества.")
-		return
-	_clear_held_movement()
-	_pending_game_messages.clear()
-	_remove_victory_view()
-	_canvas.set_game_session(game_session)
-	_canvas.zoom = DungeonCanvas.PLAY_START_ZOOM
-	_canvas.center_on_cell(game_session.player_pos)
-	_update_mode_ui()
-	_refresh_stats()
-	_refresh_map_overlays()
-	_canvas.grab_focus()
-	_set_status("Герой воскрес. Верни своё имущество, победив скелета.")
 
 
 func _restart_test_after_victory() -> void:

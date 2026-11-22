@@ -11,6 +11,8 @@ const INVENTORY_SLOT_COUNT: int = 40
 var map_data: DungeonMap
 var hero: HeroState
 var party: Array[HeroState] = []
+var fallen_heroes: Array[HeroState] = []
+var fallen_hero_locations: Array[Dictionary] = []
 var trap_random: RandomNumberGenerator = RandomNumberGenerator.new()
 var _party_damage_events: Array[Dictionary] = []
 var player_pos := Vector2i(-1, -1)
@@ -38,8 +40,6 @@ var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
 var fallen_encounters: Array = []
 var claimed_exit_rewards: Dictionary = {}
-var _next_fallen_id: int = 0
-var _death_recorded: bool = false
 var _floor_states: Dictionary = {} # Состояние посещённых карт только в памяти этого прохождения.
 
 
@@ -225,22 +225,37 @@ func _planned_inventory_transfer(from_kind: String, from_slot: Variant, to_kind:
 
 
 func party_members() -> Array[HeroState]:
-	if party.is_empty():
-		var fallback: Array[HeroState] = []
-		if hero != null:
-			fallback.append(hero)
-		return fallback
-	var result: Array[HeroState] = []
-	result.append_array(party)
-	return result
+	var members: Array[HeroState] = []
+	members.append_array(party)
+	return members
+
+
+func record_casualties() -> Array[HeroState]:
+	var casualties: Array[HeroState] = []
+	for index in range(party.size() - 1, -1, -1):
+		var member: HeroState = party[index]
+		if member != null and member.health > 0:
+			continue
+		party.remove_at(index)
+		if member != null:
+			casualties.push_front(member)
+	for member in casualties:
+		fallen_heroes.append(member)
+		fallen_hero_locations.append({"hero": member, "map_id": map_data.map_id, "position": player_pos})
+	if hero == null or not party.has(hero) or hero.health <= 0:
+		hero = party[0] if not party.is_empty() else null
+	return casualties
+
+
+func abandon_pending_encounter() -> void:
+	encounter_monster_id = ""
+	encounter_target = Vector2i(-1, -1)
 
 
 func add_party_member(hero_id: String) -> bool:
 	if not HeroCatalog.has(hero_id):
 		return false
-	if party.is_empty() and hero != null:
-		party.append(hero)
-	if party.size() >= MAX_PARTY_SIZE:
+	if party.size() >= MAX_PARTY_SIZE or (party.is_empty() and not fallen_heroes.is_empty()):
 		return false
 	var member := HeroState.new(HeroCatalog.get_hero(hero_id))
 	party.append(member)
@@ -250,19 +265,10 @@ func add_party_member(hero_id: String) -> bool:
 
 
 func is_party_defeated() -> bool:
-	for member in party_members():
+	for member in party:
 		if member != null and member.health > 0:
 			return false
 	return true
-
-
-func _update_active_hero() -> void:
-	if hero != null and hero.health > 0:
-		return
-	for member in party_members():
-		if member != null and member.health > 0:
-			hero = member
-			return
 
 
 func has_party_damage_events() -> bool:
@@ -279,7 +285,7 @@ func _record_party_damage(member: HeroState, damage: int, source: String) -> voi
 	if damage <= 0:
 		return
 	var index: int = party_members().find(member)
-	_party_damage_events.append({"hero_index": index, "damage": damage, "source": source})
+	_party_damage_events.append({"hero_index": index, "member": member, "damage": damage, "source": source})
 
 
 func _random_living_party_member() -> HeroState:
@@ -295,7 +301,7 @@ func _random_living_party_member() -> HeroState:
 ## Переход между этажами без пересоздания героя и инвентаря.
 ## Повторное посещение восстанавливает открытые двери, сундуки и исследованные клетки.
 func enter_map(next_map: DungeonMap) -> bool:
-	if next_map == null or next_map.map_id.is_empty():
+	if is_party_defeated() or next_map == null or next_map.map_id.is_empty():
 		return false
 	var spawn := next_map.find_entity_position("player_spawn")
 	if spawn.x < 0 or spawn.y < 0 or next_map.get_terrain(spawn.x, spawn.y) == "wall":
@@ -627,7 +633,7 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 				_append_event_message("%s: %s, -%d HP" % [member.definition.display_name, label, amount])
 	if not is_party_defeated():
 		_activate_traps_at(target)
-	_update_active_hero()
+	record_casualties()
 	if is_party_defeated():
 		_refresh_visibility()
 		return true
@@ -859,130 +865,3 @@ func _claim_exit_reward(stairs: Dictionary) -> void:
 		_receive_item(str(reward["item_id"]), int(reward["quantity"]))
 	if not rewards.is_empty():
 		_message_events.append({"text": "Награда за прохождение подземелья", "activation": "exit_reward", "loot": rewards})
-
-
-func _fallen_loot() -> Array[Dictionary]:
-	var rewards: Array[Dictionary] = []
-	var gold: int = 0
-	for member in party_members():
-		gold += member.gold
-	if gold > 0:
-		rewards.append({"item_id": "gold", "quantity": gold})
-	for item_id in carried_items:
-		var quantity: int = int(carried_items[item_id])
-		if quantity <= 0:
-			continue
-		var reward: Dictionary = {"item_id": item_id, "quantity": quantity}
-		var values: Array = []
-		for member in party_members():
-			values.append_array(member.shield_durabilities.get(item_id, []))
-		if not values.is_empty():
-			reward["durabilities"] = values.slice(0, quantity)
-		rewards.append(reward)
-	return rewards
-
-
-func _fallen_slot(cell: Vector2i, spawn: Vector2i) -> Dictionary:
-	if not can_enter(cell) or not _find_active_entity(cell, "door").is_empty():
-		return {}
-	var monster: Dictionary = _find_active_entity(cell, "monster")
-	if not monster.is_empty():
-		if monster.has("fallen_rewards") and DungeonMap.monster_party_ids(monster).size() < DungeonMap.MAX_MONSTERS_PER_ENCOUNTER:
-			return {"entity": monster}
-		return {}
-	if cell == spawn:
-		return {}
-	return {"cell": cell}
-
-
-func _nearest_fallen_slot(origin: Vector2i, spawn: Vector2i) -> Dictionary:
-	var queue: Array[Vector2i] = [origin]
-	var visited: Dictionary = {}
-	visited[origin] = true
-	var cursor: int = 0
-	while cursor < queue.size():
-		var cell: Vector2i = queue[cursor]
-		cursor += 1
-		var slot: Dictionary = _fallen_slot(cell, spawn)
-		if not slot.is_empty():
-			return slot
-		for direction in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
-			var neighbor: Vector2i = cell + direction
-			if visited.has(neighbor) or not can_enter(neighbor) or not _find_active_entity(neighbor, "door").is_empty():
-				continue
-			visited[neighbor] = true
-			queue.append(neighbor)
-	if visited.has(spawn):
-		return _fallen_slot(spawn, Vector2i(-1, -1))
-	return {}
-
-
-func record_defeat() -> bool:
-	if _death_recorded:
-		return true
-	if hero == null or hero.health > 0:
-		return false
-	var spawn: Vector2i = map_data.find_entity_position("player_spawn")
-	var original: Array = fallen_encounters.duplicate(true)
-	var original_counter: int = _next_fallen_id
-	var rewards: Array[Dictionary] = _fallen_loot()
-	for index in range(party_members().size()):
-		var slot: Dictionary = _nearest_fallen_slot(player_pos, spawn)
-		if slot.is_empty():
-			fallen_encounters = original
-			_next_fallen_id = original_counter
-			return false
-		var encounter: Dictionary
-		if slot.has("entity"):
-			encounter = slot["entity"]
-			var properties: Dictionary = encounter["properties"]
-			var extra: Array = properties.get("monster_ids", [])
-			extra.append("skeleton")
-			properties["monster_ids"] = extra
-		else:
-			var cell: Vector2i = slot["cell"]
-			_next_fallen_id += 1
-			encounter = {"id": "fallen_%d" % _next_fallen_id, "type": "monster", "x": cell.x, "y": cell.y,
-				"properties": {"monster_id": "skeleton", "loot_mode": "fixed"}, "fallen_rewards": []}
-			fallen_encounters.append(encounter)
-		if index == 0:
-			encounter["fallen_rewards"].append_array(rewards)
-	carried_items.clear()
-	_inventory_order.clear()
-	keys = 0
-	potions = 0
-	for member in party_members():
-		member.gold = 0
-		member.unequip_item(member.equipped_weapon_id)
-		member.unequip_item(member.equipped_shield_id)
-		member.shield_durabilities.clear()
-	_death_recorded = true
-	return true
-
-
-func resurrect_party() -> bool:
-	if not _death_recorded and not record_defeat():
-		return false
-	var spawn: Vector2i = map_data.find_entity_position("player_spawn")
-	if not can_enter(spawn):
-		return false
-	var restored: Array[HeroState] = []
-	for member in party_members():
-		var fresh := HeroState.new(member.definition)
-		fresh.learned_ability_ids.assign(member.learned_ability_ids)
-		fresh.saved_action_slots.assign(member.saved_action_slots)
-		restored.append(fresh)
-	party = restored
-	hero = party[0]
-	player_pos = spawn
-	encounter_monster_id = ""
-	encounter_target = Vector2i(-1, -1)
-	pending_chest_id = ""
-	is_completed = false
-	_death_recorded = false
-	_message_events.clear()
-	_trigger_events.clear()
-	_party_damage_events.clear()
-	last_event_message = ""
-	_refresh_visibility()
-	return true

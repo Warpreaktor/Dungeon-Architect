@@ -45,13 +45,13 @@ func show_floor_transition(step_count: int, next_name: String) -> void:
 	_retry_button.text = "Продолжить"
 
 
-## Та же сцена используется при поражении: не дублируем модальные экраны.
-func show_defeat(step_count: int, victor: MonsterDefinition) -> void:
-	_eyebrow.text = "ПУТЬ ОБОРВАЛСЯ"
-	_title.text = "ГЕРОЙ ПАЛ"
-	_description.text = "Твоё имущество осталось в подземелье. Воскресни и верни его."
-	_retry_button.text = "Воскреснуть"
-	_emblem.texture = victor.icon
+func show_game_over(step_count: int) -> void:
+	_eyebrow.text = "ПОХОД ЗАВЕРШЁН"
+	_title.text = "GAME OVER"
+	_description.text = "Все герои отряда погибли."
+	_retry_button.hide()
+	_editor_button.grab_focus()
+	_emblem.texture = null
 	var frame := _card.get_theme_stylebox("panel").duplicate(true) as StyleBoxFlat
 	frame.border_color = Color("#ba6b66")
 	_card.add_theme_stylebox_override("panel", frame)

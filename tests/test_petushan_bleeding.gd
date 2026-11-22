@@ -30,7 +30,22 @@ func _initialize() -> void:
 	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
 	assert(not target.statuses.has("petushan_accuracy_down"))
 	assert(target.status_modifier(AbilityEffectDefinition.Stat.ACCURACY) == 0)
-	assert(state.execute_ability("hero", "enemy", spur.ability_id).success)
+	assert(spur.effects.size() == 2)
+	assert(spur.effects[0].kind == AbilityEffectDefinition.Kind.DAMAGE)
+	assert(spur.effects[0].effective_damage_multiplier() == 0.4)
+	assert(spur.effects[1].kind == AbilityEffectDefinition.Kind.APPLY_STATUS)
+	var expected_spur_damage: int = AbilityExecutor.preview_damage(actor, spur, spur.effects[0], target)
+	var health_before_spur: int = target.health
+	var spur_result: Dictionary = state.execute_ability("hero", "enemy", spur.ability_id)
+	assert(bool(spur_result.get("success", false)))
+	var spur_events: Array = spur_result.get("events", [])
+	assert(spur_events.size() >= 2)
+	assert(str(spur_events[0].get("type", "")) == "attack")
+	assert(str(spur_events[0].get("ability_id", "")) == spur.ability_id)
+	assert(int(spur_events[0].get("raw_damage", -1)) == expected_spur_damage)
+	assert(not bool(spur_events[0].get("dodged", true)))
+	assert(target.health == health_before_spur - int(spur_events[0].get("damage", 0)))
+	assert(str(spur_events[1].get("type", "")) == "status_applied")
 	assert(target.statuses.has("bleeding"))
 	# Эффект может быть наложен посреди уже начатой собственной фазы.
 	target.action_cursor = 1

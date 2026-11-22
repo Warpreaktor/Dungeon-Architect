@@ -28,6 +28,8 @@ func _check() -> void:
 	var enemy_rest: BattleAbilitySlot = theirs.get_child(2) as BattleAbilitySlot
 	assert(not hero_rest.disabled and enemy_rest.disabled)
 	assert(hero_rest.tooltip_text.contains("Отдых") and enemy_rest.tooltip_text.contains("Отдых"))
+	assert(hero_rest.get_node("SlotMargin/Row/SlotIcon").texture == BattleAbilitySlot.REST_ICON)
+	assert(enemy_rest.get_node("SlotMargin/Row/SlotIcon").texture == BattleAbilitySlot.REST_ICON)
 	view._highlight_slots(-1, -1, true, true)
 	assert(hero_rest.has_theme_stylebox_override("disabled"))
 	assert(enemy_rest.has_theme_stylebox_override("disabled"))

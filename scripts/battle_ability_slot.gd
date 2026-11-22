@@ -10,6 +10,7 @@ const ATTACK_ICON: Texture2D = preload("res://assets/hud/attack.png")
 const DEFENSE_ICON: Texture2D = preload("res://assets/hud/shield.png")
 const SUPPORT_ICON: Texture2D = preload("res://assets/hud/heart.png")
 const SPECIAL_ICON: Texture2D = preload("res://assets/hud/attack.png")
+const REST_ICON: Texture2D = preload("res://assets/abilities/rest.png")
 const INFO_BUTTON_SIDE: float = 30.0
 
 
@@ -92,10 +93,9 @@ func configure_recharge(index: int) -> void:
 	configure(index, null, false)
 	_slot_number.text = "%02d" % (index + 1)
 	_slot_name.text = "Отдых"
-	_slot_icon.texture = null
-	_slot_icon.visible = false
-	_empty_icon.visible = true
-	_empty_icon.text = "Zz"
+	_slot_icon.texture = REST_ICON
+	_slot_icon.visible = true
+	_empty_icon.visible = false
 	tooltip_text = "Отдых: завершает фазу и возвращает все приёмы"
 	_info_button.visible = true
 

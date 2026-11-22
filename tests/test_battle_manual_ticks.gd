@@ -68,8 +68,16 @@ func _initialize() -> void:
 	assert(battle.manual_available_slots() == [0])
 	assert(battle.run_manual_tick(0, "enemy_support").success)
 	assert(battle.manual_available_slots().is_empty())
-	var rest: Dictionary = battle.run_manual_tick(-1)
+	var rest_cursor: int = battle.flow.completed_ticks
+	assert(not battle.run_manual_tick(-1, "enemy").success)
+	assert(battle.flow.completed_ticks == rest_cursor)
+	var rest: Dictionary = battle.run_manual_tick(-1, "hero")
 	assert(rest.success and rest.events[0].hero_reload)
+	var restored_on_self: bool = false
+	for event in rest.events:
+		if event.get("type") == "reload" and event.get("actor_id") == "hero" and event.get("target_id") == "hero":
+			restored_on_self = true
+	assert(restored_on_self)
 	assert(battle.flow.completed_ticks == 4)
 	assert(battle.get_hero().completed_phases == 1)
 	assert(battle.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)

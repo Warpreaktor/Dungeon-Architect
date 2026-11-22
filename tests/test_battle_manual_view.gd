@@ -32,6 +32,24 @@ func _initialize() -> void:
 	view._on_target_portrait_input(_tap_event(), valid_targets[0])
 	assert(combat.battle_state.flow.completed_ticks == 1)
 	view.queue_free()
+
+	var rest_combat := CombatSession.new(MonsterCatalog.get_monster("giant_crab"), hero)
+	var rest_view: BattleView = scene.instantiate() as BattleView
+	root.add_child(rest_view)
+	rest_view.begin(rest_combat, hero)
+	var rest_card: BattleAbilitySlot = rest_view._sequence_slots.get_child(prepared.size()) as BattleAbilitySlot
+	assert(not rest_card.disabled)
+	rest_card._notify_selection()
+	assert(rest_combat.battle_state.flow.completed_ticks == 1)
+	assert(rest_combat.battle_state.get_hero().completed_phases == 1)
+	assert(rest_combat.battle_state.manual_available_slots() == [0, 1, 2])
+	assert(rest_view._is_playing_back)
+	var hero_reload: bool = false
+	for event in rest_combat.battle_state.last_phase_events:
+		if event.get("type") == "reload" and event.get("actor_id") == "hero" and event.get("target_id") == "hero":
+			hero_reload = true
+	assert(hero_reload)
+	rest_view.queue_free()
 	quit()
 
 

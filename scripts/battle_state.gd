@@ -395,6 +395,11 @@ func run_manual_tick(slot_index: int, target_id: String = "") -> Dictionary:
 	if hero == null or enemy == null or not hero.is_alive() or is_defeat:
 		return {"success": false, "reason": "Герой недоступен", "events": []}
 	var resting: bool = slot_index == -1
+	if resting:
+		if target_id.is_empty():
+			target_id = hero_id
+		if target_id != hero_id:
+			return {"success": false, "reason": "Отдых направлен на самого героя", "events": []}
 	if not resting:
 		if is_victory:
 			return {"success": false, "reason": "Необходимо завершить победный отдых", "events": []}
@@ -502,7 +507,7 @@ func _complete_rest(actor_id: String, tick: int) -> void:
 	var resting: BattleParticipant = get_participant(actor_id)
 	resting.completed_phases += 1
 	resting.last_rest_tick = tick
-	events.append({"type": "reload", "actor_id": actor_id, "tick": tick, "slot_index": -1})
+	events.append({"type": "reload", "actor_id": actor_id, "tick": tick, "slot_index": -1, "target_id": actor_id})
 	events.append_array(resting.owner_phase_status_damage_events(actor_id))
 	var before_health: int = resting.health
 	var before_maximum: int = resting.max_health

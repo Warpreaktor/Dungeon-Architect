@@ -42,6 +42,34 @@ func _initialize() -> void:
 		assert(unarmed.get_enemy().equipped_weapon_id.is_empty())
 		assert(unarmed.get_enemy().action_chain.has(fallback))
 
+	var armed_skeleton: MonsterDefinition = MonsterCatalog.get_monster("skeleton").duplicate(true) as MonsterDefinition
+	armed_skeleton.weapon_spawn_chance_percent = 100
+	var two_armed: BattleState = BattleState.begin(armed_skeleton, null, 734)
+	var support: BattleParticipant = two_armed.add_support_enemy(armed_skeleton)
+	assert(support != null and support != two_armed.get_enemy())
+	assert(not two_armed.get_enemy().equipped_weapon_id.is_empty())
+	assert(not support.equipped_weapon_id.is_empty())
+	assert(two_armed.get_enemy().action_chain.has(MonsterWeaponStrike.ability_id(two_armed.get_enemy().equipped_weapon_id)))
+	assert(support.action_chain.has(MonsterWeaponStrike.ability_id(support.equipped_weapon_id)))
+	assert(two_armed.initial_enemy_chain == two_armed.get_enemy().action_chain)
+	assert(two_armed.support_initial_chain == support.action_chain)
+	var repeat_pair: BattleState = BattleState.begin(armed_skeleton, null, 734)
+	repeat_pair.add_support_enemy(armed_skeleton)
+	assert(repeat_pair.get_enemy().equipped_weapon_id == two_armed.get_enemy().equipped_weapon_id)
+	assert(repeat_pair.get_participant(BattleState.SUPPORT_ENEMY_ID).equipped_weapon_id == support.equipped_weapon_id)
+	assert(repeat_pair.support_initial_chain == two_armed.support_initial_chain)
+
+	var ordinary_skeleton: MonsterDefinition = armed_skeleton.duplicate(true) as MonsterDefinition
+	ordinary_skeleton.weapon_spawn_chance_percent = 0
+	var armed_support: BattleState = BattleState.begin(ordinary_skeleton, null, 734)
+	armed_support.add_support_enemy(armed_skeleton)
+	assert(armed_support.get_enemy().equipped_weapon_id.is_empty())
+	assert(not armed_support.get_participant(BattleState.SUPPORT_ENEMY_ID).equipped_weapon_id.is_empty())
+	var unarmed_support: BattleState = BattleState.begin(armed_skeleton, null, 734)
+	unarmed_support.add_support_enemy(ordinary_skeleton)
+	assert(not unarmed_support.get_enemy().equipped_weapon_id.is_empty())
+	assert(unarmed_support.get_participant(BattleState.SUPPORT_ENEMY_ID).equipped_weapon_id.is_empty())
+
 	var skeleton: MonsterDefinition = MonsterCatalog.get_monster("skeleton").duplicate(true) as MonsterDefinition
 	skeleton.weapon_spawn_chance_percent = 100
 	var combat: BattleState = BattleState.begin(skeleton, null, 7)

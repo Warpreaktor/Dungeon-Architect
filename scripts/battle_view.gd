@@ -270,6 +270,7 @@ func _refresh_chain_slots() -> void:
 	var rest_slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 	_sequence_slots.add_child(rest_slot)
 	rest_slot.configure_recharge(displayed.size())
+	rest_slot.slot_selected.connect(_on_slot_pressed.bind(rest_slot))
 	if _manual_started and not _is_playing_back and _combat.battle_state.flow.stage != BattleFlow.Stage.FINISHED:
 		rest_slot.disabled = false
 	rest_slot.info_requested.connect(_touch_info.show_text)
@@ -454,7 +455,7 @@ func _on_slot_selected(_index: int) -> void:
 		var requested_slot: int = -1 if _index == _hero_chain.size() else _index
 		if requested_slot == -1:
 			_selected_manual_slot = -1
-			_play_selected_manual_action("")
+			_play_selected_manual_action("hero")
 			return
 		_selected_manual_slot = -2 if _selected_manual_slot == requested_slot else requested_slot
 		_result_text.text = ""

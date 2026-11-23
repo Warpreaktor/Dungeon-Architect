@@ -37,7 +37,7 @@ func _ready() -> void:
 
 func show_hero(session: GameSession) -> void:
 	_session = session
-	_portrait.texture = session.hero.definition.portrait if session != null and session.hero != null else null
+	_portrait.texture = session._inventory_equipment_member().definition.portrait if session != null and session._inventory_equipment_member() != null else null
 	for slot_id in slots:
 		var slot: EquipmentSlotControl = slots[slot_id]
 		slot.configure(str(slot_id), session)
@@ -46,12 +46,12 @@ func show_hero(session: GameSession) -> void:
 
 
 func _apply_two_handed_shadow() -> void:
-	if _session == null or _session.hero == null:
+	if _session == null or _session._inventory_equipment_member() == null:
 		return
 	var off_hand: EquipmentSlotControl = slots.get("off_hand") as EquipmentSlotControl
 	if off_hand == null or not off_hand.item_id.is_empty():
 		return
-	var weapon: ItemDefinition = ItemCatalog.get_item(_session.hero.equipped_weapon_id)
+	var weapon: ItemDefinition = ItemCatalog.get_item(_session._inventory_equipment_member().equipped_weapon_id)
 	if weapon != null and weapon.two_handed and weapon.icon != null:
 		off_hand.show_virtual_item(weapon.icon)
 

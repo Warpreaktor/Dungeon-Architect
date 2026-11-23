@@ -15,9 +15,11 @@ signal equipment_changed
 @onready var _item_properties: Label = %ItemProperties
 @onready var _use_feedback: Label = %UseFeedback
 @onready var _mannequin: EquipmentMannequin = %EquipmentMannequin
+@onready var _hero_selector: HBoxContainer = %HeroSelector
 @onready var _close_button: Button = %CloseButton
 
 var _session: GameSession
+var _selected_member: HeroState
 var _entries: Array[String] = []
 var _selected_index: int = -1
 var _bag_cell_size: float = 52.0
@@ -49,6 +51,9 @@ func open_for(session: GameSession) -> void:
 	if session == null or session.hero == null:
 		return
 	_session = session
+	_selected_member = session.hero
+	_session.inventory_member = _selected_member
+	_rebuild_hero_selector()
 	_item_action_menu.hide()
 	_popup_slot = -1
 	_use_feedback.text = ""
@@ -57,6 +62,33 @@ func open_for(session: GameSession) -> void:
 	show()
 	_close_button.grab_focus()
 
+
+
+func _rebuild_hero_selector() -> void:
+	for child in _hero_selector.get_children():
+		_hero_selector.remove_child(child)
+		child.queue_free()
+	for member in _session.party_members():
+		if member == null or member.health <= 0:
+			continue
+		var button := Button.new()
+		button.text = member.definition.display_name
+		button.toggle_mode = true
+		button.button_pressed = member == _selected_member
+		button.custom_minimum_size = Vector2(106, 40)
+		button.pressed.connect(_select_member.bind(member))
+		_hero_selector.add_child(button)
+
+
+func _select_member(member: HeroState) -> void:
+	if _session == null or not _session.party.has(member) or member.health <= 0:
+		return
+	_cancel_touch_drag()
+	_selected_member = member
+	_session.inventory_member = member
+	_selected_index = -1
+	_rebuild_hero_selector()
+	_refresh_contents()
 
 func _refresh_contents() -> void:
 	for child in _bag_grid.get_children():
@@ -214,7 +246,7 @@ func _show_item_definition(item_id: String, bag_index: int = -1) -> void:
 	if item.defense_bonus > 0:
 		details += "\nБлок: +%d" % item.defense_bonus
 		if item.max_durability > 0:
-			var durability: int = _session.inventory_shield_durability(bag_index) if bag_index >= 0 else _session.hero.current_shield_durability(item_id)
+			var durability: int = _session.inventory_shield_durability(bag_index) if bag_index >= 0 else _selected_member.current_shield_durability(item_id)
 			details += "\nПрочность: %d / %d" % [durability, item.max_durability]
 	if bag_index < 0 and _is_equipped(item_id):
 		details += "\nНадето"
@@ -224,7 +256,7 @@ func _show_item_definition(item_id: String, bag_index: int = -1) -> void:
 func _is_equipped(item_id: String) -> bool:
 	if _session == null or _session.hero == null:
 		return false
-	return item_id == _session.hero.equipped_weapon_id or item_id == _session.hero.equipped_shield_id
+	return item_id == _selected_member.equipped_weapon_id or item_id == _selected_member.equipped_shield_id
 
 
 func show_use_result(item_id: String, message: String) -> void:
@@ -371,4 +403,7 @@ func dismiss() -> void:
 	_popup_slot = -1
 	_cancel_touch_drag()
 	hide()
+	if _session != null:
+		_session.inventory_member = null
 	_session = null
+	_selected_member = null

@@ -10,6 +10,7 @@ const INVENTORY_SLOT_COUNT: int = 40
 
 var map_data: DungeonMap
 var hero: HeroState
+var inventory_member: HeroState
 var party: Array[HeroState] = []
 var fallen_heroes: Array[HeroState] = []
 var fallen_hero_locations: Array[Dictionary] = []
@@ -78,15 +79,11 @@ static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_m
 
 
 func equipment_item_id(slot_id: String) -> String:
-	if hero == null:
-		return ""
-	match slot_id:
-		"main_hand":
-			return hero.equipped_weapon_id
-		"off_hand":
-			return hero.equipped_shield_id
-		_:
-			return str(hero.equipped_accessories.get(slot_id, ""))
+	return _member_equipment_id(_inventory_equipment_member(), slot_id)
+
+
+func _inventory_equipment_member() -> HeroState:
+	return inventory_member if inventory_member != null and party.has(inventory_member) else hero
 
 
 func inventory_slot_ids() -> Array[String]:
@@ -142,10 +139,11 @@ func swap_inventory_slots(source: int, destination: int) -> bool:
 	return transfer_inventory_item("bag", source, "bag", destination)
 
 
-func _equipment_snapshot() -> Dictionary:
+func _equipment_snapshot(member: HeroState = null) -> Dictionary:
+	var selected: HeroState = member if member != null else _inventory_equipment_member()
 	var current: Dictionary = {}
 	for slot_id in EquipmentSlotRules.SLOT_IDS:
-		current[slot_id] = equipment_item_id(slot_id)
+		current[slot_id] = _member_equipment_id(selected, slot_id)
 	return current
 
 
@@ -166,33 +164,60 @@ func _is_shield(item_id: String) -> bool:
 	return item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.SHIELD
 
 
-func _shield_layout(bag: Array[String], equipped: Dictionary) -> Dictionary:
+func _shield_layout(bag: Array[String], equipped: Dictionary, member: HeroState = null) -> Dictionary:
+	var selected: HeroState = member if member != null else _inventory_equipment_member()
+	if selected != hero:
+		var shared: Dictionary = _shield_layout(bag, _equipment_snapshot(hero), hero)
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			var item_id: String = str(equipped.get(slot_id, ""))
+			if _is_shield(item_id):
+				shared["equipment:%s" % slot_id] = selected.current_shield_durability(item_id)
+		return shared
 	var values_at: Dictionary = {}
 	var cursors: Dictionary = {}
 	for slot_id in EquipmentSlotRules.SLOT_IDS:
 		var item_id: String = str(equipped.get(slot_id, ""))
 		if _is_shield(item_id):
-			var values: Array = hero.shield_durabilities.get(item_id, [])
+			var values: Array = selected.shield_durabilities.get(item_id, [])
 			var cursor: int = int(cursors.get(item_id, 0))
 			values_at["equipment:%s" % slot_id] = int(values[cursor]) if cursor < values.size() else _new_shield_durability(item_id)
 			cursors[item_id] = cursor + 1
 	for index in range(bag.size()):
 		var item_id: String = bag[index]
 		if _is_shield(item_id):
-			var values: Array = hero.shield_durabilities.get(item_id, [])
+			var values: Array = selected.shield_durabilities.get(item_id, [])
 			var cursor: int = int(cursors.get(item_id, 0))
 			values_at["bag:%d" % index] = int(values[cursor]) if cursor < values.size() else _new_shield_durability(item_id)
 			cursors[item_id] = cursor + 1
 	return values_at
-
 
 func _new_shield_durability(item_id: String) -> int:
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
 	return maxi(item.max_durability, item.defense_bonus) if item != null else 0
 
 
-func _apply_shield_layout(bag: Array[String], equipped: Dictionary, values_at: Dictionary) -> void:
-	var updated: Dictionary = hero.shield_durabilities.duplicate(true)
+func _apply_shield_layout(bag: Array[String], equipped: Dictionary, values_at: Dictionary, member: HeroState = null) -> void:
+	var selected: HeroState = member if member != null else _inventory_equipment_member()
+	if selected != hero:
+		var primary_equipment: Dictionary = _equipment_snapshot(hero)
+		var primary_values: Dictionary = _shield_layout(bag, primary_equipment, hero)
+		for index in range(bag.size()):
+			if _is_shield(bag[index]):
+				primary_values["bag:%d" % index] = values_at.get("bag:%d" % index, _new_shield_durability(bag[index]))
+		_apply_shield_layout(bag, primary_equipment, primary_values, hero)
+		var selected_values: Dictionary = selected.shield_durabilities.duplicate(true)
+		for item_id in selected_values.keys():
+			if _is_shield(str(item_id)):
+				selected_values.erase(item_id)
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			var item_id: String = str(equipped.get(slot_id, ""))
+			if _is_shield(item_id):
+				var values: Array = selected_values.get(item_id, [])
+				values.append(int(values_at.get("equipment:%s" % slot_id, _new_shield_durability(item_id))))
+				selected_values[item_id] = values
+		selected.shield_durabilities = selected_values
+		return
+	var updated: Dictionary = selected.shield_durabilities.duplicate(true)
 	for item_id in updated.keys():
 		if _is_shield(str(item_id)):
 			updated.erase(item_id)
@@ -208,8 +233,7 @@ func _apply_shield_layout(bag: Array[String], equipped: Dictionary, values_at: D
 			var values: Array = updated.get(item_id, [])
 			values.append(int(values_at.get("bag:%d" % index, _new_shield_durability(item_id))))
 			updated[item_id] = values
-	hero.shield_durabilities = updated
-
+	selected.shield_durabilities = updated
 
 func inventory_shield_durability(index: int) -> int:
 	var bag: Array[String] = _inventory_slots_snapshot()
@@ -227,17 +251,18 @@ func transfer_inventory_item(from_kind: String, from_slot: Variant, to_kind: Str
 	if plan.is_empty():
 		return false
 	_inventory_order = plan["bag"]
+	var member: HeroState = _inventory_equipment_member()
 	var equipped: Dictionary = plan["equipment"]
-	hero.equipped_weapon_id = str(equipped["main_hand"])
-	hero.equipped_shield_id = str(equipped["off_hand"])
+	member.equipped_weapon_id = str(equipped["main_hand"])
+	member.equipped_shield_id = str(equipped["off_hand"])
 	for slot_id in EquipmentSlotRules.SLOT_IDS:
 		if slot_id != "main_hand" and slot_id != "off_hand":
 			var item_id: String = str(equipped[slot_id])
 			if item_id.is_empty():
-				hero.equipped_accessories.erase(slot_id)
+				member.equipped_accessories.erase(slot_id)
 			else:
-				hero.equipped_accessories[slot_id] = item_id
-	hero._recalculate_equipment_stats()
+				member.equipped_accessories[slot_id] = item_id
+	member._recalculate_equipment_stats()
 	_apply_shield_layout(_inventory_order, equipped, plan["shield_layout"])
 	return true
 
@@ -325,6 +350,8 @@ func party_members() -> Array[HeroState]:
 
 
 func _member_equipment_id(member: HeroState, slot_id: String) -> String:
+	if member == null:
+		return ""
 	match slot_id:
 		"main_hand":
 			return member.equipped_weapon_id

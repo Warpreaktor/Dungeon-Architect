@@ -7,6 +7,8 @@ signal closed
 
 @onready var _card: PanelContainer = %Card
 @onready var _eyebrow: Label = %Eyebrow
+@onready var _icon_holder: CenterContainer = %EventIconHolder
+@onready var _icon: TextureRect = %EventIcon
 @onready var _text: RichTextLabel = %MessageText
 @onready var _loot_section: VBoxContainer = %LootSection
 @onready var _loot_scroll: ScrollContainer = %LootScroll
@@ -30,6 +32,9 @@ func show_event(event: Dictionary) -> void:
 	_text.text = story
 	_text.visible = not story.is_empty()
 	_eyebrow.text = "ПОСЛАНИЕ" if not story.is_empty() else "СОКРОВИЩА"
+	var event_icon: Texture2D = _resolve_event_icon(event)
+	_icon.texture = event_icon
+	_icon_holder.visible = event_icon != null
 	for child in _loot_rows.get_children():
 		_loot_rows.remove_child(child)
 		child.queue_free()
@@ -67,6 +72,22 @@ func show_event(event: Dictionary) -> void:
 		_text.scroll_to_line(0)
 	_continue_button.grab_focus()
 
+
+
+func _resolve_event_icon(event: Dictionary) -> Texture2D:
+	var explicit_icon: Variant = event.get("icon", null)
+	if explicit_icon is Texture2D:
+		return explicit_icon as Texture2D
+	var icon_type: String = str(event.get("icon_type", ""))
+	var icon_id: String = str(event.get("icon_id", ""))
+	match icon_type:
+		"trap":
+			if TrapCatalog.has(icon_id):
+				return TrapCatalog.get_trap(icon_id).icon
+		"item":
+			var item := ItemCatalog.get_item(icon_id)
+			return item.icon if item != null else null
+	return null
 
 func _resize_card() -> void:
 	var viewport_size := get_viewport().get_visible_rect().size

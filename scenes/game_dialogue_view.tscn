@@ -70,6 +70,30 @@ theme_override_font_sizes/font_size = 15
 [node name="Divider" type="HSeparator" parent="Center/Card/Margins/Content"]
 layout_mode = 2
 
+[node name="EventIconHolder" type="CenterContainer" parent="Center/Card/Margins/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="EventIconPanel" type="PanelContainer" parent="Center/Card/Margins/Content/EventIconHolder"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_button")
+
+[node name="EventIconMargin" type="MarginContainer" parent="Center/Card/Margins/Content/EventIconHolder/EventIconPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="EventIcon" type="TextureRect" parent="Center/Card/Margins/Content/EventIconHolder/EventIconPanel/EventIconMargin"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 48)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
 [node name="MessageText" type="RichTextLabel" parent="Center/Card/Margins/Content"]
 unique_name_in_owner = true
 layout_mode = 2

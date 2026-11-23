@@ -23,3 +23,4 @@ test_editor_door_crossbow.gd
 test_door_trap_trigger.gd
 test_editor_door_trap_trigger.gd
 test_door_trap_regressions.gd
+test_game_dialogue_trap_icon.gd

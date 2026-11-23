@@ -43,6 +43,8 @@ func _test_trigger_order_and_damage() -> void:
 	assert(messages.size() == 1)
 	assert(messages[0]["activation"] == "door_trap")
 	assert(messages[0]["text"] == TrapCatalog.get_trap("door_crossbow").trigger_message)
+	assert(str(messages[0].get("icon_type", "")) == "trap")
+	assert(str(messages[0].get("icon_id", "")) == "door_crossbow")
 	assert(not session.move_by(1, 0))
 	assert(session.take_message_events().is_empty())
 	assert(members[0].health == initial[0] and members[1].health == initial[1])

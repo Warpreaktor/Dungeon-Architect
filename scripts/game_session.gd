@@ -967,7 +967,8 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 			pending_door_trap_cell = target
 			_message_events.append({
 				"activation": "door_trap", "entity_id": pending_door_trap_id,
-				"text": DungeonMap.door_trap_message(door), "loot": []
+				"text": DungeonMap.door_trap_message(door), "loot": [],
+				"icon_type": "trap", "icon_id": trap.trap_id
 			})
 			return false
 		_remove_carried_item(required_key, 1)

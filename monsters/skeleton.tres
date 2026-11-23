@@ -1,9 +1,10 @@
-[gd_resource type="Resource" script_class="MonsterDefinition" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="MonsterDefinition" format=3 uid="uid://bmdxw07v70vpk"]
 
-[ext_resource type="Script" path="res://scripts/monster_definition.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assets/monsters/skeleton_portrait.png" id="2_portrait"]
-[ext_resource type="Texture2D" path="res://assets/icons/skeleton.png" id="3_icon"]
-
+[ext_resource type="Script" uid="uid://detvlnn4kqqkv" path="res://scripts/monster_tactic_profile.gd" id="1_h25de"]
+[ext_resource type="Script" uid="uid://djb0j5ol6fwly" path="res://scripts/monster_definition.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://rwxlarwtscwu" path="res://assets/monsters/skeleton_portrait.png" id="2_portrait"]
+[ext_resource type="Texture2D" uid="uid://cilmdyj4gvf4v" path="res://assets/icons/skeleton.png" id="3_icon"]
+[ext_resource type="Script" uid="uid://jr2q3xoc28kd" path="res://scripts/monster_intermission_action.gd" id="4_2f5tr"]
 [ext_resource type="Resource" path="res://monsters/profiles/skeleton_desperate.tres" id="4_profile"]
 
 [resource]
@@ -11,16 +12,11 @@ script = ExtResource("1_script")
 monster_id = "skeleton"
 display_name = "Скелет"
 portrait = ExtResource("2_portrait")
-portrait_flip_h = false
 icon = ExtResource("3_icon")
-ai_profiles = Array[Resource]([ExtResource("4_profile")])
 personal_ability_ids = Array[String](["skeleton_rusty_slash", "skeleton_bone_kick", "skeleton_bone_ram", "skeleton_grave_howl"])
+ai_profiles = Array[ExtResource("1_h25de")]([ExtResource("4_profile")])
 weapon_spawn_chance_percent = 50
 weapon_replaced_ability_id = "skeleton_rusty_slash"
-base_action_slots = 3
 max_health = 12
 strength = 5
 agility = 3
-base_dodge_percent = 0
-accuracy_bonus = 0
-defense = 0

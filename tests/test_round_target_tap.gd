@@ -44,8 +44,7 @@ func _initialize() -> void:
 	view._on_target_portrait_input(_tap_event(), "enemy")
 	assert(view._combat.battle_state.round_turn_count == 1)
 	assert(view._combat.battle_state.events.any(func(e: Dictionary) -> bool:
-		return e.get("type") == "action_start" and e.get("actor_id") == "hero"
-			and e.get("ability_id") == "volcha_wolf_lunge"))
+		return e.get("type") == "action_start" and e.get("actor_id") == "hero" and e.get("ability_id") == "volcha_wolf_lunge"))
 	assert(view._is_playing_back)
 	view._on_target_portrait_input(_tap_event(), "enemy")
 	assert(view._combat.battle_state.round_turn_count == 1)
@@ -62,8 +61,7 @@ func _initialize() -> void:
 	self_view._on_target_portrait_input(_tap_event(), "hero")
 	assert(self_view._combat.battle_state.round_turn_count == 1)
 	assert(self_view._combat.battle_state.events.any(func(e: Dictionary) -> bool:
-		return e.get("type") == "action_start" and e.get("ability_id") == "volcha_wolf_instinct"
-			and e.get("actor_id") == "hero"))
+		return e.get("type") == "action_start" and e.get("ability_id") == "volcha_wolf_instinct" and e.get("actor_id") == "hero"))
 	self_view.queue_free()
 
 	var rest_hero := HeroState.new(HeroCatalog.get_hero("volcha"))
@@ -92,7 +90,6 @@ func _initialize() -> void:
 	duo_view._on_target_portrait_input(_touch_event(), "hero_2")
 	assert(duo_view._combat.battle_state.round_turn_count == 1)
 	assert(duo_view._combat.battle_state.events.any(func(e: Dictionary) -> bool:
-		return e.get("type") == "action_start" and e.get("actor_id") == "hero_2"
-			and e.get("ability_id") == "volcha_wolf_instinct"))
+		return e.get("type") == "action_start" and e.get("actor_id") == "hero_2" and e.get("ability_id") == "volcha_wolf_instinct"))
 	duo_view.queue_free()
 	quit()

@@ -10,27 +10,11 @@ import subprocess
 import sys
 import time
 
-GROUP_REGRESSION_TESTS = (
-    "test_round_group_compositions.gd",
-    "test_manual_hero_turn_selection.gd",
-    "test_round_target_tap.gd",
-    "test_party_round_scheduler.gd",
-    "test_party_enemy_targeting.gd",
-    "test_party_battle_participants.gd",
-    "test_party_combat_casualties.gd",
-    "test_party_shared_inventory.gd",
-    "test_inventory_atomicity.gd",
-    "test_ground_loot_containers.gd",
-    "test_party_traps.gd",
-    "test_regression_permadeath.gd",
-    "test_status_contracts.gd",
-    "test_battle_accuracy_dodge.gd",
-    "test_battle_combat_items.gd",
-    "test_battle_bond_contract.gd",
-    "test_death_and_exit_rewards.gd",
-    "test_party_battle_view.gd",
-    "test_round_clash_timeline.gd",
-)
+def group_regression_tests(root: Path) -> set[str]:
+    manifest = root / "tests" / "group_suite.txt"
+    return {line.strip() for line in manifest.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")}
+
 
 ERROR_PATTERN = re.compile(r"(?im)^\s*(?:SCRIPT ERROR:|ERROR:|Assertion failed:|ASSERTION FAILED:)")
 
@@ -82,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     tests = discover(root, args.filter)
     if args.suite == "group":
-        selected = set(GROUP_REGRESSION_TESTS)
+        selected = group_regression_tests(root)
         available = {test.name for test in discover(root, "")}
         missing = sorted(selected - available)
         if missing:

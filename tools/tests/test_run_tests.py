@@ -33,6 +33,13 @@ class RunnerTests(unittest.TestCase):
                 execute.return_value.stderr = ""
                 self.assertEqual(run_tests.run_test("godot", root, path, 1)[0], "FAIL")
 
+    def test_group_manifest_matches_existing_tests(self):
+        root = Path(__file__).resolve().parents[2]
+        configured = run_tests.group_regression_tests(root)
+        discovered = {item.name for item in run_tests.discover(root, "")}
+        self.assertEqual(len(configured), 19)
+        self.assertTrue(configured <= discovered, sorted(configured - discovered))
+
     def test_timeout_is_reported(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -24,6 +24,10 @@ window/size/window_height_override=800
 window/stretch/mode="canvas_items"
 window/handheld/orientation=4
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/dungeon_tests/plugin.cfg")
+
 [gui]
 
 theme/default_font_size=15

@@ -39,13 +39,22 @@ func _initialize() -> void:
 	rooster_actor = BattleParticipant.from_hero(rooster)
 	assert(AbilityCatalog.can_prepare(rooster_actor, "petushan_peck_while_hot"))
 
+	var base_abilities := AbilityCatalog.available_abilities(wolf_actor)
 	wolf.learned_ability_ids.append("hunter_shot")
 	var learned_actor: BattleParticipant = BattleParticipant.from_hero(wolf)
 	assert(AbilityCatalog.can_prepare(learned_actor, "hunter_shot"))
-	assert(AbilityCatalog.available_abilities(learned_actor).size() == 6)
+	var available := AbilityCatalog.available_abilities(learned_actor)
+	assert(available.size() == base_abilities.size() + 1)
+	var learned_ids: Array[String] = []
+	for ability in available:
+		learned_ids.append(ability.ability_id)
+	assert(learned_ids.count("hunter_shot") == 1)
 	learned_actor.learned_ability_ids.append("unknown")
 	learned_actor.learned_ability_ids.append("hunter_shot")
-	assert(AbilityCatalog.available_abilities(learned_actor).size() == 6)
+	var available_after := AbilityCatalog.available_abilities(learned_actor)
+	assert(available_after.size() == learned_ids.size())
+	for ability in available_after:
+		assert(learned_ids.has(ability.ability_id))
 	assert(not AbilityCatalog.can_prepare(learned_actor, "unknown"))
 	assert(not rooster.learned_ability_ids.has("hunter_shot"))
 	assert(not wolf.definition.personal_ability_ids.has("hunter_shot"))

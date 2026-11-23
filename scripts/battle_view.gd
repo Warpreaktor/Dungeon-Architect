@@ -81,12 +81,10 @@ var _target_outlines: Dictionary = {}
 var _hero_party: HBoxContainer
 var _support_hero_view: BattleSupportEnemyView
 var _selected_hero_id: String = "hero"
-var _round_button: Button
 var _round_turn_label: Label
 var _round_mode: bool = false
 var _round_event_cursor: int = 0
 var _selected_round_ability_id: String = ""
-var _selected_round_target_id: String = ""
 var _visible_support_hero_hp: int = 0
 var _visible_support_hero_max: int = 0
 
@@ -203,12 +201,6 @@ func _build_round_controls() -> void:
 	_round_turn_label = Label.new()
 	_round_turn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	actions.add_child(_round_turn_label)
-	_round_button = Button.new()
-	_round_button.text = "Ход"
-	_round_button.custom_minimum_size = Vector2(100, 48)
-	_round_button.pressed.connect(_on_round_button_pressed)
-	actions.add_child(_round_button)
-	_round_button.hide()
 
 
 func _hero_name_for_id(actor_id: String) -> String:
@@ -225,7 +217,6 @@ func _select_hero_view(actor_id: String) -> void:
 		return
 	_hero_chain = AbilityCatalog.known_ability_ids(actor)
 	_selected_round_ability_id = ""
-	_selected_round_target_id = ""
 	_hero_chain_title.text = _hero_name_for_id(actor_id).to_upper()
 	_refresh_chain_slots()
 	_refresh_round_controls()
@@ -247,34 +238,12 @@ func _refresh_round_controls() -> void:
 	var actor_id: String = _round_next_actor()
 	var state: BattleState = _combat.battle_state
 	_round_turn_label.text = "Раунд %d" % max(1, state.round_number)
-	_round_button.visible = not actor_id.is_empty() and actor_id in state.hero_ids()
-	_round_button.disabled = _is_playing_back or _selected_round_ability_id.is_empty()
-	if actor_id.is_empty():
-		_refresh_target_outlines()
-		return
-	if actor_id in state.hero_ids():
-		_round_turn_label.text += " · " + _hero_name_for_id(actor_id)
-	else:
-		_round_turn_label.text += " · " + _enemy_name_for_id(actor_id)
-	_round_button.text = "Отдых" if _selected_round_ability_id == "rest" else "Применить"
-	if _selected_round_ability_id != "rest" and not _selected_round_ability_id.is_empty():
-		var ability: AbilityDefinition = _selected_round_ability()
-		if ability == null or not AbilityCatalog.unavailable_reason(state.get_participant(actor_id), _selected_round_ability_id).is_empty():
-			_round_button.disabled = true
+	if not actor_id.is_empty():
+		if actor_id in state.hero_ids():
+			_round_turn_label.text += " · " + _hero_name_for_id(actor_id)
 		else:
-			var targets: Array[String] = state.create_context().target_ids(actor_id, ability)
-			if not targets.has(_selected_round_target_id):
-				_round_button.disabled = true
+			_round_turn_label.text += " · " + _enemy_name_for_id(actor_id)
 	_refresh_target_outlines()
-
-
-func _on_round_button_pressed() -> void:
-	if not _round_mode or _is_playing_back:
-		return
-	var actor_id: String = _round_next_actor()
-	if actor_id not in _combat.battle_state.hero_ids() or _selected_round_ability_id.is_empty():
-		return
-	_execute_round_turn(_selected_round_target_id, _selected_round_ability_id)
 
 
 func _execute_round_turn(target_id: String = "", ability_id: String = "") -> void:
@@ -285,9 +254,7 @@ func _execute_round_turn(target_id: String = "", ability_id: String = "") -> voi
 		_result_text.text = str(result.get("reason", ""))
 		return
 	_selected_round_ability_id = ""
-	_selected_round_target_id = ""
 	_is_playing_back = true
-	_round_button.disabled = true
 	_play_phase_events(result.get("events", []))
 
 
@@ -337,7 +304,6 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_round_event_cursor = 0
 	_selected_hero_id = "hero"
 	_combat_items_button.hide()
-	_round_button.show()
 	var support_definition: MonsterDefinition = combat.support_enemy_definition if combat.support_enemy_definition != null else combat.enemy_definition
 	var support: BattleParticipant = combat.battle_state.get_participant(combat.battle_state.support_enemy_id)
 	var portrait: Texture2D = support_definition.portrait if support_definition.portrait != null else support_definition.icon
@@ -403,7 +369,6 @@ func _start_round_combat() -> void:
 	var prepared: Dictionary = _combat.prepare_round_combat()
 	if not bool(prepared.get("success", false)):
 		_result_text.text = str(prepared.get("reason", "Не удалось подготовить бой"))
-		_round_button.disabled = true
 		return
 	_manual_started = false
 	_select_hero_view("hero")
@@ -649,13 +614,10 @@ func _on_slot_selected(_index: int) -> void:
 		var actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
 		if ability_id != "rest" and not AbilityCatalog.unavailable_reason(actor, ability_id).is_empty():
 			return
+		if ability_id == "rest":
+			_execute_round_turn("", "rest")
+			return
 		_selected_round_ability_id = ability_id
-		_selected_round_target_id = ""
-		if ability_id != "rest":
-			var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
-			var targets: Array[String] = _combat.battle_state.create_context().target_ids(_selected_hero_id, ability)
-			if targets.size() == 1:
-				_selected_round_target_id = targets[0]
 		_highlight_round_action()
 		_refresh_round_controls()
 		return
@@ -1401,11 +1363,10 @@ func _on_target_portrait_input(event: InputEvent, actor_id: String) -> void:
 			return
 		var ability: AbilityDefinition = _selected_round_ability()
 		if ability != null and _combat.battle_state.create_context().target_ids(current_id, ability).has(actor_id):
-			_selected_round_target_id = actor_id
 			get_viewport().set_input_as_handled()
-			_refresh_round_controls()
+			_execute_round_turn(actor_id, _selected_round_ability_id)
 			return
-		if actor_id in _combat.battle_state.hero_ids():
+		if _selected_round_ability_id.is_empty() and actor_id in _combat.battle_state.hero_ids():
 			_select_hero_view(actor_id)
 		return
 	if not pressed or not _manual_started or _selected_manual_slot < 0 or _is_playing_back:

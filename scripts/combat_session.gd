@@ -86,6 +86,17 @@ func play_manual_tick(slot_index: int, target_id: String = "") -> Dictionary:
 	return result
 
 
+func prepare_round_combat() -> Dictionary:
+	return battle_state.start_round_combat()
+
+
+func play_round_turn(target_id: String = "") -> Dictionary:
+	var result: Dictionary = battle_state.run_round_turn(target_id)
+	if bool(result.get("success", false)):
+		sync_hero_results()
+	return result
+
+
 func sync_hero_results() -> void:
 	for participant_id in battle_state.hero_ids():
 		var fighter: BattleParticipant = battle_state.get_participant(participant_id)

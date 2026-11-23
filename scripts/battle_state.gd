@@ -36,6 +36,12 @@ var events: Array[Dictionary] = []
 var flow: BattleFlow = BattleFlow.new()
 var tick_policy: BattleTurnPolicy = BattleTurnPolicy.new()
 var next_enemy_clash_cursor: int = 0
+var round_number: int = 0
+var round_order: Array[String] = []
+var round_cursor: int = 0
+var round_tie_order: Dictionary = {}
+var round_turn_count: int = 0
+var round_combat_active: bool = false
 var last_phase_events: Array[Dictionary] = []
 ## One RNG for reproducible combat decisions.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
@@ -70,6 +76,113 @@ static func begin_for_party(monster: MonsterDefinition, heroes: Array[HeroState]
 		state.participants[participant_id] = fighter
 		state.party_hero_ids.append(participant_id)
 	return state
+
+
+func start_round_combat() -> Dictionary:
+	if round_combat_active or manual_combat_active or flow.stage == BattleFlow.Stage.FINISHED or is_victory or is_defeat:
+		return {"success": false, "reason": "Бой уже запущен или завершён"}
+	for actor_id in hero_ids() + enemy_ids():
+		var actor: BattleParticipant = get_participant(actor_id)
+		if actor == null or not actor.is_alive():
+			continue
+		if actor.action_chain.is_empty():
+			if actor_id in hero_ids():
+				actor.action_chain = default_chain(actor_id)
+			else:
+				return {"success": false, "reason": "Нет цепочки противника"}
+		var reason: String = BattleChainPlanner.validate(actor.action_chain, actor, false)
+		if not reason.is_empty():
+			return {"success": false, "reason": reason}
+	round_combat_active = true
+	round_number = 0
+	round_cursor = 0
+	round_turn_count = 0
+	round_order.clear()
+	round_tie_order.clear()
+	return {"success": true}
+
+
+func next_round_actor_id() -> String:
+	if not round_combat_active or is_victory or is_defeat:
+		return ""
+	if round_order.is_empty() or round_cursor >= round_order.size():
+		return ""
+	for index in range(round_cursor, round_order.size()):
+		var actor: BattleParticipant = get_participant(round_order[index])
+		if actor != null and actor.is_alive():
+			return round_order[index]
+	return ""
+
+
+func _open_round() -> void:
+	var active: Array[String] = []
+	for id in hero_ids() + enemy_ids():
+		var actor: BattleParticipant = get_participant(id)
+		if actor != null and actor.is_alive():
+			active.append(id)
+	active.sort()
+	for index in range(active.size() - 1, 0, -1):
+		var position: int = rng.randi_range(0, index) if round_number == 0 else index
+		if round_number == 0:
+			var other_id: String = active[position]
+			active[position] = active[index]
+			active[index] = other_id
+	if round_number == 0:
+		for index in range(active.size()):
+			round_tie_order[active[index]] = index
+	round_order = BattleClashPlanner.ordered_actors(participants, active, round_tie_order)
+	round_cursor = 0
+	round_number += 1
+	events.append({"type": "round_started", "round": round_number, "order": round_order.duplicate()})
+
+
+func run_round_turn(selected_target_id: String = "") -> Dictionary:
+	if not round_combat_active or is_victory or is_defeat:
+		return {"success": false, "reason": "Бой не активен", "events": []}
+	var start_event: int = events.size()
+	if round_order.is_empty() or round_cursor >= round_order.size():
+		_open_round()
+	while round_cursor < round_order.size():
+		var actor_id: String = round_order[round_cursor]
+		round_cursor += 1
+		var actor: BattleParticipant = get_participant(actor_id)
+		if actor == null or not actor.is_alive():
+			continue
+		var step: Dictionary = BattleChainPlanner.next_step(actor.action_chain, actor.action_cursor)
+		var tick: int = round_turn_count + 1
+		round_turn_count = tick
+		actor.action_cursor = int(step["next_cursor"])
+		actor.is_resting = bool(step["reload"])
+		events.append({"type": "turn", "round": round_number, "tick": tick, "actor_id": actor_id,
+			"slot_index": int(step["slot_index"]), "reload": actor.is_resting})
+		if actor.is_resting:
+			_complete_rest(actor_id, tick)
+		else:
+			var ability_id: String = str(step["action_id"])
+			events.append({"type": "action_start", "actor_id": actor_id,
+				"ability_id": ability_id, "slot_index": int(step["slot_index"]), "tick": tick})
+			var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
+			var context: BattleContext = create_context()
+			var target_id: String = selected_target_id if actor_id in hero_ids() and not selected_target_id.is_empty() else context.choose_target_id(actor_id, ability)
+			var outcome: Dictionary = execute_ability(actor_id, target_id, ability_id)
+			if not bool(outcome.get("success", false)):
+				events.append({"type": "failed", "actor_id": actor_id, "ability_id": ability_id,
+					"slot_index": int(step["slot_index"]), "tick": tick,
+					"reason": outcome.get("reason", "Недоступно")})
+				events.append({"type": "rest", "actor_id": actor_id,
+					"slot_index": int(step["slot_index"]), "tick": tick, "premature": true})
+		actor.is_resting = false
+		var round_finished: bool = round_cursor >= round_order.size() or is_victory or is_defeat
+		if not round_finished:
+			round_finished = next_round_actor_id().is_empty()
+		if round_finished:
+			events.append({"type": "round_finished", "round": round_number, "tick": tick})
+		if is_victory or is_defeat:
+			round_combat_active = false
+		return {"success": true, "actor_id": actor_id, "round": round_number,
+			"round_finished": round_finished, "finished": is_victory or is_defeat,
+			"events": events.slice(start_event)}
+	return {"success": false, "reason": "Нет живых участников", "events": events.slice(start_event)}
 
 
 func get_participant(participant_id: String) -> BattleParticipant:
@@ -295,7 +408,7 @@ func _run_enemy_intermission_for(actor_id: String) -> void:
 
 
 func create_context() -> BattleContext:
-	return BattleContext.new(participants, rng, flow.completed_ticks + 1, positions,
+	return BattleContext.new(participants, rng, round_turn_count if round_combat_active else flow.completed_ticks + 1, positions,
 		intercept_targets, battle_bond.counter_multiplier if battle_bond != null else 0.0,
 		battle_bond.protect_ability_id if battle_bond != null else "",
 		enemy_id if battle_bond != null else "", bond_marked_target_id,
@@ -365,7 +478,7 @@ func configure_hero_chain(actions: Array[String]) -> Dictionary:
 
 
 func prepare_manual_combat(actions: Array[String]) -> Dictionary:
-	if flow.stage != BattleFlow.Stage.PREPARATION or flow.phase_number != 0:
+	if round_combat_active or flow.stage != BattleFlow.Stage.PREPARATION or flow.phase_number != 0:
 		return {"success": false, "reason": "Подготовка уже завершена"}
 	for actor_id in enemy_ids():
 		var actor: BattleParticipant = get_participant(actor_id)
@@ -416,7 +529,7 @@ func _begin_manual_phase() -> void:
 
 
 func run_manual_tick(slot_index: int, target_id: String = "") -> Dictionary:
-	if not manual_combat_active or flow.stage == BattleFlow.Stage.FINISHED:
+	if round_combat_active or not manual_combat_active or flow.stage == BattleFlow.Stage.FINISHED:
 		return {"success": false, "reason": "Ручной бой не подготовлен", "events": []}
 	if flow.stage not in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES, BattleFlow.Stage.EXECUTING]:
 		return {"success": false, "reason": "Сейчас нельзя выполнить такт", "events": []}

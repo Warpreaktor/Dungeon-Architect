@@ -2,7 +2,7 @@ class_name BattleClashPlanner
 extends RefCounted
 
 
-static func ordered_actors(participants: Dictionary, actor_ids: Array[String]) -> Array[String]:
+static func ordered_actors(participants: Dictionary, actor_ids: Array[String], ties: Dictionary = {}) -> Array[String]:
 	var ordered: Array[String] = actor_ids.duplicate()
 	ordered.sort_custom(func(left_id: String, right_id: String) -> bool:
 		var left: BattleParticipant = participants.get(left_id) as BattleParticipant
@@ -11,6 +11,8 @@ static func ordered_actors(participants: Dictionary, actor_ids: Array[String]) -
 		var right_agility: int = right.effective_agility() if right != null else -2147483648
 		if left_agility != right_agility:
 			return left_agility > right_agility
+		if ties.has(left_id) and ties.has(right_id):
+			return int(ties[left_id]) < int(ties[right_id])
 		return left_id < right_id
 	)
 	return ordered

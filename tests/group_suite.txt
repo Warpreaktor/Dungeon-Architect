@@ -36,3 +36,5 @@ test_stage5_progress_snapshot.gd
 
 test_stage5_editor_test_isolation.gd
 test_stage5_map_compatibility.gd
+
+test_stage5_full_adventure.gd

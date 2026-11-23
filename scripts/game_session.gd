@@ -1645,7 +1645,7 @@ func _claim_exit_reward(stairs: Dictionary) -> void:
 
 
 func progress_snapshot() -> Dictionary:
-	if is_editor_test or map_data == null or has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_door_trap() or is_completed:
+	if is_editor_test or map_data == null or is_party_defeated() or has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_door_trap() or is_completed:
 		return {}
 	var party_data: Dictionary = party_state_snapshot()
 	if party_data.is_empty():

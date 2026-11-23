@@ -15,7 +15,7 @@ enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 @export var category: Category = Category.QUEST
 @export_range(1, 9999, 1) var default_quantity: int = 1
 @export var stackable: bool = true
-@export var equipment_slot: EquipmentSlot = EquipmentSlot.NONE
+@export var equipment_slot: int = EquipmentSlot.NONE
 @export var two_handed: bool = false
 ## Собственный урон оружия, без скрытой атаки персонажа.
 @export_range(0, 999, 1) var weapon_damage: int = 0

@@ -5,7 +5,7 @@ extends Control
 ## Сведения о здоровье, атаке и блоке берутся из CombatSession/HeroState.
 signal battle_won
 signal battle_lost
-signal shield_broken(item_id: String)
+signal shield_broken(item_id: String, member: HeroState)
 signal combat_log_line(message: String)
 signal item_use_requested(item_id: String)
 
@@ -78,6 +78,15 @@ var _visible_support_max: int = 0
 var _manual_started: bool = false
 var _selected_manual_slot: int = -2
 var _target_outlines: Dictionary = {}
+var _hero_party: HBoxContainer
+var _support_hero_view: BattleSupportEnemyView
+var _selected_hero_id: String = "hero"
+var _round_button: Button
+var _round_turn_label: Label
+var _round_mode: bool = false
+var _round_event_cursor: int = 0
+var _visible_support_hero_hp: int = 0
+var _visible_support_hero_max: int = 0
 
 
 # Длительность визуальной вспышки совпадает с паузой события «Блок».
@@ -141,6 +150,8 @@ func _ready() -> void:
 	_support_enemy_view.theme = _main_enemy_card.theme
 	_enemy_party.add_child(_support_enemy_view)
 	_support_enemy_view.hide()
+	_build_hero_party()
+	_build_round_controls()
 	_bind_target_portrait(_hero_portrait, "hero")
 	_bind_target_portrait(_enemy_portrait, "enemy")
 	_bind_target_portrait(_support_enemy_view.portrait_node(), BattleState.SUPPORT_ENEMY_ID)
@@ -149,6 +160,157 @@ func _ready() -> void:
 	_result_text.text = ""
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.24)
+
+
+func _build_hero_party() -> void:
+	var hero_card: PanelContainer = $OuterMargin/Main/Battlefield/HeroCard
+	_hero_party = HBoxContainer.new()
+	_hero_party.name = "HeroParty"
+	_hero_party.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_hero_party.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_battlefield.remove_child(hero_card)
+	_battlefield.add_child(_hero_party)
+	_battlefield.move_child(_hero_party, 0)
+	_hero_party.add_child(hero_card)
+	hero_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_support_hero_view = BattleSupportEnemyView.new()
+	_support_hero_view.name = "SecondHero"
+	_support_hero_view.theme = hero_card.theme
+	_support_hero_view.info_requested.connect(_touch_info.show_text)
+	_hero_party.add_child(_support_hero_view)
+	_support_hero_view.hide()
+	_hero_party.resized.connect(_equalize_hero_cards)
+
+
+func _equalize_hero_cards() -> void:
+	var hero_card: PanelContainer = _hero_party.get_child(0) as PanelContainer
+	hero_card.custom_minimum_size.y = 0.0
+	_support_hero_view.custom_minimum_size.y = 0.0
+	if not _support_hero_view.visible:
+		return
+	var gap: float = float(_hero_party.get_theme_constant("separation"))
+	var width_each: float = maxf((_hero_party.size.x - gap) / 2.0, 0.0)
+	var height_each: float = minf(_hero_party.size.y, maxf(width_each,
+		maxf(hero_card.get_combined_minimum_size().y, _support_hero_view.get_combined_minimum_size().y)))
+	hero_card.custom_minimum_size.y = height_each
+	_support_hero_view.custom_minimum_size.y = height_each
+
+
+func _build_round_controls() -> void:
+	var actions: HBoxContainer = $OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions
+	_round_turn_label = Label.new()
+	_round_turn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actions.add_child(_round_turn_label)
+	_round_button = Button.new()
+	_round_button.text = "Ход"
+	_round_button.custom_minimum_size = Vector2(100, 48)
+	_round_button.pressed.connect(_on_round_button_pressed)
+	actions.add_child(_round_button)
+	_round_button.hide()
+
+
+func _hero_name_for_id(actor_id: String) -> String:
+	var member: HeroState = _combat.hero_sources.get(actor_id) as HeroState
+	return member.definition.display_name if member != null and member.definition != null else actor_id
+
+
+func _select_hero_view(actor_id: String) -> void:
+	if _combat == null or not _combat.battle_state.hero_ids().has(actor_id):
+		return
+	_selected_hero_id = actor_id
+	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
+	if actor == null:
+		return
+	_hero_chain = actor.action_chain.duplicate()
+	_hero_chain_title.text = _hero_name_for_id(actor_id).to_upper()
+	_refresh_chain_slots()
+	_refresh_round_controls()
+
+
+func _round_next_actor() -> String:
+	if _combat == null or not _round_mode:
+		return ""
+	return _combat.battle_state.next_round_actor_id()
+
+
+func _round_next_ability(actor_id: String) -> AbilityDefinition:
+	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
+	if actor == null or actor.action_cursor >= actor.action_chain.size() or actor.action_cursor < 0:
+		return null
+	return AbilityCatalog.get_ability(actor.action_chain[actor.action_cursor])
+
+
+func _refresh_round_controls() -> void:
+	if not _round_mode or _combat == null:
+		return
+	var actor_id: String = _round_next_actor()
+	var state: BattleState = _combat.battle_state
+	_round_turn_label.text = "Раунд %d" % max(1, state.round_number)
+	_round_button.disabled = _is_playing_back or actor_id.is_empty()
+	_round_button.visible = not actor_id.is_empty() and actor_id in state.hero_ids()
+	if actor_id.is_empty():
+		return
+	if actor_id in state.hero_ids():
+		_round_turn_label.text += " · " + _hero_name_for_id(actor_id)
+	else:
+		_round_turn_label.text += " · " + _enemy_name_for_id(actor_id)
+	var ability: AbilityDefinition = _round_next_ability(actor_id)
+	var targets: Array[String] = []
+	if ability != null:
+		targets = state.create_context().target_ids(actor_id, ability)
+	_round_button.text = "Отдых" if ability == null else "Ход"
+	if actor_id in state.hero_ids() and ability != null and targets.size() > 1:
+		_round_button.disabled = true
+	_refresh_target_outlines()
+
+
+func _enemy_name_for_id(actor_id: String) -> String:
+	if actor_id == "enemy":
+		return _enemy_name.text
+	if actor_id == BattleState.SUPPORT_ENEMY_ID:
+		return _combat.support_enemy_definition.display_name if _combat.support_enemy_definition != null else _enemy_name.text
+	return actor_id
+
+
+func _on_round_button_pressed() -> void:
+	if not _round_mode or _is_playing_back:
+		return
+	var actor_id: String = _round_next_actor()
+	if not _combat.battle_state.hero_ids().has(actor_id):
+		return
+	var ability: AbilityDefinition = _round_next_ability(actor_id)
+	var targets: Array[String] = []
+	if ability != null:
+		targets = _combat.battle_state.create_context().target_ids(actor_id, ability)
+	if targets.size() > 1:
+		return
+	_execute_round_turn(targets[0] if not targets.is_empty() else "")
+
+
+func _execute_round_turn(target_id: String = "") -> void:
+	if _is_playing_back or _combat == null or _combat.is_victory or _combat.is_defeat:
+		return
+	var result: Dictionary = _combat.play_round_turn(target_id)
+	if not bool(result.get("success", false)):
+		_result_text.text = str(result.get("reason", ""))
+		return
+	_is_playing_back = true
+	_round_button.disabled = true
+	_play_phase_events(result.get("events", []))
+
+
+func _continue_round() -> void:
+	if not _round_mode or _combat == null or _is_playing_back:
+		return
+	var actor_id: String = _round_next_actor()
+	if actor_id.is_empty() and not (_combat.is_victory or _combat.is_defeat):
+		actor_id = _combat.battle_state.prepare_next_round()
+	if actor_id in _combat.battle_state.enemy_ids():
+		_execute_round_turn()
+	else:
+		if actor_id in _combat.battle_state.hero_ids():
+			_select_hero_view(actor_id)
+		_refresh_round_controls()
 
 
 ## Единственный расчёт: тот же метод, что использует обработчик способности.
@@ -171,6 +333,11 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_combat = combat
 	_manual_started = false
 	_selected_manual_slot = -2
+	_round_mode = true
+	_round_event_cursor = 0
+	_selected_hero_id = "hero"
+	_combat_items_button.hide()
+	_round_button.show()
 	var support_definition: MonsterDefinition = combat.support_enemy_definition if combat.support_enemy_definition != null else combat.enemy_definition
 	var support: BattleParticipant = combat.battle_state.get_participant(combat.battle_state.support_enemy_id)
 	var portrait: Texture2D = support_definition.portrait if support_definition.portrait != null else support_definition.icon
@@ -179,6 +346,16 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 		support_name += " (2)"
 	_support_enemy_view.configure(support, portrait, support_name, support_definition.portrait_flip_h)
 	call_deferred("_equalize_enemy_cards")
+	var other_id: String = "hero_2"
+	var other: BattleParticipant = combat.battle_state.get_participant(other_id)
+	if other != null:
+		var member: HeroState = combat.hero_sources.get(other_id) as HeroState
+		var texture: Texture2D = member.definition.portrait if member != null and member.definition != null else null
+		_support_hero_view.configure(other, texture, _hero_name_for_id(other_id))
+		_support_hero_view.reveal_all()
+		_status_presenter.setup({other_id: _support_hero_view.portrait_node()})
+		_bind_target_portrait(_support_hero_view.portrait_node(), other_id)
+		call_deferred("_equalize_hero_cards")
 	if support != null:
 		_status_presenter.setup({combat.battle_state.support_enemy_id: _support_enemy_view.portrait_node()})
 	if hero.definition != null:
@@ -205,6 +382,8 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_hero_health_meter.set_health(hero.health, hero.effective_max_health())
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
 	_visible_hero_hp = hero.health
+	_visible_support_hero_hp = other.health if other != null else 0
+	_visible_support_hero_max = other.max_health if other != null else 0
 	_visible_enemy_hp = combat.enemy_health
 	_visible_support_hp = support.health if support != null else 0
 	_visible_hero_max = hero.effective_max_health()
@@ -221,12 +400,33 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	for ability_id in _committed_slots:
 		if not ability_id.is_empty():
 			_hero_chain.append(ability_id)
-	_enemy_chain = _combat.battle_state.default_chain("enemy")
+	_enemy_chain = _combat.battle_state.get_enemy().action_chain.duplicate()
 	_enemy_revealed.clear()
 	_enemy_played.clear()
 	_refresh_enemy_slots()
 	_result_text.text = ""
-	_start_prepared_combat()
+	_start_round_combat()
+
+
+func _start_round_combat() -> void:
+	for actor_id in _combat.battle_state.hero_ids():
+		var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
+		if actor != null and BattleChainPlanner.validate(actor.action_chain, actor, false) != "":
+			actor.action_chain = _combat.battle_state.default_chain(actor_id)
+	var prepared: Dictionary = _combat.prepare_round_combat()
+	if not bool(prepared.get("success", false)):
+		_result_text.text = str(prepared.get("reason", "Не удалось подготовить бой"))
+		_round_button.disabled = true
+		return
+	_manual_started = false
+	_select_hero_view("hero")
+	var other: BattleParticipant = _combat.battle_state.get_participant("hero_2")
+	if other != null:
+		_support_hero_view.set_chain(other)
+		_support_hero_view.reveal_all()
+	_refresh_chain_slots()
+	_refresh_round_controls()
+	call_deferred("_continue_round")
 
 
 func _equalize_enemy_cards() -> void:
@@ -249,6 +449,7 @@ func _refresh_chain_slots() -> void:
 		child.queue_free()
 	var displayed: Array[String] = _hero_chain
 	var available: Array[int] = []
+	var selected_actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
 	if _manual_started:
 		available = _combat.battle_state.manual_available_slots()
 	for index in range(displayed.size()):
@@ -256,25 +457,41 @@ func _refresh_chain_slots() -> void:
 		var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
 		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_sequence_slots.add_child(slot)
-		slot.configure(index, ability, available.has(index), _combat.battle_state.get_hero())
+		slot.configure(index, ability, not _round_mode and available.has(index), selected_actor)
 		if _manual_started and not available.has(index):
 			slot.modulate = Color(0.48, 0.48, 0.48)
-		slot.slot_selected.connect(_on_slot_pressed.bind(slot))
+		if not _round_mode:
+			slot.slot_selected.connect(_on_slot_pressed.bind(slot))
+		else:
+			slot.disabled = true
 		slot.info_requested.connect(_touch_info.show_text)
 		_touch_info.attach_long_press(slot, func() -> String: return slot.tooltip_text)
 	# Отдых не занимает слот арсенала и не сохраняется в HeroState.
 	var rest_slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 	_sequence_slots.add_child(rest_slot)
 	rest_slot.configure_recharge(displayed.size())
-	rest_slot.slot_selected.connect(_on_slot_pressed.bind(rest_slot))
+	if not _round_mode:
+		rest_slot.slot_selected.connect(_on_slot_pressed.bind(rest_slot))
+	else:
+		rest_slot.disabled = true
 	if _manual_started and not _is_playing_back and _combat.battle_state.flow.stage != BattleFlow.Stage.FINISHED:
 		rest_slot.disabled = false
 	rest_slot.info_requested.connect(_touch_info.show_text)
 	_resize_chain_slots()
-	if _manual_started:
+	if _round_mode:
+		_highlight_round_action()
+	elif _manual_started:
 		_highlight_manual_selection()
 	else:
 		_highlight_next_actions()
+
+
+func _highlight_round_action() -> void:
+	var actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
+	if actor == null:
+		return
+	for i in range(_sequence_slots.get_child_count()):
+		(_sequence_slots.get_child(i) as BattleAbilitySlot).set_current(i == actor.action_cursor)
 
 
 func _resize_chain_slots() -> void:
@@ -312,7 +529,7 @@ func _refresh_enemy_slots() -> void:
 		if _enemy_played.has(index):
 			slot.modulate = BattleAbilitySlot.SPENT_MODULATE
 		slot.info_requested.connect(_touch_info.show_text)
-	if not _is_playing_back:
+	if not _is_playing_back and not _round_mode:
 		_highlight_next_actions()
 	_resize_chain_slots()
 
@@ -514,6 +731,15 @@ func _play_selected_manual_action(target_id: String) -> void:
 	_play_phase_events(result.get("events", []))
 
 
+func _portrait_for_id(actor_id: String) -> TextureRect:
+	match actor_id:
+		"hero": return _hero_portrait
+		"hero_2": return _support_hero_view.portrait_node()
+		"enemy": return _enemy_portrait
+		BattleState.SUPPORT_ENEMY_ID: return _support_enemy_view.portrait_node()
+	return null
+
+
 func _create_impact_layer() -> void:
 	_impact_layer = Control.new()
 	_impact_layer.name = "CombatImpacts"
@@ -530,9 +756,13 @@ func _create_impact_layer() -> void:
 	_status_presenter.clear_impact()
 	var center: Vector2 = _battlefield.get_global_rect().get_center() - global_position
 	var actor_ids: Array[String] = ["hero", "enemy"]
+	if _combat.battle_state.get_participant("hero_2") != null:
+		actor_ids.append("hero_2")
 	if _combat.battle_state.get_participant(BattleState.SUPPORT_ENEMY_ID) != null:
 		actor_ids.append(BattleState.SUPPORT_ENEMY_ID)
 	var portrait_sizes: Dictionary = {"hero": _hero_portrait.size, "enemy": _enemy_portrait.size}
+	if actor_ids.has("hero_2"):
+		portrait_sizes["hero_2"] = _support_hero_view.portrait_node().size
 	if actor_ids.has(BattleState.SUPPORT_ENEMY_ID):
 		portrait_sizes[BattleState.SUPPORT_ENEMY_ID] = _support_enemy_view.portrait_node().size
 	var available_height: float = _battlefield.size.y * (1.0 - clash_formation_vertical_padding_fraction * 2.0)
@@ -541,7 +771,7 @@ func _create_impact_layer() -> void:
 	var idle_positions: Dictionary = BattleClashGeometry.formation_positions(center, portrait_sizes,
 		_impact_scale, clash_idle_gap_fraction, clash_formation_vertical_gap_fraction)
 	for actor_id in actor_ids:
-		var original: TextureRect = _hero_portrait if actor_id == "hero" else (_enemy_portrait if actor_id == "enemy" else _support_enemy_view.portrait_node())
+		var original: TextureRect = _portrait_for_id(actor_id)
 		if original == null or original.texture == null:
 			continue
 		var portrait := TextureRect.new()
@@ -590,10 +820,15 @@ func _clear_impact_layer() -> void:
 	_impact_portraits.clear()
 	_impact_shields.clear()
 	_hero_portrait.modulate.a = 1.0
+	if _support_hero_view.visible:
+		_support_hero_view.portrait_node().modulate.a = 1.0
 	_enemy_portrait.modulate.a = 1.0
 	if _support_enemy_view != null:
 		_support_enemy_view.portrait_node().modulate.a = 1.0
-	_highlight_next_actions()
+	if _round_mode:
+		_highlight_round_action()
+	else:
+		_highlight_next_actions()
 
 
 func _play_phase_events(phase_events: Array) -> void:
@@ -635,9 +870,9 @@ func _queue_clash_animation(group_events: Array[Dictionary]) -> void:
 	var attackers: Dictionary = {}
 	for event in group_events:
 		var kind: String = str(event.get("type", ""))
-		if kind in ["tick", "action_start", "block"]:
+		if kind in ["tick", "turn", "action_start", "block"]:
 			_playback.tween_callback(_display_phase_event.bind(event))
-			if kind == "tick":
+			if kind in ["tick", "turn"]:
 				_playback.tween_interval(clash_tick_seconds)
 			elif kind == "action_start":
 				_playback.tween_callback(_show_clash_ability.bind(event))
@@ -746,6 +981,19 @@ func _display_phase_event(event: Dictionary) -> void:
 				var support: BattleParticipant = _combat.battle_state.get_participant(BattleState.SUPPORT_ENEMY_ID)
 				if support != null:
 					_support_enemy_view.highlight_cursor(support.action_chain.size() if bool(event.get("support_reload", false)) else support_slot)
+		"turn":
+			if _round_mode:
+				var slot_index: int = int(event.get("slot_index", -1))
+				if actor_id in _combat.battle_state.hero_ids():
+					_select_hero_view(actor_id)
+					for i in range(_sequence_slots.get_child_count()):
+						(_sequence_slots.get_child(i) as BattleAbilitySlot).set_current(i == (_hero_chain.size() if bool(event.get("reload", false)) else slot_index))
+				elif actor_id == "enemy":
+					for i in range(_enemy_sequence_slots.get_child_count()):
+						(_enemy_sequence_slots.get_child(i) as BattleAbilitySlot).set_current(i == (_enemy_chain.size() if bool(event.get("reload", false)) else slot_index))
+				elif actor_id == BattleState.SUPPORT_ENEMY_ID:
+					_support_enemy_view.highlight_cursor(_combat.battle_state.get_participant(actor_id).action_chain.size() if bool(event.get("reload", false)) else slot_index)
+				_round_turn_label.text = "Раунд %d · %s" % [int(event.get("round", 0)), _hero_name_for_id(actor_id) if actor_id in _combat.battle_state.hero_ids() else _enemy_name_for_id(actor_id)]
 		"action_start":
 			# Враг показывает только исполняемый сейчас приём, не будущие.
 			if actor_id == "enemy":
@@ -767,13 +1015,17 @@ func _display_phase_event(event: Dictionary) -> void:
 			_set_block_display(str(event.get("target_id", "")), int(event.get("armor", 0)))
 		"heal":
 			var healed: int = int(event.get("healed", 0))
-			if actor_id == "hero":
+			var healed_id: String = str(event.get("target_id", actor_id))
+			if healed_id == "hero":
 				_visible_hero_hp += healed
 				_hero_health_meter.set_health(_visible_hero_hp, _visible_hero_max, true)
-			elif actor_id == "enemy":
+			elif healed_id == "hero_2":
+				_visible_support_hero_hp += healed
+				_support_hero_view.set_health(_visible_support_hero_hp, _visible_support_hero_max)
+			elif healed_id == "enemy":
 				_visible_enemy_hp += healed
 				_enemy_health_meter.set_health(_visible_enemy_hp, _visible_enemy_max, true)
-			elif actor_id == BattleState.SUPPORT_ENEMY_ID:
+			elif healed_id == BattleState.SUPPORT_ENEMY_ID:
 				_visible_support_hp += healed
 				_support_enemy_view.set_health(_visible_support_hp, _visible_support_max)
 			if healed > 0:
@@ -786,6 +1038,10 @@ func _display_phase_event(event: Dictionary) -> void:
 				_visible_hero_hp = actual_hp
 				_visible_hero_max = actual_max
 				_hero_health_meter.set_health(actual_hp, actual_max, true)
+			elif target_id == "hero_2":
+				_visible_support_hero_hp = actual_hp
+				_visible_support_hero_max = actual_max
+				_support_hero_view.set_health(actual_hp, actual_max)
 			elif target_id == "enemy":
 				_visible_enemy_hp = actual_hp
 				_visible_enemy_max = actual_max
@@ -805,6 +1061,9 @@ func _display_phase_event(event: Dictionary) -> void:
 			if target_id == "hero":
 				_visible_hero_hp -= amount
 				_hero_health_meter.set_health(_visible_hero_hp, _visible_hero_max, true)
+			elif target_id == "hero_2":
+				_visible_support_hero_hp -= amount
+				_support_hero_view.set_health(_visible_support_hero_hp, _visible_support_hero_max)
 			elif target_id == "enemy":
 				_visible_enemy_hp -= amount
 				_enemy_health_meter.set_health(_visible_enemy_hp, _visible_enemy_max, true)
@@ -824,7 +1083,7 @@ func _display_phase_event(event: Dictionary) -> void:
 		"failed":
 			# Текущий слот коротко вспыхивает красным, без текстовых предупреждений.
 			var slot_index: int = int(event.get("slot_index", -1))
-			if actor_id != BattleState.SUPPORT_ENEMY_ID:
+			if actor_id != BattleState.SUPPORT_ENEMY_ID and actor_id != "hero_2":
 				var row: HBoxContainer = _sequence_slots if actor_id == "hero" else _enemy_sequence_slots
 				if slot_index >= 0 and slot_index < row.get_child_count():
 					(row.get_child(slot_index) as BattleAbilitySlot).flash_empty()
@@ -837,6 +1096,13 @@ func _emit_combat_event_log(event: Dictionary) -> void:
 	if _combat.support_enemy_definition != null and _combat.support_enemy_definition.monster_id == _combat.enemy_definition.monster_id:
 		support_name += " (2)"
 	var message: String = BattleCombatLog.format_event(event, _hero_name.text, _enemy_name.text, support_name)
+	if _round_mode:
+		if str(event.get("type", "")) == "turn":
+			message = "  Раунд %d · ход %s" % [int(event.get("round", 0)), _hero_name_for_id(str(event.get("actor_id", ""))) if str(event.get("actor_id", "")) in _combat.battle_state.hero_ids() else _enemy_name_for_id(str(event.get("actor_id", "")))]
+		var actor_id: String = str(event.get("actor_id", ""))
+		var target_id: String = str(event.get("target_id", ""))
+		if actor_id == "hero_2" or target_id == "hero_2":
+			message = message.replace("hero_2", _hero_name_for_id("hero_2"))
 	if not message.is_empty():
 		combat_log_line.emit(message)
 
@@ -858,6 +1124,9 @@ func _impact(event: Dictionary) -> void:
 	if target_id == "hero":
 		_visible_hero_hp -= hp_damage
 		_hero_health_meter.set_health(_visible_hero_hp, _visible_hero_max, true)
+	elif target_id == "hero_2":
+		_visible_support_hero_hp -= hp_damage
+		_support_hero_view.set_health(_visible_support_hero_hp, _visible_support_hero_max)
 	elif target_id == "enemy":
 		_visible_enemy_hp -= hp_damage
 		_enemy_health_meter.set_health(_visible_enemy_hp, _visible_enemy_max, true)
@@ -897,6 +1166,9 @@ func _flash_shield(actor_id: String) -> void:
 
 
 func _set_block_display(actor_id: String, amount: int) -> void:
+	if actor_id == "hero_2":
+		_support_hero_view.set_block(amount)
+		return
 	if actor_id == BattleState.SUPPORT_ENEMY_ID:
 		_support_enemy_view.set_block(amount)
 		return
@@ -953,6 +1225,9 @@ func _exit_tree() -> void:
 		_impact_layer.free()
 func _after_phase_playback() -> void:
 	_is_playing_back = false
+	if _round_mode:
+		_after_round_playback()
+		return
 	_refresh_accuracy_and_dodge()
 	_status_presenter.sync(_combat.battle_state.participants)
 	_set_block_display("hero", _combat.battle_state.get_hero().block_armor)
@@ -977,7 +1252,7 @@ func _after_phase_playback() -> void:
 		if not broken_id.is_empty():
 			_combat.hero.last_shield_broken = broken_id
 			_set_block_display("hero", _combat.battle_state.get_hero().block_armor)
-			shield_broken.emit(broken_id)
+			shield_broken.emit(broken_id, _combat.hero)
 			_combat.hero.last_shield_broken = ""
 			var hero_actor: BattleParticipant = _combat.battle_state.get_hero()
 			if hero_actor != null and hero_actor._hero_snapshot != null:
@@ -993,12 +1268,63 @@ func _after_phase_playback() -> void:
 		_refresh_phase_controls()
 
 
+func _after_round_playback() -> void:
+	var state: BattleState = _combat.battle_state
+	_status_presenter.sync(state.participants)
+	_refresh_accuracy_and_dodge()
+	for actor_id in state.hero_ids() + state.enemy_ids():
+		var actor: BattleParticipant = state.get_participant(actor_id)
+		if actor == null:
+			continue
+		_set_block_display(actor_id, actor.block_armor)
+		if actor_id == "hero_2":
+			_visible_support_hero_hp = actor.health
+			_visible_support_hero_max = actor.max_health
+			_support_hero_view.refresh_health(actor)
+			_support_hero_view.refresh_stats(actor)
+			_support_hero_view.highlight_cursor(actor.action_cursor)
+		elif actor_id == BattleState.SUPPORT_ENEMY_ID:
+			_support_enemy_view.refresh_health(actor)
+			_support_enemy_view.refresh_stats(actor)
+			_support_enemy_view.highlight_cursor(actor.action_cursor)
+		elif actor_id == "hero":
+			_visible_hero_hp = actor.health
+			_hero_health_meter.set_health(actor.health, actor.max_health, true)
+			_hero_portrait.modulate = Color.WHITE if actor.is_alive() else Color("#87909c")
+		elif actor_id == "enemy":
+			_visible_enemy_hp = actor.health
+			_enemy_health_meter.set_health(actor.health, actor.max_health, true)
+			_enemy_portrait.modulate = Color.WHITE if actor.is_alive() else Color("#87909c")
+	for event_index in range(_round_event_cursor, state.events.size()):
+		var event: Dictionary = state.events[event_index]
+		var broken_id: String = str(event.get("shield_broken", ""))
+		if broken_id.is_empty():
+			continue
+		var source: HeroState = _combat.hero_sources.get(str(event.get("target_id", ""))) as HeroState
+		if source != null and source.last_shield_broken == broken_id:
+			shield_broken.emit(broken_id, source)
+			source.last_shield_broken = ""
+	_round_event_cursor = state.events.size()
+	if _combat.is_victory:
+		_show_victory()
+	elif _combat.is_defeat:
+		_show_defeat()
+	else:
+		_refresh_enemy_slots()
+		_refresh_chain_slots()
+		_refresh_round_controls()
+		call_deferred("_continue_round")
+
+
 ## При проигрывании показываем снимок результата события, а не конечное
 ## состояние уже рассчитанной фазы.
 func _set_accuracy_and_dodge_from_event(event: Dictionary) -> void:
 	if not event.has("dodge_after"):
 		return
 	var target_id: String = str(event.get("target_id", ""))
+	if target_id == "hero_2":
+		_support_hero_view.set_precision(int(event.get("dodge_after", 0)), int(event.get("accuracy_after", 0)))
+		return
 	if target_id == BattleState.SUPPORT_ENEMY_ID:
 		_support_enemy_view.set_precision(int(event.get("dodge_after", 0)), int(event.get("accuracy_after", 0)))
 		return
@@ -1021,6 +1347,8 @@ func _refresh_accuracy_and_dodge() -> void:
 	_hero_accuracy_value.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + hero.accuracy_percent())
 	_enemy_dodge_value.text = "%d%%" % enemy.dodge_percent()
 	_enemy_accuracy_value.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + enemy.accuracy_percent())
+	if _support_hero_view != null and _support_hero_view.visible:
+		_support_hero_view.refresh_stats(_combat.battle_state.get_participant("hero_2"))
 	if _support_enemy_view != null:
 		_support_enemy_view.refresh_stats(_combat.battle_state.get_participant(BattleState.SUPPORT_ENEMY_ID))
 	_hero_dodge_value.tooltip_text = "Собственное уклонение, без учёта меткости противника"
@@ -1069,6 +1397,20 @@ func _on_target_portrait_input(event: InputEvent, actor_id: String) -> void:
 		pressed = mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed
 	elif event is InputEventScreenTouch:
 		pressed = (event as InputEventScreenTouch).pressed
+	if _round_mode:
+		if not pressed or _is_playing_back:
+			return
+		var current_id: String = _round_next_actor()
+		if actor_id in _combat.battle_state.hero_ids():
+			_select_hero_view(actor_id)
+		if current_id not in _combat.battle_state.hero_ids():
+			return
+		var ability: AbilityDefinition = _round_next_ability(current_id)
+		if ability == null or not _combat.battle_state.create_context().target_ids(current_id, ability).has(actor_id):
+			return
+		get_viewport().set_input_as_handled()
+		_execute_round_turn(actor_id)
+		return
 	if not pressed or not _manual_started or _selected_manual_slot < 0 or _is_playing_back:
 		return
 	var ability: AbilityDefinition = AbilityCatalog.get_ability(_hero_chain[_selected_manual_slot])
@@ -1080,6 +1422,17 @@ func _on_target_portrait_input(event: InputEvent, actor_id: String) -> void:
 
 func _refresh_target_outlines() -> void:
 	var valid_targets: Array[String] = []
+	if _round_mode and not _is_playing_back:
+		var actor_id: String = _round_next_actor()
+		if actor_id in _combat.battle_state.hero_ids():
+			var ability: AbilityDefinition = _round_next_ability(actor_id)
+			if ability != null:
+				valid_targets = _combat.battle_state.create_context().target_ids(actor_id, ability)
+		for target_id in _target_outlines:
+			var panel: Panel = _target_outlines[target_id]
+			panel.visible = valid_targets.has(str(target_id))
+			(panel.get_parent() as TextureRect).mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if panel.visible else Control.CURSOR_ARROW
+		return
 	if _manual_started and not _is_playing_back and _selected_manual_slot >= 0 and _combat.battle_state.flow.stage != BattleFlow.Stage.FINISHED:
 		var ability: AbilityDefinition = AbilityCatalog.get_ability(_hero_chain[_selected_manual_slot])
 		valid_targets = _combat.battle_state.create_context().target_ids("hero", ability)

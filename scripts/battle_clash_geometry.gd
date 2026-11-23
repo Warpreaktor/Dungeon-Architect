@@ -3,13 +3,20 @@ extends RefCounted
 
 
 static func fit_formation_scale(available_height: float, portrait_sizes: Dictionary, requested_scale: float, vertical_gap_fraction: float) -> float:
-	if not portrait_sizes.has("enemy_support") or not portrait_sizes.has("enemy") or available_height <= 0.0:
+	if available_height <= 0.0:
 		return requested_scale
-	var top_height: float = (portrait_sizes["enemy"] as Vector2).y
-	var bottom_height: float = (portrait_sizes["enemy_support"] as Vector2).y
-	var vertical_gap: float = maxf(top_height, bottom_height) * maxf(vertical_gap_fraction, 0.0)
-	var required_height: float = top_height + bottom_height + vertical_gap
-	return minf(requested_scale, maxf(available_height, 0.0) / maxf(required_height, 1.0))
+	var highest_column: float = 0.0
+	for pair in [["hero", "hero_2"], ["enemy", "enemy_support"]]:
+		var total_height: float = 0.0
+		var count: int = 0
+		for actor_id in pair:
+			if portrait_sizes.has(actor_id):
+				total_height += (portrait_sizes[actor_id] as Vector2).y
+				count += 1
+		if count > 1:
+			total_height += total_height / count * maxf(vertical_gap_fraction, 0.0)
+		highest_column = maxf(highest_column, total_height)
+	return minf(requested_scale, available_height / maxf(highest_column, 1.0))
 
 
 static func formation_positions(center: Vector2, portrait_sizes: Dictionary, scale: float, horizontal_gap_fraction: float, vertical_gap_fraction: float) -> Dictionary:
@@ -23,6 +30,13 @@ static func formation_positions(center: Vector2, portrait_sizes: Dictionary, sca
 	var enemy_extra: float = enemy_size.x * (scale - 1.0) * 0.5
 	positions["hero"] = Vector2(center.x - gap * 0.5 - hero_size.x - hero_extra, center.y - hero_size.y * 0.5)
 	positions["enemy"] = Vector2(center.x + gap * 0.5 + enemy_extra, center.y - enemy_size.y * 0.5)
+	if portrait_sizes.has("hero_2"):
+		var support_hero_size: Vector2 = portrait_sizes["hero_2"]
+		var hero_gap: float = maxf(hero_size.y, support_hero_size.y) * scale * vertical_gap_fraction
+		positions["hero"].y -= (support_hero_size.y * scale + hero_gap) * 0.5
+		positions["hero_2"] = Vector2(
+			center.x - gap * 0.5 - support_hero_size.x - support_hero_size.x * (scale - 1.0) * 0.5,
+			center.y + (hero_size.y * scale + hero_gap) * 0.5 - support_hero_size.y * 0.5)
 	if portrait_sizes.has("enemy_support"):
 		var support_size: Vector2 = portrait_sizes["enemy_support"]
 		var visual_gap: float = maxf(enemy_size.y, support_size.y) * scale * vertical_gap_fraction

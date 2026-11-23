@@ -2246,9 +2246,9 @@ func _on_battle_item_requested(item_id: String) -> void:
 		_refresh_stats()
 
 
-func _on_battle_shield_broken(_item_id: String) -> void:
+func _on_battle_shield_broken(_item_id: String, member: HeroState) -> void:
 	if game_session != null:
-		game_session.resolve_broken_shield()
+		game_session.resolve_broken_shield(member)
 		_update_hero_hud()
 
 

@@ -1145,11 +1145,12 @@ func unequip_item(item_id: String) -> bool:
 
 
 ## Выполняется после ответной атаки; удаляем только сломанный экземпляр.
-func resolve_broken_shield() -> String:
-	if hero == null or hero.last_shield_broken.is_empty():
+func resolve_broken_shield(member: HeroState = null) -> String:
+	var owner: HeroState = member if member != null else hero
+	if owner == null or owner.last_shield_broken.is_empty():
 		return ""
-	var item_id: String = hero.last_shield_broken
-	hero.last_shield_broken = ""
+	var item_id: String = owner.last_shield_broken
+	owner.last_shield_broken = ""
 	var count: int = int(carried_items.get(item_id, 0))
 	if count > 0:
 		carried_items[item_id] = count - 1

@@ -181,6 +181,14 @@ func reveal(index: int, ability_id: String) -> void:
 	_render_slot(index)
 
 
+func reveal_all() -> void:
+	if _participant == null:
+		return
+	for index in range(_participant.action_chain.size()):
+		_revealed[index] = _participant.action_chain[index]
+		_render_slot(index)
+
+
 func reset_played() -> void:
 	_played.clear()
 	for index in range(_slots.get_child_count()):

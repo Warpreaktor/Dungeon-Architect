@@ -10,7 +10,7 @@ static func group_events(events: Array, split_actions: bool = false) -> Array[Di
 	for value in events:
 		var event: Dictionary = value
 		var kind: String = str(event.get("type", ""))
-		if kind == "tick" or (split_actions and (
+		if kind in ["tick", "turn"] or (split_actions and (
 				(kind == "counter" and not current.is_empty())
 				or (action_started and kind in ["action_start", "reload"]))):
 			if not current.is_empty():

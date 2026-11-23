@@ -114,6 +114,16 @@ func next_round_actor_id() -> String:
 	return ""
 
 
+func prepare_next_round() -> String:
+	if not round_combat_active or is_victory or is_defeat:
+		return ""
+	var actor_id: String = next_round_actor_id()
+	if actor_id.is_empty():
+		_open_round()
+		actor_id = next_round_actor_id()
+	return actor_id
+
+
 func _open_round() -> void:
 	var active: Array[String] = []
 	for id in hero_ids() + enemy_ids():

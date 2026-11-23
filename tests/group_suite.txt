@@ -27,3 +27,5 @@ test_game_dialogue_trap_icon.gd
 test_editor_popup_bounds.gd
 test_stage5_exit_links.gd
 test_editor_exit_linking.gd
+
+test_stage5_floor_states.gd

@@ -618,29 +618,66 @@ func _random_living_party_member() -> HeroState:
 	return living[trap_random.randi_range(0, living.size() - 1)]
 
 
-## Переход между этажами без пересоздания героя и инвентаря.
-## Повторное посещение восстанавливает открытые двери, сундуки и исследованные клетки.
+func _capture_floor_state() -> Dictionary:
+	if map_data == null:
+		return {}
+	var visited_cells: Array = revealed
+	if debug_open_map and _revealed_before_debug_open_map.size() == map_data.height:
+		visited_cells = _revealed_before_debug_open_map
+	return {
+		"map_id": map_data.map_id,
+		"position": player_pos,
+		"ground_loot": ground_loot_containers.duplicate(true),
+		"exit_rewards": claimed_exit_rewards.duplicate(true),
+		"removed": removed_entities.duplicate(true),
+		"chests": opened_chests.duplicate(true),
+		"traps": disarmed_traps.duplicate(true),
+		"revealed_traps": revealed_traps.duplicate(true),
+		"triggers": activated_triggers.duplicate(true),
+		"messages": shown_messages.duplicate(true),
+		"revealed": visited_cells.duplicate(true)
+	}
+
+
+func floor_state_snapshot(map_id: String = "") -> Dictionary:
+	var selected_id: String = map_id
+	if selected_id.is_empty() and map_data != null:
+		selected_id = map_data.map_id
+	if map_data != null and selected_id == map_data.map_id:
+		return _capture_floor_state()
+	var saved: Dictionary = _floor_states.get(selected_id, {})
+	if saved.is_empty():
+		return {}
+	var snapshot: Dictionary = saved.duplicate(true)
+	snapshot.erase("map")
+	return snapshot
+
+
+func visited_floor_snapshots() -> Dictionary:
+	var snapshots: Dictionary = {}
+	for map_id in _floor_states:
+		snapshots[str(map_id)] = floor_state_snapshot(str(map_id))
+	if map_data != null:
+		snapshots[map_data.map_id] = _capture_floor_state()
+	return snapshots
+
+
 func enter_map(next_map: DungeonMap) -> bool:
 	if is_party_defeated() or next_map == null or next_map.map_id.is_empty():
 		return false
-	var spawn: Vector2i = next_map.find_entity_position("player_spawn")
-	if not DungeonMap.valid_arrival_cell(next_map, spawn):
+	var saved: Dictionary = _floor_states.get(next_map.map_id, {})
+	var destination: DungeonMap = saved.get("map", next_map)
+	if map_data != null and map_data.map_id == next_map.map_id:
+		saved = _capture_floor_state()
+		destination = map_data
+	var spawn: Vector2i = destination.find_entity_position("player_spawn")
+	if not DungeonMap.valid_arrival_cell(destination, spawn):
 		return false
 	if map_data != null:
-		_floor_states[map_data.map_id] = {
-			"map": map_data,
-			"ground_loot": ground_loot_containers.duplicate(true),
-			"exit_rewards": claimed_exit_rewards.duplicate(true),
-			"removed": removed_entities.duplicate(true),
-			"chests": opened_chests.duplicate(true),
-			"traps": disarmed_traps.duplicate(true),
-			"revealed_traps": revealed_traps.duplicate(true),
-			"triggers": activated_triggers.duplicate(true),
-			"messages": shown_messages.duplicate(true),
-			"revealed": revealed.duplicate(true)
-		}
-	var saved: Dictionary = _floor_states.get(next_map.map_id, {})
-	map_data = saved.get("map", next_map)
+		var current: Dictionary = _capture_floor_state()
+		current["map"] = map_data
+		_floor_states[map_data.map_id] = current
+	map_data = destination
 	ground_loot_containers.clear()
 	for container in saved.get("ground_loot", []):
 		ground_loot_containers.append(container.duplicate(true))
@@ -1304,9 +1341,13 @@ func _refresh_visibility() -> void:
 			visible[y][x] = debug_open_map
 			if debug_open_map:
 				revealed[y][x] = true
-	if debug_open_map:
-		return
 	var radius: int = VISION_RADIUS + (hero.vision_bonus if hero != null and hero.has_vision_effect() else 0)
+	if debug_open_map:
+		for y in range(player_pos.y - radius, player_pos.y + radius + 1):
+			for x in range(player_pos.x - radius, player_pos.x + radius + 1):
+				if contains(x, y):
+					_revealed_before_debug_open_map[y][x] = true
+		return
 	for y in range(player_pos.y - radius, player_pos.y + radius + 1):
 		for x in range(player_pos.x - radius, player_pos.x + radius + 1):
 			if contains(x, y):

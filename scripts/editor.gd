@@ -1854,7 +1854,7 @@ func _emit_menu_requested() -> void:
 
 
 func _open_game_system_menu() -> void:
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
+	if not is_play_mode or game_session == null or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	_game_command_bar.visible = false
 	_dpad.visible = false
@@ -1863,7 +1863,11 @@ func _open_game_system_menu() -> void:
 
 func _close_game_system_menu() -> void:
 	_game_system_menu.dismiss()
-	if is_play_mode and not _combat_active and _victory_view == null:
+	if is_play_mode and _combat_active and _battle_view != null:
+		var menu_button: Button = _battle_view.get_node_or_null("BattleMenuButton") as Button
+		if menu_button != null:
+			menu_button.grab_focus()
+	elif is_play_mode and _victory_view == null:
 		_game_command_bar.visible = true
 		_dpad.visible = true
 		_canvas.grab_focus()
@@ -2259,6 +2263,8 @@ func _show_combat_view() -> void:
 		return
 	_battle_view = BATTLE_VIEW_SCENE.instantiate() as BattleView
 	_canvas_host.add_child(_battle_view)
+	if not standalone_game:
+		_add_battle_menu_button()
 	_battle_view.battle_won.connect(_finish_combat)
 	_battle_view.battle_lost.connect(_lose_combat)
 	_battle_view.shield_broken.connect(_on_battle_shield_broken)
@@ -2270,6 +2276,25 @@ func _show_combat_view() -> void:
 	_battle_view.begin(CombatSession.new(main_monster, game_session.hero, second_monster, -1, game_session.party), game_session.hero)
 	_battle_view.bind_combat_items(game_session)
 
+
+
+func _add_battle_menu_button() -> void:
+	var button := Button.new()
+	button.name = "BattleMenuButton"
+	button.icon = preload("res://assets/hud/menu.png")
+	button.expand_icon = true
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.tooltip_text = "Меню"
+	button.custom_minimum_size = Vector2(44, 44)
+	button.anchor_left = 1.0
+	button.anchor_right = 1.0
+	button.offset_left = -60.0
+	button.offset_right = -16.0
+	button.offset_top = 12.0
+	button.offset_bottom = 56.0
+	button.z_index = 10
+	button.pressed.connect(_open_game_system_menu)
+	_battle_view.add_child(button)
 
 
 func _on_battle_item_requested(item_id: String) -> void:
@@ -2535,7 +2560,10 @@ func _input(event: InputEvent) -> void:
 					get_viewport().set_input_as_handled()
 				return
 			if _combat_active:
-				if event.keycode in [KEY_ESCAPE, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_A, KEY_S, KEY_D]:
+				if event.keycode == KEY_ESCAPE:
+					_open_game_system_menu()
+					get_viewport().set_input_as_handled()
+				elif event.keycode in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_A, KEY_S, KEY_D]:
 					get_viewport().set_input_as_handled()
 				return
 			match event.keycode:

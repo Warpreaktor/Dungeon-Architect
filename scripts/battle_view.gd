@@ -118,7 +118,6 @@ const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 
 func _ready() -> void:
 	_sequence_scroll.resized.connect(_resize_chain_slots)
-	_enemy_sequence_scroll.resized.connect(_resize_chain_slots)
 	_combat_items_button.pressed.connect(_on_combat_items_pressed)
 	_combat_items_button.icon = StatIconCatalog.icon("potion")
 	_combat_items_button.tooltip_text = "Боевые зелья"
@@ -441,7 +440,6 @@ func _highlight_round_action() -> void:
 
 func _resize_chain_slots() -> void:
 	_fit_chain_row(_sequence_scroll, _sequence_slots)
-	_fit_chain_row(_enemy_sequence_scroll, _enemy_sequence_slots)
 
 
 func _fit_chain_row(scroll: ScrollContainer, row: HBoxContainer) -> void:

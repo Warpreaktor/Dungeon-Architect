@@ -8,6 +8,7 @@ const SUPPORT_ENEMY_ID: String = "enemy_support"
 var participants: Dictionary = {}
 var positions: Dictionary = {}
 var hero_id: String = "hero"
+var party_hero_ids: Array[String] = []
 var enemy_id: String = "enemy"
 var support_enemy_id: String = SUPPORT_ENEMY_ID
 var enemy_definition: MonsterDefinition
@@ -41,6 +42,13 @@ var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 
 static func begin(monster: MonsterDefinition, hero: HeroState = null, rng_seed: int = -1) -> BattleState:
+	var heroes: Array[HeroState] = []
+	if hero != null:
+		heroes.append(hero)
+	return begin_for_party(monster, heroes, rng_seed)
+
+
+static func begin_for_party(monster: MonsterDefinition, heroes: Array[HeroState], rng_seed: int = -1) -> BattleState:
 	var state := BattleState.new()
 	if rng_seed < 0:
 		state.rng.randomize()
@@ -52,8 +60,15 @@ static func begin(monster: MonsterDefinition, hero: HeroState = null, rng_seed: 
 	if enemy != null:
 		enemy.action_chain = MonsterCardDraw.draw(monster, enemy, state.rng)
 		state.initial_enemy_chain = enemy.action_chain.duplicate()
-	if hero != null:
-		state.participants[state.hero_id] = BattleParticipant.from_hero(hero)
+	for index in range(heroes.size()):
+		var member: HeroState = heroes[index]
+		if member == null:
+			continue
+		var participant_id: String = state.hero_id if index == 0 else "hero_%d" % (index + 1)
+		var fighter: BattleParticipant = BattleParticipant.from_hero(member, participant_id)
+		fighter.action_chain = member.get_saved_action_slots()
+		state.participants[participant_id] = fighter
+		state.party_hero_ids.append(participant_id)
 	return state
 
 
@@ -67,6 +82,21 @@ func get_enemy() -> BattleParticipant:
 
 func get_hero() -> BattleParticipant:
 	return get_participant(hero_id)
+
+
+func hero_ids() -> Array[String]:
+	if party_hero_ids.is_empty() and get_hero() != null:
+		return [hero_id]
+	return party_hero_ids.duplicate()
+
+
+func living_hero_ids() -> Array[String]:
+	var result: Array[String] = []
+	for participant_id in hero_ids():
+		var member: BattleParticipant = get_participant(participant_id)
+		if member != null and member.is_alive():
+			result.append(participant_id)
+	return result
 
 
 func add_support_enemy(definition: MonsterDefinition) -> BattleParticipant:
@@ -561,7 +591,7 @@ func update_outcome() -> void:
 	var support: BattleParticipant = get_participant(support_enemy_id)
 	if support != null and enemy != null and not enemy.is_alive():
 		support.is_targetable = true
-	is_defeat = hero != null and not hero.is_alive()
+	is_defeat = not hero_ids().is_empty() and living_hero_ids().is_empty()
 	is_victory = enemy != null and not any_living_enemy and not is_defeat
 
 

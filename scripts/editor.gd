@@ -2229,7 +2229,7 @@ func _show_combat_view() -> void:
 	var monsters: Array[MonsterDefinition] = game_session.pending_monster_definitions()
 	var main_monster: MonsterDefinition = monsters[0] if not monsters.is_empty() else game_session.pending_monster_definition()
 	var second_monster: MonsterDefinition = monsters[1] if monsters.size() > 1 else null
-	_battle_view.begin(CombatSession.new(main_monster, game_session.hero, second_monster), game_session.hero)
+	_battle_view.begin(CombatSession.new(main_monster, game_session.hero, second_monster, -1, game_session.party), game_session.hero)
 	_battle_view.bind_combat_items(game_session)
 
 

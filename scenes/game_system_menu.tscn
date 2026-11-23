@@ -83,6 +83,21 @@ layout_mode = 2
 text = "Продолжить"
 theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
 
+[node name="SaveButton" type="Button" parent="Center/Card/Margins/Content"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+text = "Сохранить"
+theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
+
+[node name="SaveError" type="Label" parent="Center/Card/Margins/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.55, 0.52, 1)
+autowrap_mode = 3
+
 [node name="LeaveButton" type="Button" parent="Center/Card/Margins/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)

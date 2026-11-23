@@ -2,12 +2,15 @@ class_name GameSystemMenu
 extends CanvasLayer
 
 signal continue_requested
+signal save_requested
 signal leave_requested
 signal test_open_map_changed(enabled: bool)
 signal console_changed(enabled: bool)
 
 @onready var _card: PanelContainer = %Card
 @onready var _continue_button: Button = %ContinueButton
+@onready var _save_button: Button = %SaveButton
+@onready var _save_error: Label = %SaveError
 @onready var _leave_button: Button = %LeaveButton
 @onready var _test_settings_button: Button = %TestSettingsButton
 
@@ -18,6 +21,7 @@ var _console_button: CheckButton
 
 func _ready() -> void:
 	_continue_button.pressed.connect(_on_continue_pressed)
+	_save_button.pressed.connect(func() -> void: save_requested.emit())
 	_leave_button.pressed.connect(_on_leave_pressed)
 	_test_settings_button.pressed.connect(_open_settings)
 	_build_settings_popup()
@@ -53,13 +57,21 @@ func _build_settings_popup() -> void:
 	column.add_child(_open_map_button)
 
 
-func open_for(standalone: bool, open_map: bool = false, console_open: bool = false) -> void:
+func open_for(standalone: bool, open_map: bool = false, console_open: bool = false, can_save: bool = false) -> void:
 	_leave_button.text = "Главное меню" if standalone else "Выйти в редактор"
+	_save_button.visible = standalone
+	_save_button.disabled = not can_save
+	_save_error.hide()
 	_open_map_button.set_pressed_no_signal(open_map)
 	_console_button.set_pressed_no_signal(console_open)
 	_settings_popup.hide()
 	show()
 	_continue_button.grab_focus()
+
+
+func show_save_error(message: String) -> void:
+	_save_error.text = message
+	_save_error.show()
 
 
 func dismiss() -> void:

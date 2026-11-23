@@ -1,12 +1,9 @@
 class_name MainMenu
 extends Control
 
-## Главный экран и выбор сохранённого подземелья для обычной игры.
-## Сохранения прохождения здесь намеренно отсутствуют до отдельного этапа.
 signal editor_requested
 signal game_requested(data: DungeonMap, hero_id: String)
-
-const MAPS_DIRECTORY := "user://maps"
+signal continue_game_requested(session: GameSession)
 
 @onready var _card: PanelContainer = %Card
 @onready var _home: VBoxContainer = %HomeActions
@@ -16,7 +13,12 @@ const MAPS_DIRECTORY := "user://maps"
 @onready var _error_message: Label = %ErrorMessage
 @onready var _start_button: Button = %StartButton
 @onready var _hero_selection: HeroSelection = %HeroSelection
+@onready var _continue_game_button: Button = %ContinueGameButton
+@onready var _home_error: Label = %HomeError
 var _selected_game_map: DungeonMap
+var _save_store: ProgressSaveStore = ProgressSaveStore.new()
+var _maps_directory: String = SavedMapLibrary.DIRECTORY
+var _maps_by_id: Dictionary = {}
 
 var _maps: Array[DungeonMap] = []
 var _thumbnails: Array[Texture2D] = []
@@ -24,6 +26,7 @@ var _thumbnails: Array[Texture2D] = []
 
 func _ready() -> void:
 	%PlayButton.pressed.connect(_open_library)
+	_continue_game_button.pressed.connect(_continue_saved_game)
 	%EditorButton.pressed.connect(func() -> void: editor_requested.emit())
 	%BackButton.pressed.connect(_back_to_home)
 	_start_button.pressed.connect(_start_selected)
@@ -33,7 +36,11 @@ func _ready() -> void:
 	_hero_selection.back_requested.connect(_return_to_library)
 	get_viewport().size_changed.connect(_resize_layout)
 	_resize_layout()
-	%PlayButton.grab_focus()
+	_refresh_continue_action()
+	if _continue_game_button.visible:
+		_continue_game_button.grab_focus()
+	else:
+		%PlayButton.grab_focus()
 
 
 func _resize_layout() -> void:
@@ -44,6 +51,7 @@ func _resize_layout() -> void:
 
 
 func _open_library() -> void:
+	_home_error.hide()
 	_home.visible = false
 	_library.visible = true
 	_hero_selection.visible = false
@@ -61,32 +69,44 @@ func _back_to_home() -> void:
 	_selected_game_map = null
 	_library.visible = false
 	_home.visible = true
-	%PlayButton.grab_focus()
+	_refresh_continue_action()
+	if _continue_game_button.visible:
+		_continue_game_button.grab_focus()
+	else:
+		%PlayButton.grab_focus()
+
+
+func _refresh_continue_action() -> void:
+	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
+	_continue_game_button.visible = _save_store.has_valid_save(_maps_by_id)
+
+
+func _continue_saved_game() -> void:
+	_home_error.hide()
+	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
+	var session: GameSession = _save_store.load_game(_maps_by_id)
+	if session == null:
+		_home_error.text = _save_store.last_error
+		_home_error.show()
+		_refresh_continue_action()
+		%PlayButton.grab_focus()
+		return
+	continue_game_requested.emit(session)
 
 
 func _load_saved_maps() -> void:
 	_maps.clear()
 	_thumbnails.clear()
 	_map_list.clear()
-	var folder := DirAccess.open(MAPS_DIRECTORY)
-	if folder != null:
-		var filenames := folder.get_files()
-		filenames.sort()
-		for filename in filenames:
-			if not filename.ends_with(".json"):
-				continue
-			var file := FileAccess.open(MAPS_DIRECTORY.path_join(filename), FileAccess.READ)
-			if file == null:
-				continue
-			var data: DungeonMap = DungeonMap.from_dict(JSON.parse_string(file.get_as_text()))
-			if data == null:
-				continue
-			_maps.append(data)
-			var thumbnail: ImageTexture = MapPreview.make_preview(data)
-			_thumbnails.append(thumbnail)
-			_map_list.add_item("%s\n%d × %d" % [data.display_name, data.width, data.height], thumbnail)
-			var index := _map_list.item_count - 1
-			_map_list.set_item_tooltip(index, data.display_name)
+	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
+	for map_id in _maps_by_id:
+		var data: DungeonMap = _maps_by_id[map_id]
+		_maps.append(data)
+		var thumbnail: ImageTexture = MapPreview.make_preview(data)
+		_thumbnails.append(thumbnail)
+		_map_list.add_item("%s\n%d × %d" % [data.display_name, data.width, data.height], thumbnail)
+		var index := _map_list.item_count - 1
+		_map_list.set_item_tooltip(index, data.display_name)
 	_no_maps.visible = _maps.is_empty()
 	_start_button.disabled = _maps.is_empty()
 	if not _maps.is_empty():

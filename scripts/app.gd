@@ -24,6 +24,7 @@ func _open_menu() -> void:
 	var screen := MENU_SCENE.instantiate() as MainMenu
 	screen.editor_requested.connect(_open_editor)
 	screen.game_requested.connect(_open_game)
+	screen.continue_game_requested.connect(_open_resumed_game)
 	_show_screen(screen)
 
 
@@ -36,5 +37,12 @@ func _open_editor() -> void:
 func _open_game(data: DungeonMap, hero_id: String) -> void:
 	var game := EDITOR_SCENE.instantiate() as Control
 	game.call("configure_for_game", data, hero_id)
+	game.connect("menu_requested", _open_menu)
+	_show_screen(game)
+
+
+func _open_resumed_game(session: GameSession) -> void:
+	var game := EDITOR_SCENE.instantiate() as Control
+	game.call("configure_for_resume", session)
 	game.connect("menu_requested", _open_menu)
 	_show_screen(game)

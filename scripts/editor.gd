@@ -82,6 +82,9 @@ var map_data: DungeonMap
 var standalone_game: bool = false
 var _startup_game_map: DungeonMap
 var _startup_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
+var _startup_game_session: GameSession
+var _progress_save_store: ProgressSaveStore = ProgressSaveStore.new()
+var _progress_maps_directory: String = SavedMapLibrary.DIRECTORY
 var _test_party_ids: Array[String] = [HeroCatalog.DEFAULT_HERO_ID]
 var _editor_header: PanelContainer
 var _floating_console: FloatingDebugConsole
@@ -187,6 +190,14 @@ func configure_for_game(data: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_
 	standalone_game = true
 	_startup_game_map = data
 	_startup_hero_id = hero_id
+
+
+func configure_for_resume(session: GameSession) -> void:
+	if session == null or session.map_data == null:
+		return
+	standalone_game = true
+	_startup_game_map = session.map_data
+	_startup_game_session = session
 
 
 func _ready() -> void:
@@ -402,6 +413,7 @@ func _build_interface() -> void:
 	add_child(_map_screen)
 	_game_system_menu = GAME_SYSTEM_MENU_SCENE.instantiate() as GameSystemMenu
 	_game_system_menu.continue_requested.connect(_close_game_system_menu)
+	_game_system_menu.save_requested.connect(_save_progress)
 	_game_system_menu.leave_requested.connect(_leave_from_game_system_menu)
 	_game_system_menu.test_open_map_changed.connect(_set_test_open_map)
 	_game_system_menu.console_changed.connect(_set_console_from_game_menu)
@@ -1882,7 +1894,7 @@ func _open_game_system_menu() -> void:
 		return
 	_game_command_bar.visible = false
 	_dpad.visible = false
-	_game_system_menu.open_for(standalone_game, game_session.debug_open_map, _floating_console.is_open())
+	_game_system_menu.open_for(standalone_game, game_session.debug_open_map, _floating_console.is_open(), _can_save_progress())
 
 
 func _close_game_system_menu() -> void:
@@ -1895,6 +1907,27 @@ func _close_game_system_menu() -> void:
 		_game_command_bar.visible = true
 		_dpad.visible = true
 		_canvas.grab_focus()
+
+
+func _can_save_progress() -> bool:
+	if not standalone_game or not is_play_mode or game_session == null:
+		return false
+	if _combat_active or _victory_view != null or game_session.is_party_defeated():
+		return false
+	return not game_session.progress_snapshot().is_empty()
+
+
+func _save_progress() -> void:
+	if not _can_save_progress():
+		_game_system_menu.show_save_error("Сохранение сейчас недоступно.")
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_progress_maps_directory)
+	if not _progress_save_store.save_game(game_session, maps):
+		_game_system_menu.show_save_error(_progress_save_store.last_error)
+		return
+	_close_game_system_menu()
+	_game_notice.show_message("Прохождение сохранено")
+	_set_status("Прохождение сохранено.")
 
 
 func _leave_from_game_system_menu() -> void:
@@ -1956,12 +1989,13 @@ func _start_play_mode() -> void:
 	_pending_next_map = null
 	var session: GameSession
 	if standalone_game:
-		session = GameSession.start_for(map_data, _startup_hero_id, false)
+		session = _startup_game_session if _startup_game_session != null else GameSession.start_for(map_data, _startup_hero_id, false)
 	else:
 		session = GameSession.start_for_party(map_data, _test_party_ids, false)
 	if session == null:
-		_set_status("Нельзя начать тест: поставь на карте точку старта героя.")
+		_set_status("Нельзя начать игру: на карте нет доступной точки старта героя." if standalone_game else "Нельзя начать тест: поставь на карте точку старта героя.")
 		return
+	_startup_game_session = null
 	## Камера редактора не принадлежит временной тестовой сессии.
 	_editor_camera_offset = _canvas.camera_offset
 	_editor_camera_zoom = _canvas.zoom

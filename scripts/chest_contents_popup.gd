@@ -40,6 +40,8 @@ func _ready() -> void:
 	%KeyboardDoneButton.pressed.connect(_finish_amount)
 	%KeyboardDoneButton.visible = false
 	_random_check.toggled.connect(_refresh_enabled)
+	_secondary_monster.add_theme_constant_override("icon_max_width", 32)
+	_secondary_monster.get_popup().add_theme_constant_override("icon_max_width", 32)
 	_build_item_rows()
 
 

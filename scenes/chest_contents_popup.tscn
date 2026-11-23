@@ -85,7 +85,7 @@ layout_mode = 2
 
 [node name="LootScroll" type="ScrollContainer" parent="ContentMargin/Content"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 335)
+custom_minimum_size = Vector2(0, 0)
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0

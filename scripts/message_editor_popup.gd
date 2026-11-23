@@ -36,7 +36,7 @@ func configure(cell: Vector2i, text: String, target_kind: String) -> void:
 
 
 func _keyboard_layout_changed(open: bool) -> void:
-	_input.custom_minimum_size.y = 70 if open else 160
+	_input.custom_minimum_size.y = 70 if open else 0
 
 
 func _finish_typing() -> void:

@@ -23,14 +23,23 @@ func _ready() -> void:
 	content.add_theme_constant_override("separation", 12)
 	margin.add_child(content)
 
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	content.add_child(scroll)
+	var fields := VBoxContainer.new()
+	fields.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fields.add_theme_constant_override("separation", 12)
+	scroll.add_child(fields)
+
 	var title := Label.new()
 	title.text = "Свойства двери"
 	title.add_theme_font_size_override("font_size", 22)
-	content.add_child(title)
+	fields.add_child(title)
 
 	var lock_label := Label.new()
 	lock_label.text = "Замок"
-	content.add_child(lock_label)
+	fields.add_child(lock_label)
 
 	_selector = OptionButton.new()
 	_selector.custom_minimum_size = Vector2(0, 48)
@@ -38,22 +47,22 @@ func _ready() -> void:
 		var item: ItemDefinition = ItemCatalog.get_item(lock_id)
 		_selector.add_icon_item(item.icon, LockCatalog.label(lock_id))
 		_selector.set_item_metadata(_selector.item_count - 1, lock_id)
-	content.add_child(_selector)
+	fields.add_child(_selector)
 
-	content.add_child(HSeparator.new())
+	fields.add_child(HSeparator.new())
 	_trap_title = Label.new()
-	content.add_child(_trap_title)
+	fields.add_child(_trap_title)
 
 	_trap_message = TextEdit.new()
 	_trap_message.custom_minimum_size = Vector2(0, 100)
 	_trap_message.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	content.add_child(_trap_message)
+	fields.add_child(_trap_message)
 
 	_remove_button = Button.new()
 	_remove_button.text = "Снять ловушку"
 	_remove_button.custom_minimum_size.y = 44
 	_remove_button.pressed.connect(_mark_trap_for_removal)
-	content.add_child(_remove_button)
+	fields.add_child(_remove_button)
 
 	var actions := HBoxContainer.new()
 	actions.alignment = BoxContainer.ALIGNMENT_END

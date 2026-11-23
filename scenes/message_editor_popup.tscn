@@ -55,8 +55,8 @@ autowrap_mode = 3
 [node name="MessageInput" type="TextEdit" parent="Margins/Body"]
 unique_name_in_owner = true
 layout_mode = 2
-custom_minimum_size = Vector2(0, 160)
-size_flags_vertical = 1
+custom_minimum_size = Vector2(0, 0)
+size_flags_vertical = 3
 placeholder_text = "Напиши здесь текст, который увидит игрок..."
 wrap_mode = 1
 

@@ -35,3 +35,4 @@ test_stage5_portals_and_return.gd
 test_stage5_progress_snapshot.gd
 
 test_stage5_editor_test_isolation.gd
+test_stage5_map_compatibility.gd

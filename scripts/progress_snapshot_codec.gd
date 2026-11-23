@@ -7,6 +7,15 @@ const FLOOR_FLAGS := [
 ]
 
 
+static func map_signature(map_ref: DungeonMap) -> String:
+	return JSON.stringify({
+		"width": map_ref.width,
+		"height": map_ref.height,
+		"terrain": map_ref.terrain,
+		"entities": map_ref.entities
+	}).sha256_text()
+
+
 static func encode_floor(state: Dictionary) -> Dictionary:
 	var position: Vector2i = state.get("position", Vector2i(-1, -1))
 	var result: Dictionary = {

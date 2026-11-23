@@ -1279,11 +1279,18 @@ func _on_exit_tapped(entity_id: String) -> void:
 	_unlink_stairs_button.visible = true
 	_stairs_reward_button.visible = str(selected_exit["type"]) == "stairs_down"
 	var linked_id: String = DungeonMap.exit_target_id(selected_exit)
+	var linked_map: DungeonMap = null
 	for index in range(_load_paths.size()):
 		var candidate: DungeonMap = _read_map(_load_paths[index])
 		if candidate != null and candidate.map_id == linked_id:
+			linked_map = candidate
 			_load_list.select(index)
 			break
+	if not linked_id.is_empty():
+		if linked_map == null:
+			_set_status("Ошибка связи: карта %s отсутствует или не читается." % linked_id)
+		elif not DungeonMap.valid_arrival_cell(linked_map, linked_map.find_entity_position("player_spawn")):
+			_set_status("Ошибка связи: на карте «%s» недоступна точка появления героя." % linked_map.display_name)
 	_load_dialog.popup_centered_clamped(Vector2i(720, 590), 0.9)
 
 
@@ -2496,11 +2503,11 @@ func _show_victory_view() -> void:
 			_game_notice.show_message("Подземелье для перехода не найдено")
 			_set_status("Связанное подземелье не найдено. Проверь выбор карты у выхода.")
 			return
-		var spawn: Vector2i = linked.find_entity_position("player_spawn")
-		if not DungeonMap.valid_arrival_cell(linked, spawn):
+		if not game_session.can_enter_next_map(linked):
+			var is_return: bool = str(game_session.current_exit().get("type", "")) == "stairs_up"
 			game_session.cancel_exit_transition()
-			_game_notice.show_message("Точка появления героя недоступна")
-			_set_status("Переход невозможен: проверь точку старта на целевой карте.")
+			_game_notice.show_message("Место подъёма недоступно" if is_return else "Точка появления героя недоступна")
+			_set_status("Переход невозможен: проверь лестницу на предыдущем этаже." if is_return else "Переход невозможен: проверь точку старта на целевой карте.")
 			return
 		_pending_next_map = linked
 	_dpad.visible = false
@@ -2529,7 +2536,16 @@ func _enter_next_floor() -> void:
 		return
 	var next_map: DungeonMap = _pending_next_map
 	if not game_session.enter_map(next_map):
-		_set_status("Переход невозможен: нет корректной точки прибытия.")
+		game_session.cancel_exit_transition()
+		_pending_next_map = null
+		_remove_victory_view()
+		_dpad.visible = true
+		_hero_hud.visible = true
+		_game_command_bar.visible = true
+		_mini_map.visible = _minimap_enabled
+		_canvas.grab_focus()
+		_game_notice.show_message("Переход невозможен")
+		_set_status("Переход не выполнен: карта или точка прибытия изменилась.")
 		return
 	_pending_next_map = null
 	_remove_victory_view()

@@ -842,15 +842,26 @@ func enter_map(next_map: DungeonMap) -> bool:
 		destination = DungeonMap.from_dict(next_map.to_dict().duplicate(true))
 		if destination == null:
 			return false
-	var spawn: Vector2i = destination.find_entity_position("player_spawn")
-	if not DungeonMap.valid_arrival_cell(destination, spawn):
+	var arrival: Vector2i = destination.find_entity_position("player_spawn")
+	if source_kind == "stairs_up":
+		arrival = _return_arrival_cell(destination)
+		if arrival.x < 0:
+			return false
+	elif not DungeonMap.valid_arrival_cell(destination, arrival):
+		return false
+	if is_completed and source_kind in ["stairs_down", "stairs_up", "portal"] and DungeonMap.exit_target_id(source_exit) != next_map.map_id:
 		return false
 	if map_data != null:
 		var current: Dictionary = _capture_floor_state()
 		current["map"] = map_data
 		_floor_states[map_data.map_id] = current
 	if source_kind == "stairs_down" and DungeonMap.exit_target_id(source_exit) == next_map.map_id:
-		_stairs_history.append({"from": source_id, "to": next_map.map_id})
+		_stairs_history.append({
+			"from": source_id,
+			"to": next_map.map_id,
+			"from_cell": [player_pos.x, player_pos.y],
+			"from_exit_id": str(source_exit.get("id", ""))
+		})
 	elif source_kind == "stairs_up" and not _stairs_history.is_empty():
 		_stairs_history.pop_back()
 	_pending_return_exit.clear()
@@ -859,7 +870,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	for container in saved.get("ground_loot", []):
 		ground_loot_containers.append(container.duplicate(true))
 	claimed_exit_rewards = saved.get("exit_rewards", {}).duplicate(true)
-	player_pos = spawn
+	player_pos = arrival
 	removed_entities = saved.get("removed", {}).duplicate(true)
 	opened_chests = saved.get("chests", {}).duplicate(true)
 	disarmed_traps = saved.get("traps", {}).duplicate(true)
@@ -892,6 +903,56 @@ func has_stairs_up() -> bool:
 	return map_data != null and not _stairs_history.is_empty() and str(_stairs_history.back().get("to", "")) == map_data.map_id
 
 
+static func _history_origin(record: Dictionary, fallback: Vector2i) -> Vector2i:
+	if not record.has("from_cell"):
+		return fallback
+	var coords: Variant = record["from_cell"]
+	if not (coords is Array) or coords.size() != 2:
+		return Vector2i(-1, -1)
+	if not ProgressSnapshotCodec._is_integer(coords[0]) or not ProgressSnapshotCodec._is_integer(coords[1]):
+		return Vector2i(-1, -1)
+	return Vector2i(int(coords[0]), int(coords[1]))
+
+
+static func _matching_return_stair(map_ref: DungeonMap, cell: Vector2i, exit_id: String, target_id: String) -> bool:
+	if map_ref == null or not map_ref.contains(cell.x, cell.y):
+		return false
+	for entity in map_ref.entities_at(cell.x, cell.y):
+		if str(entity.get("type", "")) != "stairs_down":
+			continue
+		if not exit_id.is_empty() and str(entity.get("id", "")) != exit_id:
+			continue
+		if DungeonMap.exit_target_id(entity) == target_id:
+			return true
+	return false
+
+
+static func _return_cell_is_open(map_ref: DungeonMap, cell: Vector2i, removed: Dictionary) -> bool:
+	if map_ref == null or map_ref.get_terrain(cell.x, cell.y) != "floor":
+		return false
+	for entity in map_ref.entities_at(cell.x, cell.y):
+		if str(entity.get("type", "")) in ["door", "monster"] and not removed.has(str(entity.get("id", ""))):
+			return false
+	return true
+
+
+func _return_arrival_cell(destination: DungeonMap) -> Vector2i:
+	var invalid := Vector2i(-1, -1)
+	if not has_stairs_up() or destination == null or _stairs_history.is_empty():
+		return invalid
+	var record: Dictionary = _stairs_history.back()
+	if str(record.get("from", "")) != destination.map_id:
+		return invalid
+	var previous: Dictionary = _floor_states.get(destination.map_id, {})
+	var old_position: Vector2i = previous.get("position", invalid)
+	var cell: Vector2i = _history_origin(record, old_position)
+	if not _matching_return_stair(destination, cell, str(record.get("from_exit_id", "")), map_data.map_id):
+		return invalid
+	if not _return_cell_is_open(destination, cell, previous.get("removed", {})):
+		return invalid
+	return cell
+
+
 func known_map(map_id: String) -> DungeonMap:
 	if map_data != null and map_data.map_id == map_id:
 		return map_data
@@ -915,7 +976,18 @@ func next_map_id() -> String:
 
 
 func next_arrival_cell(destination: DungeonMap) -> Vector2i:
+	if str(current_exit().get("type", "")) == "stairs_up":
+		return _return_arrival_cell(destination)
 	return DungeonMap.exit_target_cell(current_exit(), destination)
+
+
+func can_enter_next_map(destination: DungeonMap) -> bool:
+	if destination == null or destination.map_id != next_map_id():
+		return false
+	var arrival: Vector2i = next_arrival_cell(destination)
+	if str(current_exit().get("type", "")) == "stairs_up":
+		return arrival.x >= 0
+	return DungeonMap.valid_arrival_cell(destination, arrival)
 
 
 func cancel_exit_transition() -> void:
@@ -1581,7 +1653,12 @@ func progress_snapshot() -> Dictionary:
 	var floors_data: Dictionary = {}
 	for map_id in visited_floor_snapshots():
 		var snapshot: Dictionary = floor_state_snapshot(str(map_id))
-		floors_data[str(map_id)] = ProgressSnapshotCodec.encode_floor(snapshot)
+		var source_map: DungeonMap = known_map(str(map_id))
+		if source_map == null:
+			return {}
+		var encoded: Dictionary = ProgressSnapshotCodec.encode_floor(snapshot)
+		encoded["map_signature"] = ProgressSnapshotCodec.map_signature(source_map)
+		floors_data[str(map_id)] = encoded
 	return {
 		"version": ProgressSnapshotCodec.FORMAT_VERSION,
 		"current_map_id": map_data.map_id,
@@ -1617,7 +1694,17 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary) ->
 		var to_id: String = str(record["to"])
 		if not maps_by_id.has(from_id) or not maps_by_id.has(to_id) or not (maps_by_id[from_id] is DungeonMap) or not (maps_by_id[to_id] is DungeonMap):
 			return null
-		restored_history.append({"from": from_id, "to": to_id})
+		var normalized: Dictionary = {"from": from_id, "to": to_id}
+		if record.has("from_cell"):
+			var coords: Variant = record["from_cell"]
+			if not (coords is Array) or coords.size() != 2 or not ProgressSnapshotCodec._is_integer(coords[0]) or not ProgressSnapshotCodec._is_integer(coords[1]):
+				return null
+			normalized["from_cell"] = [int(coords[0]), int(coords[1])]
+		if record.has("from_exit_id"):
+			if typeof(record["from_exit_id"]) != TYPE_STRING or str(record["from_exit_id"]).is_empty():
+				return null
+			normalized["from_exit_id"] = record["from_exit_id"]
+		restored_history.append(normalized)
 	var restored_floors: Dictionary = {}
 	for raw_map_id in floors_data:
 		if typeof(raw_map_id) != TYPE_STRING or not maps_by_id.has(raw_map_id) or not (maps_by_id[raw_map_id] is DungeonMap):
@@ -1625,7 +1712,13 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary) ->
 		var map_ref: DungeonMap = maps_by_id[raw_map_id]
 		if map_ref.map_id != raw_map_id or not DungeonMap.valid_arrival_cell(map_ref, map_ref.find_entity_position("player_spawn")):
 			return null
-		var floor_data: Dictionary = ProgressSnapshotCodec.decode_floor(floors_data[raw_map_id], map_ref)
+		var raw_floor: Variant = floors_data[raw_map_id]
+		if not (raw_floor is Dictionary):
+			return null
+		if raw_floor.has("map_signature"):
+			if typeof(raw_floor["map_signature"]) != TYPE_STRING or str(raw_floor["map_signature"]) != ProgressSnapshotCodec.map_signature(map_ref):
+				return null
+		var floor_data: Dictionary = ProgressSnapshotCodec.decode_floor(raw_floor, map_ref)
 		if floor_data.is_empty():
 			return null
 		floor_data["map"] = map_ref
@@ -1633,6 +1726,20 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary) ->
 	for record in restored_history:
 		if not restored_floors.has(record["from"]) or not restored_floors.has(record["to"]):
 			return null
+		var origin: Dictionary = restored_floors[record["from"]]
+		var origin_map: DungeonMap = origin["map"]
+		var cell: Vector2i = _history_origin(record, origin["position"])
+		if not _matching_return_stair(origin_map, cell, str(record.get("from_exit_id", "")), str(record["to"])):
+			return null
+		if not _return_cell_is_open(origin_map, cell, origin["removed"]):
+			return null
+		if not record.has("from_cell"):
+			record["from_cell"] = [cell.x, cell.y]
+		if not record.has("from_exit_id"):
+			for entity in origin_map.entities_at(cell.x, cell.y):
+				if str(entity.get("type", "")) == "stairs_down" and DungeonMap.exit_target_id(entity) == str(record["to"]):
+					record["from_exit_id"] = str(entity["id"])
+					break
 	var ground_ids: Dictionary = {}
 	for floor_id in restored_floors:
 		for container in restored_floors[floor_id]["ground_loot"]:

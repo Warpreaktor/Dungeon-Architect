@@ -672,7 +672,10 @@ static func from_dict(value: Variant) -> DungeonMap:
 	if typeof(raw_terrain) != TYPE_ARRAY or raw_terrain.size() != h or typeof(raw_entities) != TYPE_ARRAY:
 		return null
 	var result := DungeonMap.create_blank(w, h)
-	result.map_id = str(value.get("id", result.map_id)).validate_filename()
+	var raw_id: String = str(value.get("id", "")).strip_edges()
+	if raw_id.is_empty():
+		raw_id = "legacy_" + JSON.stringify({"width": w, "height": h, "terrain": raw_terrain, "entities": raw_entities}).sha256_text().substr(0, 16)
+	result.map_id = raw_id.validate_filename()
 	if result.map_id.is_empty():
 		return null
 	result.display_name = str(value.get("name", "Безымянное подземелье"))
@@ -687,7 +690,9 @@ static func from_dict(value: Variant) -> DungeonMap:
 			new_row.append(tile)
 		result.terrain.append(new_row)
 	result.entities.clear()
-	for entry in raw_entities:
+	var seen_ids: Dictionary = {}
+	for index in range(raw_entities.size()):
+		var entry: Variant = raw_entities[index]
 		if typeof(entry) != TYPE_DICTIONARY:
 			return null
 		var x := int(entry.get("x", -1))
@@ -698,7 +703,13 @@ static func from_dict(value: Variant) -> DungeonMap:
 		var props: Variant = entry.get("properties", {})
 		if typeof(props) != TYPE_DICTIONARY:
 			return null
-		result.entities.append({"id": str(entry.get("id", "ent_%08x" % randi())), "type": kind, "x": x, "y": y, "properties": props})
+		var entity_id: String = str(entry.get("id", "")).strip_edges()
+		if entity_id.is_empty():
+			entity_id = "legacy_ent_%05d" % index
+		if seen_ids.has(entity_id):
+			return null
+		seen_ids[entity_id] = true
+		result.entities.append({"id": entity_id, "type": kind, "x": x, "y": y, "properties": props})
 	var raw_metadata: Variant = value.get("metadata", {"theme": "stone_dungeon"})
 	if typeof(raw_metadata) == TYPE_DICTIONARY:
 		result.metadata = raw_metadata

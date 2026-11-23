@@ -75,7 +75,7 @@ func _test_stairs_return_to_previous_map() -> void:
 	assert(session.next_map_id() == first.map_id)
 	assert(session.enter_map(session.known_map(first.map_id)))
 	assert(session.map_data == first)
-	assert(session.player_pos == first.find_entity_position("player_spawn"))
+	assert(session.player_pos == Vector2i(3, 2))
 	assert(not session.has_stairs_up())
 	assert(not session.is_completed)
 	assert(JSON.stringify(first.to_dict()) == original_first)

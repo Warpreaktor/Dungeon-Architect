@@ -455,7 +455,7 @@ func _build_interface() -> void:
 	palette.add_child(_label("ЛОВУШКИ", 14, Color("#e8c58a")))
 	var trap_tools := _tool_grid()
 	palette.add_child(trap_tools)
-	for trap_id in TrapCatalog.list_ids():
+	for trap_id in TrapCatalog.list_ids("floor"):
 		var trap: TrapDefinition = TrapCatalog.get_trap(str(trap_id))
 		_add_tool_button(trap_tools, {
 			"id": "trap:" + trap.trap_id,

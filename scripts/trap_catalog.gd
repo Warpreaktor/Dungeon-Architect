@@ -3,14 +3,17 @@ extends RefCounted
 
 const DEFAULT_TRAP_ID := "spikes"
 const DEFINITIONS := {
-	"spikes": preload("res://traps/spikes.tres")
+	"spikes": preload("res://traps/spikes.tres"),
+	"door_crossbow": preload("res://traps/door_crossbow.tres")
 }
 
 
-static func list_ids() -> Array[String]:
+static func list_ids(placement: String = "") -> Array[String]:
 	var ids: Array[String] = []
 	for trap_id in DEFINITIONS:
-		ids.append(str(trap_id))
+		var trap: TrapDefinition = DEFINITIONS[trap_id] as TrapDefinition
+		if placement.is_empty() or trap.can_attach_to(placement):
+			ids.append(str(trap_id))
 	ids.sort()
 	return ids
 
@@ -30,3 +33,8 @@ static func get_trap(trap_id: String) -> TrapDefinition:
 static func from_entity(entity: Dictionary) -> TrapDefinition:
 	var properties: Dictionary = entity.get("properties", {})
 	return get_trap(str(properties.get("trap_id", DEFAULT_TRAP_ID)))
+
+
+static func from_door(door: Dictionary) -> TrapDefinition:
+	var trap_id: String = DungeonMap.door_trap_id(door)
+	return get_trap(trap_id) if not trap_id.is_empty() else null

@@ -7,6 +7,9 @@ extends Resource
 @export var display_name: String = ""
 @export_multiline var description: String = ""
 @export var icon: Texture2D
+@export_enum("floor", "door") var placement: String = "floor"
+@export_multiline var trigger_message: String = ""
+@export var hidden_by_default: bool = true
 @export_range(0, 9999, 1) var direct_damage: int = 0
 @export var overworld_status_id: String = ""
 @export var overworld_status_label: String = ""
@@ -15,6 +18,10 @@ extends Resource
 @export_range(1, 999, 1) var overworld_status_interval_steps: int = 4
 @export var disarm_on_trigger: bool = true
 @export var blocks_path: bool = false
+
+
+func can_attach_to(kind: String) -> bool:
+	return placement == kind
 
 
 func applies_overworld_status() -> bool:

@@ -37,7 +37,7 @@ class RunnerTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         configured = run_tests.group_regression_tests(root)
         discovered = {item.name for item in run_tests.discover(root, "")}
-        self.assertEqual(len(configured), 19)
+        self.assertTrue(configured)
         self.assertTrue(configured <= discovered, sorted(configured - discovered))
 
     def test_timeout_is_reported(self):

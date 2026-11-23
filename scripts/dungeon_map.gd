@@ -109,7 +109,10 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		var trap_id: String = str(options.get("trap_id", TrapCatalog.DEFAULT_TRAP_ID))
 		if not TrapCatalog.has(trap_id):
 			trap_id = TrapCatalog.DEFAULT_TRAP_ID
-		properties = {"trap_id": trap_id, "hidden": bool(options.get("hidden", true))}
+		var trap_definition: TrapDefinition = TrapCatalog.get_trap(trap_id)
+		if not trap_definition.can_attach_to("floor"):
+			return false
+		properties = {"trap_id": trap_id, "hidden": bool(options.get("hidden", trap_definition.hidden_by_default))}
 	elif kind == "trigger":
 		properties = {"event_id": ""}
 	elif kind == "message":
@@ -134,6 +137,79 @@ static func is_entity_hidden(entity: Dictionary) -> bool:
 static func trap_id(entity: Dictionary) -> String:
 	var properties: Dictionary = entity.get("properties", {})
 	return TrapCatalog.resolve_id(str(properties.get("trap_id", TrapCatalog.DEFAULT_TRAP_ID)))
+
+
+static func door_trap_id(door: Dictionary) -> String:
+	if str(door.get("type", "")) != "door":
+		return ""
+	var attachment: Variant = door.get("properties", {}).get("trap", {})
+	if typeof(attachment) != TYPE_DICTIONARY:
+		return ""
+	var trap_id: String = str(attachment.get("trap_id", ""))
+	if not TrapCatalog.has(trap_id):
+		return ""
+	return trap_id if TrapCatalog.get_trap(trap_id).can_attach_to("door") else ""
+
+
+static func door_trap_message(door: Dictionary) -> String:
+	var trap_id: String = door_trap_id(door)
+	if trap_id.is_empty():
+		return ""
+	var attachment: Dictionary = door.get("properties", {}).get("trap", {})
+	return str(attachment.get("message", TrapCatalog.get_trap(trap_id).trigger_message))
+
+
+func attach_door_trap(door_id: String, trap_id: String) -> bool:
+	if not TrapCatalog.has(trap_id) or not TrapCatalog.get_trap(trap_id).can_attach_to("door"):
+		return false
+	for entity in entities:
+		if str(entity.get("id", "")) != door_id or str(entity.get("type", "")) != "door":
+			continue
+		var properties: Dictionary = entity.get("properties", {})
+		if properties.has("trap"):
+			return false
+		var updated: Dictionary = properties.duplicate(true)
+		updated["trap"] = {"trap_id": trap_id}
+		entity["properties"] = updated
+		return true
+	return false
+
+
+func set_door_trap_message(door_id: String, message: String) -> bool:
+	for entity in entities:
+		if str(entity.get("id", "")) != door_id or str(entity.get("type", "")) != "door":
+			continue
+		if door_trap_id(entity).is_empty():
+			return false
+		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		var attachment: Dictionary = properties["trap"].duplicate(true)
+		var clean_message: String = message.strip_edges()
+		if clean_message.is_empty():
+			if not attachment.has("message"):
+				return false
+			attachment.erase("message")
+		elif str(attachment.get("message", "")) == clean_message:
+			return false
+		else:
+			attachment["message"] = clean_message
+		properties["trap"] = attachment
+		entity["properties"] = properties
+		return true
+	return false
+
+
+func remove_door_trap(door_id: String) -> bool:
+	for entity in entities:
+		if str(entity.get("id", "")) != door_id or str(entity.get("type", "")) != "door":
+			continue
+		var properties: Dictionary = entity.get("properties", {})
+		if not properties.has("trap"):
+			return false
+		var updated: Dictionary = properties.duplicate(true)
+		updated.erase("trap")
+		entity["properties"] = updated
+		return true
+	return false
 
 
 ## Описание добычи принадлежит карте; старая форма reward продолжает читаться.

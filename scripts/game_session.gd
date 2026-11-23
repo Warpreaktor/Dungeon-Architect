@@ -866,7 +866,7 @@ func _activate_traps_at(cell: Vector2i) -> void:
 		if str(entity.get("type", "")) != "trap" or is_trap_disarmed(entity):
 			continue
 		var trap: TrapDefinition = TrapCatalog.from_entity(entity)
-		if trap == null:
+		if trap == null or not trap.can_attach_to("floor"):
 			continue
 		var target: HeroState = _random_living_party_member()
 		if target == null:

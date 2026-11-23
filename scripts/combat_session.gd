@@ -90,8 +90,8 @@ func prepare_round_combat() -> Dictionary:
 	return battle_state.start_round_combat()
 
 
-func play_round_turn(target_id: String = "") -> Dictionary:
-	var result: Dictionary = battle_state.run_round_turn(target_id)
+func play_round_turn(target_id: String = "", ability_id: String = "") -> Dictionary:
+	var result: Dictionary = battle_state.run_round_turn(target_id, ability_id)
 	if bool(result.get("success", false)):
 		sync_hero_results()
 	return result

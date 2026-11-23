@@ -24,12 +24,23 @@ func _setup(seed: int = 4275) -> BattleState:
 	return battle
 
 
+func _turn(state: BattleState, action: String = "guard") -> Dictionary:
+	var actor_id: String = state.prepare_next_round()
+	return state.run_round_turn(actor_id if actor_id in state.hero_ids() else "", action if actor_id in state.hero_ids() else "")
+
+
 func _initialize() -> void:
 	var battle: BattleState = _setup()
 	assert(bool(battle.start_round_combat().get("success", false)))
+	assert(battle.prepare_next_round() == "hero")
+	var before_events: int = battle.events.size()
+	var missing: Dictionary = battle.run_round_turn()
+	assert(not bool(missing.get("success", false)))
+	assert(battle.round_turn_count == 0)
+	assert(battle.events.size() == before_events)
 	var acted: Array[String] = []
 	for i in range(4):
-		var turn: Dictionary = battle.run_round_turn()
+		var turn: Dictionary = _turn(battle)
 		assert(bool(turn.get("success", false)))
 		acted.append(str(turn["actor_id"]))
 		assert(bool(turn["round_finished"]) == (i == 3))
@@ -38,44 +49,38 @@ func _initialize() -> void:
 	var first_round: Array[String] = acted.duplicate()
 	acted.clear()
 	for i in range(4):
-		acted.append(str(battle.run_round_turn()["actor_id"]))
+		acted.append(str(_turn(battle)["actor_id"]))
 	assert(acted == first_round)
+	assert(battle.get_participant("hero").action_cursor == 0)
 	assert(battle.get_participant("hero_2").action_cursor == 0)
-	assert(battle.get_participant("hero").action_cursor == 2)
-	assert(battle.get_participant("hero_2").completed_phases == 1)
-	acted.clear()
-	for i in range(4):
-		var turn: Dictionary = battle.run_round_turn()
-		acted.append(str(turn["actor_id"]))
-		if i == 0:
-			assert(bool(turn["events"][1].get("reload", false)))
-	assert(acted == first_round)
-	assert(battle.get_participant("hero").completed_phases == 1)
-	assert(battle.get_participant("hero_2").action_cursor == 1)
+	assert(battle.get_participant("hero").completed_phases == 0)
+	var rest: Dictionary = battle.run_round_turn("", "rest")
+	assert(bool(rest.get("success", false)))
+	assert(rest["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "rest"))
+	assert(battle.get_participant("hero").action_cursor == 0)
 
 	var changed: BattleState = _setup()
 	assert(bool(changed.start_round_combat().get("success", false)))
-	changed.run_round_turn()
+	_turn(changed)
 	changed.get_participant("enemy").agility = 20
-	assert(changed.run_round_turn()["actor_id"] == "hero_2")
-	changed.run_round_turn()
-	changed.run_round_turn()
-	assert(changed.run_round_turn()["actor_id"] == "enemy")
+	assert(_turn(changed)["actor_id"] == "hero_2")
+	_turn(changed)
+	_turn(changed)
+	assert(_turn(changed)["actor_id"] == "enemy")
 
 	var dead: BattleState = _setup()
 	assert(bool(dead.start_round_combat().get("success", false)))
-	dead.run_round_turn()
+	_turn(dead)
 	dead.get_participant("hero_2").health = 0
-	assert(dead.run_round_turn()["actor_id"] in ["enemy", "enemy_support"])
+	assert(_turn(dead)["actor_id"] in ["enemy", "enemy_support"])
 	assert(dead.get_participant("hero_2").action_cursor == 0)
-	var remained: Dictionary = dead.run_round_turn()
-	assert(bool(remained["round_finished"]))
-	assert(dead.run_round_turn()["actor_id"] == "hero")
+	assert(bool(_turn(dead)["round_finished"]))
+	assert(_turn(dead)["actor_id"] == "hero")
 
 	var first: BattleState = _setup()
 	var second: BattleState = _setup()
 	assert(bool(first.start_round_combat().get("success", false)))
 	assert(bool(second.start_round_combat().get("success", false)))
 	for i in range(12):
-		assert(first.run_round_turn() == second.run_round_turn())
+		assert(_turn(first) == _turn(second))
 	quit()

@@ -25,10 +25,15 @@ func _battle(seed: int) -> BattleState:
 	return state
 
 
+func _take_turn(state: BattleState) -> Dictionary:
+	var actor_id: String = state.prepare_next_round()
+	return state.run_round_turn(actor_id if actor_id in state.hero_ids() else "", "guard" if actor_id in state.hero_ids() else "")
+
+
 func _target_trace(state: BattleState, turns: int) -> Array[String]:
 	var targets: Array[String] = []
 	for index in range(turns):
-		var turn: Dictionary = state.run_round_turn()
+		var turn: Dictionary = _take_turn(state)
 		assert(bool(turn.get("success", false)))
 		for event in turn["events"]:
 			if str(event.get("type", "")) == "enemy_target_selected":
@@ -57,30 +62,30 @@ func _initialize() -> void:
 
 	var unavailable: BattleState = _battle(4276)
 	assert(bool(unavailable.start_round_combat().get("success", false)))
-	unavailable.run_round_turn()
-	unavailable.run_round_turn()
+	_take_turn(unavailable)
+	_take_turn(unavailable)
 	unavailable.get_participant("enemy").action_chain = ["missing_ability"]
-	var failed_turn: Dictionary = unavailable.run_round_turn()
+	var failed_turn: Dictionary = _take_turn(unavailable)
 	assert(not failed_turn["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "enemy_target_selected"))
 	assert(failed_turn["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "failed"))
 	assert(not failed_turn["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "attack"))
 
 	var untargetable: BattleState = _battle(4276)
 	assert(bool(untargetable.start_round_combat().get("success", false)))
-	untargetable.run_round_turn()
-	untargetable.run_round_turn()
+	_take_turn(untargetable)
+	_take_turn(untargetable)
 	untargetable.get_participant("hero").is_targetable = false
 	untargetable.get_participant("hero_2").is_targetable = false
-	var without_targets: Dictionary = untargetable.run_round_turn()
+	var without_targets: Dictionary = _take_turn(untargetable)
 	assert(not without_targets["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "enemy_target_selected"))
 	assert(without_targets["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "failed"))
 
 	var guarded: BattleState = _battle(4276)
 	guarded.get_participant("enemy").action_chain = ["guard"]
 	assert(bool(guarded.start_round_combat().get("success", false)))
-	guarded.run_round_turn()
-	guarded.run_round_turn()
-	var guard_turn: Dictionary = guarded.run_round_turn()
+	_take_turn(guarded)
+	_take_turn(guarded)
+	var guard_turn: Dictionary = _take_turn(guarded)
 	assert(not guard_turn["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "enemy_target_selected"))
 	assert(guard_turn["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "block" and e.get("target_id") == "enemy"))
 
@@ -96,9 +101,9 @@ func _initialize() -> void:
 	adaptive.initial_enemy_chain = ["basic_strike"]
 	adaptive.get_participant("enemy").health = 300
 	assert(bool(adaptive.start_round_combat().get("success", false)))
-	adaptive.run_round_turn()
-	adaptive.run_round_turn()
-	var adapted_turn: Dictionary = adaptive.run_round_turn()
+	_take_turn(adaptive)
+	_take_turn(adaptive)
+	var adapted_turn: Dictionary = _take_turn(adaptive)
 	assert(adapted_turn["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "enemy_chain_changed"))
 	assert(adapted_turn["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "block"))
 	assert(not adapted_turn["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "enemy_target_selected"))

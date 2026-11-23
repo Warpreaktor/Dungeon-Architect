@@ -195,6 +195,10 @@ func reset_played() -> void:
 		_render_slot(index)
 
 
+func hide_action_slots() -> void:
+	_slots.hide()
+
+
 func set_chain(participant: BattleParticipant) -> void:
 	_participant = participant
 	_revealed.clear()
@@ -209,7 +213,7 @@ func _refresh_slots() -> void:
 		child.queue_free()
 	if _participant == null:
 		return
-	var count: int = _participant.action_chain.size() + BattleChainPlanner.REST_TICKS
+	var count: int = _participant.action_chain.size()
 	for index in range(count):
 		var button := Button.new()
 		button.custom_minimum_size = SLOT_SIZE

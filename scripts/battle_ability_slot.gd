@@ -97,7 +97,7 @@ func configure_recharge(index: int) -> void:
 	_slot_icon.texture = REST_ICON
 	_slot_icon.visible = true
 	_empty_icon.visible = false
-	tooltip_text = "Отдых: завершает фазу и возвращает все приёмы"
+	tooltip_text = "Отдых: пропустить текущий ход"
 	_info_button.visible = true
 
 

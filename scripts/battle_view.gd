@@ -85,6 +85,8 @@ var _round_button: Button
 var _round_turn_label: Label
 var _round_mode: bool = false
 var _round_event_cursor: int = 0
+var _selected_round_ability_id: String = ""
+var _selected_round_target_id: String = ""
 var _visible_support_hero_hp: int = 0
 var _visible_support_hero_max: int = 0
 
@@ -221,7 +223,9 @@ func _select_hero_view(actor_id: String) -> void:
 	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
 	if actor == null:
 		return
-	_hero_chain = actor.action_chain.duplicate()
+	_hero_chain = AbilityCatalog.known_ability_ids(actor)
+	_selected_round_ability_id = ""
+	_selected_round_target_id = ""
 	_hero_chain_title.text = _hero_name_for_id(actor_id).to_upper()
 	_refresh_chain_slots()
 	_refresh_round_controls()
@@ -233,11 +237,8 @@ func _round_next_actor() -> String:
 	return _combat.battle_state.next_round_actor_id()
 
 
-func _round_next_ability(actor_id: String) -> AbilityDefinition:
-	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
-	if actor == null or actor.action_cursor >= actor.action_chain.size() or actor.action_cursor < 0:
-		return null
-	return AbilityCatalog.get_ability(actor.action_chain[actor.action_cursor])
+func _selected_round_ability() -> AbilityDefinition:
+	return AbilityCatalog.get_ability(_selected_round_ability_id) if not _selected_round_ability_id.is_empty() and _selected_round_ability_id != "rest" else null
 
 
 func _refresh_round_controls() -> void:
@@ -246,54 +247,45 @@ func _refresh_round_controls() -> void:
 	var actor_id: String = _round_next_actor()
 	var state: BattleState = _combat.battle_state
 	_round_turn_label.text = "Раунд %d" % max(1, state.round_number)
-	_round_button.disabled = _is_playing_back or actor_id.is_empty()
 	_round_button.visible = not actor_id.is_empty() and actor_id in state.hero_ids()
+	_round_button.disabled = _is_playing_back or _selected_round_ability_id.is_empty()
 	if actor_id.is_empty():
+		_refresh_target_outlines()
 		return
 	if actor_id in state.hero_ids():
 		_round_turn_label.text += " · " + _hero_name_for_id(actor_id)
 	else:
 		_round_turn_label.text += " · " + _enemy_name_for_id(actor_id)
-	var ability: AbilityDefinition = _round_next_ability(actor_id)
-	var targets: Array[String] = []
-	if ability != null:
-		targets = state.create_context().target_ids(actor_id, ability)
-	_round_button.text = "Отдых" if ability == null else "Ход"
-	if actor_id in state.hero_ids() and ability != null and targets.size() > 1:
-		_round_button.disabled = true
+	_round_button.text = "Отдых" if _selected_round_ability_id == "rest" else "Применить"
+	if _selected_round_ability_id != "rest" and not _selected_round_ability_id.is_empty():
+		var ability: AbilityDefinition = _selected_round_ability()
+		if ability == null or not AbilityCatalog.unavailable_reason(state.get_participant(actor_id), _selected_round_ability_id).is_empty():
+			_round_button.disabled = true
+		else:
+			var targets: Array[String] = state.create_context().target_ids(actor_id, ability)
+			if not targets.has(_selected_round_target_id):
+				_round_button.disabled = true
 	_refresh_target_outlines()
-
-
-func _enemy_name_for_id(actor_id: String) -> String:
-	if actor_id == "enemy":
-		return _enemy_name.text
-	if actor_id == BattleState.SUPPORT_ENEMY_ID:
-		return _combat.support_enemy_definition.display_name if _combat.support_enemy_definition != null else _enemy_name.text
-	return actor_id
 
 
 func _on_round_button_pressed() -> void:
 	if not _round_mode or _is_playing_back:
 		return
 	var actor_id: String = _round_next_actor()
-	if not _combat.battle_state.hero_ids().has(actor_id):
+	if actor_id not in _combat.battle_state.hero_ids() or _selected_round_ability_id.is_empty():
 		return
-	var ability: AbilityDefinition = _round_next_ability(actor_id)
-	var targets: Array[String] = []
-	if ability != null:
-		targets = _combat.battle_state.create_context().target_ids(actor_id, ability)
-	if targets.size() > 1:
-		return
-	_execute_round_turn(targets[0] if not targets.is_empty() else "")
+	_execute_round_turn(_selected_round_target_id, _selected_round_ability_id)
 
 
-func _execute_round_turn(target_id: String = "") -> void:
+func _execute_round_turn(target_id: String = "", ability_id: String = "") -> void:
 	if _is_playing_back or _combat == null or _combat.is_victory or _combat.is_defeat:
 		return
-	var result: Dictionary = _combat.play_round_turn(target_id)
+	var result: Dictionary = _combat.play_round_turn(target_id, ability_id)
 	if not bool(result.get("success", false)):
 		_result_text.text = str(result.get("reason", ""))
 		return
+	_selected_round_ability_id = ""
+	_selected_round_target_id = ""
 	_is_playing_back = true
 	_round_button.disabled = true
 	_play_phase_events(result.get("events", []))
@@ -311,6 +303,14 @@ func _continue_round() -> void:
 		if actor_id in _combat.battle_state.hero_ids():
 			_select_hero_view(actor_id)
 		_refresh_round_controls()
+
+
+func _enemy_name_for_id(actor_id: String) -> String:
+	if actor_id == "enemy":
+		return _enemy_name.text
+	if actor_id == BattleState.SUPPORT_ENEMY_ID:
+		return _combat.support_enemy_definition.display_name if _combat.support_enemy_definition != null else _enemy_name.text
+	return actor_id
 
 
 ## Единственный расчёт: тот же метод, что использует обработчик способности.
@@ -391,15 +391,6 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_visible_support_max = combat.support_enemy_definition.max_health if support != null else 0
 	_status_presenter.reset()
 	_status_presenter.sync(_combat.battle_state.participants)
-	_committed_slots = hero.get_saved_action_slots()
-	var playable: BattleParticipant = _combat.battle_state.get_hero()
-	for i in range(_committed_slots.size()):
-		if not _committed_slots[i].is_empty() and not AbilityCatalog.knows_ability(playable, _committed_slots[i]):
-			_committed_slots[i] = ""
-	_hero_chain.clear()
-	for ability_id in _committed_slots:
-		if not ability_id.is_empty():
-			_hero_chain.append(ability_id)
 	_enemy_chain = _combat.battle_state.get_enemy().action_chain.duplicate()
 	_enemy_revealed.clear()
 	_enemy_played.clear()
@@ -409,10 +400,6 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 
 
 func _start_round_combat() -> void:
-	for actor_id in _combat.battle_state.hero_ids():
-		var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
-		if actor != null and BattleChainPlanner.validate(actor.action_chain, actor, false) != "":
-			actor.action_chain = _combat.battle_state.default_chain(actor_id)
 	var prepared: Dictionary = _combat.prepare_round_combat()
 	if not bool(prepared.get("success", false)):
 		_result_text.text = str(prepared.get("reason", "Не удалось подготовить бой"))
@@ -422,8 +409,7 @@ func _start_round_combat() -> void:
 	_select_hero_view("hero")
 	var other: BattleParticipant = _combat.battle_state.get_participant("hero_2")
 	if other != null:
-		_support_hero_view.set_chain(other)
-		_support_hero_view.reveal_all()
+		_support_hero_view.hide_action_slots()
 	_refresh_chain_slots()
 	_refresh_round_controls()
 	call_deferred("_continue_round")
@@ -447,35 +433,29 @@ func _refresh_chain_slots() -> void:
 	for child in _sequence_slots.get_children():
 		_sequence_slots.remove_child(child)
 		child.queue_free()
-	var displayed: Array[String] = _hero_chain
+	var actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
 	var available: Array[int] = []
-	var selected_actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
 	if _manual_started:
 		available = _combat.battle_state.manual_available_slots()
-	for index in range(displayed.size()):
-		var action_id: String = displayed[index]
-		var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
+	for index in range(_hero_chain.size()):
+		var ability_id: String = _hero_chain[index]
+		var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
 		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_sequence_slots.add_child(slot)
-		slot.configure(index, ability, not _round_mode and available.has(index), selected_actor)
-		if _manual_started and not available.has(index):
+		var can_use: bool = _round_mode and actor != null and actor.is_alive() and AbilityCatalog.unavailable_reason(actor, ability_id).is_empty()
+		slot.configure(index, ability, can_use if _round_mode else available.has(index), actor)
+		if _round_mode and not can_use:
 			slot.modulate = Color(0.48, 0.48, 0.48)
-		if not _round_mode:
-			slot.slot_selected.connect(_on_slot_pressed.bind(slot))
-		else:
-			slot.disabled = true
+		elif _manual_started and not available.has(index):
+			slot.modulate = Color(0.48, 0.48, 0.48)
+		slot.slot_selected.connect(_on_slot_pressed.bind(slot))
 		slot.info_requested.connect(_touch_info.show_text)
 		_touch_info.attach_long_press(slot, func() -> String: return slot.tooltip_text)
-	# Отдых не занимает слот арсенала и не сохраняется в HeroState.
 	var rest_slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 	_sequence_slots.add_child(rest_slot)
-	rest_slot.configure_recharge(displayed.size())
-	if not _round_mode:
-		rest_slot.slot_selected.connect(_on_slot_pressed.bind(rest_slot))
-	else:
-		rest_slot.disabled = true
-	if _manual_started and not _is_playing_back and _combat.battle_state.flow.stage != BattleFlow.Stage.FINISHED:
-		rest_slot.disabled = false
+	rest_slot.configure_recharge(_hero_chain.size())
+	rest_slot.disabled = not _round_mode and not _manual_started
+	rest_slot.slot_selected.connect(_on_slot_pressed.bind(rest_slot))
 	rest_slot.info_requested.connect(_touch_info.show_text)
 	_resize_chain_slots()
 	if _round_mode:
@@ -487,11 +467,11 @@ func _refresh_chain_slots() -> void:
 
 
 func _highlight_round_action() -> void:
-	var actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
-	if actor == null:
+	if _sequence_slots == null:
 		return
-	for i in range(_sequence_slots.get_child_count()):
-		(_sequence_slots.get_child(i) as BattleAbilitySlot).set_current(i == actor.action_cursor)
+	for index in range(_sequence_slots.get_child_count()):
+		var selected: bool = _selected_round_ability_id == "rest" if index == _hero_chain.size() else _hero_chain[index] == _selected_round_ability_id
+		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(selected)
 
 
 func _resize_chain_slots() -> void:
@@ -515,7 +495,7 @@ func _refresh_enemy_slots() -> void:
 		_enemy_sequence_slots.remove_child(child)
 		child.queue_free()
 	var enemy: BattleParticipant = _combat.battle_state.get_enemy()
-	var capacity: int = _enemy_chain.size() + 1
+	var capacity: int = _enemy_chain.size()
 	for index in range(capacity):
 		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_enemy_sequence_slots.add_child(slot)
@@ -662,6 +642,23 @@ func _on_slot_pressed(index: int, slot: BattleAbilitySlot) -> void:
 
 
 func _on_slot_selected(_index: int) -> void:
+	if _round_mode:
+		if _is_playing_back or _round_next_actor() != _selected_hero_id:
+			return
+		var ability_id: String = "rest" if _index == _hero_chain.size() else _hero_chain[_index]
+		var actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
+		if ability_id != "rest" and not AbilityCatalog.unavailable_reason(actor, ability_id).is_empty():
+			return
+		_selected_round_ability_id = ability_id
+		_selected_round_target_id = ""
+		if ability_id != "rest":
+			var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
+			var targets: Array[String] = _combat.battle_state.create_context().target_ids(_selected_hero_id, ability)
+			if targets.size() == 1:
+				_selected_round_target_id = targets[0]
+		_highlight_round_action()
+		_refresh_round_controls()
+		return
 	if _manual_started:
 		if _is_playing_back or _combat.battle_state.flow.stage == BattleFlow.Stage.FINISHED:
 			return
@@ -1282,7 +1279,6 @@ func _after_round_playback() -> void:
 			_visible_support_hero_max = actor.max_health
 			_support_hero_view.refresh_health(actor)
 			_support_hero_view.refresh_stats(actor)
-			_support_hero_view.highlight_cursor(actor.action_cursor)
 		elif actor_id == BattleState.SUPPORT_ENEMY_ID:
 			_support_enemy_view.refresh_health(actor)
 			_support_enemy_view.refresh_stats(actor)
@@ -1401,15 +1397,16 @@ func _on_target_portrait_input(event: InputEvent, actor_id: String) -> void:
 		if not pressed or _is_playing_back:
 			return
 		var current_id: String = _round_next_actor()
-		if actor_id in _combat.battle_state.hero_ids():
-			_select_hero_view(actor_id)
 		if current_id not in _combat.battle_state.hero_ids():
 			return
-		var ability: AbilityDefinition = _round_next_ability(current_id)
-		if ability == null or not _combat.battle_state.create_context().target_ids(current_id, ability).has(actor_id):
+		var ability: AbilityDefinition = _selected_round_ability()
+		if ability != null and _combat.battle_state.create_context().target_ids(current_id, ability).has(actor_id):
+			_selected_round_target_id = actor_id
+			get_viewport().set_input_as_handled()
+			_refresh_round_controls()
 			return
-		get_viewport().set_input_as_handled()
-		_execute_round_turn(actor_id)
+		if actor_id in _combat.battle_state.hero_ids():
+			_select_hero_view(actor_id)
 		return
 	if not pressed or not _manual_started or _selected_manual_slot < 0 or _is_playing_back:
 		return
@@ -1425,7 +1422,7 @@ func _refresh_target_outlines() -> void:
 	if _round_mode and not _is_playing_back:
 		var actor_id: String = _round_next_actor()
 		if actor_id in _combat.battle_state.hero_ids():
-			var ability: AbilityDefinition = _round_next_ability(actor_id)
+			var ability: AbilityDefinition = _selected_round_ability()
 			if ability != null:
 				valid_targets = _combat.battle_state.create_context().target_ids(actor_id, ability)
 		for target_id in _target_outlines:

@@ -17,6 +17,7 @@ const TILE_SIZE := 48.0
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
 const WALL_TEXTURE: Texture2D = preload("res://assets/stone_wall.png")
 const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.png")
+const PORTAL_TEXTURE: Texture2D = preload("res://assets/icons/traps/void_portal.png")
 const DOUBLE_TAP_MS := 400
 const TAP_MOVE_LIMIT := 16.0
 const PLAY_START_ZOOM := 4.0
@@ -433,6 +434,8 @@ func _draw_entity(kind: String, origin: Vector2) -> void:
 			draw_rect(Rect2(origin + Vector2(10, 19), Vector2(28, 19)), Color("#a76a2d"))
 			draw_rect(Rect2(origin + Vector2(10, 14), Vector2(28, 9)), Color("#d8a45b"))
 			draw_rect(Rect2(origin + Vector2(21, 16), Vector2(6, 16)), Color("#ffe2a0"))
+		"portal":
+			draw_texture_rect(PORTAL_TEXTURE, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		"stairs_down":
 			draw_rect(Rect2(origin + Vector2(7, 9), Vector2(34, 31)), Color("#172d37"))
 			for i in range(4):
@@ -593,13 +596,13 @@ func _configurable_at(cell: Vector2i) -> Dictionary:
 		if kind == "message" and selected_tool == "hand":
 			message_entity = entity
 			continue
-		if kind in ["chest", "trigger", "message", "monster", "door", "stairs_down"] and (selected_tool == "hand" or kind == selected_tool or (kind == "monster" and selected_tool.begins_with("monster:"))):
+		if kind in ["chest", "trigger", "message", "monster", "door", "stairs_down", "portal"] and (selected_tool == "hand" or kind == selected_tool or (kind == "monster" and selected_tool.begins_with("monster:"))):
 			return entity
 	return message_entity
 
 
 func _selected_tool_has_properties() -> bool:
-	return selected_tool in ["chest", "trigger", "door", "stairs_down"] or selected_tool.begins_with("monster:")
+	return selected_tool in ["chest", "trigger", "door", "stairs_down", "portal"] or selected_tool.begins_with("monster:")
 
 
 func _cancel_pending_settings_tap() -> void:

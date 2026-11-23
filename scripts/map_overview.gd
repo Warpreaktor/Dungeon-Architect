@@ -96,6 +96,8 @@ func _draw() -> void:
 						mark = Color("#c782c8")
 					"stairs_down":
 						mark = Color("#6bca9d")
+					"portal":
+						mark = Color("#977eff")
 				if mark.a > 0.0:
 					draw_rect(rect.grow(-CELL_SIZE * 0.26), mark)
 	var hero_center := (Vector2(session.player_pos) + Vector2.ONE * 0.5) * CELL_SIZE
@@ -150,6 +152,8 @@ func _draw_minimap_overlay() -> void:
 						mark = Color(1.0, 0.77, 0.39, 0.90)
 					"stairs_down":
 						mark = Color(0.45, 1.0, 0.70, 0.95)
+					"portal":
+						mark = Color(0.60, 0.47, 1.0, 0.95)
 				if mark.a > 0.0:
 					draw_circle(top_left + Vector2.ONE * cell_pixels * 0.5, 2.8, mark)
 	# Метка героя остаётся в центре, даже если карта намного больше экрана.

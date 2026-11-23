@@ -75,6 +75,7 @@ func _test_floor_rewards() -> void:
 	assert(session.take_message_events().size() == 1)
 	assert(session.enter_map(next_floor))
 	assert(session.enter_map(restored))
+	assert(session.move_by(1, 0))
 	assert(session.move_by(-1, 0))
 	assert(session.move_by(1, 0))
 	assert(session.hero.gold == 19 and session.keys == 2)

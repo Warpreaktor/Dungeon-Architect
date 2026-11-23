@@ -761,7 +761,7 @@ func _initialize() -> void:
 	assert(journey.move_by(0, 1) and journey.is_completed)
 	assert(journey.next_map_id() == first_floor.map_id)
 	assert(journey.enter_map(first_floor))
-	assert(journey.player_pos == Vector2i(2, 1))
+	assert(journey.player_pos == Vector2i(1, 1))
 	assert(journey.hero.health == 13 and int(journey.carried_items["key"]) == 2)
 	assert(journey.is_revealed(1, 1))
 	assert(not journey.is_completed)

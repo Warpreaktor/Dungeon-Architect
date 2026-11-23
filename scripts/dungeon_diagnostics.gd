@@ -15,7 +15,7 @@ static func analyze(map_data: DungeonMap, result: Dictionary) -> Array[Dictionar
 	var keys: Dictionary = {}
 	for entity in map_data.entities:
 		var kind: String = str(entity["type"])
-		if kind == "stairs_down":
+		if kind == "stairs_down" or (kind == "portal" and not DungeonMap.exit_target_id(entity).is_empty()):
 			exits.append(entity)
 		elif kind == "door":
 			doors.append(entity)

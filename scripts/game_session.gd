@@ -623,15 +623,14 @@ func _random_living_party_member() -> HeroState:
 func enter_map(next_map: DungeonMap) -> bool:
 	if is_party_defeated() or next_map == null or next_map.map_id.is_empty():
 		return false
-	var spawn := next_map.find_entity_position("player_spawn")
-	if spawn.x < 0 or spawn.y < 0 or next_map.get_terrain(spawn.x, spawn.y) == "wall":
+	var spawn: Vector2i = next_map.find_entity_position("player_spawn")
+	if not DungeonMap.valid_arrival_cell(next_map, spawn):
 		return false
 	if map_data != null:
 		_floor_states[map_data.map_id] = {
 			"map": map_data,
 			"ground_loot": ground_loot_containers.duplicate(true),
 			"exit_rewards": claimed_exit_rewards.duplicate(true),
-			"position": player_pos,
 			"removed": removed_entities.duplicate(true),
 			"chests": opened_chests.duplicate(true),
 			"traps": disarmed_traps.duplicate(true),
@@ -646,7 +645,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	for container in saved.get("ground_loot", []):
 		ground_loot_containers.append(container.duplicate(true))
 	claimed_exit_rewards = saved.get("exit_rewards", {}).duplicate(true)
-	player_pos = saved.get("position", spawn)
+	player_pos = spawn
 	removed_entities = saved.get("removed", {}).duplicate(true)
 	opened_chests = saved.get("chests", {}).duplicate(true)
 	disarmed_traps = saved.get("traps", {}).duplicate(true)
@@ -675,13 +674,25 @@ func enter_map(next_map: DungeonMap) -> bool:
 	return true
 
 
-func next_map_id() -> String:
+func current_exit() -> Dictionary:
 	if not is_completed:
-		return ""
-	var stairs := _find_active_entity(player_pos, "stairs_down")
-	if stairs.is_empty():
-		return ""
-	return DungeonMap.stairs_target_id(stairs)
+		return {}
+	var stairs: Dictionary = _find_active_entity(player_pos, "stairs_down")
+	if not stairs.is_empty():
+		return stairs
+	return _find_active_entity(player_pos, "portal")
+
+
+func next_map_id() -> String:
+	return DungeonMap.exit_target_id(current_exit())
+
+
+func next_arrival_cell(destination: DungeonMap) -> Vector2i:
+	return DungeonMap.exit_target_cell(current_exit(), destination)
+
+
+func cancel_exit_transition() -> void:
+	is_completed = false
 
 
 func _init_masks() -> void:
@@ -1009,11 +1020,14 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 	else:
 		_activate_message_at(target, "enter")
 	_refresh_visibility()
-	# Пока лестница завершает приключение. Позже здесь появится переход на другую карту.
 	var stairs: Dictionary = _find_active_entity(target, "stairs_down")
 	if not stairs.is_empty():
 		_claim_exit_reward(stairs)
 		is_completed = true
+	else:
+		var portal: Dictionary = _find_active_entity(target, "portal")
+		if not portal.is_empty() and not DungeonMap.exit_target_id(portal).is_empty():
+			is_completed = true
 	return true
 
 

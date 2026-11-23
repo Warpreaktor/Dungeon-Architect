@@ -19,7 +19,7 @@ const NAME_SECRETS := [
 	"алой луны", "железных теней", "безмолвных духов", "серебряного ключа",
 	"древнего пророчества", "разбитой звезды", "погасших факелов", "тайного ордена"
 ]
-const ENTITY_TYPES := ["door", "chest", "monster", "trap", "stairs_down", "key", "potion", "gold", "trigger", "player_spawn", "message"]
+const ENTITY_TYPES := ["door", "chest", "monster", "trap", "stairs_down", "portal", "key", "potion", "gold", "trigger", "player_spawn", "message"]
 static var CHEST_REWARDS: Array = LockCatalog.LOCK_IDS + ["potion", "gold"] + ItemCatalog.consumable_ids() + ItemCatalog.equipment_ids()
 
 var map_id: String = ""
@@ -98,8 +98,8 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 	elif kind == "chest":
 		# Новый сундук пустой: содержимое автор задаёт после размещения.
 		properties = {"contents": [], "loot_mode": "random"}
-	elif kind == "stairs_down":
-		properties = {"target_map_id": "", "target_x": 0, "target_y": 0}
+	elif kind in ["stairs_down", "portal"]:
+		properties = {"target_map_id": ""}
 	elif kind == "monster":
 		var monster_id: String = str(options.get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
 		if not MonsterCatalog.has(monster_id):
@@ -432,23 +432,52 @@ func set_door_lock(door_id: String, lock_id: String) -> bool:
 	return false
 
 
-## Связь выхода с другой картой хранится в JSON текущего лабиринта.
-static func stairs_target_id(stairs: Dictionary) -> String:
-	return str(stairs.get("properties", {}).get("target_map_id", "")).strip_edges()
+static func is_exit(entity: Dictionary) -> bool:
+	return str(entity.get("type", "")) in ["stairs_down", "portal"]
 
 
-func set_stairs_target(stairs_id: String, target_map_id: String) -> bool:
-	var normalized := target_map_id.strip_edges()
-	for entity in entities:
-		if str(entity.get("id", "")) != stairs_id or str(entity.get("type", "")) != "stairs_down":
-			continue
-		if stairs_target_id(entity) == normalized:
+static func exit_target_id(entity: Dictionary) -> String:
+	return str(entity.get("properties", {}).get("target_map_id", "")).strip_edges() if is_exit(entity) else ""
+
+
+static func valid_arrival_cell(destination: DungeonMap, cell: Vector2i) -> bool:
+	if destination == null or destination.get_terrain(cell.x, cell.y) != "floor":
+		return false
+	for entity in destination.entities_at(cell.x, cell.y):
+		if str(entity.get("type", "")) in ["door", "monster"]:
 			return false
+	return true
+
+
+static func exit_target_cell(entity: Dictionary, destination: DungeonMap) -> Vector2i:
+	if not is_exit(entity) or destination == null:
+		return Vector2i(-1, -1)
+	return destination.find_entity_position("player_spawn")
+
+
+func set_exit_target(entity_id: String, target_map_id: String) -> bool:
+	var normalized: String = target_map_id.strip_edges()
+	for entity in entities:
+		if str(entity.get("id", "")) != entity_id or not is_exit(entity):
+			continue
 		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		if str(properties.get("target_map_id", "")).strip_edges() == normalized and not properties.has("target_position_enabled") and not properties.has("target_x") and not properties.has("target_y"):
+			return false
 		properties["target_map_id"] = normalized
+		properties.erase("target_position_enabled")
+		properties.erase("target_x")
+		properties.erase("target_y")
 		entity["properties"] = properties
 		return true
 	return false
+
+
+static func stairs_target_id(stairs: Dictionary) -> String:
+	return exit_target_id(stairs)
+
+
+func set_stairs_target(stairs_id: String, target_map_id: String) -> bool:
+	return set_exit_target(stairs_id, target_map_id)
 
 
 ## Идентификатор игрового события хранится на самой карте, не в сессии.

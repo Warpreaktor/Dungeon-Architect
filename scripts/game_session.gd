@@ -29,6 +29,8 @@ var opened_chests: Dictionary = {} # ID открытых сундуков тол
 var disarmed_traps: Dictionary = {} # ID разряженных ловушек только в этом прохождении.
 var revealed_traps: Dictionary = {}
 var pending_chest_id: String = "" # Ожидает завершения анимации шага до открытия сундука.
+var pending_door_trap_id: String = ""
+var pending_door_trap_cell := Vector2i(-1, -1)
 var activated_triggers: Dictionary = {} # ID сработавших триггеров; обнуляется с новой сессией.
 var shown_messages: Dictionary = {} # Авторские сообщения показываются один раз за прохождение.
 var _message_events: Array[Dictionary] = []
@@ -650,6 +652,8 @@ func enter_map(next_map: DungeonMap) -> bool:
 	disarmed_traps = saved.get("traps", {}).duplicate(true)
 	revealed_traps = saved.get("revealed_traps", {}).duplicate(true)
 	pending_chest_id = ""
+	pending_door_trap_id = ""
+	pending_door_trap_cell = Vector2i(-1, -1)
 	activated_triggers = saved.get("triggers", {}).duplicate(true)
 	shown_messages = saved.get("messages", {}).duplicate(true)
 	encounter_monster_id = ""
@@ -861,39 +865,71 @@ func _append_event_message(message: String) -> void:
 		last_event_message += "  " + clean
 
 
+func _activate_trap(trap: TrapDefinition, trap_key: String) -> void:
+	var target: HeroState = _random_living_party_member()
+	if target == null:
+		return
+	revealed_traps[trap_key] = true
+	var parts: Array[String] = []
+	if trap.direct_damage > 0:
+		var health_before: int = target.health
+		target.take_damage(trap.direct_damage)
+		var damage: int = health_before - target.health
+		if damage > 0:
+			_record_party_damage(target, damage, trap.trap_id)
+			parts.append("-%d HP" % damage)
+	if target.health > 0 and trap.applies_overworld_status():
+		if target.apply_overworld_status(trap.overworld_status_id, trap.overworld_status_label,
+			trap.overworld_status_damage, trap.overworld_status_ticks, trap.overworld_status_interval_steps):
+			parts.append("%s %d на %d фазы" % [
+				trap.overworld_status_label, trap.overworld_status_damage, trap.overworld_status_ticks
+			])
+	if not parts.is_empty():
+		_append_event_message("%s: ловушка «%s», %s." % [
+			target.definition.display_name, trap.display_name, " и ".join(parts)
+		])
+	if trap.disarm_on_trigger:
+		disarmed_traps[trap_key] = true
+
+
 func _activate_traps_at(cell: Vector2i) -> void:
 	for entity in map_data.entities_at(cell.x, cell.y):
 		if str(entity.get("type", "")) != "trap" or is_trap_disarmed(entity):
 			continue
 		var trap: TrapDefinition = TrapCatalog.from_entity(entity)
-		if trap == null or not trap.can_attach_to("floor"):
-			continue
-		var target: HeroState = _random_living_party_member()
-		if target == null:
-			continue
-		revealed_traps[str(entity.get("id", ""))] = true
-		var parts: Array[String] = []
-		if trap.direct_damage > 0:
-			var health_before: int = target.health
-			target.take_damage(trap.direct_damage)
-			var damage: int = health_before - target.health
-			if damage > 0:
-				_record_party_damage(target, damage, trap.trap_id)
-				parts.append("-%d HP" % damage)
-		if target.health > 0 and trap.applies_overworld_status():
-			if target.apply_overworld_status(trap.overworld_status_id, trap.overworld_status_label,
-				trap.overworld_status_damage, trap.overworld_status_ticks, trap.overworld_status_interval_steps):
-				parts.append("%s %d на %d фазы" % [
-					trap.overworld_status_label,
-					trap.overworld_status_damage,
-					trap.overworld_status_ticks
-				])
-		if not parts.is_empty():
-			_append_event_message("%s: ловушка «%s», %s." % [
-				target.definition.display_name, trap.display_name, " и ".join(parts)
-			])
-		if trap.disarm_on_trigger:
-			disarmed_traps[str(entity.get("id", ""))] = true
+		if trap != null and trap.can_attach_to("floor"):
+			_activate_trap(trap, str(entity.get("id", "")))
+
+
+func has_pending_door_trap() -> bool:
+	return not pending_door_trap_id.is_empty()
+
+
+func resolve_pending_door_trap() -> bool:
+	if not has_pending_door_trap():
+		return false
+	var door_id: String = pending_door_trap_id
+	var cell: Vector2i = pending_door_trap_cell
+	pending_door_trap_id = ""
+	pending_door_trap_cell = Vector2i(-1, -1)
+	var door: Dictionary = _find_active_entity(cell, "door")
+	if door.is_empty() or str(door.get("id", "")) != door_id or not can_enter(cell):
+		return false
+	var trap: TrapDefinition = TrapCatalog.from_door(door)
+	if trap != null and not is_trap_disarmed(door):
+		_activate_trap(trap, door_id)
+		record_casualties()
+		if is_party_defeated():
+			return false
+	var trap_damage: Array[Dictionary] = _party_damage_events.duplicate(true)
+	var trap_message: String = last_event_message
+	var delta: Vector2i = cell - player_pos
+	var moved: bool = move_by(delta.x, delta.y, true)
+	trap_damage.append_array(_party_damage_events)
+	_party_damage_events = trap_damage
+	if not trap_message.is_empty():
+		_append_event_message(trap_message)
+	return moved
 
 
 func can_enter(cell: Vector2i) -> bool:
@@ -904,7 +940,7 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 	last_event_message = ""
 	_trigger_events.clear()
 	_party_damage_events.clear()
-	if is_party_defeated() or has_pending_encounter() or is_completed or not pending_chest_id.is_empty():
+	if is_party_defeated() or has_pending_encounter() or is_completed or not pending_chest_id.is_empty() or has_pending_door_trap():
 		return false
 	var target := player_pos + Vector2i(dx, dy)
 	if not can_enter(target):
@@ -924,6 +960,15 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 		var required_key: String = LockCatalog.required_key(door)
 		if int(carried_items.get(required_key, 0)) <= 0:
 			last_event_message = "Дверь заперта. Нужен %s ключ." % LockCatalog.label(required_key).to_lower()
+			return false
+		var trap: TrapDefinition = TrapCatalog.from_door(door)
+		if trap != null and not is_trap_disarmed(door):
+			pending_door_trap_id = str(door["id"])
+			pending_door_trap_cell = target
+			_message_events.append({
+				"activation": "door_trap", "entity_id": pending_door_trap_id,
+				"text": DungeonMap.door_trap_message(door), "loot": []
+			})
 			return false
 		_remove_carried_item(required_key, 1)
 		opened_door_id = str(door["id"])

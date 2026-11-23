@@ -20,3 +20,5 @@ test_round_clash_timeline.gd
 test_door_trap_data.gd
 
 test_editor_door_crossbow.gd
+test_door_trap_trigger.gd
+test_editor_door_trap_trigger.gd

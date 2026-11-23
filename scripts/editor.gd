@@ -28,6 +28,7 @@ const BATTLE_VIEW_SCENE: PackedScene = preload("res://scenes/battle_view.tscn")
 const VICTORY_VIEW_SCENE: PackedScene = preload("res://scenes/victory_view.tscn")
 const MESSAGE_EDITOR_SCENE: PackedScene = preload("res://scenes/message_editor_popup.tscn")
 const GAME_DIALOGUE_SCENE: PackedScene = preload("res://scenes/game_dialogue_view.tscn")
+const DOOR_CROSSBOW_SOUND: AudioStream = preload("res://assets/audio/traps/door_crossbow.wav")
 const INVENTORY_VIEW_SCENE: PackedScene = preload("res://scenes/inventory_view.tscn")
 const GAME_COMMAND_BAR_SCENE: PackedScene = preload("res://scenes/game_command_bar.tscn")
 const GAME_SYSTEM_MENU_SCENE: PackedScene = preload("res://scenes/game_system_menu.tscn")
@@ -141,6 +142,7 @@ var _trigger_popup: TriggerPropertiesPopup
 var _message_popup: MessageEditorPopup
 var _game_dialogue: GameDialogueView
 var _pending_game_messages: Array[Dictionary] = []
+var _active_game_message: Dictionary = {}
 var _editor_controls: Array[Control] = []
 var _play_button: Button
 var _load_paths: Array[String] = []
@@ -1941,6 +1943,7 @@ func _start_play_mode() -> void:
 	_game_system_menu.dismiss()
 	_map_screen.dismiss()
 	_pending_game_messages.clear()
+	_active_game_message.clear()
 	is_play_mode = true
 	_canvas.set_game_session(session)
 	_canvas.zoom = DungeonCanvas.PLAY_START_ZOOM
@@ -1980,6 +1983,7 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 	_map_screen.dismiss()
 	_mini_map.visible = false
 	_pending_game_messages.clear()
+	_active_game_message.clear()
 	game_session = null
 	is_play_mode = false
 	_canvas.set_game_session(null)
@@ -2115,10 +2119,26 @@ func _show_next_game_message() -> void:
 	if _game_dialogue.visible or _pending_game_messages.is_empty():
 		return
 	var event: Dictionary = _pending_game_messages.pop_front()
+	_active_game_message = event
 	_game_dialogue.show_event(event)
 
 
 func _on_game_dialogue_closed() -> void:
+	var closed_event: Dictionary = _active_game_message
+	_active_game_message = {}
+	if str(closed_event.get("activation", "")) == "door_trap" and is_play_mode and game_session != null:
+		var moving_session: GameSession = game_session
+		var previous_pos: Vector2i = moving_session.player_pos
+		var shot := AudioStreamPlayer.new()
+		shot.stream = DOOR_CROSSBOW_SOUND
+		add_child(shot)
+		shot.finished.connect(shot.queue_free)
+		shot.play()
+		var moved: bool = moving_session.resolve_pending_door_trap()
+		_refresh_stats()
+		_flash_party_damage()
+		_complete_player_move(moving_session, previous_pos, moved, true)
+		return
 	if not _pending_game_messages.is_empty():
 		_show_next_game_message()
 	elif is_play_mode and game_session != null and game_session.has_pending_encounter():
@@ -2156,6 +2176,13 @@ func _try_move_player(dx: int, dy: int) -> void:
 		if not _game_dialogue.visible:
 			_start_combat()
 		return
+	if game_session.has_pending_door_trap():
+		_collect_game_messages()
+		return
+	_complete_player_move(moving_session, previous_pos, moved)
+
+
+func _complete_player_move(moving_session: GameSession, previous_pos: Vector2i, moved: bool, wait_until_arrival: bool = false) -> void:
 	if moved:
 		if (game_session.hero == null or not game_session.hero.has_vision_effect()) and _canvas.zoom < DungeonCanvas.PLAY_MIN_ZOOM:
 			_canvas.zoom = DungeonCanvas.PLAY_MIN_ZOOM
@@ -2167,7 +2194,7 @@ func _try_move_player(dx: int, dy: int) -> void:
 				return
 			if not moving_session.is_party_defeated():
 				moving_session.open_pending_chest()
-		elif moving_session.has_party_damage_events():
+		elif wait_until_arrival or moving_session.has_party_damage_events():
 			await _canvas.player_step_finished
 			if not is_play_mode or game_session != moving_session:
 				return

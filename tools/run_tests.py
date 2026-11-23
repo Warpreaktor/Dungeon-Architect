@@ -10,6 +10,28 @@ import subprocess
 import sys
 import time
 
+GROUP_REGRESSION_TESTS = (
+    "test_round_group_compositions.gd",
+    "test_manual_hero_turn_selection.gd",
+    "test_round_target_tap.gd",
+    "test_party_round_scheduler.gd",
+    "test_party_enemy_targeting.gd",
+    "test_party_battle_participants.gd",
+    "test_party_combat_casualties.gd",
+    "test_party_shared_inventory.gd",
+    "test_inventory_atomicity.gd",
+    "test_ground_loot_containers.gd",
+    "test_party_traps.gd",
+    "test_regression_permadeath.gd",
+    "test_status_contracts.gd",
+    "test_battle_accuracy_dodge.gd",
+    "test_battle_combat_items.gd",
+    "test_battle_bond_contract.gd",
+    "test_death_and_exit_rewards.gd",
+    "test_party_battle_view.gd",
+    "test_round_clash_timeline.gd",
+)
+
 ERROR_PATTERN = re.compile(r"(?im)^\s*(?:SCRIPT ERROR:|ERROR:|Assertion failed:|ASSERTION FAILED:)")
 
 
@@ -45,6 +67,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="Godot executable (or GODOT_BIN environment variable)")
     parser.add_argument("--timeout", type=float, default=60.0, help="Timeout per test in seconds")
     parser.add_argument("--filter", default="", help="Part of test filename")
+    parser.add_argument("--list", action="store_true", help="List selected tests without running them")
+    parser.add_argument("--suite", choices=("all", "group"), default="all",
+                        help="Select all tests or the group-combat regression suite")
     parser.add_argument("--check-order", action="store_true", help="Run again in reverse order")
     parser.add_argument("--project", type=Path, default=Path(__file__).resolve().parents[1],
                         help="Godot project root")
@@ -55,13 +80,26 @@ def main(argv: list[str] | None = None) -> int:
     if not (root / "project.godot").is_file():
         print(f"Missing project.godot: {root}", file=sys.stderr)
         return 2
+    tests = discover(root, args.filter)
+    if args.suite == "group":
+        selected = set(GROUP_REGRESSION_TESTS)
+        available = {test.name for test in discover(root, "")}
+        missing = sorted(selected - available)
+        if missing:
+            print("Missing group regression tests: " + ", ".join(missing), file=sys.stderr)
+            return 2
+        tests = [test for test in tests if test.name in selected]
+    if not tests:
+        print("No matching tests found", file=sys.stderr)
+        return 2
+    if args.list:
+        for path in tests:
+            print(path.relative_to(root).as_posix())
+        print(f"Selected {len(tests)} tests")
+        return 0
     godot = shutil.which(args.godot) or (str(Path(args.godot).resolve()) if Path(args.godot).is_file() else None)
     if godot is None:
         print(f"Godot executable not found: {args.godot}", file=sys.stderr)
-        return 2
-    tests = discover(root, args.filter)
-    if not tests:
-        print("No matching tests found", file=sys.stderr)
         return 2
     results: list[tuple[str, str, float, str]] = []
     runs = (tests, list(reversed(tests))) if args.check_order else (tests,)

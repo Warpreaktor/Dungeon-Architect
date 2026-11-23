@@ -46,6 +46,8 @@ var ground_loot_containers: Array[Dictionary] = []
 var _ground_loot_counter: int = 0
 var claimed_exit_rewards: Dictionary = {}
 var _floor_states: Dictionary = {} # Состояние посещённых карт только в памяти этого прохождения.
+var _stairs_history: Array[Dictionary] = []
+var _pending_return_exit: Dictionary = {}
 
 
 
@@ -827,6 +829,9 @@ func _valid_snapshot_inventory(counts: Dictionary, bag: Array, members: Array[He
 func enter_map(next_map: DungeonMap) -> bool:
 	if is_party_defeated() or next_map == null or next_map.map_id.is_empty():
 		return false
+	var source_exit: Dictionary = current_exit()
+	var source_id: String = map_data.map_id if map_data != null else ""
+	var source_kind: String = str(source_exit.get("type", ""))
 	var saved: Dictionary = _floor_states.get(next_map.map_id, {})
 	var destination: DungeonMap = saved.get("map", next_map)
 	if map_data != null and map_data.map_id == next_map.map_id:
@@ -839,6 +844,11 @@ func enter_map(next_map: DungeonMap) -> bool:
 		var current: Dictionary = _capture_floor_state()
 		current["map"] = map_data
 		_floor_states[map_data.map_id] = current
+	if source_kind == "stairs_down" and DungeonMap.exit_target_id(source_exit) == next_map.map_id:
+		_stairs_history.append({"from": source_id, "to": next_map.map_id})
+	elif source_kind == "stairs_up" and not _stairs_history.is_empty():
+		_stairs_history.pop_back()
+	_pending_return_exit.clear()
 	map_data = destination
 	ground_loot_containers.clear()
 	for container in saved.get("ground_loot", []):
@@ -873,7 +883,20 @@ func enter_map(next_map: DungeonMap) -> bool:
 	return true
 
 
+func has_stairs_up() -> bool:
+	return map_data != null and not _stairs_history.is_empty() and str(_stairs_history.back().get("to", "")) == map_data.map_id
+
+
+func known_map(map_id: String) -> DungeonMap:
+	if map_data != null and map_data.map_id == map_id:
+		return map_data
+	var state: Dictionary = _floor_states.get(map_id, {})
+	return state.get("map") as DungeonMap
+
+
 func current_exit() -> Dictionary:
+	if not _pending_return_exit.is_empty():
+		return _pending_return_exit.duplicate(true)
 	if not is_completed:
 		return {}
 	var stairs: Dictionary = _find_active_entity(player_pos, "stairs_down")
@@ -892,6 +915,7 @@ func next_arrival_cell(destination: DungeonMap) -> Vector2i:
 
 func cancel_exit_transition() -> void:
 	is_completed = false
+	_pending_return_exit.clear()
 
 
 func _init_masks() -> void:
@@ -1194,7 +1218,14 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 		else:
 			_open_chest(chest)
 
-	player_pos = target
+	var arrival: Vector2i = target
+	var local_portal: Dictionary = _find_active_entity(target, "portal_local")
+	if not local_portal.is_empty():
+		var paired: Vector2i = map_data.local_portal_destination(str(local_portal["id"]))
+		if DungeonMap.valid_arrival_cell(map_data, paired):
+			arrival = paired
+	player_pos = arrival
+	target = arrival
 	steps += 1
 	for member in party_members():
 		if member == null or member.health <= 0:
@@ -1220,7 +1251,13 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 		_activate_message_at(target, "enter")
 	_refresh_visibility()
 	var stairs: Dictionary = _find_active_entity(target, "stairs_down")
-	if not stairs.is_empty():
+	if has_stairs_up() and target == map_data.find_entity_position("player_spawn"):
+		_pending_return_exit = {
+			"type": "stairs_up", "id": "return_stairs",
+			"properties": {"target_map_id": str(_stairs_history.back()["from"])}
+		}
+		is_completed = true
+	elif not stairs.is_empty():
 		_claim_exit_reward(stairs)
 		is_completed = true
 	else:
@@ -1528,3 +1565,100 @@ func _claim_exit_reward(stairs: Dictionary) -> void:
 		_receive_item(str(reward["item_id"]), int(reward["quantity"]))
 	if not rewards.is_empty():
 		_message_events.append({"text": "Награда за прохождение подземелья", "activation": "exit_reward", "loot": rewards})
+
+
+func progress_snapshot() -> Dictionary:
+	if map_data == null or has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_door_trap() or is_completed:
+		return {}
+	var party_data: Dictionary = party_state_snapshot()
+	if party_data.is_empty():
+		return {}
+	var floors_data: Dictionary = {}
+	for map_id in visited_floor_snapshots():
+		var snapshot: Dictionary = floor_state_snapshot(str(map_id))
+		floors_data[str(map_id)] = ProgressSnapshotCodec.encode_floor(snapshot)
+	return {
+		"version": ProgressSnapshotCodec.FORMAT_VERSION,
+		"current_map_id": map_data.map_id,
+		"party": party_data,
+		"floors": floors_data,
+		"ground_loot_counter": _ground_loot_counter,
+		"stairs_history": _stairs_history.duplicate(true)
+	}
+
+
+static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary) -> GameSession:
+	if not (snapshot is Dictionary) or not ProgressSnapshotCodec._is_integer(snapshot.get("version")):
+		return null
+	if int(snapshot["version"]) != ProgressSnapshotCodec.FORMAT_VERSION:
+		return null
+	var current_id: String = str(snapshot.get("current_map_id", ""))
+	var floors_data: Variant = snapshot.get("floors")
+	if current_id.is_empty() or not (floors_data is Dictionary) or not floors_data.has(current_id) or not (snapshot.get("party") is Dictionary):
+		return null
+	var counter_value: Variant = snapshot.get("ground_loot_counter")
+	if not ProgressSnapshotCodec._is_integer(counter_value) or int(counter_value) < 0:
+		return null
+	var history_data: Variant = snapshot.get("stairs_history")
+	if not (history_data is Array):
+		return null
+	var restored_history: Array[Dictionary] = []
+	for record in history_data:
+		if not (record is Dictionary):
+			return null
+		if typeof(record.get("from")) != TYPE_STRING or typeof(record.get("to")) != TYPE_STRING:
+			return null
+		var from_id: String = str(record["from"])
+		var to_id: String = str(record["to"])
+		if not maps_by_id.has(from_id) or not maps_by_id.has(to_id) or not (maps_by_id[from_id] is DungeonMap) or not (maps_by_id[to_id] is DungeonMap):
+			return null
+		restored_history.append({"from": from_id, "to": to_id})
+	var restored_floors: Dictionary = {}
+	for raw_map_id in floors_data:
+		if typeof(raw_map_id) != TYPE_STRING or not maps_by_id.has(raw_map_id) or not (maps_by_id[raw_map_id] is DungeonMap):
+			return null
+		var map_ref: DungeonMap = maps_by_id[raw_map_id]
+		if map_ref.map_id != raw_map_id or not DungeonMap.valid_arrival_cell(map_ref, map_ref.find_entity_position("player_spawn")):
+			return null
+		var floor_data: Dictionary = ProgressSnapshotCodec.decode_floor(floors_data[raw_map_id], map_ref)
+		if floor_data.is_empty():
+			return null
+		floor_data["map"] = map_ref
+		restored_floors[raw_map_id] = floor_data
+	for record in restored_history:
+		if not restored_floors.has(record["from"]) or not restored_floors.has(record["to"]):
+			return null
+	var ground_ids: Dictionary = {}
+	for floor_id in restored_floors:
+		for container in restored_floors[floor_id]["ground_loot"]:
+			var container_id: String = str(container["id"])
+			if ground_ids.has(container_id):
+				return null
+			ground_ids[container_id] = true
+			if container_id.begins_with("ground_"):
+				var counter_text: String = container_id.trim_prefix("ground_")
+				if not counter_text.is_valid_int() or int(counter_text) > int(counter_value):
+					return null
+	var session := GameSession.new()
+	if not session.restore_party_state(snapshot["party"]):
+		return null
+	var current: Dictionary = restored_floors[current_id]
+	session.map_data = current["map"]
+	session._floor_states = restored_floors.duplicate()
+	session._floor_states.erase(current_id)
+	session._stairs_history = restored_history
+	session._ground_loot_counter = int(counter_value)
+	session.player_pos = current["position"]
+	for container in current["ground_loot"]:
+		session.ground_loot_containers.append(container.duplicate(true))
+	session.claimed_exit_rewards = current["exit_rewards"].duplicate(true)
+	session.removed_entities = current["removed"].duplicate(true)
+	session.opened_chests = current["chests"].duplicate(true)
+	session.disarmed_traps = current["traps"].duplicate(true)
+	session.revealed_traps = current["revealed_traps"].duplicate(true)
+	session.activated_triggers = current["triggers"].duplicate(true)
+	session.shown_messages = current["messages"].duplicate(true)
+	session._init_masks()
+	session.revealed = current["revealed"].duplicate(true)
+	session._refresh_visibility()
+	return session

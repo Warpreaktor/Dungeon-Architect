@@ -59,7 +59,7 @@ const TOOLS := [
 	{"id": "door", "label": "Дверь", "hint": "Дверь на клетке пола"},
 	{"id": "chest", "label": "Сундук", "hint": "Контейнер с добычей"},
 	{"id": "stairs_down", "label": "Спуск", "hint": "Выход из подземелья или переход на следующую карту"},
-	{"id": "portal", "label": "Портал", "hint": "Переход на связанную карту"},
+	{"id": "portal", "label": "Магический портал", "hint": "Переход на связанную карту"},
 	{"id": "trigger", "label": "Триггер", "hint": "Невидимое в игре событие"},
 	{"id": "message", "label": "Послание", "hint": "Авторский текст при входе в клетку или открытии двери"},
 	{"id": "player_spawn", "label": "Старт героя", "hint": "Единственная стартовая позиция"},
@@ -72,7 +72,6 @@ const TOOL_ICONS := {
 	"door": preload("res://assets/icons/door.png"),
 	"chest": preload("res://assets/icons/chest.png"),
 	"stairs_down": preload("res://assets/icons/stairs_down.png"),
-	"portal": preload("res://assets/icons/traps/void_portal.png"),
 	"trigger": preload("res://assets/icons/trigger.png"),
 	"message": preload("res://assets/icons/message.png"),
 	"player_spawn": preload("res://assets/icons/player_spawn.png"),
@@ -443,6 +442,22 @@ func _build_interface() -> void:
 			_add_tool_button(map_tools, tool)
 
 	palette.add_child(HSeparator.new())
+	palette.add_child(_label("ЦВЕТНЫЕ ПОРТАЛЫ", 14, Color("#e8c58a")))
+	var portals_grid := _tool_grid()
+	palette.add_child(portals_grid)
+	var portal_labels := {
+		"blue": "Синий", "cyan": "Голубой", "green": "Зелёный", "orange": "Оранжевый",
+		"pink": "Розовый", "purple": "Фиолетовый", "red": "Красный", "yellow": "Жёлтый"
+	}
+	for color_id in DungeonMap.PORTAL_COLORS:
+		_add_tool_button(portals_grid, {
+			"id": "portal_local:" + color_id,
+			"label": "Портал: " + str(portal_labels[color_id]),
+			"hint": "Перемещение между парными порталами этого цвета",
+			"icon": ImageAsset.texture("res://assets/icons/portals/portal_%s.png" % color_id)
+		})
+
+	palette.add_child(HSeparator.new())
 	palette.add_child(_label("МОНСТРЫ", 14, Color("#e8c58a")))
 	var monster_tools := _tool_grid()
 	palette.add_child(monster_tools)
@@ -500,10 +515,13 @@ func _tool_grid() -> GridContainer:
 func _add_tool_button(grid: GridContainer, tool: Dictionary) -> void:
 	var key: String = str(tool["id"])
 	var button := Button.new()
-	button.icon = tool.get("icon", TOOL_ICONS.get(key)) as Texture2D
+	var icon: Texture2D = tool.get("icon", TOOL_ICONS.get(key)) as Texture2D
+	if key == "portal" and icon == null:
+		icon = ImageAsset.texture("res://assets/icons/portals/portal_gateway.png")
+	button.icon = icon
 	button.expand_icon = true
 	button.custom_minimum_size = Vector2(66, 66)
-	button.tooltip_text = "%s\n%s" % [str(tool["label"]), str(tool["hint"])]
+	button.tooltip_text = "%s\n%s" % [str(tool["label"]), str(tool.get("hint", ""))]
 	button.pressed.connect(_on_tool_button_pressed.bind(button, key))
 	grid.add_child(button)
 	_touch_info.attach_long_press(button, func() -> String: return button.tooltip_text)
@@ -2431,7 +2449,9 @@ func _show_victory_view() -> void:
 	_pending_next_map = null
 	var target_id: String = game_session.next_map_id()
 	if not target_id.is_empty():
-		var linked: DungeonMap = _find_linked_map(target_id)
+		var linked: DungeonMap = game_session.known_map(target_id)
+		if linked == null:
+			linked = _find_linked_map(target_id)
 		if linked == null:
 			game_session.cancel_exit_transition()
 			_game_notice.show_message("Подземелье для перехода не найдено")

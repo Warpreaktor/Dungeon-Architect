@@ -17,7 +17,10 @@ const TILE_SIZE := 48.0
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
 const WALL_TEXTURE: Texture2D = preload("res://assets/stone_wall.png")
 const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.png")
-const PORTAL_TEXTURE: Texture2D = preload("res://assets/icons/traps/void_portal.png")
+var _portal_texture: Texture2D = ImageAsset.texture("res://assets/icons/portals/portal_gateway.png")
+var _stairs_up_texture: Texture2D = ImageAsset.texture("res://assets/icons/stairs_up.png")
+var _local_portal_textures: Dictionary = {}
+
 const STAIRS_DOWN_TEXTURE: Texture2D = preload("res://assets/icons/stairs_down.png")
 const DOUBLE_TAP_MS := 400
 const TAP_MOVE_LIMIT := 16.0
@@ -69,6 +72,8 @@ var _settings_tool_pressed_id: String = ""
 
 
 func _ready() -> void:
+	for color_id in DungeonMap.PORTAL_COLORS:
+		_local_portal_textures[color_id] = ImageAsset.texture("res://assets/icons/portals/portal_%s.png" % color_id)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_ALL
 	clip_contents = true
@@ -169,6 +174,13 @@ func animate_player_step(from_cell: Vector2i, to_cell: Vector2i) -> void:
 	if mode != "play" or game_session == null or from_cell == to_cell:
 		return
 	_cancel_player_step()
+	if absi(to_cell.x - from_cell.x) + absi(to_cell.y - from_cell.y) > 1:
+		_player_visual_cell = Vector2(to_cell)
+		center_on_cell(to_cell)
+		_player_step_tween = create_tween()
+		_player_step_tween.tween_interval(0.01)
+		_player_step_tween.finished.connect(_finish_player_step.bind(Vector2(to_cell)))
+		return
 	_player_visual_cell = Vector2(from_cell)
 	_player_step_tween = create_tween()
 	_player_step_tween.set_trans(Tween.TRANS_LINEAR)
@@ -333,6 +345,11 @@ func _draw_cell(x: int, y: int) -> void:
 			draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		elif kind == "trap":
 			_draw_trap(origin, entity, mode == "play" and game_session != null and game_session.is_trap_disarmed(entity))
+		elif kind == "portal_local":
+			var portal_color: String = str(entity.get("properties", {}).get("color", ""))
+			var portal_texture: Texture2D = _local_portal_textures.get(portal_color)
+			if portal_texture != null:
+				draw_texture_rect(portal_texture, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		else:
 			_draw_entity(kind, origin)
 			if kind == "door":
@@ -341,6 +358,9 @@ func _draw_cell(x: int, y: int) -> void:
 					_draw_door_trap_marker(origin, entity)
 		if mode == "edit" and DungeonMap.is_entity_hidden(entity):
 			has_hidden_entity = true
+	if mode == "play" and game_session != null and game_session.has_stairs_up() and Vector2i(x, y) == map_data.find_entity_position("player_spawn"):
+		if _stairs_up_texture != null:
+			draw_texture_rect(_stairs_up_texture, rect, false)
 	if has_hidden_entity:
 		_draw_hidden_marker(rect.position)
 	if mode == "play" and not can_see:
@@ -436,7 +456,8 @@ func _draw_entity(kind: String, origin: Vector2) -> void:
 			draw_rect(Rect2(origin + Vector2(10, 14), Vector2(28, 9)), Color("#d8a45b"))
 			draw_rect(Rect2(origin + Vector2(21, 16), Vector2(6, 16)), Color("#ffe2a0"))
 		"portal":
-			draw_texture_rect(PORTAL_TEXTURE, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
+			if _portal_texture != null:
+				draw_texture_rect(_portal_texture, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		"stairs_down":
 			draw_texture_rect(STAIRS_DOWN_TEXTURE, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		"key":
@@ -661,6 +682,9 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 		var monster_id: String = selected_tool.trim_prefix("monster:")
 		if MonsterCatalog.has(monster_id):
 			modified = map_data.place_entity("monster", cell.x, cell.y, {"monster_id": monster_id})
+	elif selected_tool.begins_with("portal_local:"):
+		var color_id: String = selected_tool.trim_prefix("portal_local:")
+		modified = map_data.place_entity("portal_local", cell.x, cell.y, {"color": color_id})
 	elif selected_tool.begins_with("trap:"):
 		var trap_id: String = selected_tool.trim_prefix("trap:")
 		if TrapCatalog.has(trap_id):

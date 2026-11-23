@@ -19,7 +19,8 @@ const NAME_SECRETS := [
 	"алой луны", "железных теней", "безмолвных духов", "серебряного ключа",
 	"древнего пророчества", "разбитой звезды", "погасших факелов", "тайного ордена"
 ]
-const ENTITY_TYPES := ["door", "chest", "monster", "trap", "stairs_down", "portal", "key", "potion", "gold", "trigger", "player_spawn", "message"]
+const PORTAL_COLORS := ["blue", "cyan", "green", "orange", "pink", "purple", "red", "yellow"]
+const ENTITY_TYPES := ["door", "chest", "monster", "trap", "stairs_down", "portal", "portal_local", "key", "potion", "gold", "trigger", "player_spawn", "message"]
 static var CHEST_REWARDS: Array = LockCatalog.LOCK_IDS + ["potion", "gold"] + ItemCatalog.consumable_ids() + ItemCatalog.equipment_ids()
 
 var map_id: String = ""
@@ -84,8 +85,20 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 	# Не ставим монстра или сундук внутрь стены.
 	if get_terrain(x, y) == "wall":
 		return false
+	if kind == "portal_local":
+		var color: String = str(options.get("color", ""))
+		if color not in PORTAL_COLORS:
+			return false
+		var same_color_count: int = 0
+		for entity in entities:
+			if str(entity.get("type", "")) == "portal_local" and str(entity.get("properties", {}).get("color", "")) == color:
+				same_color_count += 1
+		if same_color_count >= 2:
+			return false
 	for entity in entities:
-		if entity["type"] == kind and int(entity["x"]) == x and int(entity["y"]) == y:
+		if int(entity["x"]) != x or int(entity["y"]) != y:
+			continue
+		if entity["type"] == kind or (kind in ["portal", "portal_local", "stairs_down"] and entity["type"] in ["portal", "portal_local", "stairs_down"]):
 			return false
 	# На всей карте допускается единственная стартовая позиция героя.
 	if kind == "player_spawn":
@@ -100,6 +113,8 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		properties = {"contents": [], "loot_mode": "random"}
 	elif kind in ["stairs_down", "portal"]:
 		properties = {"target_map_id": ""}
+	elif kind == "portal_local":
+		properties = {"color": str(options["color"])}
 	elif kind == "monster":
 		var monster_id: String = str(options.get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
 		if not MonsterCatalog.has(monster_id):
@@ -432,8 +447,29 @@ func set_door_lock(door_id: String, lock_id: String) -> bool:
 	return false
 
 
+func local_portal_destination(portal_id: String) -> Vector2i:
+	var source: Dictionary = {}
+	for entity in entities:
+		if str(entity.get("id", "")) == portal_id and str(entity.get("type", "")) == "portal_local":
+			source = entity
+			break
+	if source.is_empty():
+		return Vector2i(-1, -1)
+	var color: String = str(source.get("properties", {}).get("color", ""))
+	if color not in PORTAL_COLORS:
+		return Vector2i(-1, -1)
+	var paired: Array[Dictionary] = []
+	for entity in entities:
+		if str(entity.get("type", "")) == "portal_local" and str(entity.get("properties", {}).get("color", "")) == color:
+			paired.append(entity)
+	if paired.size() != 2:
+		return Vector2i(-1, -1)
+	var target: Dictionary = paired[1] if str(paired[0].get("id", "")) == portal_id else paired[0]
+	return Vector2i(int(target["x"]), int(target["y"]))
+
+
 static func is_exit(entity: Dictionary) -> bool:
-	return str(entity.get("type", "")) in ["stairs_down", "portal"]
+	return str(entity.get("type", "")) in ["stairs_down", "stairs_up", "portal"]
 
 
 static func exit_target_id(entity: Dictionary) -> String:
@@ -561,7 +597,7 @@ func move_existing(kind: String, entity_id: String, source: Vector2i, target: Ve
 	if moving.is_empty():
 		return false
 	for entry in entities_at(target.x, target.y):
-		if str(entry["type"]) == kind:
+		if str(entry["type"]) == kind or (kind in ["portal", "portal_local", "stairs_down"] and str(entry["type"]) in ["portal", "portal_local", "stairs_down"]):
 			return false
 	# Послание, привязанное к двери, монстру или сундуку, перемещается вместе с объектом.
 	var bound_message: Dictionary = {}

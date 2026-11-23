@@ -30,3 +30,6 @@ test_editor_exit_linking.gd
 
 test_stage5_floor_states.gd
 test_stage5_party_snapshot.gd
+
+test_stage5_portals_and_return.gd
+test_stage5_progress_snapshot.gd

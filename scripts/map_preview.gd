@@ -9,7 +9,7 @@ const PREVIEW_WALL: Texture2D = preload("res://assets/stone_wall.png")
 const PREVIEW_COLORS := {
     "door": Color("#c58a49"), "chest": Color("#edc06c"),
     "monster": Color("#e65d73"), "trap": Color("#e07b8f"), "key": Color("#ffe8a3"),
-    "potion": Color("#b89bff"), "gold": Color("#f4ce67"), "stairs_down": Color("#5bd2e7"), "portal": Color("#977eff"),
+    "potion": Color("#b89bff"), "gold": Color("#f4ce67"), "stairs_down": Color("#5bd2e7"), "portal": Color("#977eff"), "portal_local": Color("#977eff"),
     "trigger": Color("#ce90e5"), "player_spawn": Color("#70f2aa"),
     "message": Color("#ffdd93")
 }

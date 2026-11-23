@@ -96,7 +96,7 @@ func _draw() -> void:
 						mark = Color("#c782c8")
 					"stairs_down":
 						mark = Color("#6bca9d")
-					"portal":
+					"portal", "portal_local":
 						mark = Color("#977eff")
 				if mark.a > 0.0:
 					draw_rect(rect.grow(-CELL_SIZE * 0.26), mark)
@@ -152,7 +152,7 @@ func _draw_minimap_overlay() -> void:
 						mark = Color(1.0, 0.77, 0.39, 0.90)
 					"stairs_down":
 						mark = Color(0.45, 1.0, 0.70, 0.95)
-					"portal":
+					"portal", "portal_local":
 						mark = Color(0.60, 0.47, 1.0, 0.95)
 				if mark.a > 0.0:
 					draw_circle(top_left + Vector2.ONE * cell_pixels * 0.5, 2.8, mark)

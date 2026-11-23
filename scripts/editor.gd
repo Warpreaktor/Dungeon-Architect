@@ -85,6 +85,8 @@ var _startup_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
 var _startup_game_session: GameSession
 var _progress_save_store: ProgressSaveStore = ProgressSaveStore.new()
 var _progress_maps_directory: String = SavedMapLibrary.DIRECTORY
+var _editor_maps_directory: String = SavedMapLibrary.DIRECTORY
+var _campaign_library: CampaignLibrary = CampaignLibrary.new()
 var _test_party_ids: Array[String] = [HeroCatalog.DEFAULT_HERO_ID]
 var _editor_header: PanelContainer
 var _floating_console: FloatingDebugConsole
@@ -155,6 +157,9 @@ var _library_actions: HBoxContainer
 var _stairs_reward_button: Button
 var _unlink_stairs_button: Button
 var _linking_exit_id: String = ""
+var _campaign_creation_dialog: ConfirmationDialog
+var _campaign_name_input: LineEdit
+var _pending_campaign_destination_path: String = ""
 var _pending_next_map: DungeonMap
 
 var _preview_textures: Array[Texture2D] = []
@@ -681,6 +686,7 @@ func _create_dialogs() -> void:
 	_load_dialog.title = "Библиотека карт"
 	_load_dialog.ok_button_text = "Загрузить"
 	_load_dialog.confirmed.connect(_load_selected)
+	_load_dialog.canceled.connect(_cancel_exit_link_selection)
 	add_child(_load_dialog)
 	var library_layout := VBoxContainer.new()
 	library_layout.custom_minimum_size = Vector2(620, 370)
@@ -712,6 +718,22 @@ func _create_dialogs() -> void:
 	_stairs_reward_button = _button("Награда", "Настроить награду за прохождение", _edit_stairs_reward)
 	_stairs_reward_button.hide()
 	library_layout.add_child(_stairs_reward_button)
+
+	_campaign_creation_dialog = ConfirmationDialog.new()
+	_campaign_creation_dialog.title = "Создание кампании"
+	_campaign_creation_dialog.ok_button_text = "Создать"
+	_campaign_creation_dialog.dialog_hide_on_ok = false
+	_campaign_creation_dialog.confirmed.connect(_confirm_campaign_creation)
+	_campaign_creation_dialog.canceled.connect(_cancel_campaign_creation)
+	add_child(_campaign_creation_dialog)
+	var campaign_form := VBoxContainer.new()
+	campaign_form.custom_minimum_size.x = 380
+	_campaign_creation_dialog.add_child(campaign_form)
+	campaign_form.add_child(_label("Название кампании", 15, Color("#d5e0e7")))
+	_campaign_name_input = LineEdit.new()
+	_campaign_name_input.placeholder_text = "Название"
+	_campaign_name_input.custom_minimum_size.y = 44
+	campaign_form.add_child(_campaign_name_input)
 
 	_rename_dialog = ConfirmationDialog.new()
 	_rename_dialog.title = "Переименование карты"
@@ -1272,6 +1294,7 @@ func _on_exit_tapped(entity_id: String) -> void:
 	if selected_exit.is_empty():
 		return
 	_linking_exit_id = entity_id
+	_pending_campaign_destination_path = ""
 	_refresh_library()
 	_load_dialog.title = "Переход на карту"
 	_load_dialog.ok_button_text = "Связать"
@@ -1310,13 +1333,89 @@ func _link_selected_exit() -> void:
 	if path.is_empty():
 		return
 	var destination: DungeonMap = _read_map(path)
+	if not _valid_exit_destination(destination):
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
+	if not _campaign_library.last_error.is_empty():
+		_set_status(_campaign_library.last_error)
+		return
+	if campaign == null:
+		_pending_campaign_destination_path = path
+		_campaign_name_input.text = map_data.display_name
+		_load_dialog.hide()
+		_campaign_creation_dialog.popup_centered_clamped(Vector2i(490, 220), 0.9)
+		_campaign_name_input.grab_focus()
+		_campaign_name_input.select_all()
+		return
+	_apply_exit_link(destination)
+
+
+func _valid_exit_destination(destination: DungeonMap) -> bool:
 	if destination == null or destination.map_id.is_empty():
 		_set_status("Не удалось прочитать выбранное подземелье.")
-		return
-	var spawn: Vector2i = destination.find_entity_position("player_spawn")
-	if not DungeonMap.valid_arrival_cell(destination, spawn):
+		return false
+	if not DungeonMap.valid_arrival_cell(destination, destination.find_entity_position("player_spawn")):
 		_set_status("На целевой карте нужна свободная точка старта героя.")
+		return false
+	return true
+
+
+func _confirm_campaign_creation() -> void:
+	if map_data == null or _pending_campaign_destination_path.is_empty() or _linking_exit_id.is_empty() or is_play_mode:
+		_cancel_campaign_creation()
 		return
+	var exit_exists: bool = false
+	for entity in map_data.entities:
+		if str(entity.get("id", "")) == _linking_exit_id and DungeonMap.is_exit(entity):
+			exit_exists = true
+			break
+	if not exit_exists:
+		_cancel_campaign_creation()
+		return
+	var name: String = _campaign_name_input.text.strip_edges()
+	if name.is_empty():
+		_set_status("Укажи название кампании.")
+		return
+	var destination: DungeonMap = _read_map(_pending_campaign_destination_path)
+	if not _valid_exit_destination(destination):
+		_cancel_campaign_creation()
+		return
+	_save_internal()
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	if is_dirty or not maps.has(map_data.map_id):
+		_set_status("Сначала необходимо сохранить текущую карту.")
+		return
+	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
+	if not _campaign_library.last_error.is_empty():
+		_set_status(_campaign_library.last_error)
+		return
+	if campaign == null:
+		campaign = _campaign_library.create_campaign(name, map_data.map_id, maps)
+		if campaign == null:
+			_set_status(_campaign_library.last_error)
+			return
+	var selected_path: String = _pending_campaign_destination_path
+	var exit_id: String = _linking_exit_id
+	_pending_campaign_destination_path = ""
+	_campaign_creation_dialog.hide()
+	_on_exit_tapped(exit_id)
+	var index: int = _load_paths.find(selected_path)
+	if index >= 0:
+		_load_list.select(index)
+
+
+func _cancel_campaign_creation() -> void:
+	_pending_campaign_destination_path = ""
+	_linking_exit_id = ""
+
+
+func _cancel_exit_link_selection() -> void:
+	_pending_campaign_destination_path = ""
+	_linking_exit_id = ""
+
+
+func _apply_exit_link(destination: DungeonMap) -> void:
 	var before: Dictionary = _canvas.capture_edit_state()
 	if map_data.set_exit_target(_linking_exit_id, destination.map_id):
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
@@ -1605,7 +1704,7 @@ func _new_map() -> void:
 
 
 func _maps_dir() -> String:
-	return "user://maps"
+	return _editor_maps_directory
 
 
 ## На устройстве запоминаем только ID сохранённой карты, не игровые данные.
@@ -1676,6 +1775,7 @@ func _show_load() -> void:
 	if is_play_mode:
 		return
 	_linking_exit_id = ""
+	_pending_campaign_destination_path = ""
 	_load_dialog.title = "Библиотека карт"
 	_load_dialog.ok_button_text = "Загрузить"
 	_library_actions.visible = true

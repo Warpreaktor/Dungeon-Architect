@@ -62,6 +62,7 @@ func open_for(standalone: bool, open_map: bool = false, console_open: bool = fal
 	_save_button.visible = standalone
 	_save_button.disabled = not can_save
 	_save_error.hide()
+	_open_map_button.visible = not standalone
 	_open_map_button.set_pressed_no_signal(open_map)
 	_console_button.set_pressed_no_signal(console_open)
 	_settings_popup.hide()

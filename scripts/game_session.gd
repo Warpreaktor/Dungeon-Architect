@@ -39,6 +39,7 @@ var last_event_message: String = ""
 var encounter_monster_id: String = ""
 var encounter_target := Vector2i(-1, -1)
 var debug_open_map: bool = false # Только для теста редактора, никогда не сериализуется.
+var is_editor_test: bool = false
 var _revealed_before_debug_open_map: Array = []
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
@@ -837,6 +838,10 @@ func enter_map(next_map: DungeonMap) -> bool:
 	if map_data != null and map_data.map_id == next_map.map_id:
 		saved = _capture_floor_state()
 		destination = map_data
+	elif is_editor_test and saved.is_empty():
+		destination = DungeonMap.from_dict(next_map.to_dict().duplicate(true))
+		if destination == null:
+			return false
 	var spawn: Vector2i = destination.find_entity_position("player_spawn")
 	if not DungeonMap.valid_arrival_cell(destination, spawn):
 		return false
@@ -1568,7 +1573,7 @@ func _claim_exit_reward(stairs: Dictionary) -> void:
 
 
 func progress_snapshot() -> Dictionary:
-	if map_data == null or has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_door_trap() or is_completed:
+	if is_editor_test or map_data == null or has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_door_trap() or is_completed:
 		return {}
 	var party_data: Dictionary = party_state_snapshot()
 	if party_data.is_empty():

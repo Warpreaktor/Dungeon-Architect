@@ -1653,7 +1653,7 @@ func _write_map(path: String) -> bool:
 
 
 func _save_internal() -> void:
-	if is_play_mode:
+	if is_play_mode or standalone_game:
 		return
 	if not _ensure_maps_dir():
 		_set_status("Не удалось создать папку карт")
@@ -1882,6 +1882,8 @@ func _request_return_to_menu() -> void:
 	if standalone_game:
 		_stop_play_mode()
 	else:
+		if is_play_mode:
+			_stop_play_mode(false)
 		_confirm_if_dirty(_emit_menu_requested)
 
 
@@ -1966,7 +1968,7 @@ func _refresh_map_overlays() -> void:
 
 
 func _set_test_open_map(enabled: bool) -> void:
-	if game_session == null or not is_play_mode:
+	if standalone_game or game_session == null or not is_play_mode:
 		return
 	game_session.set_debug_open_map(enabled)
 	_canvas.queue_redraw()
@@ -1991,7 +1993,10 @@ func _start_play_mode() -> void:
 	if standalone_game:
 		session = _startup_game_session if _startup_game_session != null else GameSession.start_for(map_data, _startup_hero_id, false)
 	else:
-		session = GameSession.start_for_party(map_data, _test_party_ids, false)
+		var test_map: DungeonMap = DungeonMap.from_dict(map_data.to_dict().duplicate(true))
+		session = GameSession.start_for_party(test_map, _test_party_ids, false)
+		if session != null:
+			session.is_editor_test = true
 	if session == null:
 		_set_status("Нельзя начать игру: на карте нет доступной точки старта героя." if standalone_game else "Нельзя начать тест: поставь на карте точку старта героя.")
 		return

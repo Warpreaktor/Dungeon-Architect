@@ -29,3 +29,4 @@ test_stage5_exit_links.gd
 test_editor_exit_linking.gd
 
 test_stage5_floor_states.gd
+test_stage5_party_snapshot.gd

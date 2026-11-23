@@ -662,6 +662,168 @@ func visited_floor_snapshots() -> Dictionary:
 	return snapshots
 
 
+func party_state_snapshot() -> Dictionary:
+	var active: Array[Dictionary] = []
+	for member in party:
+		active.append(member.to_snapshot())
+	var fallen: Array[Dictionary] = []
+	for member in fallen_heroes:
+		fallen.append(member.to_snapshot())
+	var locations: Array[Dictionary] = []
+	for location in fallen_hero_locations:
+		var index: int = fallen_heroes.find(location.get("hero"))
+		if index < 0:
+			return {}
+		var cell: Vector2i = location.get("position", Vector2i(-1, -1))
+		locations.append({
+			"fallen_index": index,
+			"map_id": str(location.get("map_id", "")),
+			"x": cell.x,
+			"y": cell.y,
+			"equipment_at_death": location.get("equipment_at_death", {}).duplicate(true),
+			"shield_durabilities_at_death": location.get("shield_durabilities_at_death", {}).duplicate(true),
+			"gold_at_death": int(location.get("gold_at_death", 0))
+		})
+	return {
+		"active_heroes": active,
+		"fallen_heroes": fallen,
+		"fallen_locations": locations,
+		"hero_index": party.find(hero),
+		"inventory_member_index": party.find(inventory_member),
+		"carried_items": carried_items.duplicate(true),
+		"inventory_slots": inventory_slot_ids(),
+		"steps": steps,
+		"random_seed": str(trap_random.seed),
+		"random_state": str(trap_random.state)
+	}
+
+
+func restore_party_state(snapshot: Dictionary) -> bool:
+	if not (snapshot.get("active_heroes") is Array) or not (snapshot.get("fallen_heroes") is Array):
+		return false
+	if not (snapshot.get("fallen_locations") is Array) or not (snapshot.get("carried_items") is Dictionary):
+		return false
+	if not (snapshot.get("inventory_slots") is Array):
+		return false
+	var active_data: Array = snapshot["active_heroes"]
+	var fallen_data: Array = snapshot["fallen_heroes"]
+	if active_data.size() > MAX_PARTY_SIZE or (active_data.is_empty() and fallen_data.is_empty()):
+		return false
+	var restored_party: Array[HeroState] = []
+	for active_snapshot in active_data:
+		if not (active_snapshot is Dictionary):
+			return false
+		var active_member: HeroState = HeroState.from_snapshot(active_snapshot)
+		if active_member == null or active_member.health <= 0:
+			return false
+		restored_party.append(active_member)
+	var restored_fallen: Array[HeroState] = []
+	for fallen_snapshot in fallen_data:
+		if not (fallen_snapshot is Dictionary):
+			return false
+		var fallen_member: HeroState = HeroState.from_snapshot(fallen_snapshot)
+		if fallen_member == null or fallen_member.health != 0:
+			return false
+		restored_fallen.append(fallen_member)
+	var hero_index: int = int(snapshot.get("hero_index", -2))
+	var inventory_index: int = int(snapshot.get("inventory_member_index", -2))
+	if restored_party.is_empty():
+		if hero_index != -1:
+			return false
+	elif hero_index < 0 or hero_index >= restored_party.size():
+		return false
+	if inventory_index < -1 or inventory_index >= restored_party.size():
+		return false
+	var locations_data: Array = snapshot["fallen_locations"]
+	if locations_data.size() != restored_fallen.size():
+		return false
+	var restored_locations: Array[Dictionary] = []
+	var seen_fallen: Dictionary = {}
+	for location in locations_data:
+		if not (location is Dictionary):
+			return false
+		var index: int = int(location.get("fallen_index", -1))
+		if index < 0 or index >= restored_fallen.size() or seen_fallen.has(index):
+			return false
+		if str(location.get("map_id", "")).is_empty():
+			return false
+		if not (location.get("equipment_at_death") is Dictionary) or not (location.get("shield_durabilities_at_death") is Dictionary):
+			return false
+		seen_fallen[index] = true
+		restored_locations.append({
+			"hero": restored_fallen[index],
+			"map_id": str(location["map_id"]),
+			"position": Vector2i(int(location.get("x", -1)), int(location.get("y", -1))),
+			"equipment_at_death": location["equipment_at_death"].duplicate(true),
+			"shield_durabilities_at_death": location["shield_durabilities_at_death"].duplicate(true),
+			"gold_at_death": int(location.get("gold_at_death", 0))
+		})
+	var new_carried: Dictionary = snapshot["carried_items"]
+	var new_slots: Array = snapshot["inventory_slots"]
+	if new_slots.size() != INVENTORY_SLOT_COUNT or not _valid_snapshot_inventory(new_carried, new_slots, restored_party):
+		return false
+	if not (snapshot.get("steps") is int) and not (snapshot.get("steps") is float):
+		return false
+	var restored_steps: int = int(snapshot["steps"])
+	if restored_steps < 0 or float(snapshot["steps"]) != float(restored_steps):
+		return false
+	var seed_text: String = str(snapshot.get("random_seed", ""))
+	var state_text: String = str(snapshot.get("random_state", ""))
+	if not seed_text.is_valid_int() or not state_text.is_valid_int():
+		return false
+	var restored_slots: Array[String] = []
+	for item_id in new_slots:
+		restored_slots.append(str(item_id))
+	party = restored_party
+	fallen_heroes = restored_fallen
+	fallen_hero_locations = restored_locations
+	hero = restored_party[hero_index] if hero_index >= 0 else null
+	inventory_member = restored_party[inventory_index] if inventory_index >= 0 else null
+	carried_items = new_carried.duplicate(true)
+	_inventory_order = restored_slots
+	steps = restored_steps
+	keys = int(carried_items.get("key", 0))
+	potions = int(carried_items.get("potion", 0))
+	trap_random.seed = seed_text.to_int()
+	trap_random.state = state_text.to_int()
+	_casualty_events.clear()
+	_party_damage_events.clear()
+	return true
+
+
+func _valid_snapshot_inventory(counts: Dictionary, bag: Array, members: Array[HeroState]) -> bool:
+	var seen: Dictionary = {}
+	for count_item_id in counts:
+		if typeof(count_item_id) != TYPE_STRING or ItemCatalog.get_item(str(count_item_id)) == null:
+			return false
+		if typeof(counts[count_item_id]) not in [TYPE_INT, TYPE_FLOAT] or int(counts[count_item_id]) < 0 or float(counts[count_item_id]) != float(int(counts[count_item_id])):
+			return false
+	for bag_entry in bag:
+		if typeof(bag_entry) != TYPE_STRING:
+			return false
+		var bag_item_id: String = str(bag_entry)
+		if bag_item_id.is_empty():
+			continue
+		var item: ItemDefinition = ItemCatalog.get_item(bag_item_id)
+		if item == null or int(counts.get(bag_item_id, 0)) <= 0:
+			return false
+		if item.stackable and seen.has(bag_item_id):
+			return false
+		seen[bag_item_id] = int(seen.get(bag_item_id, 0)) + (int(counts[bag_item_id]) if item.stackable else 1)
+	for member in members:
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			var equipped_item_id: String = _member_equipment_id(member, slot_id)
+			if equipped_item_id.is_empty():
+				continue
+			if not EquipmentSlotRules.accepts(slot_id, ItemCatalog.get_item(equipped_item_id)):
+				return false
+			seen[equipped_item_id] = int(seen.get(equipped_item_id, 0)) + 1
+	for total_item_id in counts:
+		if int(seen.get(total_item_id, 0)) != int(counts[total_item_id]):
+			return false
+	return true
+
+
 func enter_map(next_map: DungeonMap) -> bool:
 	if is_party_defeated() or next_map == null or next_map.map_id.is_empty():
 		return false
@@ -1085,7 +1247,7 @@ func open_pending_chest() -> bool:
 func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: int, quantities: Dictionary = {}) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
 	if random_mode:
-		rewards.append(ItemCatalog.roll_loot())
+		rewards.append(ItemCatalog.roll_loot(trap_random))
 	else:
 		for item_id in contents:
 			var item: ItemDefinition = ItemCatalog.get_item(item_id)

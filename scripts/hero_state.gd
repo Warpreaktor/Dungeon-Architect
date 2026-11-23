@@ -404,3 +404,127 @@ func apply_battle_result(snapshot: HeroState) -> void:
 	overworld_statuses = snapshot.overworld_statuses.duplicate(true)
 	reset_exploration_phase()
 	_recalculate_equipment_stats()
+
+func to_snapshot() -> Dictionary:
+	return {
+		"hero_id": definition.hero_id,
+		"max_health": max_health,
+		"health": health,
+		"strength": strength,
+		"agility": agility,
+		"base_defense": base_defense,
+		"gold": gold,
+		"learned_ability_ids": learned_ability_ids.duplicate(),
+		"saved_action_slots": saved_action_slots.duplicate(),
+		"bonus_action_slots": bonus_action_slots,
+		"equipped_weapon_id": equipped_weapon_id,
+		"equipped_shield_id": equipped_shield_id,
+		"equipped_accessories": equipped_accessories.duplicate(true),
+		"shield_durabilities": shield_durabilities.duplicate(true),
+		"last_shield_broken": last_shield_broken,
+		"strength_bonus": strength_bonus,
+		"strength_phases": strength_phases,
+		"vitality_percent": vitality_percent,
+		"vitality_phases": vitality_phases,
+		"vision_bonus": vision_bonus,
+		"vision_phases": vision_phases,
+		"overworld_statuses": overworld_statuses.duplicate(true),
+		"potion_phase_progress": _potion_phase_progress
+	}
+
+
+static func from_snapshot(data: Dictionary) -> HeroState:
+	var hero_id: String = str(data.get("hero_id", ""))
+	if not HeroCatalog.has(hero_id):
+		return null
+	var required_numbers: Array[String] = [
+		"max_health", "health", "strength", "agility", "base_defense", "gold",
+		"bonus_action_slots", "strength_bonus", "strength_phases", "vitality_percent",
+		"vitality_phases", "vision_bonus", "vision_phases", "potion_phase_progress"
+	]
+	for key in required_numbers:
+		if not data.has(key) or typeof(data[key]) not in [TYPE_INT, TYPE_FLOAT]:
+			return null
+		if int(data[key]) != float(data[key]):
+			return null
+	if int(data["max_health"]) <= 0 or int(data["health"]) < 0 or int(data["health"]) > int(data["max_health"]):
+		return null
+	if int(data["gold"]) < 0 or int(data["strength_phases"]) < 0 or int(data["vitality_phases"]) < 0 or int(data["vision_phases"]) < 0:
+		return null
+	if int(data["bonus_action_slots"]) < 0 or int(data["potion_phase_progress"]) < 0:
+		return null
+	if not (data.get("learned_ability_ids") is Array) or not (data.get("saved_action_slots") is Array):
+		return null
+	if not (data.get("equipped_accessories") is Dictionary) or not (data.get("shield_durabilities") is Dictionary):
+		return null
+	if not (data.get("overworld_statuses") is Dictionary):
+		return null
+	var result := HeroState.new(HeroCatalog.get_hero(hero_id))
+	result.max_health = int(data["max_health"])
+	result.health = int(data["health"])
+	result.strength = int(data["strength"])
+	result.agility = int(data["agility"])
+	result.base_defense = int(data["base_defense"])
+	result.gold = int(data["gold"])
+	result.bonus_action_slots = int(data["bonus_action_slots"])
+	var learned: Array[String] = []
+	for learned_id_raw in data["learned_ability_ids"]:
+		if typeof(learned_id_raw) != TYPE_STRING or str(learned_id_raw).is_empty() or AbilityCatalog.get_ability(str(learned_id_raw)) == null or learned.has(str(learned_id_raw)):
+			return null
+		learned.append(str(learned_id_raw))
+	result.learned_ability_ids = learned
+	var prepared: Array[String] = []
+	for action_id_raw in data["saved_action_slots"]:
+		if typeof(action_id_raw) != TYPE_STRING:
+			return null
+		if not str(action_id_raw).is_empty() and AbilityCatalog.get_ability(str(action_id_raw)) == null:
+			return null
+		prepared.append(str(action_id_raw))
+	if prepared.size() > result.action_slot_capacity():
+		return null
+	result.saved_action_slots = prepared
+	result.equipped_weapon_id = str(data.get("equipped_weapon_id", ""))
+	result.equipped_shield_id = str(data.get("equipped_shield_id", ""))
+	for slot_id in ["main_hand", "off_hand"]:
+		var equipped_id: String = result.equipped_weapon_id if slot_id == "main_hand" else result.equipped_shield_id
+		if not equipped_id.is_empty() and not EquipmentSlotRules.accepts(slot_id, ItemCatalog.get_item(equipped_id)):
+			return null
+	var weapon: ItemDefinition = ItemCatalog.get_item(result.equipped_weapon_id)
+	if weapon != null and weapon.two_handed and not result.equipped_shield_id.is_empty():
+		return null
+	var accessories: Dictionary = data["equipped_accessories"]
+	for raw_slot in accessories:
+		var slot_id: String = str(raw_slot)
+		var accessory_item_id: String = str(accessories[raw_slot])
+		if slot_id not in EquipmentSlotRules.SLOT_IDS or slot_id in ["main_hand", "off_hand"]:
+			return null
+		if not accessory_item_id.is_empty() and not EquipmentSlotRules.accepts(slot_id, ItemCatalog.get_item(accessory_item_id)):
+			return null
+	result.equipped_accessories = accessories.duplicate(true)
+	var durabilities: Dictionary = data["shield_durabilities"]
+	for durability_id in durabilities:
+		var shield_item_id: String = str(durability_id)
+		var item: ItemDefinition = ItemCatalog.get_item(shield_item_id)
+		if item == null or item.equipment_slot != ItemDefinition.EquipmentSlot.SHIELD:
+			return null
+		if not (durabilities[durability_id] is Array):
+			return null
+		for durability in durabilities[durability_id]:
+			if typeof(durability) not in [TYPE_INT, TYPE_FLOAT] or int(durability) <= 0 or float(durability) != float(int(durability)):
+				return null
+	result.shield_durabilities = durabilities.duplicate(true)
+	result.last_shield_broken = str(data.get("last_shield_broken", ""))
+	result.strength_bonus = int(data["strength_bonus"])
+	result.strength_phases = int(data["strength_phases"])
+	result.vitality_percent = int(data["vitality_percent"])
+	result.vitality_phases = int(data["vitality_phases"])
+	result.vision_bonus = int(data["vision_bonus"])
+	result.vision_phases = int(data["vision_phases"])
+	var statuses: Dictionary = data["overworld_statuses"]
+	for status_id in statuses:
+		if typeof(status_id) != TYPE_STRING or not (statuses[status_id] is Dictionary):
+			return null
+	result.overworld_statuses = statuses.duplicate(true)
+	result._potion_phase_progress = int(data["potion_phase_progress"])
+	result._recalculate_equipment_stats()
+	return result

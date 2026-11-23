@@ -18,6 +18,7 @@ const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
 const WALL_TEXTURE: Texture2D = preload("res://assets/stone_wall.png")
 const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.png")
 const PORTAL_TEXTURE: Texture2D = preload("res://assets/icons/traps/void_portal.png")
+const STAIRS_DOWN_TEXTURE: Texture2D = preload("res://assets/icons/stairs_down.png")
 const DOUBLE_TAP_MS := 400
 const TAP_MOVE_LIMIT := 16.0
 const PLAY_START_ZOOM := 4.0
@@ -437,10 +438,7 @@ func _draw_entity(kind: String, origin: Vector2) -> void:
 		"portal":
 			draw_texture_rect(PORTAL_TEXTURE, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		"stairs_down":
-			draw_rect(Rect2(origin + Vector2(7, 9), Vector2(34, 31)), Color("#172d37"))
-			for i in range(4):
-				var margin := float(i) * 3.0
-				draw_rect(Rect2(origin + Vector2(10 + margin, 10 + i * 7), Vector2(28 - margin * 2, 5)), Color("#5aa7bf").darkened(float(i) * 0.13))
+			draw_texture_rect(STAIRS_DOWN_TEXTURE, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		"key":
 			draw_circle(origin + Vector2(18, 15), 7.0, Color("#ffe096"), false, 4.0)
 			draw_line(origin + Vector2(22, 20), origin + Vector2(35, 35), Color("#f3ca68"), 5.0)

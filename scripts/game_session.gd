@@ -769,7 +769,10 @@ func pending_monster_definition() -> MonsterDefinition:
 ## Победа снимает монстра только в сессии, затем повторяет вход в клетку
 ## через обычные правила дверей, сундуков и находок.
 func win_pending_encounter() -> bool:
-	if not has_pending_encounter() or hero == null or hero.health <= 0:
+	if not has_pending_encounter():
+		return false
+	record_casualties()
+	if is_party_defeated():
 		return false
 	var target: Vector2i = encounter_target
 	var defeated_id: String = encounter_monster_id

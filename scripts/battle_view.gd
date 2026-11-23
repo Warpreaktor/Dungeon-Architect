@@ -213,7 +213,7 @@ func _select_hero_view(actor_id: String) -> void:
 		return
 	_selected_hero_id = actor_id
 	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
-	if actor == null:
+	if actor == null or not actor.is_alive():
 		return
 	_hero_chain = AbilityCatalog.known_ability_ids(actor)
 	_selected_round_ability_id = ""

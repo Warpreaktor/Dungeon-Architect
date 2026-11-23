@@ -18,3 +18,5 @@ test_death_and_exit_rewards.gd
 test_party_battle_view.gd
 test_round_clash_timeline.gd
 test_door_trap_data.gd
+
+test_editor_door_crossbow.gd

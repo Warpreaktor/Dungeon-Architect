@@ -335,6 +335,8 @@ func _draw_cell(x: int, y: int) -> void:
 			_draw_entity(kind, origin)
 			if kind == "door":
 				_draw_door_lock(origin, LockCatalog.required_key(entity))
+				if mode == "edit":
+					_draw_door_trap_marker(origin, entity)
 		if mode == "edit" and DungeonMap.is_entity_hidden(entity):
 			has_hidden_entity = true
 	if has_hidden_entity:
@@ -356,6 +358,15 @@ func _draw_door_lock(origin: Vector2, lock_id: String) -> void:
 	draw_arc(origin + Vector2(24.5, 22.5), 4.0, PI, TAU, 10, tint, 2.8)
 	draw_rect(Rect2(origin + Vector2(20.5, 25), Vector2(8, 8)), tint)
 	draw_circle(origin + Vector2(24.5, 28), 1.3, Color("#24202b"))
+
+
+func _draw_door_trap_marker(origin: Vector2, door: Dictionary) -> void:
+	var trap: TrapDefinition = TrapCatalog.from_door(door)
+	if trap == null or trap.icon == null:
+		return
+	var rect := Rect2(origin + Vector2(1, 1), Vector2(22, 22))
+	draw_rect(rect.grow(1), Color("#111b28"))
+	draw_texture_rect(trap.icon, rect, false)
 
 
 func _draw_player(origin: Vector2) -> void:
@@ -575,12 +586,16 @@ func _configurable_at(cell: Vector2i) -> Dictionary:
 	if map_data == null or not map_data.contains(cell.x, cell.y):
 		return {}
 	var entities := map_data.entities_at(cell.x, cell.y)
+	var message_entity: Dictionary = {}
 	for i in range(entities.size() - 1, -1, -1):
 		var entity: Dictionary = entities[i]
 		var kind := str(entity.get("type", ""))
+		if kind == "message" and selected_tool == "hand":
+			message_entity = entity
+			continue
 		if kind in ["chest", "trigger", "message", "monster", "door", "stairs_down"] and (selected_tool == "hand" or kind == selected_tool or (kind == "monster" and selected_tool.begins_with("monster:"))):
 			return entity
-	return {}
+	return message_entity
 
 
 func _selected_tool_has_properties() -> bool:
@@ -648,7 +663,14 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 	elif selected_tool.begins_with("trap:"):
 		var trap_id: String = selected_tool.trim_prefix("trap:")
 		if TrapCatalog.has(trap_id):
-			modified = map_data.place_entity("trap", cell.x, cell.y, {"trap_id": trap_id})
+			var trap: TrapDefinition = TrapCatalog.get_trap(trap_id)
+			if trap.can_attach_to("door"):
+				for entity in map_data.entities_at(cell.x, cell.y):
+					if str(entity.get("type", "")) == "door":
+						modified = map_data.attach_door_trap(str(entity["id"]), trap_id)
+						break
+			elif trap.can_attach_to("floor"):
+				modified = map_data.place_entity("trap", cell.x, cell.y, {"trap_id": trap_id})
 	elif selected_tool not in ["key", "potion", "gold", "sword"]:
 		# Подбираемые вещи появляются только через источники добычи (пока сундуки).
 		modified = map_data.place_entity(selected_tool, cell.x, cell.y)

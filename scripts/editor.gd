@@ -453,16 +453,21 @@ func _build_interface() -> void:
 
 	palette.add_child(HSeparator.new())
 	palette.add_child(_label("ЛОВУШКИ", 14, Color("#e8c58a")))
-	var trap_tools := _tool_grid()
-	palette.add_child(trap_tools)
-	for trap_id in TrapCatalog.list_ids("floor"):
-		var trap: TrapDefinition = TrapCatalog.get_trap(str(trap_id))
-		_add_tool_button(trap_tools, {
-			"id": "trap:" + trap.trap_id,
-			"label": trap.display_name,
-			"hint": trap.get_description() if not trap.get_description().is_empty() else "Ловушка: %s" % trap.display_name,
-			"icon": trap.icon
-		})
+	for placement in ["floor", "door"]:
+		var trap_ids: Array[String] = TrapCatalog.list_ids(placement)
+		if trap_ids.is_empty():
+			continue
+		palette.add_child(_label("НАПОЛЬНЫЕ" if placement == "floor" else "ДВЕРНЫЕ", 12, Color("#b9c9d8")))
+		var trap_tools := _tool_grid()
+		palette.add_child(trap_tools)
+		for trap_id in trap_ids:
+			var trap: TrapDefinition = TrapCatalog.get_trap(str(trap_id))
+			_add_tool_button(trap_tools, {
+				"id": "trap:" + trap.trap_id,
+				"label": trap.display_name,
+				"hint": trap.get_description() if not trap.get_description().is_empty() else "Ловушка: %s" % trap.display_name,
+				"icon": trap.icon
+			})
 
 	# Перестановка дочернего Control в HBoxContainer меняет порядок панелей
 	# без переподключения сигналов и пересоздания палитры.
@@ -510,7 +515,7 @@ func _create_dialogs() -> void:
 	_monster_loot_popup.monster_configuration_changed.connect(_on_monster_configuration_changed)
 	add_child(_monster_loot_popup)
 	_door_popup = DOOR_PROPERTIES_SCENE.instantiate() as DoorPropertiesPopup
-	_door_popup.lock_changed.connect(_on_door_lock_changed)
+	_door_popup.configuration_changed.connect(_on_door_configuration_changed)
 	add_child(_door_popup)
 	_trigger_popup = TRIGGER_PROPERTIES_SCENE.instantiate() as TriggerPropertiesPopup
 	_trigger_popup.event_id_changed.connect(_on_trigger_event_id_changed)
@@ -1309,16 +1314,22 @@ func _on_door_tapped(door_id: String) -> void:
 	_canvas.finish_edit_stroke()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == door_id and str(entity.get("type", "")) == "door":
-			_door_popup.configure(door_id, LockCatalog.required_key(entity))
-			_door_popup.popup_centered_clamped(Vector2i(410, 215), 0.9)
+			var attachment: Dictionary = entity.get("properties", {}).get("trap", {})
+			_door_popup.configure(door_id, LockCatalog.required_key(entity), DungeonMap.door_trap_id(entity), str(attachment.get("message", "")))
+			_door_popup.popup_centered_clamped(Vector2i(510, 460), 0.9)
 			return
 
 
-func _on_door_lock_changed(door_id: String, lock_id: String) -> void:
+func _on_door_configuration_changed(door_id: String, lock_id: String, trap_message: String, remove_trap: bool) -> void:
 	if is_play_mode:
 		return
 	var before := _canvas.capture_edit_state()
-	if map_data.set_door_lock(door_id, lock_id):
+	var changed: bool = map_data.set_door_lock(door_id, lock_id)
+	if remove_trap:
+		changed = map_data.remove_door_trap(door_id) or changed
+	else:
+		changed = map_data.set_door_trap_message(door_id, trap_message) or changed
+	if changed:
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()

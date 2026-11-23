@@ -3,5 +3,5 @@
 [ext_resource type="Script" path="res://scripts/door_properties_popup.gd" id="1_script"]
 
 [node name="DoorPropertiesPopup" type="PopupPanel"]
-size = Vector2i(410, 215)
+size = Vector2i(510, 460)
 script = ExtResource("1_script")

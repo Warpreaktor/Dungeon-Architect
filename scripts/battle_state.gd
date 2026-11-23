@@ -140,7 +140,7 @@ func run_round_turn(selected_target_id: String = "") -> Dictionary:
 	if not round_combat_active or is_victory or is_defeat:
 		return {"success": false, "reason": "Бой не активен", "events": []}
 	var start_event: int = events.size()
-	if round_order.is_empty() or round_cursor >= round_order.size():
+	if round_order.is_empty() or next_round_actor_id().is_empty():
 		_open_round()
 	while round_cursor < round_order.size():
 		var actor_id: String = round_order[round_cursor]
@@ -148,6 +148,8 @@ func run_round_turn(selected_target_id: String = "") -> Dictionary:
 		var actor: BattleParticipant = get_participant(actor_id)
 		if actor == null or not actor.is_alive():
 			continue
+		if actor_id in enemy_ids() and actor.action_cursor == 0:
+			_prepare_round_enemy(actor_id)
 		var step: Dictionary = BattleChainPlanner.next_step(actor.action_chain, actor.action_cursor)
 		var tick: int = round_turn_count + 1
 		round_turn_count = tick
@@ -163,7 +165,14 @@ func run_round_turn(selected_target_id: String = "") -> Dictionary:
 				"ability_id": ability_id, "slot_index": int(step["slot_index"]), "tick": tick})
 			var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
 			var context: BattleContext = create_context()
-			var target_id: String = selected_target_id if actor_id in hero_ids() and not selected_target_id.is_empty() else context.choose_target_id(actor_id, ability)
+			var target_id: String = ""
+			if actor_id in hero_ids() and not selected_target_id.is_empty():
+				target_id = selected_target_id
+			elif ability != null and ability.validation_error().is_empty() and ability.unavailable_reason(actor).is_empty() and AbilityCatalog.knows_ability(actor, ability_id):
+				target_id = context.choose_target_id(actor_id, ability)
+			if actor_id in enemy_ids() and not target_id.is_empty():
+				events.append({"type": "enemy_target_selected", "actor_id": actor_id,
+					"target_id": target_id, "ability_id": ability_id, "round": round_number, "tick": tick})
 			var outcome: Dictionary = execute_ability(actor_id, target_id, ability_id)
 			if not bool(outcome.get("success", false)):
 				events.append({"type": "failed", "actor_id": actor_id, "ability_id": ability_id,
@@ -183,6 +192,32 @@ func run_round_turn(selected_target_id: String = "") -> Dictionary:
 			"round_finished": round_finished, "finished": is_victory or is_defeat,
 			"events": events.slice(start_event)}
 	return {"success": false, "reason": "Нет живых участников", "events": events.slice(start_event)}
+
+
+func _prepare_round_enemy(actor_id: String) -> void:
+	var actor: BattleParticipant = get_participant(actor_id)
+	var definition: MonsterDefinition = enemy_definition if actor_id == enemy_id else support_enemy_definition
+	if actor == null or definition == null or not actor.is_alive() or definition.ai_profiles.is_empty():
+		return
+	var previous_id: String = current_enemy_profile_id if actor_id == enemy_id else support_profile_id
+	var profile: MonsterTacticProfile = MonsterAiPlanner.choose_profile(definition, actor, previous_id, rng)
+	var profile_id: String = profile.profile_id if profile != null else ""
+	if profile_id == previous_id and (profile == null or not definition.reconsider_tactics_each_phase):
+		return
+	var base_chain: Array[String] = initial_enemy_chain if actor_id == enemy_id else support_initial_chain
+	var planned: Array[String] = base_chain.duplicate() if profile == null else MonsterAiPlanner.planned_chain(profile, actor, rng)
+	planned = MonsterWeaponStrike.replace_default_card(definition, actor, planned)
+	if planned.is_empty():
+		return
+	if actor_id == enemy_id:
+		current_enemy_profile_id = profile_id
+	else:
+		support_profile_id = profile_id
+	if planned == actor.action_chain:
+		return
+	actor.action_chain = planned
+	events.append({"type": "enemy_chain_changed", "actor_id": actor_id,
+		"profile_id": profile_id, "chain_size": planned.size()})
 
 
 func get_participant(participant_id: String) -> BattleParticipant:

@@ -16,6 +16,7 @@ const FILE_EXPORT := 5
 const SETTINGS_MAP_PROPERTIES := 1
 const SETTINGS_TEST_HERO := 2
 const SETTINGS_CONSOLE := 3
+const SETTINGS_CAMPAIGN := 4
 const VIEW_REACHABILITY := 1
 const VIEW_GRID := 2
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
@@ -162,6 +163,24 @@ var _unlink_stairs_button: Button
 var _linking_exit_id: String = ""
 var _campaign_creation_dialog: ConfirmationDialog
 var _campaign_name_input: LineEdit
+var _campaign_dialog: AcceptDialog
+var _campaign_list: ItemList
+var _campaign_title_input: LineEdit
+var _campaign_start_choice: OptionButton
+var _campaign_available_choice: OptionButton
+var _campaign_current_id: String = ""
+var _campaign_member_paths: Array[String] = []
+var _campaign_available_ids: Array[String] = []
+var _campaign_remove_confirm: ConfirmationDialog
+var _campaign_delete_confirm: ConfirmationDialog
+var _campaign_pending_remove: String = ""
+var _legacy_campaign_dialog: ConfirmationDialog
+var _legacy_campaign_name: LineEdit
+var _legacy_campaign_destination: OptionButton
+var _legacy_campaign_members: ItemList
+var _legacy_campaign_start: OptionButton
+var _legacy_campaign_ids: Array[String] = []
+var _legacy_campaign_existing_ids: Array[String] = []
 var _pending_campaign_destination_path: String = ""
 var _pending_next_map: DungeonMap
 
@@ -281,6 +300,7 @@ func _build_interface() -> void:
 	var settings_popup := _settings_menu.get_popup()
 	settings_popup.add_icon_item(COMMAND_ICONS["inspector"], "Свойства карты", SETTINGS_MAP_PROPERTIES)
 	settings_popup.add_item("Тестовый герой", SETTINGS_TEST_HERO)
+	settings_popup.add_item("Управление кампанией", SETTINGS_CAMPAIGN)
 	settings_popup.add_check_item("Показать консоль", SETTINGS_CONSOLE)
 	settings_popup.id_pressed.connect(_on_settings_option_selected)
 	toolbar.add_child(_settings_menu)
@@ -747,6 +767,79 @@ func _create_dialogs() -> void:
 	_campaign_name_input.custom_minimum_size.y = 44
 	campaign_form.add_child(_campaign_name_input)
 
+	_campaign_dialog = AcceptDialog.new()
+	_campaign_dialog.title = "Управление кампанией"
+	_campaign_dialog.ok_button_text = "Закрыть"
+	add_child(_campaign_dialog)
+	var manager := VBoxContainer.new()
+	manager.custom_minimum_size = Vector2(570, 390)
+	_campaign_dialog.add_child(manager)
+	manager.add_child(_label("Название кампании", 15, Color("#d5e0e7")))
+	var campaign_name_row := HBoxContainer.new()
+	manager.add_child(campaign_name_row)
+	_campaign_title_input = LineEdit.new()
+	_campaign_title_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	campaign_name_row.add_child(_campaign_title_input)
+	campaign_name_row.add_child(_button("Переименовать", "", _rename_campaign))
+	manager.add_child(_label("Стартовая карта", 15, Color("#d5e0e7")))
+	var start_row := HBoxContainer.new()
+	manager.add_child(start_row)
+	_campaign_start_choice = OptionButton.new()
+	_campaign_start_choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	start_row.add_child(_campaign_start_choice)
+	start_row.add_child(_button("Назначить", "", _set_campaign_start))
+	manager.add_child(_label("Карты кампании", 15, Color("#d5e0e7")))
+	_campaign_list = ItemList.new()
+	_campaign_list.custom_minimum_size.y = 140
+	_campaign_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	manager.add_child(_campaign_list)
+	var member_actions := HBoxContainer.new()
+	manager.add_child(member_actions)
+	member_actions.add_child(_button("Открыть карту", "", _open_campaign_selected_map))
+	member_actions.add_child(_button("Исключить", "", _request_campaign_detach))
+	manager.add_child(_label("Добавить свободную карту", 15, Color("#d5e0e7")))
+	var add_row := HBoxContainer.new()
+	manager.add_child(add_row)
+	_campaign_available_choice = OptionButton.new()
+	_campaign_available_choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_row.add_child(_campaign_available_choice)
+	add_row.add_child(_button("Добавить", "", _attach_campaign_map))
+	manager.add_child(_button("Удалить кампанию", "", _request_campaign_delete))
+	_legacy_campaign_dialog = ConfirmationDialog.new()
+	_legacy_campaign_dialog.title = "Собрать карты в кампанию"
+	_legacy_campaign_dialog.ok_button_text = "Подтвердить состав"
+	_legacy_campaign_dialog.dialog_hide_on_ok = false
+	_legacy_campaign_dialog.confirmed.connect(_confirm_legacy_campaign)
+	add_child(_legacy_campaign_dialog)
+	var legacy_form := VBoxContainer.new()
+	legacy_form.custom_minimum_size = Vector2(550, 390)
+	_legacy_campaign_dialog.add_child(legacy_form)
+	legacy_form.add_child(_label("Название новой кампании", 15, Color("#d5e0e7")))
+	_legacy_campaign_name = LineEdit.new()
+	legacy_form.add_child(_legacy_campaign_name)
+	legacy_form.add_child(_label("Куда добавить карты", 15, Color("#d5e0e7")))
+	_legacy_campaign_destination = OptionButton.new()
+	legacy_form.add_child(_legacy_campaign_destination)
+	legacy_form.add_child(_label("Связанные карты (выберите участников)", 15, Color("#d5e0e7")))
+	_legacy_campaign_members = ItemList.new()
+	_legacy_campaign_members.select_mode = ItemList.SELECT_MULTI
+	_legacy_campaign_members.custom_minimum_size.y = 175
+	_legacy_campaign_members.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_legacy_campaign_members.multi_selected.connect(_on_legacy_member_selected)
+	legacy_form.add_child(_legacy_campaign_members)
+	legacy_form.add_child(_label("Стартовая карта", 15, Color("#d5e0e7")))
+	_legacy_campaign_start = OptionButton.new()
+	legacy_form.add_child(_legacy_campaign_start)
+	_legacy_campaign_destination.item_selected.connect(_on_legacy_destination_changed)
+	_campaign_remove_confirm = ConfirmationDialog.new()
+	_campaign_remove_confirm.title = "Исключить карту"
+	_campaign_remove_confirm.confirmed.connect(_confirm_campaign_detach)
+	add_child(_campaign_remove_confirm)
+	_campaign_delete_confirm = ConfirmationDialog.new()
+	_campaign_delete_confirm.title = "Удалить кампанию"
+	_campaign_delete_confirm.confirmed.connect(_confirm_campaign_delete)
+	add_child(_campaign_delete_confirm)
+
 	_rename_dialog = ConfirmationDialog.new()
 	_rename_dialog.title = "Переименование карты"
 	_rename_dialog.ok_button_text = "Переименовать"
@@ -1049,6 +1142,8 @@ func _on_settings_option_selected(id: int) -> void:
 			_refresh_stats()
 			_settings_tabs.current_tab = 0
 			_settings_dialog.popup_centered_clamped(Vector2i(490, 260))
+		SETTINGS_CAMPAIGN:
+			_open_campaign_manager()
 		SETTINGS_TEST_HERO:
 			_settings_tabs.current_tab = 1
 			_test_hero_panel.select_party(_test_party_ids)
@@ -1757,6 +1852,7 @@ func _restore_last_map() -> bool:
 		return false
 	_set_map(saved_map)
 	_set_status("Открыта последняя карта: " + saved_map.display_name)
+	_offer_legacy_campaign()
 	return true
 
 
@@ -2008,6 +2104,297 @@ func _load_from_path_confirmed(path: String) -> void:
 	if path == _maps_dir().path_join(loaded_map.map_id + ".json"):
 		_remember_last_map(loaded_map.map_id)
 	_set_status("Загружено: " + path)
+	if path == _maps_dir().path_join(loaded_map.map_id + ".json"):
+		_offer_legacy_campaign()
+
+
+func _open_campaign_manager() -> void:
+	if is_play_mode or map_data == null:
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
+	if not _campaign_library.last_error.is_empty():
+		_set_status(_campaign_library.last_error)
+		return
+	if campaign == null:
+		_open_legacy_campaign_dialog(maps)
+		return
+	_campaign_current_id = campaign.campaign_id
+	_refresh_campaign_manager()
+	_campaign_dialog.popup_centered_clamped(Vector2i(650, 630), 0.9)
+
+
+func _offer_legacy_campaign() -> void:
+	if standalone_game or is_play_mode or map_data == null:
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	if not maps.has(map_data.map_id):
+		return
+	if _campaign_library.campaign_for_map(map_data.map_id, maps) != null:
+		return
+	if not _campaign_library.last_error.is_empty():
+		_set_status(_campaign_library.last_error)
+		return
+	_open_legacy_campaign_dialog(maps)
+
+
+func _open_legacy_campaign_dialog(maps: Dictionary) -> void:
+	if map_data == null or not maps.has(map_data.map_id):
+		_set_status("Сначала сохраните карту в библиотеке.")
+		return
+	var campaigns: Dictionary = _campaign_library.load_all(maps)
+	if not _campaign_library.last_error.is_empty():
+		_set_status(_campaign_library.last_error)
+		return
+	_legacy_campaign_ids = _campaign_library.legacy_linked_maps(map_data.map_id, maps)
+	_legacy_campaign_existing_ids.clear()
+	_legacy_campaign_destination.clear()
+	_legacy_campaign_destination.add_item("Создать кампанию")
+	var sorted_campaigns: Array = campaigns.keys()
+	sorted_campaigns.sort()
+	for campaign_id in sorted_campaigns:
+		_legacy_campaign_existing_ids.append(campaign_id)
+		_legacy_campaign_destination.add_item((campaigns[campaign_id] as CampaignDefinition).display_name)
+	_legacy_campaign_name.text = map_data.display_name
+	_legacy_campaign_members.clear()
+	for map_id in _legacy_campaign_ids:
+		var owner: CampaignDefinition = null
+		for entry in campaigns.values():
+			if entry.map_ids.has(map_id):
+				owner = entry
+				break
+		var label: String = (maps[map_id] as DungeonMap).display_name
+		if owner != null:
+			label += " [%s]" % owner.display_name
+		_legacy_campaign_members.add_item(label)
+		if owner == null:
+			_legacy_campaign_members.select(_legacy_campaign_members.item_count - 1, false)
+	_on_legacy_destination_changed(0)
+	_legacy_campaign_dialog.popup_centered_clamped(Vector2i(640, 610), 0.9)
+
+
+func _on_legacy_destination_changed(_index: int) -> void:
+	_legacy_campaign_name.editable = _legacy_campaign_destination.selected == 0
+	_refresh_legacy_start_choices()
+
+
+func _on_legacy_member_selected(_index: int, _selected: bool) -> void:
+	_refresh_legacy_start_choices()
+
+
+func _refresh_legacy_start_choices() -> void:
+	var previously_selected: String = ""
+	if _legacy_campaign_start.selected >= 0:
+		previously_selected = str(_legacy_campaign_start.get_item_metadata(_legacy_campaign_start.selected))
+	_legacy_campaign_start.clear()
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	for index in _legacy_campaign_members.get_selected_items():
+		if index >= _legacy_campaign_ids.size():
+			continue
+		var id: String = _legacy_campaign_ids[index]
+		if not maps.has(id):
+			continue
+		_legacy_campaign_start.add_item((maps[id] as DungeonMap).display_name)
+		_legacy_campaign_start.set_item_metadata(_legacy_campaign_start.item_count - 1, id)
+	var preferred: String = previously_selected if not previously_selected.is_empty() else map_data.map_id
+	for index in range(_legacy_campaign_start.item_count):
+		if str(_legacy_campaign_start.get_item_metadata(index)) == preferred:
+			_legacy_campaign_start.select(index)
+			break
+
+
+func _confirm_legacy_campaign() -> void:
+	if map_data == null or _legacy_campaign_start.selected < 0:
+		_set_status("Выберите участников и стартовую карту.")
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var selected_ids: Array[String] = []
+	for index in _legacy_campaign_members.get_selected_items():
+		if index < _legacy_campaign_ids.size():
+			selected_ids.append(_legacy_campaign_ids[index])
+	if not selected_ids.has(map_data.map_id):
+		_set_status("Текущая карта должна входить в кампанию.")
+		return
+	var destination_index: int = _legacy_campaign_destination.selected
+	var existing_id: String = ""
+	var start_id: String = str(_legacy_campaign_start.get_item_metadata(_legacy_campaign_start.selected))
+	if destination_index > 0:
+		if destination_index - 1 >= _legacy_campaign_existing_ids.size():
+			return
+		existing_id = _legacy_campaign_existing_ids[destination_index - 1]
+		var campaign: CampaignDefinition = _campaign_library.load_campaign(existing_id, maps)
+		if campaign == null:
+			_set_status(_campaign_library.last_error)
+			return
+		start_id = campaign.start_map_id
+	var created: CampaignDefinition = _campaign_library.assemble_legacy_campaign(_legacy_campaign_name.text, start_id, selected_ids, maps, existing_id)
+	if created == null:
+		_set_status(_campaign_library.last_error)
+		return
+	_legacy_campaign_dialog.hide()
+	_set_status("Карты присоединены к кампании «%s»." % created.display_name)
+
+
+func _campaign_map_path(map_id: String) -> String:
+	var folder: DirAccess = DirAccess.open(_maps_dir())
+	if folder == null:
+		return ""
+	for filename in folder.get_files():
+		if not filename.ends_with(".json"):
+			continue
+		var path: String = _maps_dir().path_join(filename)
+		var candidate: DungeonMap = _read_map(path)
+		if candidate != null and candidate.map_id == map_id:
+			return path
+	return ""
+
+
+func _refresh_campaign_manager() -> void:
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var campaign: CampaignDefinition = _campaign_library.load_campaign(_campaign_current_id, maps)
+	if campaign == null:
+		_set_status(_campaign_library.last_error)
+		_campaign_dialog.hide()
+		return
+	_campaign_title_input.text = campaign.display_name
+	_campaign_list.clear()
+	_campaign_start_choice.clear()
+	_campaign_available_choice.clear()
+	_campaign_member_paths.clear()
+	_campaign_available_ids.clear()
+	for map_id in campaign.map_ids:
+		var data: DungeonMap = maps[map_id]
+		var title: String = data.display_name
+		_campaign_list.add_item("%s%s" % [title, " (старт)" if map_id == campaign.start_map_id else ""])
+		_campaign_member_paths.append(_campaign_map_path(map_id))
+		_campaign_start_choice.add_item(title)
+		if map_id == campaign.start_map_id:
+			_campaign_start_choice.select(_campaign_start_choice.item_count - 1)
+	if not _campaign_member_paths.is_empty():
+		_campaign_list.select(0)
+	var campaigns: Dictionary = _campaign_library.load_all(maps)
+	if not _campaign_library.last_error.is_empty():
+		_set_status(_campaign_library.last_error)
+		return
+	var occupied: Dictionary = {}
+	for entry in campaigns.values():
+		for id in entry.map_ids:
+			occupied[id] = true
+	var free_ids: Array = maps.keys()
+	free_ids.sort()
+	for map_id in free_ids:
+		if occupied.has(map_id):
+			continue
+		_campaign_available_ids.append(map_id)
+		_campaign_available_choice.add_item((maps[map_id] as DungeonMap).display_name)
+
+
+func _rename_campaign() -> void:
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var campaign: CampaignDefinition = _campaign_library.load_campaign(_campaign_current_id, maps)
+	if campaign == null or not campaign.rename(_campaign_title_input.text):
+		_set_status("Название кампании не может быть пустым.")
+		return
+	if not _campaign_library.save_campaign(campaign, maps):
+		_set_status(_campaign_library.last_error)
+		return
+	_refresh_campaign_manager()
+
+
+func _set_campaign_start() -> void:
+	var index: int = _campaign_start_choice.selected
+	if index < 0 or index >= _campaign_member_paths.size():
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var campaign: CampaignDefinition = _campaign_library.load_campaign(_campaign_current_id, maps)
+	if campaign == null:
+		_set_status(_campaign_library.last_error)
+		return
+	var selected: DungeonMap = _read_map(_campaign_member_paths[index])
+	if selected == null:
+		_set_status("Не удалось прочитать выбранную карту.")
+		return
+	if not campaign.set_start_map(selected.map_id) or not _campaign_library.save_campaign(campaign, maps):
+		_set_status(_campaign_library.last_error)
+		return
+	_refresh_campaign_manager()
+
+
+func _attach_campaign_map() -> void:
+	var index: int = _campaign_available_choice.selected
+	if index < 0 or index >= _campaign_available_ids.size():
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	if not _campaign_library.attach_map(_campaign_current_id, _campaign_available_ids[index], maps):
+		_set_status(_campaign_library.last_error)
+		return
+	_refresh_campaign_manager()
+
+
+func _open_campaign_selected_map() -> void:
+	var selected: PackedInt32Array = _campaign_list.get_selected_items()
+	if selected.is_empty() or selected[0] >= _campaign_member_paths.size():
+		return
+	var path: String = _campaign_member_paths[selected[0]]
+	if path.is_empty():
+		_set_status("Не удалось найти файл карты.")
+		return
+	_campaign_dialog.hide()
+	_load_from_path(path)
+
+
+func _request_campaign_detach() -> void:
+	var selected: PackedInt32Array = _campaign_list.get_selected_items()
+	if selected.is_empty() or selected[0] >= _campaign_member_paths.size():
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var candidate: DungeonMap = _read_map(_campaign_member_paths[selected[0]])
+	var campaign: CampaignDefinition = _campaign_library.load_campaign(_campaign_current_id, maps)
+	if candidate == null or campaign == null:
+		_set_status("Не удалось прочитать выбранную карту или кампанию.")
+		return
+	if candidate.map_id == campaign.start_map_id:
+		_set_status("Сначала назначьте другую стартовую карту.")
+		return
+	var sources: Array[String] = _campaign_library.incoming_links(candidate.map_id, maps, candidate.map_id)
+	if not sources.is_empty():
+		_set_status("Сначала уберите переход на карту из %s." % (maps[sources[0]] as DungeonMap).display_name)
+		return
+	_campaign_pending_remove = candidate.map_id
+	_campaign_remove_confirm.dialog_text = "Исключить «%s» из кампании? Сама карта останется в библиотеке." % candidate.display_name
+	_campaign_remove_confirm.popup_centered()
+
+
+func _confirm_campaign_detach() -> void:
+	if _campaign_pending_remove.is_empty():
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	if not _campaign_library.detach_map(_campaign_current_id, _campaign_pending_remove, maps):
+		_set_status(_campaign_library.last_error)
+	_campaign_pending_remove = ""
+	_refresh_campaign_manager()
+
+
+func _request_campaign_delete() -> void:
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var campaign: CampaignDefinition = _campaign_library.load_campaign(_campaign_current_id, maps)
+	if campaign == null:
+		return
+	var count: int = 0
+	for map_id in campaign.map_ids:
+		count += _campaign_library.incoming_links(map_id, maps, map_id).size()
+	_campaign_delete_confirm.dialog_text = "Удалить кампанию «%s»? Карты останутся в библиотеке, переходы между ними сохранятся. Входящих связей: %d." % [campaign.display_name, count]
+	_campaign_delete_confirm.popup_centered()
+
+
+func _confirm_campaign_delete() -> void:
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	if not _campaign_library.delete_campaign(_campaign_current_id, maps):
+		_set_status(_campaign_library.last_error)
+		return
+	_campaign_current_id = ""
+	_campaign_dialog.hide()
+	_set_status("Кампания удалена. Карты сохранены в библиотеке.")
 
 
 func _request_rename() -> void:
@@ -2059,12 +2446,36 @@ func _request_delete() -> void:
 	_delete_path = _selected_library_path()
 	if _delete_path.is_empty():
 		return
+	var candidate: DungeonMap = _read_map(_delete_path)
+	if candidate == null:
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var owner: CampaignDefinition = _campaign_library.campaign_for_map(candidate.map_id, maps)
+	if not _campaign_library.last_error.is_empty():
+		_set_status(_campaign_library.last_error)
+		return
+	if owner != null:
+		_set_status("Карта принадлежит кампании. Сначала исключите её из кампании.")
+		return
+	if not _campaign_library.incoming_links(candidate.map_id, maps, candidate.map_id).is_empty():
+		_set_status("На карту ведут переходы. Сначала уберите входящие связи.")
+		return
 	_delete_dialog.dialog_text = "Удалить карту %s? Это действие нельзя отменить." % _load_list.get_item_text(_load_list.get_selected_items()[0]).replace("\n", " ")
 	_delete_dialog.popup_centered()
 
 
 func _delete_selected() -> void:
 	if _delete_path.is_empty():
+		return
+	var candidate: DungeonMap = _read_map(_delete_path)
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	if candidate == null:
+		return
+	if _campaign_library.campaign_for_map(candidate.map_id, maps) != null or not _campaign_library.last_error.is_empty():
+		_set_status("Нельзя удалить карту, принадлежащую кампании.")
+		return
+	if not _campaign_library.incoming_links(candidate.map_id, maps, candidate.map_id).is_empty():
+		_set_status("На карту ведут переходы. Удаление отменено.")
 		return
 	var err := DirAccess.remove_absolute(ProjectSettings.globalize_path(_delete_path))
 	if err == OK:

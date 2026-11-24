@@ -63,7 +63,27 @@ weights = {
 "armor_chain_shirt": 1,
 "armor_lamellar_cuirass": 1,
 "armor_militia_brigandine": 1,
-"armor_iron_cuirass": 1
+"armor_iron_cuirass": 1,
+"boots_bast_shoes": 1,
+"boots_canvas_shoes": 1,
+"boots_felt": 1,
+"boots_leather_ankle": 1,
+"boots_ranger": 1,
+"boots_miner": 1,
+"boots_high_leather": 1,
+"boots_hobnailed": 1,
+"boots_chainmail": 1,
+"boots_iron_sabatons": 1,
+"gloves_cloth_wraps": 1,
+"gloves_canvas_mittens": 1,
+"gloves_fingerless_leather": 1,
+"gloves_miner_mittens": 1,
+"gloves_ranger": 1,
+"gloves_quilted_mittens": 1,
+"gloves_tanned_leather": 1,
+"gloves_chainmail_mittens": 1,
+"gloves_studded_combat": 1,
+"gloves_militia_plate": 1
 }
 quantity_ranges = {
 "gold": Vector2i(3, 12)

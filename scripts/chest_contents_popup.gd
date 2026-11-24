@@ -14,7 +14,7 @@ signal monster_configuration_changed(entity_id: String, party: Array[String], co
 @onready var _primary_monster: Label = %PrimaryMonster
 @onready var _secondary_monster: OptionButton = %SecondaryMonster
 
-const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Броня", "Снаряжение", "Прочее"]
+const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Броня", "Перчатки", "Сапоги", "Снаряжение", "Прочее"]
 const CATEGORY_ICONS := {
 	"Ключи": preload("res://assets/icons/key.png"),
 	"Зелья": preload("res://assets/icons/stats/24x24/potion.png"),
@@ -22,6 +22,8 @@ const CATEGORY_ICONS := {
 	"Щиты": preload("res://assets/icons/shield.png"),
 	"Шлемы": preload("res://assets/icons/helmets/helmet_leather.png"),
 	"Броня": preload("res://assets/icons/armors/armor_leather_vest.png"),
+	"Перчатки": preload("res://assets/icons/gloves/gloves_cloth_wraps.png"),
+	"Сапоги": preload("res://assets/icons/boots/boots_leather_ankle.png"),
 	"Снаряжение": preload("res://assets/icons/equipment_slots/armor.png"),
 	"Прочее": preload("res://assets/icons/gold.png"),
 }
@@ -54,6 +56,8 @@ func _build_item_rows() -> void:
 	var shields: Array[String] = []
 	var helmets: Array[String] = []
 	var armor: Array[String] = []
+	var gloves: Array[String] = []
+	var boots: Array[String] = []
 	var other_equipment: Array[String] = []
 	for item_id in ItemCatalog.equipment_ids():
 		var item: ItemDefinition = ItemCatalog.get_item(item_id)
@@ -66,6 +70,10 @@ func _build_item_rows() -> void:
 				helmets.append(item_id)
 			ItemDefinition.EquipmentSlot.BODY:
 				armor.append(item_id)
+			ItemDefinition.EquipmentSlot.GLOVES:
+				gloves.append(item_id)
+			ItemDefinition.EquipmentSlot.BOOTS:
+				boots.append(item_id)
 			_:
 				other_equipment.append(item_id)
 	var potions: Array[String] = ["potion"]
@@ -79,6 +87,8 @@ func _build_item_rows() -> void:
 		{"title": "Щиты", "items": shields},
 		{"title": "Шлемы", "items": helmets},
 		{"title": "Броня", "items": armor},
+		{"title": "Перчатки", "items": gloves},
+		{"title": "Сапоги", "items": boots},
 		{"title": "Снаряжение", "items": other_equipment},
 		{"title": "Прочее", "items": ["gold"]}
 	]

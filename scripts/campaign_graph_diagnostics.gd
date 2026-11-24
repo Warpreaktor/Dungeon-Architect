@@ -26,7 +26,7 @@ static func analyze(campaigns: Dictionary, maps_by_id: Dictionary) -> Array[Dict
 		var adjacency: Dictionary = {}
 		for map_id in campaign.map_ids:
 			adjacency[map_id] = []
-			for map_id in campaign.map_ids:
+		for map_id in campaign.map_ids:
 			if not maps_by_id.has(map_id) or not (maps_by_id[map_id] is DungeonMap):
 				continue
 			var dungeon: DungeonMap = maps_by_id[map_id]

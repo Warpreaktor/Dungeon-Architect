@@ -60,7 +60,7 @@ func _test_campaign_roundtrip_and_legacy() -> void:
 	assert(session.enter_map(third))
 	session.party[1].health -= 3
 	var expected: Dictionary = session.progress_snapshot()
-	assert(expected["version"] == 2)
+	assert(expected["version"] == ProgressSnapshotCodec.FORMAT_VERSION)
 	assert(expected["campaign_id"] == campaign.campaign_id)
 	assert(store.save_game(session, maps))
 	var path: String = store.directory.path_join(ProgressSaveStore.SAVE_FILE)
@@ -85,6 +85,11 @@ func _test_campaign_roundtrip_and_legacy() -> void:
 	var legacy: Dictionary = expected.duplicate(true)
 	legacy["version"] = 1
 	legacy.erase("campaign_id")
+	legacy["party"].erase("item_instances")
+	legacy["party"].erase("bag_instance_ids")
+	legacy["party"].erase("next_item_instance_number")
+	for member in legacy["party"]["active_heroes"]:
+		member.erase("equipped_instance_ids")
 	_write(path, legacy)
 	var legacy_text: String = FileAccess.get_file_as_string(path)
 	var migrated: GameSession = store.load_game(maps)
@@ -92,7 +97,7 @@ func _test_campaign_roundtrip_and_legacy() -> void:
 	assert(migrated.map_data.map_id == third.map_id)
 	assert(FileAccess.get_file_as_string(path) == legacy_text)
 	assert(store.save_game(migrated, maps))
-	assert(JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == 2)
+	assert(JSON.parse_string(FileAccess.get_file_as_string(path))["version"] == ProgressSnapshotCodec.FORMAT_VERSION)
 	assert(JSON.parse_string(FileAccess.get_file_as_string(path))["campaign_id"] == campaign.campaign_id)
 	var changed: CampaignDefinition = library.load_campaign(campaign.campaign_id, maps)
 	assert(changed.remove_map(third.map_id))

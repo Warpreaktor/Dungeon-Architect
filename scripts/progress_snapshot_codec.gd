@@ -1,7 +1,8 @@
 class_name ProgressSnapshotCodec
 extends RefCounted
 
-const FORMAT_VERSION: int = 2
+const FORMAT_VERSION: int = 3
+const PREVIOUS_FORMAT_VERSION: int = 2
 const LEGACY_FORMAT_VERSION: int = 1
 const FLOOR_FLAGS := [
 	"exit_rewards", "removed", "chests", "traps", "revealed_traps", "triggers", "messages"
@@ -74,6 +75,15 @@ static func decode_floor(data: Variant, map_ref: DungeonMap) -> Dictionary:
 				return {}
 			if ItemCatalog.get_item(str(item["item_id"])) == null or not _is_integer(item.get("quantity")) or int(item["quantity"]) <= 0:
 				return {}
+			if item.has("instances"):
+				var instances: Variant = item["instances"]
+				var definition: ItemDefinition = ItemCatalog.get_item(str(item["item_id"]))
+				if not (instances is Array) or definition == null or definition.category != ItemDefinition.Category.EQUIPMENT or definition.stackable or instances.size() != int(item["quantity"]):
+					return {}
+				for data in instances:
+					var instance: ItemInstance = ItemInstance.from_dict(data)
+					if instance == null or instance.item_id != str(item["item_id"]):
+						return {}
 			if item.has("durabilities"):
 				if not (item["durabilities"] is Array) or item["durabilities"].size() != int(item["quantity"]):
 					return {}

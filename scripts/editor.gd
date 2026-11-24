@@ -2832,7 +2832,7 @@ func _on_inventory_closed() -> void:
 func _on_inventory_use_requested(item_id: String) -> void:
 	if not is_play_mode or game_session == null or not _inventory_view.visible:
 		return
-	var result: Dictionary = game_session.use_item(item_id)
+	var result: Dictionary = game_session.use_item(item_id, game_session._inventory_equipment_member())
 	_inventory_view.show_use_result(item_id, str(result.get("message", "")))
 	if bool(result.get("used", false)):
 		_refresh_stats()

@@ -95,7 +95,7 @@ func _refresh_contents() -> void:
 		_bag_grid.remove_child(child)
 		child.queue_free()
 	_entries = _session.inventory_slot_ids()
-	var hero: HeroState = _session.hero
+	var hero: HeroState = _selected_member
 	_gold_label.text = "%d" % hero.gold
 	_mannequin.show_hero(_session)
 	if _selected_index < 0 or _selected_index >= _entries.size() or _entries[_selected_index].is_empty():

@@ -130,9 +130,9 @@ func _load_saved_maps() -> void:
 			_campaigns.append(campaign)
 			var thumbnail: ImageTexture = MapPreview.make_preview(start_map)
 			_thumbnails.append(thumbnail)
-			_map_list.add_item("%s\nСтарт: %s" % [campaign.display_name, start_map.display_name], thumbnail)
+			_map_list.add_item(campaign.display_name, thumbnail)
 			var index: int = _map_list.item_count - 1
-			_map_list.set_item_tooltip(index, "%s\n%s" % [campaign.display_name, start_map.display_name])
+			_map_list.set_item_tooltip(index, campaign.display_name)
 	else:
 		_personal_maps = unassigned_maps(_maps_by_id, campaigns)
 		for dungeon in _personal_maps:

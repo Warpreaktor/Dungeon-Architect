@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/icons/boots/boots_felt.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_definition")
+item_id = "boots_felt"
+display_name = "Войлочные сапоги"
+description = "Плотная и мягкая защита ног: здоровье в обмен на небольшую потерю подвижности"
+icon = ExtResource("2_icon")
+category = 3
+stackable = false
+equipment_slot = 9
+armor_bonus = 0
+health_bonus = 3
+strength_bonus = 0
+agility_bonus = -1
+perception_bonus = 0
+dodge_bonus_percent = 0
+accuracy_bonus_percent = 0
+poison_resistance_percent = 0

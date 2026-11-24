@@ -65,11 +65,11 @@ func weapon_damage(kind: int) -> int:
 
 
 func melee_attack_value() -> float:
-	return BattleMath.melee_power(weapon_damage(ItemDefinition.WeaponKind.MELEE), strength_bonus, strength)
+	return BattleMath.melee_power(weapon_damage(ItemDefinition.WeaponKind.MELEE), strength_bonus, effective_strength())
 
 
 func ranged_attack_value() -> float:
-	return BattleMath.ranged_power(weapon_damage(ItemDefinition.WeaponKind.RANGED), strength_bonus, agility)
+	return BattleMath.ranged_power(weapon_damage(ItemDefinition.WeaponKind.RANGED), strength_bonus, effective_agility())
 
 
 func melee_attack() -> int:
@@ -156,11 +156,31 @@ func equip_shield(item: ItemDefinition) -> void:
 		equip_item(item)
 
 
-## Лечит не выше максимума, возвращает фактически восстановленное здоровье.
+func equipment_bonus(property_name: String) -> int:
+	var total: int = 0
+	var equipped: Array[String] = [equipped_weapon_id, equipped_shield_id]
+	for item_id in equipped_accessories.values():
+		equipped.append(str(item_id))
+	for item_id in equipped:
+		var item: ItemDefinition = ItemCatalog.get_item(item_id)
+		if item != null:
+			total += int(item.get(property_name))
+	return total
+
+
+func effective_strength() -> int:
+	return maxi(strength + equipment_bonus("strength_bonus"), 0)
+
+
+func effective_agility() -> int:
+	return maxi(agility + equipment_bonus("agility_bonus"), 0)
+
+
 func effective_max_health() -> int:
-	return BattleStatusRules.health_limit(max_health, overworld_statuses)
+	return BattleStatusRules.health_limit(max_health + equipment_bonus("health_bonus"), overworld_statuses)
 
 
+## Лечит не выше максимума, возвращает фактически восстановленное здоровье.
 func restore_health(amount: int) -> int:
 	var restored: int = mini(maxi(amount, 0), maxi(effective_max_health() - health, 0))
 	health += restored
@@ -451,7 +471,7 @@ static func from_snapshot(data: Dictionary) -> HeroState:
 			return null
 		if int(data[key]) != float(data[key]):
 			return null
-	if int(data["max_health"]) <= 0 or int(data["health"]) < 0 or int(data["health"]) > int(data["max_health"]):
+	if int(data["max_health"]) <= 0 or int(data["health"]) < 0:
 		return null
 	if int(data["gold"]) < 0 or int(data["strength_phases"]) < 0 or int(data["vitality_phases"]) < 0 or int(data["vision_phases"]) < 0:
 		return null
@@ -540,4 +560,6 @@ static func from_snapshot(data: Dictionary) -> HeroState:
 	result.overworld_statuses = statuses.duplicate(true)
 	result._potion_phase_progress = int(data["potion_phase_progress"])
 	result._recalculate_equipment_stats()
+	if result.health > result.effective_max_health():
+		return null
 	return result

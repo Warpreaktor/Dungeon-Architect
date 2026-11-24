@@ -399,6 +399,7 @@ func transfer_inventory_item(from_kind: String, from_slot: Variant, to_kind: Str
 			else:
 				member.equipped_accessories[slot_id] = item_id
 	member._recalculate_equipment_stats()
+	member.health = mini(member.health, member.effective_max_health())
 	_apply_shield_layout(_inventory_order, equipped, plan["shield_layout"])
 	_update_instance_shield_values(plan["shield_layout"], member)
 	return true

@@ -22,6 +22,14 @@ enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 @export var weapon_kind: WeaponKind = WeaponKind.MELEE
 @export var monster_attack_icon: Texture2D
 @export var defense_bonus: int = 0
+@export var armor_bonus: int = 0
+@export var health_bonus: int = 0
+@export var strength_bonus: int = 0
+@export var agility_bonus: int = 0
+@export var perception_bonus: int = 0
+@export var dodge_bonus_percent: int = 0
+@export var accuracy_bonus_percent: int = 0
+@export var poison_resistance_percent: int = 0
 @export_range(0, 999, 1) var max_durability: int = 0
 @export_range(0, 9999, 1) var healing_amount: int = 0
 @export var consumable_effect: ConsumableEffect = ConsumableEffect.NONE
@@ -35,4 +43,8 @@ func get_description() -> String:
 	values["vision_cells"] = DescriptionTemplate.quantity(effect_value, "клетку", "клетки", "клеток")
 	if item_id in LockCatalog.LOCK_IDS:
 		values["lock_color"] = LockCatalog.label(item_id)
-	return DescriptionTemplate.render(description, values)
+	var result: String = DescriptionTemplate.render(description, values)
+	var equipment_stats: PackedStringArray = DescriptionTemplate.equipment_properties(self)
+	if not equipment_stats.is_empty():
+		result += "\n" + "\n".join(equipment_stats)
+	return result

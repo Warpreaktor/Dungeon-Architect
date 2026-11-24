@@ -3044,7 +3044,7 @@ func _on_battle_item_requested(item_id: String) -> void:
 	if bool(outcome.get("used", false)):
 		_append_combat_log("    %s: %s · HP %d/%d" % [game_session.hero.definition.display_name,
 			str(outcome.get("message", "Предмет применён")), game_session.hero.health,
-			game_session.hero.max_health])
+			game_session.hero.effective_max_health()])
 		_refresh_stats()
 
 

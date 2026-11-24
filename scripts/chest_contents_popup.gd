@@ -14,12 +14,14 @@ signal monster_configuration_changed(entity_id: String, party: Array[String], co
 @onready var _primary_monster: Label = %PrimaryMonster
 @onready var _secondary_monster: OptionButton = %SecondaryMonster
 
-const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Прочее"]
+const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Снаряжение", "Прочее"]
 const CATEGORY_ICONS := {
 	"Ключи": preload("res://assets/icons/key.png"),
 	"Зелья": preload("res://assets/icons/stats/24x24/potion.png"),
 	"Оружие": preload("res://assets/icons/sword.png"),
 	"Щиты": preload("res://assets/icons/shield.png"),
+	"Шлемы": preload("res://assets/icons/helmets/helmet_leather.png"),
+	"Снаряжение": preload("res://assets/icons/equipment_slots/armor.png"),
 	"Прочее": preload("res://assets/icons/gold.png"),
 }
 const AMOUNT_WIDTH := 94.0
@@ -48,12 +50,19 @@ func _ready() -> void:
 func _build_item_rows() -> void:
 	var weapons: Array[String] = []
 	var shields: Array[String] = []
+	var helmets: Array[String] = []
+	var other_equipment: Array[String] = []
 	for item_id in ItemCatalog.equipment_ids():
 		var item: ItemDefinition = ItemCatalog.get_item(item_id)
-		if item.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON:
-			weapons.append(item_id)
-		else:
-			shields.append(item_id)
+		match item.equipment_slot:
+			ItemDefinition.EquipmentSlot.WEAPON:
+				weapons.append(item_id)
+			ItemDefinition.EquipmentSlot.SHIELD:
+				shields.append(item_id)
+			ItemDefinition.EquipmentSlot.HEAD:
+				helmets.append(item_id)
+			_:
+				other_equipment.append(item_id)
 	var potions: Array[String] = ["potion"]
 	for kind in ["health", "strength", "vitality", "vision"]:
 		for grade in ["small", "medium", "large"]:
@@ -63,6 +72,8 @@ func _build_item_rows() -> void:
 		{"title": "Зелья", "items": potions},
 		{"title": "Оружие", "items": weapons},
 		{"title": "Щиты", "items": shields},
+		{"title": "Шлемы", "items": helmets},
+		{"title": "Снаряжение", "items": other_equipment},
 		{"title": "Прочее", "items": ["gold"]}
 	]
 	for group in groups:

@@ -145,8 +145,8 @@ func _refresh_profile() -> void:
 
 	var actor := BattleParticipant.from_hero(_hero)
 	var values: Array[Dictionary] = [
-		{"stat": "strength", "text": "Сила  %d" % _hero.strength},
-		{"stat": "agility", "text": "Ловкость  %d" % _hero.agility},
+		{"stat": "strength", "text": "Сила  %d" % _hero.effective_strength()},
+		{"stat": "agility", "text": "Ловкость  %d" % _hero.effective_agility()},
 		{"stat": "attack", "text": "Атака  %d" % actor.melee_attack()},
 		{"stat": "defense", "text": "Защита  %d" % actor.block_armor},
 		{"stat": "evasion", "text": "Уклонение  %d%%" % actor.dodge_percent()},

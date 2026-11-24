@@ -67,7 +67,7 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant.accuracy_bonus = source.definition.accuracy_bonus if source.definition != null else 0
 	participant.learned_ability_ids = source.learned_ability_ids.duplicate()
 	participant.action_slot_capacity = source.action_slot_capacity()
-	participant._base_max_health = participant._hero_snapshot.max_health
+	participant._base_max_health = participant._hero_snapshot.max_health + participant._hero_snapshot.equipment_bonus("health_bonus")
 	participant.refresh_from_hero()
 	participant._sync_status_health_limit(false)
 	return participant
@@ -101,10 +101,14 @@ func refresh_from_hero() -> void:
 	if _hero_snapshot == null:
 		return
 	_equipment.set_snapshot(_hero_snapshot)
-	max_health = BattleStatusRules.health_limit(_hero_snapshot.max_health, statuses)
+	_base_max_health = _hero_snapshot.max_health + _hero_snapshot.equipment_bonus("health_bonus")
+	max_health = BattleStatusRules.health_limit(_base_max_health, statuses)
 	health = _hero_snapshot.health
-	strength = _hero_snapshot.strength
-	agility = _hero_snapshot.agility
+	strength = _hero_snapshot.effective_strength()
+	agility = _hero_snapshot.effective_agility()
+	if _hero_snapshot.definition != null:
+		base_dodge_percent = _hero_snapshot.definition.base_dodge_percent + _hero_snapshot.equipment_bonus("dodge_bonus_percent")
+		accuracy_bonus = _hero_snapshot.definition.accuracy_bonus + _hero_snapshot.equipment_bonus("accuracy_bonus_percent")
 	defense = 0 # Shield/weapon equipment is not passive blocking.
 	equipped_weapon_id = _hero_snapshot.equipped_weapon_id
 	equipped_shield_id = _hero_snapshot.equipped_shield_id

@@ -33,7 +33,27 @@ weights = {
 "wooden_shield": 1,
 "heraldic_shield": 1,
 "tower_shield": 1,
-"spiked_shield": 1
+"spiked_shield": 1,
+"helmet_leather": 1,
+"helmet_iron_shishak": 1,
+"helmet_miner": 1,
+"helmet_shadow_hunter": 1,
+"helmet_closed_knight": 1,
+"helmet_berserker": 1,
+"helmet_bone_trophy": 1,
+"helmet_plague_alchemist": 1,
+"helmet_silent_guard": 1,
+"helmet_buried_king": 1,
+"helmet_padded_coif": 1,
+"helmet_canvas_hood": 1,
+"helmet_felt_miner_cap": 1,
+"helmet_wicker_cap": 1,
+"helmet_rawhide_cap": 1,
+"helmet_mail_coif": 1,
+"helmet_militia_cap": 1,
+"helmet_iron_halfhelm": 1,
+"helmet_infantry_sallet": 1,
+"helmet_kettle_hat": 1
 }
 quantity_ranges = {
 "gold": Vector2i(3, 12)

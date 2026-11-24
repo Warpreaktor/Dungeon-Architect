@@ -40,6 +40,27 @@ static func unresolved_tokens(text: String) -> PackedStringArray:
 	return result
 
 
+static func equipment_properties(item: Resource) -> PackedStringArray:
+	var labels: Dictionary = {
+		"armor_bonus": "Броня (план)",
+		"health_bonus": "HP",
+		"strength_bonus": "Сила",
+		"agility_bonus": "Ловкость",
+		"perception_bonus": "Чутьё",
+		"dodge_bonus_percent": "Уклонение",
+		"accuracy_bonus_percent": "Меткость",
+		"poison_resistance_percent": "Сопротивление яду"
+	}
+	var lines := PackedStringArray()
+	for key in labels:
+		var value: int = int(item.get(key))
+		if value == 0:
+			continue
+		var suffix: String = " п.п." if key in ["dodge_bonus_percent", "accuracy_bonus_percent"] else ("%" if key == "poison_resistance_percent" else "")
+		lines.append("%s: %s%d%s" % [labels[key], "+" if value > 0 else "", value, suffix])
+	return lines
+
+
 static func quantity(value: int, singular: String, few: String, many: String) -> String:
 	var last: int = absi(value) % 10
 	var last_pair: int = absi(value) % 100

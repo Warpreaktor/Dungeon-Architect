@@ -154,6 +154,30 @@ func campaign_for_map(map_id: String, maps_by_id: Dictionary) -> CampaignDefinit
 	return null
 
 
+func attach_map(campaign_id: String, map_id: String, maps_by_id: Dictionary) -> bool:
+	last_error = ""
+	if not maps_by_id.has(map_id):
+		last_error = "Целевая карта отсутствует в библиотеке."
+		return false
+	var campaigns: Dictionary = load_all(maps_by_id)
+	if not last_error.is_empty():
+		return false
+	var campaign: CampaignDefinition = campaigns.get(campaign_id)
+	if campaign == null:
+		last_error = "Кампания не найдена."
+		return false
+	for other in campaigns.values():
+		if other.campaign_id != campaign_id and other.map_ids.has(map_id):
+			last_error = "Карта уже принадлежит другой кампании."
+			return false
+	if campaign.map_ids.has(map_id):
+		return true
+	if not campaign.add_map(map_id):
+		last_error = "Не удалось добавить карту в кампанию."
+		return false
+	return save_campaign(campaign, maps_by_id)
+
+
 func _path(campaign_id: String, suffix: String) -> String:
 	return directory.path_join(campaign_id + suffix)
 

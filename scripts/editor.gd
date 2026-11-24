@@ -154,6 +154,9 @@ var _play_button: Button
 var _load_paths: Array[String] = []
 var _load_list: ItemList
 var _library_actions: HBoxContainer
+var _campaign_link_actions: HBoxContainer
+var _campaign_add_mode: bool = false
+var _campaign_link_label: Label
 var _stairs_reward_button: Button
 var _unlink_stairs_button: Button
 var _linking_exit_id: String = ""
@@ -712,6 +715,15 @@ func _create_dialogs() -> void:
 	_library_actions.add_child(_button("Переименовать", "Изменить название выбранной карты", _request_rename))
 	_library_actions.add_child(_button("Копировать", "Создать отдельную копию карты", _duplicate_selected))
 	_library_actions.add_child(_button("Удалить", "Удалить выбранную карту после подтверждения", _request_delete))
+	_campaign_link_label = Label.new()
+	_campaign_link_label.visible = false
+	library_layout.add_child(_campaign_link_label)
+	_campaign_link_actions = HBoxContainer.new()
+	_campaign_link_actions.visible = false
+	library_layout.add_child(_campaign_link_actions)
+	_campaign_link_actions.add_child(_button("Карты кампании", "", _show_campaign_member_maps))
+	_campaign_link_actions.add_child(_button("Добавить существующую карту", "", _show_campaign_add_map))
+	_campaign_link_actions.add_child(_button("Создать карту", "", _create_campaign_link_map))
 	_unlink_stairs_button = _button("Без перехода", "Оставить лестницу финальным выходом", _unlink_selected_exit)
 	_unlink_stairs_button.visible = false
 	library_layout.add_child(_unlink_stairs_button)
@@ -1295,10 +1307,14 @@ func _on_exit_tapped(entity_id: String) -> void:
 		return
 	_linking_exit_id = entity_id
 	_pending_campaign_destination_path = ""
+	_campaign_add_mode = false
 	_refresh_library()
 	_load_dialog.title = "Переход на карту"
 	_load_dialog.ok_button_text = "Связать"
 	_library_actions.visible = false
+	_campaign_link_actions.visible = true
+	_campaign_link_label.visible = true
+	_refresh_campaign_link_library()
 	_unlink_stairs_button.visible = true
 	_stairs_reward_button.visible = str(selected_exit["type"]) == "stairs_down"
 	var linked_id: String = DungeonMap.exit_target_id(selected_exit)
@@ -1347,6 +1363,9 @@ func _link_selected_exit() -> void:
 		_campaign_creation_dialog.popup_centered_clamped(Vector2i(490, 220), 0.9)
 		_campaign_name_input.grab_focus()
 		_campaign_name_input.select_all()
+		return
+	if not _campaign_library.attach_map(campaign.campaign_id, destination.map_id, maps):
+		_set_status(_campaign_library.last_error)
 		return
 	_apply_exit_link(destination)
 
@@ -1400,6 +1419,7 @@ func _confirm_campaign_creation() -> void:
 	_pending_campaign_destination_path = ""
 	_campaign_creation_dialog.hide()
 	_on_exit_tapped(exit_id)
+	_show_campaign_add_map()
 	var index: int = _load_paths.find(selected_path)
 	if index >= 0:
 		_load_list.select(index)
@@ -1413,9 +1433,15 @@ func _cancel_campaign_creation() -> void:
 func _cancel_exit_link_selection() -> void:
 	_pending_campaign_destination_path = ""
 	_linking_exit_id = ""
+	_campaign_add_mode = false
 
 
 func _apply_exit_link(destination: DungeonMap) -> void:
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
+	if campaign == null or not _campaign_library.last_error.is_empty() or not campaign.map_ids.has(destination.map_id):
+		_set_status("Переход разрешён только между картами одной кампании.")
+		return
 	var before: Dictionary = _canvas.capture_edit_state()
 	if map_data.set_exit_target(_linking_exit_id, destination.map_id):
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
@@ -1779,6 +1805,9 @@ func _show_load() -> void:
 	_load_dialog.title = "Библиотека карт"
 	_load_dialog.ok_button_text = "Загрузить"
 	_library_actions.visible = true
+	_campaign_link_actions.visible = false
+	_campaign_link_label.visible = false
+	_campaign_add_mode = false
 	_unlink_stairs_button.visible = false
 	_stairs_reward_button.hide()
 	_refresh_library()
@@ -1816,6 +1845,98 @@ func _refresh_library() -> void:
 		_load_paths.append(path)
 	if not _load_paths.is_empty():
 		_load_list.select(0)
+
+
+func _refresh_campaign_link_library() -> void:
+	if _linking_exit_id.is_empty():
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var campaigns: Dictionary = _campaign_library.load_all(maps)
+	if not _campaign_library.last_error.is_empty():
+		_set_status(_campaign_library.last_error)
+		_load_paths.clear()
+		_load_list.clear()
+		return
+	var campaign: CampaignDefinition = null
+	var occupied: Dictionary = {}
+	for entry in campaigns.values():
+		for id in entry.map_ids:
+			occupied[id] = entry.campaign_id
+		if entry.map_ids.has(map_data.map_id):
+			campaign = entry
+	_campaign_link_label.text = "Карты кампании: %s" % campaign.display_name if campaign != null else "Сначала создайте кампанию при привязке карты"
+	var paths: Array[String] = _load_paths.duplicate()
+	_load_paths.clear()
+	_load_list.clear()
+	_preview_textures.clear()
+	for path in paths:
+		var data: DungeonMap = _read_map(path)
+		if data == null:
+			continue
+		if campaign != null:
+			if _campaign_add_mode and occupied.has(data.map_id):
+				continue
+			if not _campaign_add_mode and not campaign.map_ids.has(data.map_id):
+				continue
+		else:
+			if occupied.has(data.map_id):
+				continue
+		var thumbnail: ImageTexture = _make_preview(data)
+		_preview_textures.append(thumbnail)
+		_load_list.add_item("%s\n%d × %d" % [data.display_name, data.width, data.height], thumbnail)
+		_load_paths.append(path)
+	if not _load_paths.is_empty():
+		_load_list.select(0)
+	_load_dialog.ok_button_text = "Добавить и связать" if _campaign_add_mode else "Связать"
+
+
+func _show_campaign_member_maps() -> void:
+	if _linking_exit_id.is_empty():
+		return
+	_campaign_add_mode = false
+	_refresh_library()
+	_refresh_campaign_link_library()
+
+
+func _show_campaign_add_map() -> void:
+	if _linking_exit_id.is_empty():
+		return
+	_campaign_add_mode = true
+	_refresh_library()
+	_refresh_campaign_link_library()
+	_campaign_link_label.text = "Карты вне кампаний"
+
+
+func _create_campaign_link_map() -> void:
+	if _linking_exit_id.is_empty():
+		return
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
+	if campaign == null or not _campaign_library.last_error.is_empty():
+		_set_status("Сначала создайте кампанию, связав существующую карту.")
+		return
+	var created: DungeonMap = DungeonMap.create_blank(16, 16)
+	if not created.place_entity("player_spawn", 1, 1):
+		return
+	if not _ensure_maps_dir():
+		return
+	var path: String = _maps_dir().path_join(created.map_id + ".json")
+	if FileAccess.file_exists(path):
+		_set_status("Карта с этим идентификатором уже существует.")
+		return
+	var writer: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	if writer == null:
+		_set_status("Не удалось создать файл карты.")
+		return
+	writer.store_string(JSON.stringify(created.to_dict(), "\t"))
+	writer.flush()
+	var write_error: int = writer.get_error()
+	writer = null
+	if write_error != OK or not _campaign_library.attach_map(campaign.campaign_id, created.map_id, SavedMapLibrary.load_all(_maps_dir())):
+		DirAccess.remove_absolute(path)
+		_set_status("Не удалось присоединить карту: %s" % _campaign_library.last_error)
+		return
+	_apply_exit_link(created)
 
 
 func _make_preview(data: DungeonMap) -> ImageTexture:

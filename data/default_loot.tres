@@ -83,7 +83,17 @@ weights = {
 "gloves_tanned_leather": 1,
 "gloves_chainmail_mittens": 1,
 "gloves_studded_combat": 1,
-"gloves_militia_plate": 1
+"gloves_militia_plate": 1,
+"amulet_knotted_cord": 1,
+"amulet_clay_bead": 1,
+"amulet_wooden_disc": 1,
+"amulet_bone_fang": 1,
+"amulet_copper_coin": 1,
+"amulet_river_pebble": 1,
+"amulet_braided_cord": 1,
+"amulet_iron_tag": 1,
+"amulet_brass_plate": 1,
+"amulet_flint_shard": 1
 }
 quantity_ranges = {
 "gold": Vector2i(3, 12)

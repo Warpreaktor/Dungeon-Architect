@@ -14,7 +14,7 @@ signal monster_configuration_changed(entity_id: String, party: Array[String], co
 @onready var _primary_monster: Label = %PrimaryMonster
 @onready var _secondary_monster: OptionButton = %SecondaryMonster
 
-const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Броня", "Перчатки", "Сапоги", "Пояса", "Амулеты", "Кольца", "Снаряжение", "Прочее"]
+const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Броня", "Перчатки", "Сапоги", "Пояса", "Амулеты", "Кольца", "Прочее"]
 const CATEGORY_ICONS := {
 	"Ключи": preload("res://assets/icons/key.png"),
 	"Зелья": preload("res://assets/icons/stats/24x24/potion.png"),
@@ -27,7 +27,6 @@ const CATEGORY_ICONS := {
 	"Пояса": preload("res://assets/icons/belts/belt_rope.png"),
 	"Амулеты": preload("res://assets/icons/amulets/amulet_knotted_cord.png"),
 	"Кольца": preload("res://assets/icons/rings/ring_copper_wire.png"),
-	"Снаряжение": preload("res://assets/icons/equipment_slots/armor.png"),
 	"Прочее": preload("res://assets/icons/gold.png"),
 }
 const AMOUNT_WIDTH := 94.0
@@ -64,7 +63,6 @@ func _build_item_rows() -> void:
 	var belts: Array[String] = []
 	var amulets: Array[String] = []
 	var rings: Array[String] = []
-	var other_equipment: Array[String] = []
 	for item_id in ItemCatalog.equipment_ids():
 		var item: ItemDefinition = ItemCatalog.get_item(item_id)
 		match item.equipment_slot:
@@ -86,8 +84,6 @@ func _build_item_rows() -> void:
 				amulets.append(item_id)
 			ItemDefinition.EquipmentSlot.RING:
 				rings.append(item_id)
-			_:
-				other_equipment.append(item_id)
 	var potions: Array[String] = ["potion"]
 	for kind in ["health", "strength", "vitality", "vision"]:
 		for grade in ["small", "medium", "large"]:
@@ -104,7 +100,6 @@ func _build_item_rows() -> void:
 		{"title": "Пояса", "items": belts},
 		{"title": "Амулеты", "items": amulets},
 		{"title": "Кольца", "items": rings},
-		{"title": "Снаряжение", "items": other_equipment},
 		{"title": "Прочее", "items": ["gold"]}
 	]
 	for group in groups:

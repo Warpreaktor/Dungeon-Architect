@@ -121,7 +121,7 @@ func _test_editor_palette_and_legacy_rewards() -> void:
 	var popup: ChestContentsPopup = scene.instantiate() as ChestContentsPopup
 	root.add_child(popup)
 	assert(popup._group_contents.has("Сапоги"))
-	assert(popup._group_contents.has("Снаряжение"))
+	assert(not popup._group_contents.has("Снаряжение"))
 	for item_id in BOOT_IDS:
 		assert(popup._item_checks.has(item_id))
 	assert(not popup._item_checks.has("leather_boots"))

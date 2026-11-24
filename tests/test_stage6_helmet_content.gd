@@ -100,7 +100,7 @@ func _test_editor_reward_palette() -> void:
 	assert(popup._group_contents.has("Шлемы"))
 	assert(popup._item_checks.has("helmet_berserker"))
 	assert(popup._item_checks.has("helmet_miner"))
-	assert(popup._group_contents.has("Снаряжение"))
+	assert(not popup._group_contents.has("Снаряжение"))
 	popup.queue_free()
 
 

@@ -103,7 +103,17 @@ weights = {
 "belt_wide_leather": 1,
 "belt_miner": 1,
 "belt_studded_combat": 1,
-"belt_iron_guard": 1
+"belt_iron_guard": 1,
+"ring_copper_wire": 1,
+"ring_braided_wire": 1,
+"ring_wooden": 1,
+"ring_bone_carved": 1,
+"ring_copper_band": 1,
+"ring_leather_wrapped": 1,
+"ring_brass_notched": 1,
+"ring_blacksmith": 1,
+"ring_river_pebble": 1,
+"ring_militia_signet": 1
 }
 quantity_ranges = {
 "gold": Vector2i(3, 12)

@@ -171,7 +171,7 @@ theme_override_constants/separation = 10
 layout_mode = 2
 theme_override_colors/font_color = Color(0.93, 0.78, 0.55, 1)
 theme_override_font_sizes/font_size = 18
-text = "Выбор подземелья"
+text = "Выбор кампании"
 
 [node name="MapList" type="ItemList" parent="SafeArea/Center/Card/Padding/Content/Library"]
 unique_name_in_owner = true
@@ -188,7 +188,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.70, 0.77, 0.81, 1)
-text = "Сохранённых подземелий нет"
+text = "Кампаний пока нет"
 horizontal_alignment = 1
 
 [node name="ErrorMessage" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library"]

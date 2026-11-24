@@ -2,7 +2,7 @@ class_name MainMenu
 extends Control
 
 signal editor_requested
-signal game_requested(data: DungeonMap, hero_id: String)
+signal game_requested(data: DungeonMap, hero_id: String, campaign: CampaignDefinition)
 signal continue_game_requested(session: GameSession)
 
 @onready var _card: PanelContainer = %Card
@@ -16,11 +16,13 @@ signal continue_game_requested(session: GameSession)
 @onready var _continue_game_button: Button = %ContinueGameButton
 @onready var _home_error: Label = %HomeError
 var _selected_game_map: DungeonMap
+var _selected_campaign_id: String = ""
+var _campaign_library: CampaignLibrary = CampaignLibrary.new()
+var _campaigns: Array[CampaignDefinition] = []
 var _save_store: ProgressSaveStore = ProgressSaveStore.new()
 var _maps_directory: String = SavedMapLibrary.DIRECTORY
 var _maps_by_id: Dictionary = {}
 
-var _maps: Array[DungeonMap] = []
 var _thumbnails: Array[Texture2D] = []
 
 
@@ -67,6 +69,7 @@ func _open_library() -> void:
 func _back_to_home() -> void:
 	_hero_selection.visible = false
 	_selected_game_map = null
+	_selected_campaign_id = ""
 	_library.visible = false
 	_home.visible = true
 	_refresh_continue_action()
@@ -91,25 +94,43 @@ func _continue_saved_game() -> void:
 		_refresh_continue_action()
 		%PlayButton.grab_focus()
 		return
+	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(session.map_data.map_id, _maps_by_id)
+	if campaign != null:
+		var valid_members: bool = true
+		for map_id in session.visited_floor_snapshots():
+			if not campaign.map_ids.has(str(map_id)):
+				valid_members = false
+				break
+		if valid_members:
+			session.set_campaign(campaign)
 	continue_game_requested.emit(session)
 
 
 func _load_saved_maps() -> void:
-	_maps.clear()
+	_campaigns.clear()
 	_thumbnails.clear()
 	_map_list.clear()
 	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
-	for map_id in _maps_by_id:
-		var data: DungeonMap = _maps_by_id[map_id]
-		_maps.append(data)
-		var thumbnail: ImageTexture = MapPreview.make_preview(data)
+	var campaigns: Dictionary = _campaign_library.load_all(_maps_by_id)
+	if not _campaign_library.last_error.is_empty():
+		_error_message.text = _campaign_library.last_error
+		_error_message.show()
+	var ids: Array = campaigns.keys()
+	ids.sort()
+	for campaign_id in ids:
+		var campaign: CampaignDefinition = campaigns[campaign_id]
+		var start_map: DungeonMap = _maps_by_id.get(campaign.start_map_id) as DungeonMap
+		if start_map == null:
+			continue
+		_campaigns.append(campaign)
+		var thumbnail: ImageTexture = MapPreview.make_preview(start_map)
 		_thumbnails.append(thumbnail)
-		_map_list.add_item("%s\n%d × %d" % [data.display_name, data.width, data.height], thumbnail)
-		var index := _map_list.item_count - 1
-		_map_list.set_item_tooltip(index, data.display_name)
-	_no_maps.visible = _maps.is_empty()
-	_start_button.disabled = _maps.is_empty()
-	if not _maps.is_empty():
+		_map_list.add_item("%s\nСтарт: %s" % [campaign.display_name, start_map.display_name], thumbnail)
+		var index: int = _map_list.item_count - 1
+		_map_list.set_item_tooltip(index, "%s\n%s" % [campaign.display_name, start_map.display_name])
+	_no_maps.visible = _campaigns.is_empty()
+	_start_button.disabled = _campaigns.is_empty() or not _campaign_library.last_error.is_empty()
+	if not _start_button.disabled:
 		_map_list.select(0)
 
 
@@ -123,15 +144,23 @@ func _on_map_activated(_index: int) -> void:
 
 
 func _start_selected() -> void:
-	var selection := _map_list.get_selected_items()
-	if selection.is_empty():
+	var selection: PackedInt32Array = _map_list.get_selected_items()
+	if selection.is_empty() or selection[0] >= _campaigns.size():
 		return
-	var chosen: DungeonMap = _maps[selection[0]]
-	if chosen.find_entity_position("player_spawn") == Vector2i(-1, -1):
-		_error_message.text = "На карте не задана точка старта героя"
-		_error_message.visible = true
+	var selected: CampaignDefinition = _campaigns[selection[0]]
+	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
+	var campaign: CampaignDefinition = _campaign_library.load_campaign(selected.campaign_id, _maps_by_id)
+	if campaign == null:
+		_error_message.text = _campaign_library.last_error if not _campaign_library.last_error.is_empty() else "Кампания больше не найдена"
+		_error_message.show()
+		return
+	var chosen: DungeonMap = _maps_by_id.get(campaign.start_map_id) as DungeonMap
+	if chosen == null or chosen.find_entity_position("player_spawn") == Vector2i(-1, -1):
+		_error_message.text = "На стартовой карте не задана точка старта героя"
+		_error_message.show()
 		return
 	_selected_game_map = chosen
+	_selected_campaign_id = campaign.campaign_id
 	_library.visible = false
 	_hero_selection.visible = true
 	_hero_selection.focus_first()
@@ -144,5 +173,15 @@ func _return_to_library() -> void:
 
 
 func _launch_selected_character(hero_id: String) -> void:
-	if _selected_game_map != null:
-		game_requested.emit(_selected_game_map, hero_id)
+	if _selected_game_map == null or _selected_campaign_id.is_empty():
+		return
+	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
+	var campaign: CampaignDefinition = _campaign_library.load_campaign(_selected_campaign_id, _maps_by_id)
+	if campaign == null or campaign.start_map_id != _selected_game_map.map_id:
+		_hero_selection.visible = false
+		_library.visible = true
+		_load_saved_maps()
+		_error_message.text = "Стартовая карта кампании изменилась. Выбери приключение заново."
+		_error_message.show()
+		return
+	game_requested.emit(_maps_by_id[campaign.start_map_id], hero_id, campaign)

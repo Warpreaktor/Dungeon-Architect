@@ -84,6 +84,7 @@ var standalone_game: bool = false
 var _startup_game_map: DungeonMap
 var _startup_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
 var _startup_game_session: GameSession
+var _startup_campaign: CampaignDefinition
 var _progress_save_store: ProgressSaveStore = ProgressSaveStore.new()
 var _progress_maps_directory: String = SavedMapLibrary.DIRECTORY
 var _editor_maps_directory: String = SavedMapLibrary.DIRECTORY
@@ -213,10 +214,11 @@ var _import_dialog: FileDialog
 
 
 ## Вызывается главным меню до добавления сцены в дерево.
-func configure_for_game(data: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID) -> void:
+func configure_for_game(data: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID, campaign: CampaignDefinition = null) -> void:
 	standalone_game = true
 	_startup_game_map = data
 	_startup_hero_id = hero_id
+	_startup_campaign = campaign
 
 
 func configure_for_resume(session: GameSession) -> void:
@@ -2639,6 +2641,9 @@ func _start_play_mode() -> void:
 	if session == null:
 		_set_status("Нельзя начать игру: на карте нет доступной точки старта героя." if standalone_game else "Нельзя начать тест: поставь на карте точку старта героя.")
 		return
+	if standalone_game and _startup_campaign != null and not session.set_campaign(_startup_campaign):
+		_set_status("Невозможно начать игру: стартовая карта не входит в кампанию.")
+		return
 	_startup_game_session = null
 	## Камера редактора не принадлежит временной тестовой сессии.
 	_editor_camera_offset = _canvas.camera_offset
@@ -3121,12 +3126,27 @@ func _continue_after_defeat() -> void:
 		_show_game_event(game_session.last_event_message)
 
 
+func _campaign_transition_allowed(map_id: String) -> bool:
+	if game_session == null or not game_session.is_map_in_campaign(map_id):
+		return false
+	if game_session.campaign_id.is_empty():
+		return true
+	var maps: Dictionary = SavedMapLibrary.load_all(_progress_maps_directory)
+	var campaign: CampaignDefinition = _campaign_library.load_campaign(game_session.campaign_id, maps)
+	return campaign != null and campaign.map_ids.has(game_session.map_data.map_id) and campaign.map_ids.has(map_id)
+
+
 func _show_victory_view() -> void:
 	if not is_play_mode or game_session == null or _victory_view != null or _game_dialogue.visible:
 		return
 	_pending_next_map = null
 	var target_id: String = game_session.next_map_id()
 	if not target_id.is_empty():
+		if not _campaign_transition_allowed(target_id):
+			game_session.cancel_exit_transition()
+			_game_notice.show_message("Переход за пределы кампании запрещён")
+			_set_status("Целевая карта не принадлежит текущей кампании.")
+			return
 		var linked: DungeonMap = game_session.known_map(target_id)
 		if linked == null:
 			linked = _find_linked_map(target_id)
@@ -3167,7 +3187,7 @@ func _enter_next_floor() -> void:
 	if game_session == null or _pending_next_map == null:
 		return
 	var next_map: DungeonMap = _pending_next_map
-	if not game_session.enter_map(next_map):
+	if not _campaign_transition_allowed(next_map.map_id) or not game_session.enter_map(next_map):
 		game_session.cancel_exit_transition()
 		_pending_next_map = null
 		_remove_victory_view()

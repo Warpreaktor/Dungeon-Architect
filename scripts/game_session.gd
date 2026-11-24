@@ -9,6 +9,8 @@ const MAX_PARTY_SIZE: int = 4
 const INVENTORY_SLOT_COUNT: int = 40
 
 var map_data: DungeonMap
+var campaign_id: String = ""
+var _campaign_map_ids: Dictionary = {}
 var hero: HeroState
 var inventory_member: HeroState
 var party: Array[HeroState] = []
@@ -81,6 +83,21 @@ static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_m
 	session._activate_triggers_at(spawn)
 	session._activate_message_at(spawn, "enter")
 	return session
+
+
+func set_campaign(campaign: CampaignDefinition) -> bool:
+	if campaign == null or map_data == null or not campaign.map_ids.has(map_data.map_id):
+		return false
+	var allowed: Dictionary = {}
+	for map_id in campaign.map_ids:
+		allowed[map_id] = true
+	campaign_id = campaign.campaign_id
+	_campaign_map_ids = allowed
+	return true
+
+
+func is_map_in_campaign(map_id: String) -> bool:
+	return campaign_id.is_empty() or _campaign_map_ids.has(map_id)
 
 
 func equipment_item_id(slot_id: String) -> String:
@@ -828,7 +845,7 @@ func _valid_snapshot_inventory(counts: Dictionary, bag: Array, members: Array[He
 
 
 func enter_map(next_map: DungeonMap) -> bool:
-	if is_party_defeated() or next_map == null or next_map.map_id.is_empty():
+	if is_party_defeated() or next_map == null or next_map.map_id.is_empty() or not is_map_in_campaign(next_map.map_id):
 		return false
 	var source_exit: Dictionary = current_exit()
 	var source_id: String = map_data.map_id if map_data != null else ""
@@ -982,7 +999,7 @@ func next_arrival_cell(destination: DungeonMap) -> Vector2i:
 
 
 func can_enter_next_map(destination: DungeonMap) -> bool:
-	if destination == null or destination.map_id != next_map_id():
+	if destination == null or destination.map_id != next_map_id() or not is_map_in_campaign(destination.map_id):
 		return false
 	var arrival: Vector2i = next_arrival_cell(destination)
 	if str(current_exit().get("type", "")) == "stairs_up":

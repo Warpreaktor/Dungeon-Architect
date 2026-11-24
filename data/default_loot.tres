@@ -93,7 +93,17 @@ weights = {
 "amulet_braided_cord": 1,
 "amulet_iron_tag": 1,
 "amulet_brass_plate": 1,
-"amulet_flint_shard": 1
+"amulet_flint_shard": 1,
+"belt_rope": 1,
+"belt_canvas_sash": 1,
+"belt_thin_leather": 1,
+"belt_pouches": 1,
+"belt_ranger": 1,
+"belt_quilted": 1,
+"belt_wide_leather": 1,
+"belt_miner": 1,
+"belt_studded_combat": 1,
+"belt_iron_guard": 1
 }
 quantity_ranges = {
 "gold": Vector2i(3, 12)

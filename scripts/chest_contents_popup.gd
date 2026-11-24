@@ -14,7 +14,7 @@ signal monster_configuration_changed(entity_id: String, party: Array[String], co
 @onready var _primary_monster: Label = %PrimaryMonster
 @onready var _secondary_monster: OptionButton = %SecondaryMonster
 
-const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Броня", "Перчатки", "Сапоги", "Амулеты", "Снаряжение", "Прочее"]
+const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Броня", "Перчатки", "Сапоги", "Пояса", "Амулеты", "Снаряжение", "Прочее"]
 const CATEGORY_ICONS := {
 	"Ключи": preload("res://assets/icons/key.png"),
 	"Зелья": preload("res://assets/icons/stats/24x24/potion.png"),
@@ -24,6 +24,7 @@ const CATEGORY_ICONS := {
 	"Броня": preload("res://assets/icons/armors/armor_leather_vest.png"),
 	"Перчатки": preload("res://assets/icons/gloves/gloves_cloth_wraps.png"),
 	"Сапоги": preload("res://assets/icons/boots/boots_leather_ankle.png"),
+	"Пояса": preload("res://assets/icons/belts/belt_rope.png"),
 	"Амулеты": preload("res://assets/icons/amulets/amulet_knotted_cord.png"),
 	"Снаряжение": preload("res://assets/icons/equipment_slots/armor.png"),
 	"Прочее": preload("res://assets/icons/gold.png"),
@@ -59,6 +60,7 @@ func _build_item_rows() -> void:
 	var armor: Array[String] = []
 	var gloves: Array[String] = []
 	var boots: Array[String] = []
+	var belts: Array[String] = []
 	var amulets: Array[String] = []
 	var other_equipment: Array[String] = []
 	for item_id in ItemCatalog.equipment_ids():
@@ -76,6 +78,8 @@ func _build_item_rows() -> void:
 				gloves.append(item_id)
 			ItemDefinition.EquipmentSlot.BOOTS:
 				boots.append(item_id)
+			ItemDefinition.EquipmentSlot.BELT:
+				belts.append(item_id)
 			ItemDefinition.EquipmentSlot.NECK:
 				amulets.append(item_id)
 			_:
@@ -93,6 +97,7 @@ func _build_item_rows() -> void:
 		{"title": "Броня", "items": armor},
 		{"title": "Перчатки", "items": gloves},
 		{"title": "Сапоги", "items": boots},
+		{"title": "Пояса", "items": belts},
 		{"title": "Амулеты", "items": amulets},
 		{"title": "Снаряжение", "items": other_equipment},
 		{"title": "Прочее", "items": ["gold"]}

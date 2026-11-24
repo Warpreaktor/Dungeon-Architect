@@ -4,7 +4,7 @@ extends RefCounted
 const ITEM_DIRECTORY: String = "res://items"
 const LOOT_TABLE: WeightedLootTable = preload("res://data/default_loot.tres")
 const LEGACY_IDS := {"key_yellow": "key"}
-const LEGACY_UNLISTED_EQUIPMENT_IDS := ["leather_armor", "leather_boots", "leather_gloves", "plain_amulet"]
+const LEGACY_UNLISTED_EQUIPMENT_IDS := ["leather_armor", "leather_boots", "leather_gloves", "plain_amulet", "cloth_belt"]
 
 
 static func list_ids() -> Array[String]:

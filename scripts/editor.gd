@@ -165,6 +165,8 @@ var _linking_exit_id: String = ""
 var _campaign_creation_dialog: ConfirmationDialog
 var _campaign_name_input: LineEdit
 var _campaign_dialog: AcceptDialog
+var _campaign_diagnostics_dialog: AcceptDialog
+var _campaign_diagnostics_text: TextEdit
 var _campaign_list: ItemList
 var _campaign_title_input: LineEdit
 var _campaign_start_choice: OptionButton
@@ -806,7 +808,18 @@ func _create_dialogs() -> void:
 	_campaign_available_choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_row.add_child(_campaign_available_choice)
 	add_row.add_child(_button("Добавить", "", _attach_campaign_map))
-	manager.add_child(_button("Удалить кампанию", "", _request_campaign_delete))
+	var campaign_footer := HBoxContainer.new()
+	manager.add_child(campaign_footer)
+	campaign_footer.add_child(_button("Диагностика связей", "", _show_campaign_diagnostics))
+	campaign_footer.add_child(_button("Удалить кампанию", "", _request_campaign_delete))
+	_campaign_diagnostics_dialog = AcceptDialog.new()
+	_campaign_diagnostics_dialog.title = "Диагностика кампаний"
+	_campaign_diagnostics_dialog.ok_button_text = "Закрыть"
+	add_child(_campaign_diagnostics_dialog)
+	_campaign_diagnostics_text = TextEdit.new()
+	_campaign_diagnostics_text.editable = false
+	_campaign_diagnostics_text.custom_minimum_size = Vector2(590, 340)
+	_campaign_diagnostics_dialog.add_child(_campaign_diagnostics_text)
 	_legacy_campaign_dialog = ConfirmationDialog.new()
 	_legacy_campaign_dialog.title = "Собрать карты в кампанию"
 	_legacy_campaign_dialog.ok_button_text = "Подтвердить состав"
@@ -2117,6 +2130,8 @@ func _open_campaign_manager() -> void:
 	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
 	if not _campaign_library.last_error.is_empty():
 		_set_status(_campaign_library.last_error)
+		_campaign_current_id = ""
+		_show_campaign_diagnostics()
 		return
 	if campaign == null:
 		_open_legacy_campaign_dialog(maps)
@@ -2249,6 +2264,23 @@ func _campaign_map_path(map_id: String) -> String:
 		if candidate != null and candidate.map_id == map_id:
 			return path
 	return ""
+
+
+func _show_campaign_diagnostics() -> void:
+	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+	var issues: Array[Dictionary] = _campaign_library.diagnose_graph(maps)
+	var lines: Array[String] = []
+	for issue in issues:
+		if not _campaign_current_id.is_empty() and not str(issue["campaign_id"]).is_empty() and issue["campaign_id"] != _campaign_current_id:
+			continue
+		var severity: String = str(issue["severity"])
+		var label_text: String = "Ошибка" if severity == "error" else ("Предупреждение" if severity == "warning" else "Сведения")
+		var reference: String = str(issue["map_id"])
+		if reference.is_empty():
+			reference = str(issue["campaign_id"])
+		lines.append("%s [%s]: %s" % [label_text, reference, issue["message"]])
+	_campaign_diagnostics_text.text = "\n".join(lines) if not lines.is_empty() else "Ошибок и предупреждений не обнаружено."
+	_campaign_diagnostics_dialog.popup_centered_clamped(Vector2i(660, 440), 0.9)
 
 
 func _refresh_campaign_manager() -> void:

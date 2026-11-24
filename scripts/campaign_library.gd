@@ -136,6 +136,49 @@ func load_all(maps_by_id: Dictionary) -> Dictionary:
 	return result
 
 
+func diagnose_graph(maps_by_id: Dictionary) -> Array[Dictionary]:
+	var issues: Array[Dictionary] = []
+	var candidates: Dictionary = {}
+	if DirAccess.dir_exists_absolute(directory):
+		var folder: DirAccess = DirAccess.open(directory)
+		if folder == null:
+			issues.append({"severity": "error", "campaign_id": "", "map_id": "", "message": "Невозможно прочитать каталог кампаний."})
+			return issues
+		for filename in folder.get_files():
+			var campaign_id: String = ""
+			if filename.ends_with(BACKUP_SUFFIX):
+				campaign_id = filename.trim_suffix(BACKUP_SUFFIX)
+			elif filename.ends_with(FILE_SUFFIX):
+				campaign_id = filename.trim_suffix(FILE_SUFFIX)
+			else:
+				continue
+			if not CampaignDefinition.valid_campaign_id(campaign_id):
+				issues.append({"severity": "error", "campaign_id": "", "map_id": "", "message": "Неверное имя файла кампании: %s." % filename})
+				continue
+			candidates[campaign_id] = true
+	var campaigns: Dictionary = {}
+	var ids: Array = candidates.keys()
+	ids.sort()
+	for campaign_id in ids:
+		var campaign: CampaignDefinition = _read_definition(_path(campaign_id, FILE_SUFFIX), campaign_id)
+		if campaign == null:
+			campaign = _read_definition(_path(campaign_id, BACKUP_SUFFIX), campaign_id)
+		if campaign == null:
+			issues.append({"severity": "error", "campaign_id": campaign_id, "map_id": "", "message": "Повреждённая структура кампании или несовпадение ID."})
+			continue
+		campaigns[campaign_id] = campaign
+	issues.append_array(CampaignGraphDiagnostics.analyze(campaigns, maps_by_id))
+	return issues
+
+
+func _read_definition(path: String, expected_id: String) -> CampaignDefinition:
+	if not FileAccess.file_exists(path):
+		return null
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var campaign: CampaignDefinition = CampaignDefinition.from_dict(parsed)
+	return campaign if campaign != null and campaign.campaign_id == expected_id else null
+
+
 func load_campaign(campaign_id: String, maps_by_id: Dictionary) -> CampaignDefinition:
 	var campaigns: Dictionary = load_all(maps_by_id)
 	if not last_error.is_empty():

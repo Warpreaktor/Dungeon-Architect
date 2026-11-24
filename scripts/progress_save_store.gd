@@ -7,11 +7,13 @@ const BACKUP_FILE := "progress.json.bak"
 const TEMP_FILE := "progress.json.tmp"
 
 var directory: String
+var campaign_library: CampaignLibrary
 var last_error: String = ""
 
 
-func _init(save_directory: String = DEFAULT_DIRECTORY) -> void:
+func _init(save_directory: String = DEFAULT_DIRECTORY, campaign_directory: String = CampaignLibrary.DIRECTORY) -> void:
 	directory = save_directory
+	campaign_library = CampaignLibrary.new(campaign_directory)
 
 
 func save_game(session: GameSession, maps_by_id: Dictionary) -> bool:
@@ -19,8 +21,12 @@ func save_game(session: GameSession, maps_by_id: Dictionary) -> bool:
 	if session == null:
 		last_error = "Нет активного прохождения."
 		return false
+	var campaigns: Dictionary = _load_campaigns(maps_by_id)
+	if not campaign_library.last_error.is_empty():
+		last_error = campaign_library.last_error
+		return false
 	var snapshot: Dictionary = session.progress_snapshot()
-	if snapshot.is_empty() or GameSession.from_progress_snapshot(snapshot, maps_by_id) == null:
+	if snapshot.is_empty() or GameSession.from_progress_snapshot(snapshot, maps_by_id, campaigns) == null:
 		last_error = "Текущее прохождение нельзя сохранить."
 		return false
 	var serialized: String = JSON.stringify(snapshot, "\t")
@@ -35,6 +41,9 @@ func save_game(session: GameSession, maps_by_id: Dictionary) -> bool:
 	var backup_exists: bool = FileAccess.file_exists(backup_path)
 	var save_valid: bool = save_exists and _read_session(save_path, maps_by_id) != null
 	var backup_valid: bool = backup_exists and _read_session(backup_path, maps_by_id) != null
+	if (save_exists and not save_valid and _is_incompatible_save(save_path, maps_by_id)) or (backup_exists and not backup_valid and _is_incompatible_save(backup_path, maps_by_id)):
+		last_error = "Существующее сохранение несовместимо; перезапись отменена."
+		return false
 	if (save_exists or backup_exists) and not save_valid and not backup_valid:
 		last_error = "Существующее сохранение повреждено или несовместимо; перезапись отменена."
 		return false
@@ -125,4 +134,16 @@ func _decode_session(content: String, maps_by_id: Dictionary) -> GameSession:
 	var json := JSON.new()
 	if json.parse(content) != OK or not (json.data is Dictionary):
 		return null
-	return GameSession.from_progress_snapshot(json.data, maps_by_id)
+	var campaigns: Dictionary = _load_campaigns(maps_by_id)
+	if not campaign_library.last_error.is_empty():
+		return null
+	return GameSession.from_progress_snapshot(json.data, maps_by_id, campaigns)
+
+
+func _load_campaigns(maps_by_id: Dictionary) -> Dictionary:
+	return campaign_library.load_all(maps_by_id)
+
+
+func _is_incompatible_save(path: String, maps_by_id: Dictionary) -> bool:
+	var parsed: Variant = JSON.parse_string(_read_text(path))
+	return parsed is Dictionary and _decode_session(JSON.stringify(parsed), maps_by_id) == null

@@ -1,7 +1,8 @@
 class_name ProgressSnapshotCodec
 extends RefCounted
 
-const FORMAT_VERSION: int = 1
+const FORMAT_VERSION: int = 2
+const LEGACY_FORMAT_VERSION: int = 1
 const FLOOR_FLAGS := [
 	"exit_rewards", "removed", "chests", "traps", "revealed_traps", "triggers", "messages"
 ]

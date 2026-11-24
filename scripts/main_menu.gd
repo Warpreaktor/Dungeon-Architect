@@ -94,15 +94,6 @@ func _continue_saved_game() -> void:
 		_refresh_continue_action()
 		%PlayButton.grab_focus()
 		return
-	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(session.map_data.map_id, _maps_by_id)
-	if campaign != null:
-		var valid_members: bool = true
-		for map_id in session.visited_floor_snapshots():
-			if not campaign.map_ids.has(str(map_id)):
-				valid_members = false
-				break
-		if valid_members:
-			session.set_campaign(campaign)
 	continue_game_requested.emit(session)
 
 

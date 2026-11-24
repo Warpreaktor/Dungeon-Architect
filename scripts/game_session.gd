@@ -1678,6 +1678,7 @@ func progress_snapshot() -> Dictionary:
 		floors_data[str(map_id)] = encoded
 	return {
 		"version": ProgressSnapshotCodec.FORMAT_VERSION,
+		"campaign_id": campaign_id,
 		"current_map_id": map_data.map_id,
 		"party": party_data,
 		"floors": floors_data,
@@ -1686,15 +1687,53 @@ func progress_snapshot() -> Dictionary:
 	}
 
 
-static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary) -> GameSession:
+static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, campaigns: Dictionary = {}) -> GameSession:
 	if not (snapshot is Dictionary) or not ProgressSnapshotCodec._is_integer(snapshot.get("version")):
 		return null
-	if int(snapshot["version"]) != ProgressSnapshotCodec.FORMAT_VERSION:
+	var version: int = int(snapshot["version"])
+	if version != ProgressSnapshotCodec.FORMAT_VERSION and version != ProgressSnapshotCodec.LEGACY_FORMAT_VERSION:
+		return null
+	if version == ProgressSnapshotCodec.LEGACY_FORMAT_VERSION and snapshot.has("campaign_id"):
+		return null
+	if version == ProgressSnapshotCodec.FORMAT_VERSION and typeof(snapshot.get("campaign_id")) != TYPE_STRING:
 		return null
 	var current_id: String = str(snapshot.get("current_map_id", ""))
 	var floors_data: Variant = snapshot.get("floors")
 	if current_id.is_empty() or not (floors_data is Dictionary) or not floors_data.has(current_id) or not (snapshot.get("party") is Dictionary):
 		return null
+	var saved_campaign_id: String = str(snapshot.get("campaign_id", ""))
+	var owners: Dictionary = {}
+	for campaign_key in campaigns:
+		var listed: Variant = campaigns[campaign_key]
+		if not (listed is CampaignDefinition) or listed.campaign_id != campaign_key or not listed.has_valid_maps(maps_by_id):
+			return null
+		for member_id in listed.map_ids:
+			if owners.has(member_id):
+				return null
+			owners[member_id] = campaign_key
+	if version == ProgressSnapshotCodec.LEGACY_FORMAT_VERSION:
+		var inferred_id: String = str(owners.get(current_id, ""))
+		for floor_id in floors_data:
+			if str(owners.get(floor_id, "")) != inferred_id:
+				return null
+		saved_campaign_id = inferred_id
+	elif not saved_campaign_id.is_empty():
+		if not campaigns.has(saved_campaign_id):
+			return null
+	elif owners.has(current_id):
+		return null
+	var allowed: Dictionary = {}
+	if not saved_campaign_id.is_empty():
+		var saved_campaign: CampaignDefinition = campaigns[saved_campaign_id]
+		for member_id in saved_campaign.map_ids:
+			allowed[member_id] = true
+	for floor_id in floors_data:
+		if not (floor_id is String):
+			return null
+		if not saved_campaign_id.is_empty() and not allowed.has(floor_id):
+			return null
+		if saved_campaign_id.is_empty() and owners.has(floor_id):
+			return null
 	var counter_value: Variant = snapshot.get("ground_loot_counter")
 	if not ProgressSnapshotCodec._is_integer(counter_value) or int(counter_value) < 0:
 		return null
@@ -1710,6 +1749,8 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary) ->
 		var from_id: String = str(record["from"])
 		var to_id: String = str(record["to"])
 		if not maps_by_id.has(from_id) or not maps_by_id.has(to_id) or not (maps_by_id[from_id] is DungeonMap) or not (maps_by_id[to_id] is DungeonMap):
+			return null
+		if not saved_campaign_id.is_empty() and (not allowed.has(from_id) or not allowed.has(to_id)):
 			return null
 		var normalized: Dictionary = {"from": from_id, "to": to_id}
 		if record.has("from_cell"):
@@ -1790,4 +1831,6 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary) ->
 	session._init_masks()
 	session.revealed = current["revealed"].duplicate(true)
 	session._refresh_visibility()
+	if not saved_campaign_id.is_empty() and not session.set_campaign(campaigns[saved_campaign_id]):
+		return null
 	return session

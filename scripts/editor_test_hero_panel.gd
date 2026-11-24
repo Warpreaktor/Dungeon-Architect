@@ -10,6 +10,7 @@ const HERO_SELECTOR_HEIGHT: int = 44
 
 var selector: OptionButton
 var second_selector: OptionButton
+var third_selector: OptionButton
 
 
 func _init() -> void:
@@ -34,6 +35,11 @@ func _init() -> void:
 	properties.add_child(second_label)
 	second_selector = _make_selector("TestSecondHeroSelect", true)
 	properties.add_child(second_selector)
+	var third_label := Label.new()
+	third_label.text = "Третий герой"
+	properties.add_child(third_label)
+	third_selector = _make_selector("TestThirdHeroSelect", true)
+	properties.add_child(third_selector)
 
 
 func _make_selector(node_name: String, optional: bool = false) -> OptionButton:
@@ -58,6 +64,8 @@ func select_party(hero_ids: Array[String]) -> void:
 	_select_id(selector, first_id)
 	var second_id: String = hero_ids[1] if hero_ids.size() > 1 else ""
 	_select_id(second_selector, second_id)
+	var third_id: String = hero_ids[2] if hero_ids.size() > 2 else ""
+	_select_id(third_selector, third_id)
 	_refresh_second_selector()
 
 
@@ -76,22 +84,25 @@ func _select_id(control: OptionButton, hero_id: String) -> void:
 
 func selected_party() -> Array[String]:
 	var heroes: Array[String] = []
-	var first_id: String = str(selector.get_selected_metadata())
-	if HeroCatalog.has(first_id):
-		heroes.append(first_id)
-	var second_id: String = str(second_selector.get_selected_metadata())
-	if HeroCatalog.has(second_id) and second_id != first_id:
-		heroes.append(second_id)
+	for control in [selector, second_selector, third_selector]:
+		var hero_id: String = str(control.get_selected_metadata())
+		if HeroCatalog.has(hero_id) and not heroes.has(hero_id):
+			heroes.append(hero_id)
 	return heroes
 
 
 func _refresh_second_selector() -> void:
-	var first_id: String = str(selector.get_selected_metadata())
-	for index in range(second_selector.item_count):
-		var second_id: String = str(second_selector.get_item_metadata(index))
-		second_selector.set_item_disabled(index, second_id == first_id)
-	if str(second_selector.get_selected_metadata()) == first_id:
-		_select_id(second_selector, "")
+	var chosen: Array[String] = []
+	for control in [selector, second_selector, third_selector]:
+		var current_id: String = str(control.get_selected_metadata())
+		if chosen.has(current_id) and not current_id.is_empty():
+			_select_id(control, "")
+			current_id = str(control.get_selected_metadata())
+		for index in range(control.item_count):
+			var item_id: String = str(control.get_item_metadata(index))
+			control.set_item_disabled(index, chosen.has(item_id))
+		if not current_id.is_empty():
+			chosen.append(current_id)
 
 
 func _on_selected(_index: int) -> void:

@@ -82,6 +82,10 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					last_hit["hit_index"] = hit_index
 					last_hit["hit_count"] = effect.hit_count
 					event_list.append(last_hit)
+					if not effect.target_status_id.is_empty() and effect.consume_target_status_on_hit and not bool(last_hit.get("dodged", false)):
+						if recipient.remove_status(effect.target_status_id):
+							event_list.append({"type": "status_removed", "actor_id": actor_id,
+								"target_id": recipient.participant_id, "status_id": effect.target_status_id, "removed": true})
 					if not stance_counter_used and recipient.is_alive() and actor.is_alive() and recipient != actor:
 						for status in recipient.statuses.values():
 							var retaliation_multiplier: float = float(status.get("counter_damage_multiplier", 0.0))
@@ -99,7 +103,14 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					if not recipient.is_alive():
 						break
 			AbilityEffectDefinition.Kind.BLOCK:
+				var cleared: Array[String] = []
+				for status_id in recipient.statuses:
+					if int((recipient.statuses[status_id] as Dictionary).get("next_block_penalty", 0)) > 0:
+						cleared.append(str(status_id))
 				recipient.prepare_block(effect.amount)
+				for status_id in cleared:
+					event_list.append({"type": "status_removed", "actor_id": actor_id,
+							"target_id": recipient.participant_id, "status_id": status_id, "removed": true})
 				event_list.append({"type": "block", "actor_id": actor_id, "target_id": recipient.participant_id,
 					"ability_id": ability_id, "armor": recipient.block_armor,
 					"damage_bonus_percent": recipient.block_attack_bonus_percent,
@@ -190,6 +201,8 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 		if first_in_draft or first_in_execution:
 			multiplier = effect.first_slot_multiplier
 	if target != null:
+		if not effect.target_status_id.is_empty() and target.statuses.has(effect.target_status_id) and effect.vs_target_status_multiplier > 0.0:
+			multiplier = effect.vs_target_status_multiplier
 		if target.block_armor > 0 and effect.vs_block_multiplier > 0.0:
 			multiplier = effect.vs_block_multiplier
 		elif target.is_resting and effect.vs_rest_multiplier > 0.0:

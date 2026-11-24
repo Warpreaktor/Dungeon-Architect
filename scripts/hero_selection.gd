@@ -10,6 +10,14 @@ signal back_requested
 func _ready() -> void:
     _configure_card(_volcha_button, "volcha")
     _configure_card(_petushan_button, "petushan")
+    for hero_id in HeroCatalog.list_ids():
+        if hero_id in ["volcha", "petushan"]:
+            continue
+        var button: Button = _volcha_button.duplicate(0) as Button
+        button.name = "%sButton" % hero_id.capitalize()
+        button.unique_name_in_owner = false
+        $Scroll/Cards.add_child(button)
+        _configure_card(button, hero_id)
     %BackButton.pressed.connect(func() -> void: back_requested.emit())
 
 func _configure_card(button: Button, hero_id: String) -> void:

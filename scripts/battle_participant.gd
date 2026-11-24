@@ -65,6 +65,8 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant.personal_ability_ids = source.definition.personal_ability_ids.duplicate() if source.definition != null else []
 	participant.base_dodge_percent = source.definition.base_dodge_percent if source.definition != null else 0
 	participant.accuracy_bonus = source.definition.accuracy_bonus if source.definition != null else 0
+	if source.definition != null and source.definition.base_accuracy_percent >= 0:
+		participant.accuracy_bonus += source.definition.base_accuracy_percent - BattleMath.accuracy_total(source.definition.agility, 0, 0)
 	participant.learned_ability_ids = source.learned_ability_ids.duplicate()
 	participant.action_slot_capacity = source.action_slot_capacity()
 	participant._base_max_health = participant._hero_snapshot.max_health + participant._hero_snapshot.equipment_bonus("health_bonus")
@@ -164,12 +166,18 @@ func prepare_block(base_armor: int) -> void:
 	# Блок доступен без щита. С щитом используем ЕГО броню, а не сумму
 	# с базовой; остаток прочности влияет только на последующие удары.
 	block_armor = preview_block_armor(base_armor)
+	for status_id in statuses.keys():
+		if int((statuses[status_id] as Dictionary).get("next_block_penalty", 0)) > 0:
+			remove_status(str(status_id))
 	block_attack_bonus_percent += BattleMath.RULES.block_attack_bonus_percent
 
 
 func preview_block_armor(base_armor: int = BattleMath.USE_DEFAULT_BLOCK_ARMOR) -> int:
 	var requested: int = BattleMath.RULES.unarmed_block_armor if base_armor == BattleMath.USE_DEFAULT_BLOCK_ARMOR else base_armor
-	return _equipment.block_armor(equipped_shield_id, maxi(BattleMath.RULES.unarmed_block_armor, requested))
+	var armor: int = _equipment.block_armor(equipped_shield_id, maxi(BattleMath.RULES.unarmed_block_armor, requested))
+	for status in statuses.values():
+		armor -= int(status.get("next_block_penalty", 0))
+	return maxi(armor, 0)
 
 
 func has_serviceable_shield() -> bool:

@@ -9,6 +9,7 @@ var max_health: int = 0
 var health: int = 0
 var strength: int = 0
 var agility: int = 0
+var perception: int = 0
 var base_defense: int = 0
 var defense: int = 0
 var gold: int = 0
@@ -46,7 +47,9 @@ func _init(hero_definition: HeroDefinition = null) -> void:
 	health = max_health
 	strength = definition.strength
 	agility = definition.agility
+	perception = definition.perception
 	base_defense = definition.base_defense
+	equipped_weapon_id = definition.starting_weapon_id
 	_recalculate_equipment_stats()
 	for ability_id in definition.personal_ability_ids:
 		if saved_action_slots.size() >= action_slot_capacity():
@@ -383,6 +386,7 @@ func copy_for_battle() -> HeroState:
 	copy.health = health
 	copy.strength = strength
 	copy.agility = agility
+	copy.perception = perception
 	copy.base_defense = base_defense
 	copy.defense = defense
 	copy.gold = gold
@@ -435,6 +439,7 @@ func to_snapshot() -> Dictionary:
 		"health": health,
 		"strength": strength,
 		"agility": agility,
+		"perception": perception,
 		"base_defense": base_defense,
 		"gold": gold,
 		"learned_ability_ids": learned_ability_ids.duplicate(),
@@ -471,6 +476,8 @@ static func from_snapshot(data: Dictionary) -> HeroState:
 			return null
 		if int(data[key]) != float(data[key]):
 			return null
+	if data.has("perception") and (typeof(data["perception"]) not in [TYPE_INT, TYPE_FLOAT] or float(data["perception"]) != float(int(data["perception"])) or int(data["perception"]) < 0):
+		return null
 	if int(data["max_health"]) <= 0 or int(data["health"]) < 0:
 		return null
 	if int(data["gold"]) < 0 or int(data["strength_phases"]) < 0 or int(data["vitality_phases"]) < 0 or int(data["vision_phases"]) < 0:
@@ -488,6 +495,7 @@ static func from_snapshot(data: Dictionary) -> HeroState:
 	result.health = int(data["health"])
 	result.strength = int(data["strength"])
 	result.agility = int(data["agility"])
+	result.perception = int(data.get("perception", result.definition.perception))
 	result.base_defense = int(data["base_defense"])
 	result.gold = int(data["gold"])
 	result.bonus_action_slots = int(data["bonus_action_slots"])

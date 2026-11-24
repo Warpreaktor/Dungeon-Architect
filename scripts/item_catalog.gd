@@ -5,11 +5,12 @@ const ITEM_DIRECTORY: String = "res://items"
 const LOOT_TABLE: WeightedLootTable = preload("res://data/default_loot.tres")
 const LEGACY_IDS := {"key_yellow": "key"}
 const LEGACY_UNLISTED_EQUIPMENT_IDS := ["leather_armor", "leather_boots", "leather_gloves", "plain_amulet", "cloth_belt", "copper_ring"]
+const STARTER_ONLY_EQUIPMENT_IDS := ["burolom_drill"]
 
 
 static func list_ids() -> Array[String]:
 	var ids: Array[String] = ResourceCatalog.list_ids(ITEM_DIRECTORY)
-	for item_id in LEGACY_UNLISTED_EQUIPMENT_IDS:
+	for item_id in LEGACY_UNLISTED_EQUIPMENT_IDS + STARTER_ONLY_EQUIPMENT_IDS:
 		ids.erase(item_id)
 	return ids
 

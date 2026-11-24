@@ -75,7 +75,10 @@ static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_m
 	var session := GameSession.new()
 	session.map_data = map_ref
 	for hero_id in hero_ids:
-		session.party.append(HeroState.new(HeroCatalog.get_hero(hero_id)))
+		var member := HeroState.new(HeroCatalog.get_hero(hero_id))
+		session.party.append(member)
+		if not member.equipped_weapon_id.is_empty():
+			session.carried_items[member.equipped_weapon_id] = int(session.carried_items.get(member.equipped_weapon_id, 0)) + 1
 	session.hero = session.party[0]
 	session.trap_random.randomize()
 	session.player_pos = spawn
@@ -760,6 +763,8 @@ func add_party_member(hero_id: String) -> bool:
 		return false
 	var member := HeroState.new(HeroCatalog.get_hero(hero_id))
 	party.append(member)
+	if not member.equipped_weapon_id.is_empty():
+		carried_items[member.equipped_weapon_id] = int(carried_items.get(member.equipped_weapon_id, 0)) + 1
 	if hero == null:
 		hero = member
 	return true

@@ -21,6 +21,9 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 @export_range(0.0, 1.0, 0.01) var armor_pierce_fraction: float = 0.0
 @export_range(0.0, 10.0, 0.01) var vs_rest_multiplier: float = 0.0
 @export_range(0.0, 10.0, 0.01) var vs_block_multiplier: float = 0.0
+@export var target_status_id: String = ""
+@export_range(0.0, 10.0, 0.01) var vs_target_status_multiplier: float = 0.0
+@export var consume_target_status_on_hit: bool = false
 @export_range(1, 20, 1) var hit_count: int = 1
 ## Параметры боевых ресурсов выражены через проценты от динамической базы.
 ## Нулевое значение использует damage_multiplier, положительное задаёт долю базы.
@@ -35,6 +38,7 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 @export_range(0, 999, 1) var duration_ticks: int = 0
 ## Периодический урон раз в собственный отдых владельца эффекта.
 @export_range(0, 9999, 1) var tick_damage: int = 0
+@export_range(0, 999, 1) var next_block_penalty: int = 0
 @export_range(0, 100, 1) var heal_percent_max: int = 0
 @export_range(-100, 100, 1) var accuracy_offset_percent: int = 0
 ## Дебафф после атаки требует попадания (обычное попадание или через блок).

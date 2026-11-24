@@ -40,6 +40,7 @@ static func apply(statuses: Dictionary, effect: AbilityEffectDefinition, tick: i
 		"stacks": stacks,
 		"applied_tick": tick,
 		"tick_damage": effect.tick_damage,
+		"next_block_penalty": effect.next_block_penalty,
 		"counter_damage_multiplier": effect.counter_damage_multiplier,
 		"counter_ability_id": effect.status_id,
 		"battle_only": effect.battle_only,
@@ -115,6 +116,9 @@ static func describe(status: Dictionary) -> String:
 	var hp_reduction: int = int(status.get("max_health_reduction_percent", 0))
 	if hp_reduction > 0:
 		parts.append("Максимум HP: −%d%% за стек; стеков: %d" % [hp_reduction, stacks])
+	var block_penalty: int = int(status.get("next_block_penalty", 0))
+	if block_penalty > 0:
+		parts.append("Следующий блок: −%d" % block_penalty)
 	var value: int = int(status.get("modifier", 0)) * stacks
 	if value != 0:
 		var label: String = "Модификатор"

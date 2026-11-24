@@ -1162,17 +1162,20 @@ func _on_settings_option_selected(id: int) -> void:
 		SETTINGS_TEST_HERO:
 			_settings_tabs.current_tab = 1
 			_test_hero_panel.select_party(_test_party_ids)
-			_settings_dialog.popup_centered_clamped(Vector2i(490, 260))
+			_settings_dialog.popup_centered_clamped(Vector2i(490, 360))
 
 
 func _on_test_party_selected(hero_ids: Array[String]) -> void:
-	if hero_ids.is_empty() or hero_ids.size() > 2:
+	if hero_ids.is_empty() or hero_ids.size() > 3:
 		return
 	for hero_id in hero_ids:
 		if not HeroCatalog.has(hero_id):
 			return
-	if hero_ids.size() == 2 and hero_ids[0] == hero_ids[1]:
-		return
+	var unique_ids: Dictionary = {}
+	for hero_id in hero_ids:
+		if unique_ids.has(hero_id):
+			return
+		unique_ids[hero_id] = true
 	_test_party_ids = hero_ids.duplicate()
 	var config := ConfigFile.new()
 	config.load(EDITOR_SETTINGS_PATH)
@@ -1194,7 +1197,7 @@ func _load_test_party_selection() -> void:
 			var hero_id: String = str(entry)
 			if HeroCatalog.has(hero_id) and not valid_ids.has(hero_id):
 				valid_ids.append(hero_id)
-			if valid_ids.size() >= 2:
+			if valid_ids.size() >= 3:
 				break
 	if valid_ids.is_empty():
 		var legacy_id: String = str(config.get_value("editor", "test_hero_id", HeroCatalog.DEFAULT_HERO_ID))

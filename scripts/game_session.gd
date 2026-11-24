@@ -274,7 +274,10 @@ func _can_equip_layout(equipped: Dictionary) -> bool:
 		return false
 	for slot_id in EquipmentSlotRules.SLOT_IDS:
 		var item_id: String = str(equipped.get(slot_id, ""))
-		if not item_id.is_empty() and not EquipmentSlotRules.accepts(slot_id, ItemCatalog.get_item(item_id)):
+		if item_id.is_empty():
+			continue
+		var definition: ItemDefinition = ItemCatalog.get_item(item_id)
+		if definition == null or definition.stackable or not EquipmentSlotRules.accepts(slot_id, definition):
 			return false
 	return true
 
@@ -1742,7 +1745,7 @@ func equip_item(item_id: String) -> bool:
 			if transfer_inventory_item("bag", source, "equipment", slot_id):
 				return true
 	for slot_id in EquipmentSlotRules.SLOT_IDS:
-		if EquipmentSlotRules.accepts(slot_id, item) and equipment_item_id(slot_id) != item_id:
+		if EquipmentSlotRules.accepts(slot_id, item):
 			if transfer_inventory_item("bag", source, "equipment", slot_id):
 				return true
 	return false
@@ -1751,14 +1754,17 @@ func equip_item(item_id: String) -> bool:
 func unequip_item(item_id: String) -> bool:
 	if hero == null or item_id.is_empty():
 		return false
-	var bag: Array[String] = _inventory_slots_snapshot()
-	var free: int = bag.find("")
-	if free < 0:
-		return false
 	for slot_id in EquipmentSlotRules.SLOT_IDS:
 		if equipment_item_id(slot_id) == item_id:
-			return transfer_inventory_item("equipment", slot_id, "bag", free)
+			return unequip_equipment_slot(slot_id)
 	return false
+
+
+func unequip_equipment_slot(slot_id: String) -> bool:
+	if hero == null or not EquipmentSlotRules.SLOT_IDS.has(slot_id) or equipment_item_id(slot_id).is_empty():
+		return false
+	var free: int = _inventory_slots_snapshot().find("")
+	return free >= 0 and transfer_inventory_item("equipment", slot_id, "bag", free)
 
 
 ## Выполняется после ответной атаки; удаляем только сломанный экземпляр.

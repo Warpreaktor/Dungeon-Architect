@@ -80,8 +80,8 @@ static func decode_floor(data: Variant, map_ref: DungeonMap) -> Dictionary:
 				var definition: ItemDefinition = ItemCatalog.get_item(str(item["item_id"]))
 				if not (instances is Array) or definition == null or definition.category != ItemDefinition.Category.EQUIPMENT or definition.stackable or instances.size() != int(item["quantity"]):
 					return {}
-				for data in instances:
-					var instance: ItemInstance = ItemInstance.from_dict(data)
+				for raw_instance in instances:
+					var instance: ItemInstance = ItemInstance.from_dict(raw_instance)
 					if instance == null or instance.item_id != str(item["item_id"]):
 						return {}
 			if item.has("durabilities"):

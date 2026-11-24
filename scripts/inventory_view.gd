@@ -254,9 +254,9 @@ func _show_item_definition(item_id: String, bag_index: int = -1) -> void:
 
 
 func _is_equipped(item_id: String) -> bool:
-	if _session == null or _session.hero == null:
+	if _session == null or _selected_member == null:
 		return false
-	return item_id == _selected_member.equipped_weapon_id or item_id == _selected_member.equipped_shield_id
+	return _session._equipment_snapshot(_selected_member).values().has(item_id)
 
 
 func show_use_result(item_id: String, message: String) -> void:

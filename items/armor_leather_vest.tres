@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="ItemDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/item_definition.gd" id="1_definition"]
+[ext_resource type="Texture2D" path="res://assets/icons/armors/armor_leather_vest.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_definition")
+item_id = "armor_leather_vest"
+display_name = "Кожаный жилет"
+description = "Лёгкая броня для тех, кто делает ставку на манёвренность"
+icon = ExtResource("2_icon")
+category = 3
+stackable = false
+equipment_slot = 4
+armor_bonus = 1
+health_bonus = 3
+strength_bonus = 0
+agility_bonus = 0
+perception_bonus = 0
+dodge_bonus_percent = 1
+accuracy_bonus_percent = 0
+poison_resistance_percent = 0

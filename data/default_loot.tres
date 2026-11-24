@@ -53,7 +53,17 @@ weights = {
 "helmet_militia_cap": 1,
 "helmet_iron_halfhelm": 1,
 "helmet_infantry_sallet": 1,
-"helmet_kettle_hat": 1
+"helmet_kettle_hat": 1,
+"armor_canvas_jacket": 1,
+"armor_wool_doublet": 1,
+"armor_quilted_gambeson": 1,
+"armor_leather_vest": 1,
+"armor_ranger_jacket": 1,
+"armor_reinforced_leather": 1,
+"armor_chain_shirt": 1,
+"armor_lamellar_cuirass": 1,
+"armor_militia_brigandine": 1,
+"armor_iron_cuirass": 1
 }
 quantity_ranges = {
 "gold": Vector2i(3, 12)

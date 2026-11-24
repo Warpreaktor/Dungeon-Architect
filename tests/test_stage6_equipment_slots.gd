@@ -4,7 +4,7 @@ extends SceneTree
 const SLOT_ITEMS: Dictionary = {
 	"head": "leather_cap",
 	"neck": "plain_amulet",
-	"body": "leather_armor",
+	"body": "armor_canvas_jacket",
 	"main_hand": "sword",
 	"off_hand": "shield",
 	"ring_left": "copper_ring",

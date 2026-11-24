@@ -14,13 +14,14 @@ signal monster_configuration_changed(entity_id: String, party: Array[String], co
 @onready var _primary_monster: Label = %PrimaryMonster
 @onready var _secondary_monster: OptionButton = %SecondaryMonster
 
-const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Снаряжение", "Прочее"]
+const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Броня", "Снаряжение", "Прочее"]
 const CATEGORY_ICONS := {
 	"Ключи": preload("res://assets/icons/key.png"),
 	"Зелья": preload("res://assets/icons/stats/24x24/potion.png"),
 	"Оружие": preload("res://assets/icons/sword.png"),
 	"Щиты": preload("res://assets/icons/shield.png"),
 	"Шлемы": preload("res://assets/icons/helmets/helmet_leather.png"),
+	"Броня": preload("res://assets/icons/armors/armor_leather_vest.png"),
 	"Снаряжение": preload("res://assets/icons/equipment_slots/armor.png"),
 	"Прочее": preload("res://assets/icons/gold.png"),
 }
@@ -31,6 +32,7 @@ var _editing_monster: bool = false
 var _primary_monster_id: String = ""
 var _item_checks: Dictionary = {} # id -> CheckBox
 var _item_amounts: Dictionary = {} # id -> SpinBox
+var _unlisted_quantities: Dictionary = {}
 var _group_buttons: Dictionary = {} # category -> Button
 var _group_contents: Dictionary = {} # category -> VBoxContainer
 var _editing_amount: SpinBox
@@ -51,6 +53,7 @@ func _build_item_rows() -> void:
 	var weapons: Array[String] = []
 	var shields: Array[String] = []
 	var helmets: Array[String] = []
+	var armor: Array[String] = []
 	var other_equipment: Array[String] = []
 	for item_id in ItemCatalog.equipment_ids():
 		var item: ItemDefinition = ItemCatalog.get_item(item_id)
@@ -61,6 +64,8 @@ func _build_item_rows() -> void:
 				shields.append(item_id)
 			ItemDefinition.EquipmentSlot.HEAD:
 				helmets.append(item_id)
+			ItemDefinition.EquipmentSlot.BODY:
+				armor.append(item_id)
 			_:
 				other_equipment.append(item_id)
 	var potions: Array[String] = ["potion"]
@@ -73,6 +78,7 @@ func _build_item_rows() -> void:
 		{"title": "Оружие", "items": weapons},
 		{"title": "Щиты", "items": shields},
 		{"title": "Шлемы", "items": helmets},
+		{"title": "Броня", "items": armor},
 		{"title": "Снаряжение", "items": other_equipment},
 		{"title": "Прочее", "items": ["gold"]}
 	]
@@ -174,6 +180,11 @@ func configure(entity_id: String, contents: Array[String], gold_amount: int = 5,
 			if monster_id == selected_id:
 				selection_index = index
 		_secondary_monster.select(selection_index)
+	_unlisted_quantities.clear()
+	for item_id in contents:
+		if not _item_checks.has(item_id) and ItemCatalog.has(item_id):
+			var item: ItemDefinition = ItemCatalog.get_item(item_id)
+			_unlisted_quantities[item_id] = int(quantities.get(item_id, gold_amount if item_id == "gold" else item.default_quantity))
 	_random_check.set_pressed_no_signal(random_mode)
 	_hidden_check.set_pressed_no_signal(hidden)
 	for item_id in _item_checks:
@@ -234,6 +245,10 @@ func _save() -> void:
 			amount.apply()
 			contents.append(item_id)
 			quantities[item_id] = int(amount.value)
+	for item_id in _unlisted_quantities:
+		if item_id not in contents:
+			contents.append(item_id)
+			quantities[item_id] = _unlisted_quantities[item_id]
 	var gold_amount: int = int(quantities.get("gold", 5))
 	if _editing_monster:
 		var party: Array[String] = [_primary_monster_id]

@@ -65,17 +65,21 @@ func _draw() -> void:
 	var data: DungeonMap = session.map_data
 	var scale := _view_scale()
 	var offset := _view_offset(scale)
+	var cell_pixels := CELL_SIZE * scale
+	var start_x := clampi(floori(-offset.x / cell_pixels) - 1, 0, data.width)
+	var start_y := clampi(floori(-offset.y / cell_pixels) - 1, 0, data.height)
+	var end_x := clampi(ceili((size.x - offset.x) / cell_pixels) + 1, 0, data.width)
+	var end_y := clampi(ceili((size.y - offset.y) / cell_pixels) + 1, 0, data.height)
 	draw_set_transform(offset, 0.0, Vector2.ONE * scale)
-	for y in range(data.height):
-		for x in range(data.width):
+	for y in range(start_y, end_y):
+		for x in range(start_x, end_x):
 			if not session.is_revealed(x, y):
 				continue
 			var location := Vector2(x, y) * CELL_SIZE
 			var rect := Rect2(location, Vector2.ONE * CELL_SIZE)
-			draw_rect(rect, WALL_COLOR if data.get_terrain(x, y) == "wall" else FLOOR_COLOR)
-			if data.get_terrain(x, y) == "wall":
-				continue
-			if miniature and scale * CELL_SIZE < 3.0:
+			var is_wall := data.get_terrain(x, y) == "wall"
+			draw_rect(rect, WALL_COLOR if is_wall else FLOOR_COLOR)
+			if is_wall:
 				continue
 			for entity in session.entities_at(x, y):
 				if session.is_entity_removed(entity):

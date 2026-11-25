@@ -2894,15 +2894,18 @@ func _on_inventory_closed() -> void:
 func _on_inventory_use_requested(item_id: String) -> void:
 	if not is_play_mode or game_session == null or not _inventory_view.visible:
 		return
+	var previous_vision: int = game_session.hero.vision_bonus if game_session.hero != null and game_session.hero.has_vision_effect() else 0
 	var result: Dictionary = game_session.use_item(item_id, game_session._inventory_equipment_member())
 	_inventory_view.show_use_result(item_id, str(result.get("message", "")))
 	if bool(result.get("used", false)):
 		_refresh_stats()
-		if game_session.hero.has_vision_effect():
+		var current_vision: int = game_session.hero.vision_bonus if game_session.hero != null and game_session.hero.has_vision_effect() else 0
+		if current_vision > 0 and _canvas.zoom != DungeonCanvas.PLAY_VISION_MIN_ZOOM:
 			_canvas.zoom = DungeonCanvas.PLAY_VISION_MIN_ZOOM
 			_canvas.center_on_cell(game_session.player_pos)
-		_canvas.queue_redraw()
-		_refresh_map_overlays()
+		if previous_vision != current_vision:
+			_canvas.queue_redraw()
+			_refresh_map_overlays()
 
 
 func _show_game_event(message: String) -> void:

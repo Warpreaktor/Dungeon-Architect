@@ -28,7 +28,15 @@ var display_name: String = "Безымянное подземелье"
 var width: int = 16
 var height: int = 16
 var terrain: Array = []  # terrain[y][x] = "floor" или "wall"
-var entities: Array = [] # [{"id", "type", "x", "y", "properties"}, ...]
+var _entities: Array = []
+var _entities_by_cell: Dictionary = {}
+var _entities_by_kind: Dictionary = {}
+var entities: Array:
+	get:
+		return _entities.duplicate()
+	set(value):
+		_entities = value.duplicate()
+		_rebuild_entity_index()
 var metadata: Dictionary = {"theme": "stone_dungeon"}
 
 
@@ -73,9 +81,8 @@ func set_terrain(x: int, y: int, kind: String) -> bool:
 		return false
 	terrain[y][x] = kind
 	if kind == "wall":
-		for i in range(entities.size() - 1, -1, -1):
-			if int(entities[i]["x"]) == x and int(entities[i]["y"]) == y:
-				entities.remove_at(i)
+		for entity in entities_at(x, y):
+			_remove_entity(entity)
 	return true
 
 
@@ -90,21 +97,19 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		if color not in PORTAL_COLORS:
 			return false
 		var same_color_count: int = 0
-		for entity in entities:
-			if str(entity.get("type", "")) == "portal_local" and str(entity.get("properties", {}).get("color", "")) == color:
+		for entity in _entities_by_kind.get("portal_local", []):
+			if str(entity.get("properties", {}).get("color", "")) == color:
 				same_color_count += 1
 		if same_color_count >= 2:
 			return false
-	for entity in entities:
-		if int(entity["x"]) != x or int(entity["y"]) != y:
-			continue
+	for entity in _entities_by_cell.get(Vector2i(x, y), []):
 		if entity["type"] == kind or (kind in ["portal", "portal_local", "stairs_down"] and entity["type"] in ["portal", "portal_local", "stairs_down"]):
 			return false
 	# На всей карте допускается единственная стартовая позиция героя.
 	if kind == "player_spawn":
-		for i in range(entities.size() - 1, -1, -1):
-			if entities[i]["type"] == "player_spawn":
-				entities.remove_at(i)
+		var spawns: Array = _entities_by_kind.get("player_spawn", [])
+		for entity in spawns.duplicate():
+			_remove_entity(entity)
 	var properties: Dictionary = {}
 	if kind == "door":
 		properties = {"lock_id": "key"}
@@ -132,7 +137,7 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		properties = {"event_id": ""}
 	elif kind == "message":
 		properties = {"text": "", "activation": "enter", "target_entity_id": ""}
-	entities.append({
+	_append_entity({
 		"id": "ent_%08x" % randi(),
 		"type": kind,
 		"x": x,
@@ -177,7 +182,7 @@ static func door_trap_message(door: Dictionary) -> String:
 func attach_door_trap(door_id: String, trap_id: String) -> bool:
 	if not TrapCatalog.has(trap_id) or not TrapCatalog.get_trap(trap_id).can_attach_to("door"):
 		return false
-	for entity in entities:
+	for entity in _entities:
 		if str(entity.get("id", "")) != door_id or str(entity.get("type", "")) != "door":
 			continue
 		var properties: Dictionary = entity.get("properties", {})
@@ -191,7 +196,7 @@ func attach_door_trap(door_id: String, trap_id: String) -> bool:
 
 
 func set_door_trap_message(door_id: String, message: String) -> bool:
-	for entity in entities:
+	for entity in _entities:
 		if str(entity.get("id", "")) != door_id or str(entity.get("type", "")) != "door":
 			continue
 		if door_trap_id(entity).is_empty():
@@ -214,7 +219,7 @@ func set_door_trap_message(door_id: String, message: String) -> bool:
 
 
 func remove_door_trap(door_id: String) -> bool:
-	for entity in entities:
+	for entity in _entities:
 		if str(entity.get("id", "")) != door_id or str(entity.get("type", "")) != "door":
 			continue
 		var properties: Dictionary = entity.get("properties", {})
@@ -303,7 +308,7 @@ func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amou
 		if item_id in CHEST_REWARDS and item_id not in normalized:
 			normalized.append(item_id)
 	var amount: int = clampi(gold_amount, 1, 999999)
-	for entity in entities:
+	for entity in _entities:
 		if str(entity.get("id", "")) != chest_id or str(entity.get("type", "")) not in ["chest", "stairs_down"]:
 			continue
 		var current: Dictionary = entity.get("properties", {})
@@ -348,7 +353,7 @@ func set_monster_party(entity_id: String, party: Array[String]) -> bool:
 	for member_id in party:
 		if not MonsterCatalog.has(member_id):
 			return false
-	for entity in entities:
+	for entity in _entities:
 		if str(entity.get("id", "")) != entity_id or str(entity.get("type", "")) != "monster":
 			continue
 		if monster_party_ids(entity) == party:
@@ -395,7 +400,7 @@ func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: 
 		if canonical_id in CHEST_REWARDS and canonical_id not in normalized:
 			normalized.append(canonical_id)
 	var amount: int = clampi(gold_amount, 1, 999999)
-	for entity in entities:
+	for entity in _entities:
 		if str(entity.get("id", "")) != monster_id or str(entity.get("type", "")) != "monster":
 			continue
 		var current: Dictionary = entity.get("properties", {})
@@ -419,7 +424,7 @@ func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: 
 func set_monster_type(entity_id: String, monster_id: String) -> bool:
 	if not MonsterCatalog.has(monster_id):
 		return false
-	for entity in entities:
+	for entity in _entities:
 		if str(entity.get("id", "")) != entity_id or str(entity.get("type", "")) != "monster":
 			continue
 		var old_type: String = str(entity.get("properties", {}).get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
@@ -435,7 +440,7 @@ func set_monster_type(entity_id: String, monster_id: String) -> bool:
 ## Тип замка является свойством двери в JSON, а не состоянием прохождения.
 func set_door_lock(door_id: String, lock_id: String) -> bool:
 	var normalized: String = LockCatalog.normalize(lock_id)
-	for entity in entities:
+	for entity in _entities:
 		if str(entity.get("id", "")) != door_id or str(entity.get("type", "")) != "door":
 			continue
 		if LockCatalog.required_key(entity) == normalized:
@@ -449,7 +454,7 @@ func set_door_lock(door_id: String, lock_id: String) -> bool:
 
 func local_portal_destination(portal_id: String) -> Vector2i:
 	var source: Dictionary = {}
-	for entity in entities:
+	for entity in _entities_by_kind.get("portal_local", []):
 		if str(entity.get("id", "")) == portal_id and str(entity.get("type", "")) == "portal_local":
 			source = entity
 			break
@@ -459,7 +464,7 @@ func local_portal_destination(portal_id: String) -> Vector2i:
 	if color not in PORTAL_COLORS:
 		return Vector2i(-1, -1)
 	var paired: Array[Dictionary] = []
-	for entity in entities:
+	for entity in _entities_by_kind.get("portal_local", []):
 		if str(entity.get("type", "")) == "portal_local" and str(entity.get("properties", {}).get("color", "")) == color:
 			paired.append(entity)
 	if paired.size() != 2:
@@ -493,7 +498,7 @@ static func exit_target_cell(entity: Dictionary, destination: DungeonMap) -> Vec
 
 func set_exit_target(entity_id: String, target_map_id: String) -> bool:
 	var normalized: String = target_map_id.strip_edges()
-	for entity in entities:
+	for entity in _entities:
 		if str(entity.get("id", "")) != entity_id or not is_exit(entity):
 			continue
 		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
@@ -519,7 +524,7 @@ func set_stairs_target(stairs_id: String, target_map_id: String) -> bool:
 ## Идентификатор игрового события хранится на самой карте, не в сессии.
 func set_trigger_event_id(trigger_id: String, event_id: String) -> bool:
 	var normalized := event_id.strip_edges()
-	for entity in entities:
+	for entity in _entities:
 		if str(entity.get("id", "")) != trigger_id or str(entity.get("type", "")) != "trigger":
 			continue
 		var properties: Dictionary = entity.get("properties", {})
@@ -548,7 +553,7 @@ func set_message_at(x: int, y: int, text: String) -> bool:
 	if clean_text.is_empty():
 		if existing.is_empty():
 			return false
-		entities.erase(existing)
+		_remove_entity(existing)
 		return true
 	# Послание прикрепляется к событию клетки, а не заменяет объект.
 	# Монстр имеет приоритет: игрок должен прочитать реплику до боя.
@@ -590,7 +595,7 @@ func move_existing(kind: String, entity_id: String, source: Vector2i, target: Ve
 	if get_terrain(target.x, target.y) == "wall":
 		return false
 	var moving: Dictionary = {}
-	for entry in entities:
+	for entry in _entities_by_cell.get(source, []):
 		if str(entry["id"]) == entity_id and str(entry["type"]) == kind and int(entry["x"]) == source.x and int(entry["y"]) == source.y:
 			moving = entry
 			break
@@ -616,32 +621,76 @@ func move_existing(kind: String, entity_id: String, source: Vector2i, target: Ve
 	if not bound_message.is_empty():
 		bound_message["x"] = target.x
 		bound_message["y"] = target.y
+	_entities_by_cell.erase(source)
+	_entities_by_cell.erase(target)
+	for entity in _entities:
+		var cell := Vector2i(int(entity["x"]), int(entity["y"]))
+		if cell != source and cell != target:
+			continue
+		if not _entities_by_cell.has(cell):
+			_entities_by_cell[cell] = []
+		_entities_by_cell[cell].append(entity)
 	return true
 
 
 func erase_at(x: int, y: int) -> bool:
 	if not contains(x, y):
 		return false
-	for i in range(entities.size() - 1, -1, -1):
-		if int(entities[i]["x"]) == x and int(entities[i]["y"]) == y:
-			entities.remove_at(i)
-			return true
+	var here: Array = _entities_by_cell.get(Vector2i(x, y), [])
+	if not here.is_empty():
+		_remove_entity(here.back())
+		return true
 	return set_terrain(x, y, "floor")
 
 
+func _append_entity(entity: Dictionary) -> void:
+	_entities.append(entity)
+	_index_entity(entity)
+
+
+func _index_entity(entity: Dictionary) -> void:
+	var cell := Vector2i(int(entity["x"]), int(entity["y"]))
+	var kind := str(entity["type"])
+	if not _entities_by_cell.has(cell):
+		_entities_by_cell[cell] = []
+	if not _entities_by_kind.has(kind):
+		_entities_by_kind[kind] = []
+	_entities_by_cell[cell].append(entity)
+	_entities_by_kind[kind].append(entity)
+
+
+func _remove_entity(entity: Dictionary) -> void:
+	_entities.erase(entity)
+	var cell := Vector2i(int(entity["x"]), int(entity["y"]))
+	var kind := str(entity["type"])
+	var cell_entries: Array = _entities_by_cell[cell]
+	cell_entries.erase(entity)
+	if cell_entries.is_empty():
+		_entities_by_cell.erase(cell)
+	var kind_entries: Array = _entities_by_kind[kind]
+	kind_entries.erase(entity)
+	if kind_entries.is_empty():
+		_entities_by_kind.erase(kind)
+
+
+func _rebuild_entity_index() -> void:
+	_entities_by_cell.clear()
+	_entities_by_kind.clear()
+	for entity in _entities:
+		_index_entity(entity)
+
+
 func entities_at(x: int, y: int) -> Array:
-	var result: Array = []
-	for entity in entities:
-		if int(entity["x"]) == x and int(entity["y"]) == y:
-			result.append(entity)
-	return result
+	var here: Array = _entities_by_cell.get(Vector2i(x, y), [])
+	return here.duplicate()
 
 
 func find_entity_position(kind: String) -> Vector2i:
-	for entity in entities:
-		if str(entity["type"]) == kind:
-			return Vector2i(int(entity["x"]), int(entity["y"]))
-	return Vector2i(-1, -1)
+	var matches: Array = _entities_by_kind.get(kind, [])
+	if matches.is_empty():
+		return Vector2i(-1, -1)
+	var entity: Dictionary = matches.front()
+	return Vector2i(int(entity["x"]), int(entity["y"]))
 
 
 func to_dict() -> Dictionary:
@@ -689,7 +738,6 @@ static func from_dict(value: Variant) -> DungeonMap:
 				return null
 			new_row.append(tile)
 		result.terrain.append(new_row)
-	result.entities.clear()
 	var seen_ids: Dictionary = {}
 	for index in range(raw_entities.size()):
 		var entry: Variant = raw_entities[index]
@@ -709,7 +757,7 @@ static func from_dict(value: Variant) -> DungeonMap:
 		if seen_ids.has(entity_id):
 			return null
 		seen_ids[entity_id] = true
-		result.entities.append({"id": entity_id, "type": kind, "x": x, "y": y, "properties": props})
+		result._append_entity({"id": entity_id, "type": kind, "x": x, "y": y, "properties": props.duplicate(true)})
 	var raw_metadata: Variant = value.get("metadata", {"theme": "stone_dungeon"})
 	if typeof(raw_metadata) == TYPE_DICTIONARY:
 		result.metadata = raw_metadata

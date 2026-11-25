@@ -49,7 +49,14 @@ var is_editor_test: bool = false
 var _revealed_before_debug_open_map: Array = []
 var revealed: Array = [] # revealed[y][x] = bool
 var visible: Array = []  # visible[y][x] = bool
-var ground_loot_containers: Array[Dictionary] = []
+var _ground_loot_containers: Array[Dictionary] = []
+var _ground_by_cell: Dictionary = {}
+var _ground_by_id: Dictionary = {}
+var _visible_bounds := Rect2i()
+var _debug_visibility_applied: bool = false
+var ground_loot_containers: Array[Dictionary]:
+	get:
+		return _ground_loot_containers.duplicate()
 var _ground_loot_counter: int = 0
 var claimed_exit_rewards: Dictionary = {}
 var _floor_states: Dictionary = {} # Состояние посещённых карт только в памяти этого прохождения.
@@ -468,25 +475,39 @@ func _append_ground_loot(cell: Vector2i, entries: Array[Dictionary]) -> void:
 		contents.append_array(entries)
 		return
 	_ground_loot_counter += 1
-	ground_loot_containers.append({
+	_add_ground_container({
 		"id": "ground_%d" % _ground_loot_counter,
 		"x": cell.x, "y": cell.y,
 		"loot": entries.duplicate(true)
 	})
 
 
+func _add_ground_container(container: Dictionary) -> void:
+	_ground_loot_containers.append(container)
+	var cell := Vector2i(int(container["x"]), int(container["y"]))
+	if not _ground_by_cell.has(cell):
+		_ground_by_cell[cell] = []
+	_ground_by_cell[cell].append(container)
+	_ground_by_id[str(container["id"])] = container
+
+
+func _remove_ground_container(container: Dictionary) -> void:
+	_ground_loot_containers.erase(container)
+	_ground_by_id.erase(str(container["id"]))
+	var cell := Vector2i(int(container["x"]), int(container["y"]))
+	var entries: Array = _ground_by_cell[cell]
+	entries.erase(container)
+	if entries.is_empty():
+		_ground_by_cell.erase(cell)
+
+
 func ground_container_at(cell: Vector2i) -> Dictionary:
-	for container in ground_loot_containers:
-		if int(container["x"]) == cell.x and int(container["y"]) == cell.y:
-			return container
-	return {}
+	var entries: Array = _ground_by_cell.get(cell, [])
+	return entries.front() if not entries.is_empty() else {}
 
 
 func ground_container_by_id(container_id: String) -> Dictionary:
-	for container in ground_loot_containers:
-		if str(container["id"]) == container_id:
-			return container
-	return {}
+	return _ground_by_id.get(container_id, {})
 
 
 func _shield_durability_for_drop(member: HeroState, item_id: String) -> int:
@@ -701,7 +722,7 @@ func take_ground_loot(container_id: String, entry_index: int) -> int:
 	if int(entry["quantity"]) <= 0:
 		loot.remove_at(entry_index)
 	if loot.is_empty():
-		ground_loot_containers.erase(container)
+		_remove_ground_container(container)
 	return amount
 
 
@@ -768,7 +789,7 @@ func _capture_floor_state() -> Dictionary:
 	return {
 		"map_id": map_data.map_id,
 		"position": player_pos,
-		"ground_loot": ground_loot_containers.duplicate(true),
+		"ground_loot": _ground_loot_containers.duplicate(true),
 		"exit_rewards": claimed_exit_rewards.duplicate(true),
 		"removed": removed_entities.duplicate(true),
 		"chests": opened_chests.duplicate(true),
@@ -1075,9 +1096,11 @@ func enter_map(next_map: DungeonMap) -> bool:
 		_stairs_history.pop_back()
 	_pending_return_exit.clear()
 	map_data = destination
-	ground_loot_containers.clear()
+	_ground_loot_containers.clear()
+	_ground_by_cell.clear()
+	_ground_by_id.clear()
 	for container in saved.get("ground_loot", []):
-		ground_loot_containers.append(container.duplicate(true))
+		_add_ground_container(container.duplicate(true))
 	claimed_exit_rewards = saved.get("exit_rewards", {}).duplicate(true)
 	player_pos = arrival
 	removed_entities = saved.get("removed", {}).duplicate(true)
@@ -1205,6 +1228,8 @@ func cancel_exit_transition() -> void:
 
 
 func _init_masks() -> void:
+	_visible_bounds = Rect2i()
+	_debug_visibility_applied = false
 	_revealed_before_debug_open_map.clear()
 	revealed.clear()
 	visible.clear()
@@ -1858,25 +1883,33 @@ func set_debug_open_map(enabled: bool) -> void:
 
 
 func _refresh_visibility() -> void:
-	if debug_open_map and _revealed_before_debug_open_map.is_empty():
-		_revealed_before_debug_open_map = revealed.duplicate(true)
-	for y in range(map_data.height):
-		for x in range(map_data.width):
-			visible[y][x] = debug_open_map
-			if debug_open_map:
-				revealed[y][x] = true
 	var radius: int = VISION_RADIUS + (hero.vision_bonus if hero != null and hero.has_vision_effect() else 0)
+	var bounds := Rect2i(player_pos - Vector2i(radius, radius), Vector2i.ONE * (2 * radius + 1))
+	bounds = bounds.intersection(Rect2i(0, 0, map_data.width, map_data.height))
 	if debug_open_map:
-		for y in range(player_pos.y - radius, player_pos.y + radius + 1):
-			for x in range(player_pos.x - radius, player_pos.x + radius + 1):
-				if contains(x, y):
-					_revealed_before_debug_open_map[y][x] = true
+		if not _debug_visibility_applied:
+			_revealed_before_debug_open_map = revealed.duplicate(true)
+			for y in range(map_data.height):
+				visible[y].fill(true)
+				revealed[y].fill(true)
+			_debug_visibility_applied = true
+		for y in range(bounds.position.y, bounds.end.y):
+			for x in range(bounds.position.x, bounds.end.x):
+				_revealed_before_debug_open_map[y][x] = true
 		return
-	for y in range(player_pos.y - radius, player_pos.y + radius + 1):
-		for x in range(player_pos.x - radius, player_pos.x + radius + 1):
-			if contains(x, y):
-				visible[y][x] = true
-				revealed[y][x] = true
+	if _debug_visibility_applied:
+		for y in range(map_data.height):
+			visible[y].fill(false)
+		_debug_visibility_applied = false
+	else:
+		for y in range(_visible_bounds.position.y, _visible_bounds.end.y):
+			for x in range(_visible_bounds.position.x, _visible_bounds.end.x):
+				visible[y][x] = false
+	_visible_bounds = bounds
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			visible[y][x] = true
+			revealed[y][x] = true
 
 
 func _claim_exit_reward(stairs: Dictionary) -> void:
@@ -2067,7 +2100,7 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, ca
 	session._ground_loot_counter = int(counter_value)
 	session.player_pos = current["position"]
 	for container in current["ground_loot"]:
-		session.ground_loot_containers.append(container.duplicate(true))
+		session._add_ground_container(container.duplicate(true))
 	session.claimed_exit_rewards = current["exit_rewards"].duplicate(true)
 	session.removed_entities = current["removed"].duplicate(true)
 	session.opened_chests = current["chests"].duplicate(true)

@@ -2,6 +2,7 @@ extends SceneTree
 
 ## Минимальный smoke-test модели. Запускается через Godot --headless --script.
 func _initialize() -> void:
+	_test_spatial_index()
 	var model := DungeonMap.create_blank(12, 12)
 	assert(model.display_name != "Безымянное подземелье")
 	assert(not model.display_name.is_empty())
@@ -769,3 +770,66 @@ func _initialize() -> void:
 
 	print("DungeonMap smoke tests: OK")
 	quit()
+
+
+func _test_spatial_index() -> void:
+	var source := DungeonMap.create_blank(DungeonMap.MAX_SIZE, DungeonMap.MAX_SIZE)
+	var raw: Dictionary = source.to_dict()
+	var objects: Array = []
+	for y in range(1, 129):
+		for x in range(1, 65):
+			objects.append({"id": "trigger_%d_%d" % [x, y], "type": "trigger", "x": x, "y": y, "properties": {}})
+	raw["entities"] = objects
+	var model := DungeonMap.from_dict(raw)
+	assert(model != null and model.entities.size() == objects.size())
+	for y in [0, 1, 17, 128, 129, DungeonMap.MAX_SIZE - 1]:
+		for x in [0, 1, 23, 64, 65, DungeonMap.MAX_SIZE - 1]:
+			_assert_cell_matches_linear(model, Vector2i(x, y))
+	var origin := Vector2i(130, 20)
+	var target := Vector2i(131, 20)
+	assert(model.place_entity("chest", origin.x, origin.y))
+	var chest: Dictionary = model.entities_at(origin.x, origin.y)[0]
+	assert(model.place_entity("trigger", target.x, target.y))
+	assert(model.set_message_at(origin.x, origin.y, "Сундук"))
+	var before: Dictionary = model.to_dict().duplicate(true)
+	assert(model.move_existing("chest", str(chest["id"]), origin, target))
+	assert(model.entities_at(origin.x, origin.y).is_empty())
+	var moved: Array = model.entities_at(target.x, target.y)
+	assert(moved.size() == 3)
+	assert(moved[0]["type"] == "chest" and moved[1]["type"] == "trigger" and moved[2]["type"] == "message")
+	assert(moved[2]["properties"]["target_entity_id"] == chest["id"])
+	_assert_cell_matches_linear(model, target)
+	moved.clear()
+	assert(model.entities_at(target.x, target.y).size() == 3)
+	var after: Dictionary = model.to_dict().duplicate(true)
+	assert(model.erase_at(target.x, target.y))
+	assert(model.message_at(target.x, target.y).is_empty())
+	assert(model.set_terrain(target.x, target.y, "wall"))
+	assert(model.entities_at(target.x, target.y).is_empty())
+	model.terrain = before["terrain"].duplicate(true)
+	model.entities = before["entities"].duplicate(true)
+	assert(model.entities_at(origin.x, origin.y).size() == 2)
+	assert(model.entities_at(target.x, target.y).size() == 1)
+	model.terrain = after["terrain"].duplicate(true)
+	model.entities = after["entities"].duplicate(true)
+	_assert_cell_matches_linear(model, origin)
+	_assert_cell_matches_linear(model, target)
+	assert(model.place_entity("player_spawn", 150, 150))
+	assert(model.place_entity("player_spawn", 151, 150))
+	assert(model.entities_at(150, 150).is_empty())
+	assert(model.find_entity_position("player_spawn") == Vector2i(151, 150))
+	assert(model.erase_at(151, 150))
+	assert(model.find_entity_position("player_spawn") == Vector2i(-1, -1))
+	var clone := DungeonMap.from_dict(JSON.parse_string(JSON.stringify(model.to_dict())))
+	assert(clone != null)
+	_assert_cell_matches_linear(clone, target)
+	assert(clone.set_message_at(target.x, target.y, ""))
+	assert(not model.message_at(target.x, target.y).is_empty())
+
+
+func _assert_cell_matches_linear(model: DungeonMap, cell: Vector2i) -> void:
+	var expected: Array = []
+	for entity in model.entities:
+		if int(entity["x"]) == cell.x and int(entity["y"]) == cell.y:
+			expected.append(entity)
+	assert(model.entities_at(cell.x, cell.y) == expected)

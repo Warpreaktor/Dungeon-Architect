@@ -2,6 +2,7 @@ extends SceneTree
 
 
 func _initialize() -> void:
+	_test_ground_index()
 	_test_survivors_keep_bag_and_gear()
 	_test_full_bag_and_shield_durability()
 	_test_last_hero_drops_shared_bag()
@@ -113,4 +114,25 @@ func _test_floor_persistence_and_loot_removal() -> void:
 	assert(session.ground_container_by_id(container_id)["loot"][0]["quantity"] == 6)
 	assert(session.take_ground_loot(container_id, 0) == 6)
 	assert(session.ground_container_by_id(container_id).is_empty())
+	assert(session.ground_container_at(session.player_pos).is_empty())
 	assert(JSON.stringify(original_map.to_dict()) == original)
+
+
+func _test_ground_index() -> void:
+	var session := _session()
+	var cell := session.player_pos
+	session._append_ground_loot(cell, [{"item_id": "gold", "quantity": 2}])
+	session._append_ground_loot(cell + Vector2i(1, 0), [{"item_id": "gold", "quantity": 7}])
+	session._append_ground_loot(cell, [{"item_id": "gold", "quantity": 3}])
+	var container: Dictionary = session.ground_container_at(cell)
+	var container_id: String = str(container["id"])
+	assert(container["loot"].size() == 2)
+	assert(session.ground_container_by_id(container_id) == container)
+	assert(session.entities_at(cell.x, cell.y).back()["id"] == container_id)
+	assert(session.map_data.entities_at(cell.x, cell.y).size() == 1)
+	assert(session.take_ground_loot(container_id, 0) == 2)
+	assert(session.take_ground_loot(container_id, 0) == 3)
+	assert(session.ground_container_at(cell).is_empty())
+	assert(session.ground_container_by_id(container_id).is_empty())
+	assert(session.ground_container_at(cell + Vector2i(1, 0))["loot"][0]["quantity"] == 7)
+	assert(session.entities_at(cell.x, cell.y).size() == 1)

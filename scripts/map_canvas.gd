@@ -20,6 +20,9 @@ const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.
 var _portal_texture: Texture2D = ImageAsset.texture("res://assets/icons/portals/portal_gateway.png")
 var _stairs_up_texture: Texture2D = ImageAsset.texture("res://assets/icons/stairs_up.png")
 var _local_portal_textures: Dictionary = {}
+var _monster_icons: Dictionary = {}
+var _trap_icons: Dictionary = {}
+var _door_trap_icons: Dictionary = {}
 
 const STAIRS_DOWN_TEXTURE: Texture2D = preload("res://assets/icons/stairs_down.png")
 const DOUBLE_TAP_MS := 400
@@ -73,6 +76,15 @@ var _settings_tool_pressed_id: String = ""
 
 
 func _ready() -> void:
+	for monster_id in MonsterCatalog.list_ids():
+		_monster_icons[monster_id] = MonsterCatalog.get_monster(monster_id).icon
+	for legacy_id in MonsterCatalog.LEGACY_IDS:
+		_monster_icons[legacy_id] = _monster_icons[MonsterCatalog.resolve_id(legacy_id)]
+	for trap_id in TrapCatalog.list_ids():
+		var trap: TrapDefinition = TrapCatalog.get_trap(trap_id)
+		_trap_icons[trap_id] = trap.icon
+		if trap.can_attach_to("door"):
+			_door_trap_icons[trap_id] = trap.icon
 	for color_id in DungeonMap.PORTAL_COLORS:
 		_local_portal_textures[color_id] = ImageAsset.texture("res://assets/icons/portals/portal_%s.png" % color_id)
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -273,10 +285,13 @@ func _draw() -> void:
 	if min_x >= max_x or min_y >= max_y:
 		return
 
+	var stairs_up_cell := Vector2i(-1, -1)
+	if mode == "play" and game_session != null and game_session.has_stairs_up():
+		stairs_up_cell = map_data.find_entity_position("player_spawn")
 	draw_set_transform(camera_offset, 0.0, Vector2.ONE * zoom)
 	for y in range(min_y, max_y):
 		for x in range(min_x, max_x):
-			_draw_cell(x, y)
+			_draw_cell(x, y, stairs_up_cell)
 
 	if mode == "play" and game_session != null and map_data.contains(game_session.player_pos.x, game_session.player_pos.y):
 		_draw_player(_player_visual_cell * TILE_SIZE)
@@ -306,19 +321,20 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-func _draw_cell(x: int, y: int) -> void:
+func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 	var rect := Rect2(float(x) * TILE_SIZE, float(y) * TILE_SIZE, TILE_SIZE, TILE_SIZE)
 	var can_see := mode != "play" or game_session == null or game_session.is_visible(x, y)
 	var has_seen := mode != "play" or game_session == null or game_session.is_revealed(x, y)
 	if not has_seen:
 		draw_rect(rect, Color("#05080c"))
 		return
-	if map_data.get_terrain(x, y) == "wall":
+	var is_wall := map_data.get_terrain(x, y) == "wall"
+	if is_wall:
 		draw_texture_rect(WALL_TEXTURE, rect, false)
 	else:
 		draw_texture_rect(FLOOR_TEXTURE, rect, false)
 	# Полупрозрачный слой анализа виден только автору, не игроку.
-	if mode == "edit" and not reachability_result.is_empty() and map_data.get_terrain(x, y) != "wall":
+	if mode == "edit" and not reachability_result.is_empty() and not is_wall:
 		var position := Vector2i(x, y)
 		var certain: Dictionary = reachability_result.get("reachable", {})
 		var possible: Dictionary = reachability_result.get("possible", {})
@@ -339,11 +355,13 @@ func _draw_cell(x: int, y: int) -> void:
 		if mode == "play" and kind in ["player_spawn", "trigger", "message"]:
 			continue
 		var origin := Vector2(x, y) * TILE_SIZE
-		if kind == "chest" and ((DungeonMap.chest_contents(entity).is_empty() and not DungeonMap.chest_is_random(entity)) or (mode == "play" and game_session != null and game_session.is_chest_open(entity))):
+		if kind == "chest" and ((mode == "play" and game_session != null and game_session.is_chest_open(entity)) or (not DungeonMap.chest_is_random(entity) and DungeonMap.chest_contents(entity).is_empty())):
 			_draw_open_chest(origin)
 		elif kind == "monster":
-			var icon: Texture2D = MonsterCatalog.from_entity(entity).icon
-			draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
+			var monster_id := str(entity.get("properties", {}).get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
+			var icon: Texture2D = _monster_icons.get(monster_id, _monster_icons.get(MonsterCatalog.DEFAULT_MONSTER_ID))
+			if icon != null:
+				draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		elif kind == "trap":
 			_draw_trap(origin, entity, mode == "play" and game_session != null and game_session.is_trap_disarmed(entity))
 		elif kind == "portal_local":
@@ -359,7 +377,7 @@ func _draw_cell(x: int, y: int) -> void:
 					_draw_door_trap_marker(origin, entity)
 		if mode == "edit" and DungeonMap.is_entity_hidden(entity):
 			has_hidden_entity = true
-	if mode == "play" and game_session != null and game_session.has_stairs_up() and Vector2i(x, y) == map_data.find_entity_position("player_spawn"):
+	if Vector2i(x, y) == stairs_up_cell:
 		if _stairs_up_texture != null:
 			draw_texture_rect(_stairs_up_texture, rect, false)
 	if has_hidden_entity:
@@ -384,12 +402,15 @@ func _draw_door_lock(origin: Vector2, lock_id: String) -> void:
 
 
 func _draw_door_trap_marker(origin: Vector2, door: Dictionary) -> void:
-	var trap: TrapDefinition = TrapCatalog.from_door(door)
-	if trap == null or trap.icon == null:
+	var attachment: Variant = door.get("properties", {}).get("trap", {})
+	if not attachment is Dictionary:
+		return
+	var icon: Texture2D = _door_trap_icons.get(str(attachment.get("trap_id", "")))
+	if icon == null:
 		return
 	var rect := Rect2(origin + Vector2(1, 1), Vector2(22, 22))
 	draw_rect(rect.grow(1), Color("#111b28"))
-	draw_texture_rect(trap.icon, rect, false)
+	draw_texture_rect(icon, rect, false)
 
 
 func _draw_player(origin: Vector2) -> void:
@@ -404,24 +425,29 @@ func _draw_player(origin: Vector2) -> void:
 	draw_circle(center + Vector2(14, -12), 4.0, Color("#e8c58a"))
 
 
+func _trap_icon(entity: Dictionary) -> Texture2D:
+	var trap_id := str(entity.get("properties", {}).get("trap_id", TrapCatalog.DEFAULT_TRAP_ID))
+	return _trap_icons.get(trap_id, _trap_icons.get(TrapCatalog.DEFAULT_TRAP_ID))
+
+
 func _draw_triggered_trap_marker(origin: Vector2, entity: Dictionary) -> void:
-	var trap: TrapDefinition = TrapCatalog.from_entity(entity)
-	if trap == null or trap.icon == null:
+	var icon := _trap_icon(entity)
+	if icon == null:
 		return
 	var badge := Rect2(origin + Vector2(28, -3), Vector2(23, 23))
 	draw_rect(badge.grow(1.0), Color("#eeb978"))
-	draw_texture_rect(trap.icon, badge, false)
+	draw_texture_rect(icon, badge, false)
 
 
 func _draw_trap(origin: Vector2, entity: Dictionary, disarmed: bool) -> void:
-	var trap: TrapDefinition = TrapCatalog.from_entity(entity)
-	if trap == null or trap.icon == null:
+	var icon := _trap_icon(entity)
+	if icon == null:
 		_draw_entity("trigger", origin)
 		return
 	var modulate := Color(1, 1, 1, 1)
 	if disarmed:
 		modulate = Color(0.58, 0.63, 0.70, 0.72)
-	draw_texture_rect(trap.icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false, modulate)
+	draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false, modulate)
 	if disarmed:
 		var overlay := Rect2(origin + Vector2(4, 4), Vector2(40, 40))
 		draw_rect(overlay, Color(0.05, 0.08, 0.12, 0.22))
@@ -507,7 +533,8 @@ func _update_hover(point: Vector2) -> void:
 	if cell != _hovered:
 		_hovered = cell
 		hover_changed.emit(cell)
-		queue_redraw()
+		if mode == "edit" and selected_tool != "hand":
+			queue_redraw()
 
 
 ## Краткая история операций: запоминаем только содержимое карты, не камеру.

@@ -105,6 +105,28 @@ func _run() -> void:
 	editor.call("_on_view_option_selected", 1)
 	assert(not issues_button.visible and not issues_dialog.visible)
 
+	var canvas: DungeonCanvas = editor.get("_canvas") as DungeonCanvas
+	assert(canvas != null)
+	for monster_id in MonsterCatalog.list_ids():
+		assert(canvas._monster_icons[monster_id] == MonsterCatalog.get_monster(monster_id).icon)
+	for legacy_id in MonsterCatalog.LEGACY_IDS:
+		assert(canvas._monster_icons[legacy_id] == MonsterCatalog.get_monster(legacy_id).icon)
+	for trap_id in TrapCatalog.list_ids():
+		var trap: TrapDefinition = TrapCatalog.get_trap(trap_id)
+		assert(canvas._trap_icons[trap_id] == trap.icon)
+		assert(canvas._door_trap_icons.has(trap_id) == trap.can_attach_to("door"))
+	var snapshot: Dictionary = canvas.capture_edit_state()
+	var edit_cell := Vector2i(1, 1)
+	var original_entities: Array = current_map.entities_at(edit_cell.x, edit_cell.y).duplicate(true)
+	current_map.set_terrain(edit_cell.x, edit_cell.y, "wall")
+	assert(current_map.set_terrain(edit_cell.x, edit_cell.y, "floor"))
+	assert(current_map.place_entity("trigger", edit_cell.x, edit_cell.y))
+	var changed: Dictionary = canvas.capture_edit_state()
+	assert(current_map.entities_at(edit_cell.x, edit_cell.y).size() == 1)
+	canvas.restore_edit_state(snapshot)
+	assert(current_map.entities_at(edit_cell.x, edit_cell.y) == original_entities)
+	canvas.restore_edit_state(changed)
+	assert(current_map.entities_at(edit_cell.x, edit_cell.y).size() == 1)
 	editor.queue_free()
 	print("Editor UI: map settings dialog, compact panels and diagnostics OK")
 	quit()

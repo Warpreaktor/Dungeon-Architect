@@ -2,16 +2,13 @@ extends SceneTree
 
 ## Зелья расходуются из GameSession в паузе, а не из временной UI-копии.
 func _initialize() -> void:
-	var game := GameSession.new()
-	game.hero = HeroState.new(HeroCatalog.get_hero("volcha"))
-	game.map_data = DungeonMap.create_blank(5, 5)
-	game.player_pos = Vector2i(2, 2)
-	game._init_masks()
-	game.carried_items = {
-		"potion_health_small": 2, "potion_strength_small": 1,
-		"potion_vitality_small": 1, "potion_vision_small": 1,
-		"sword": 1
-	}
+	var dungeon := DungeonMap.create_blank(5, 5)
+	assert(dungeon.place_entity("player_spawn", 2, 2))
+	var game := GameSession.start_for(dungeon, "volcha")
+	assert(game._receive_item("potion_health_small", 2) == 2)
+	for item_id in ["potion_strength_small", "potion_vitality_small", "potion_vision_small", "sword"]:
+		assert(game._receive_item(item_id, 1) == 1)
+	assert(game.unequip_item("sword"))
 	var items: Array[String] = game.combat_item_ids()
 	assert(items.size() == 3)
 	assert(not ("potion_vision_small" in items) and not ("sword" in items))

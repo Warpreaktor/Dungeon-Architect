@@ -165,7 +165,6 @@ func _refresh_locations(preferred_id: String = "") -> void:
 	_location_entries.clear()
 	if _session == null:
 		return
-	_session._ensure_item_instances()
 	for slot_id in EquipmentSlotRules.SLOT_IDS:
 		var item_id: String = _session.equipment_item_id(slot_id)
 		if item_id.is_empty():
@@ -354,7 +353,6 @@ func _add_item() -> void:
 		instance_id = str(ids[0])
 		if not _apply_magic(_session.item_instance(instance_id), item, options):
 			return
-		_session._sync_item_instances_to_party()
 		for member in _session.party:
 			member._recalculate_equipment_stats()
 	_feedback.text = "Добавлено: %s" % item.display_name
@@ -374,7 +372,6 @@ func _apply_properties() -> void:
 	var options: Dictionary = _magic_options(item)
 	if options.is_empty() or not _apply_magic(instance, item, options):
 		return
-	_session._sync_item_instances_to_party()
 	for member in _session.party:
 		member._recalculate_equipment_stats()
 	_feedback.text = "Свойства изменены"

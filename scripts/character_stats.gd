@@ -41,40 +41,59 @@ static func equipment_values(ids: Array[String]) -> Dictionary:
 	return totals
 
 
-static func slot_item_value(hero: Variant, slot_id: String, field: String) -> int:
-	var item_id: String = ""
+static func _slot_item_id(hero: Variant, slot_id: String) -> String:
 	match slot_id:
 		"main_hand":
-			item_id = str(hero.equipped_weapon_id)
+			return str(hero.equipped_weapon_id)
 		"off_hand":
-			item_id = str(hero.equipped_shield_id)
+			return str(hero.equipped_shield_id)
 		_:
-			item_id = str(hero.equipped_accessories.get(slot_id, ""))
-	var definition: ItemDefinition = ItemCatalog.get_item(item_id)
-	if definition == null:
-		return 0
+			return str(hero.equipped_accessories.get(slot_id, ""))
+
+
+static func _slot_instance(hero: Variant, slot_id: String, item_id: String) -> ItemInstance:
 	var instance: ItemInstance = hero.item_instances.get(str(hero.equipped_instance_ids.get(slot_id, ""))) as ItemInstance
-	if instance != null and instance.item_id != item_id:
-		instance = null
-	return ItemMagicCatalog.effective_value(definition, instance, field)
+	return instance if instance != null and instance.item_id == item_id else null
+
+
+static func slot_item_value(hero: Variant, slot_id: String, field: String) -> int:
+	var item_id: String = _slot_item_id(hero, slot_id)
+	var definition: ItemDefinition = ItemCatalog.get_item(item_id)
+	return ItemMagicCatalog.effective_value(definition, _slot_instance(hero, slot_id, item_id), field) if definition != null else 0
+
+
+static func _equipment_totals(hero: Variant, fields: Array[String], include_hands: bool = false) -> Dictionary:
+	var totals: Dictionary = {}
+	for field in fields:
+		totals[field] = 0
+	if include_hands:
+		totals["melee_weapon_damage"] = 0
+		totals["ranged_weapon_damage"] = 0
+		totals["block_rating"] = 0
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		var item_id: String = _slot_item_id(hero, slot_id)
+		if item_id.is_empty():
+			continue
+		var definition: ItemDefinition = ItemCatalog.get_item(item_id)
+		if definition == null:
+			continue
+		var instance: ItemInstance = _slot_instance(hero, slot_id, item_id)
+		for field in fields:
+			if field == "armor_bonus" and slot_id in ["main_hand", "off_hand"]:
+				continue
+			totals[field] += ItemMagicCatalog.effective_value(definition, instance, field)
+		if include_hands and slot_id == "main_hand" and definition.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON:
+			if definition.weapon_kind == ItemDefinition.WeaponKind.MELEE:
+				totals["melee_weapon_damage"] = ItemMagicCatalog.effective_value(definition, instance, "weapon_damage")
+			elif definition.weapon_kind == ItemDefinition.WeaponKind.RANGED:
+				totals["ranged_weapon_damage"] = ItemMagicCatalog.effective_value(definition, instance, "weapon_damage")
+		elif include_hands and slot_id == "off_hand":
+			totals["block_rating"] = ItemMagicCatalog.effective_value(definition, instance, "defense_bonus")
+	return totals
 
 
 static func equipment_values_for_hero(hero: Variant) -> Dictionary:
-	var totals: Dictionary = {}
-	for field in EQUIPMENT_FIELDS:
-		totals[field] = 0
-	for slot_id in EquipmentSlotRules.SLOT_IDS:
-		if slot_id in ["main_hand", "off_hand"]:
-			var weapon_id: String = str(hero.equipped_weapon_id if slot_id == "main_hand" else hero.equipped_shield_id)
-			if weapon_id.is_empty():
-				continue
-		elif str(hero.equipped_accessories.get(slot_id, "")).is_empty():
-			continue
-		for field in EQUIPMENT_FIELDS:
-			if field == "armor_bonus" and slot_id in ["main_hand", "off_hand"]:
-				continue
-			totals[field] += slot_item_value(hero, slot_id, field)
-	return totals
+	return _equipment_totals(hero, EQUIPMENT_FIELDS)
 
 
 static func equipped_ids(hero: Variant) -> Array[String]:
@@ -87,7 +106,10 @@ static func equipped_ids(hero: Variant) -> Array[String]:
 
 
 static func equipment_bonus(hero: Variant, field: String) -> int:
-	return int(equipment_values_for_hero(hero).get(field, 0))
+	if not EQUIPMENT_FIELDS.has(field):
+		return 0
+	var fields: Array[String] = [field]
+	return int(_equipment_totals(hero, fields)[field])
 
 
 static func energy_factor(amount: int, maximum: int) -> float:
@@ -103,15 +125,10 @@ static func energy_factor(amount: int, maximum: int) -> float:
 	return 1.0
 
 
-static func _weapon_kind(item_id: String) -> int:
-	var item: ItemDefinition = ItemCatalog.get_item(item_id)
-	return item.weapon_kind if item != null and item.equipment_slot == ItemDefinition.EquipmentSlot.WEAPON else -1
-
-
 static func hero_values(hero: Variant, include_temporary: bool = true) -> Dictionary:
 	if hero == null:
 		return {}
-	var equipment: Dictionary = equipment_values_for_hero(hero)
+	var equipment: Dictionary = _equipment_totals(hero, EQUIPMENT_FIELDS, true)
 	var definition: HeroDefinition = hero.definition
 	var accuracy_bonus: int = definition.accuracy_bonus if definition != null else 0
 	if definition != null and definition.base_accuracy_percent >= 0:
@@ -122,9 +139,9 @@ static func hero_values(hero: Variant, include_temporary: bool = true) -> Dictio
 		"base_dodge_percent": definition.base_dodge_percent if definition != null else 0,
 		"accuracy_bonus": accuracy_bonus,
 		"attack_power_bonus": hero.strength_bonus if hero.strength_phases > 0 else 0,
-		"melee_weapon_damage": slot_item_value(hero, "main_hand", "weapon_damage") if _weapon_kind(hero.equipped_weapon_id) == ItemDefinition.WeaponKind.MELEE else 0,
-		"ranged_weapon_damage": slot_item_value(hero, "main_hand", "weapon_damage") if _weapon_kind(hero.equipped_weapon_id) == ItemDefinition.WeaponKind.RANGED else 0,
-		"block_rating": slot_item_value(hero, "off_hand", "defense_bonus")
+		"melee_weapon_damage": equipment["melee_weapon_damage"],
+		"ranged_weapon_damage": equipment["ranged_weapon_damage"],
+		"block_rating": equipment["block_rating"]
 	}
 	var statuses: Dictionary = hero.overworld_statuses if include_temporary else {}
 	var factor: float = energy_factor(hero.energy, definition.max_energy) if include_temporary and definition != null else 1.0
@@ -147,13 +164,28 @@ static func participant_values(participant: Variant) -> Dictionary:
 	return resolve(base, {}, participant.statuses, energy_factor(participant.current_energy(), participant.max_energy))
 
 
+static func _defense_value(base_defense: int, armor_bonus: int, factor: float) -> int:
+	return maxi(floori(float(maxi(base_defense + armor_bonus, 0)) * factor), 0)
+
+
+static func hero_base_defense(hero: Variant) -> int:
+	return _defense_value(hero.base_defense, equipment_bonus(hero, "armor_bonus"), 1.0)
+
+
+static func _health_limit(base_health: int, bonus: int, statuses: Dictionary) -> int:
+	return BattleStatusRules.health_limit(base_health + bonus, statuses)
+
+
+static func hero_max_health(hero: Variant) -> int:
+	return _health_limit(hero.max_health, equipment_bonus(hero, "health_bonus"), hero.overworld_statuses)
+
+
 static func resolve(base: Dictionary, equipment: Dictionary, statuses: Dictionary = {}, factor: float = 1.0) -> Dictionary:
 	var strength: int = maxi(floori(float(maxi(int(base.get("strength", 0)) + int(equipment.get("strength_bonus", 0)), 0)) * factor), 0)
 	var agility_raw: int = int(base.get("agility", 0)) + int(equipment.get("agility_bonus", 0)) + BattleStatusRules.modifier(statuses, AbilityEffectDefinition.Stat.AGILITY)
 	var agility: int = maxi(floori(float(maxi(agility_raw, 0)) * factor), 0)
-	var armor_raw: int = int(base.get("defense", 0)) + int(equipment.get("armor_bonus", 0))
-	var defense: int = maxi(floori(float(maxi(armor_raw, 0)) * factor), 0)
-	var maximum: int = BattleStatusRules.health_limit(int(base.get("max_health", 0)) + int(equipment.get("health_bonus", 0)), statuses)
+	var defense: int = _defense_value(int(base.get("defense", 0)), int(equipment.get("armor_bonus", 0)), factor)
+	var maximum: int = _health_limit(int(base.get("max_health", 0)), int(equipment.get("health_bonus", 0)), statuses)
 	var dodge_base: int = int(base.get("base_dodge_percent", 0)) + int(equipment.get("dodge_bonus_percent", 0))
 	var accuracy_bonus: int = int(base.get("accuracy_bonus", 0)) + int(equipment.get("accuracy_bonus_percent", 0))
 	var attack_status: int = BattleStatusRules.modifier(statuses, AbilityEffectDefinition.Stat.ATTACK_POWER)

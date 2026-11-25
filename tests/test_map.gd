@@ -492,7 +492,7 @@ func _initialize() -> void:
 	var guarded_game := GameSession.start_for(guarded_map)
 	assert(not guarded_game.move_by(1, 0))
 	assert(guarded_game.hero.gold == 0 and guarded_game.player_pos == Vector2i(2, 2))
-	guarded_game.carried_items["key"] = 1
+	assert(guarded_game._receive_item("key", 1) == 1)
 	assert(guarded_game.move_by(1, 0))
 	assert(guarded_game.hero.gold == 5 and guarded_game.player_pos == Vector2i(3, 2))
 	assert(guarded_game.steps == 1 and guarded_game.is_chest_open(guarded_chest))
@@ -752,7 +752,7 @@ func _initialize() -> void:
 	var journey := GameSession.start_for(first_floor)
 	assert(journey != null)
 	journey.hero.health = 13
-	journey.carried_items["key"] = 2
+	assert(journey._receive_item("key", 2) == 2)
 	assert(journey.move_by(1, 0) and journey.is_completed)
 	assert(journey.next_map_id() == second_floor.map_id)
 	assert(journey.enter_map(second_floor))

@@ -6,6 +6,10 @@ func _initialize() -> void:
 	_test_full_bag_and_ground_loot()
 	_test_two_handed_rejection()
 	_test_casualty_shield_order()
+	_test_read_only_inventory_and_starter()
+	_test_battle_shield_commit()
+	_test_reward_with_selected_member()
+	_test_stats_after_mutations()
 	print("Inventory atomicity: OK")
 	quit()
 
@@ -118,3 +122,100 @@ func _test_casualty_shield_order() -> void:
 	assert(session.inventory_shield_durability(bag.find("shield")) == 7)
 	assert(session.inventory_shield_durability(bag.find("shield", 1)) == 11)
 	assert(session.inventory_shield_durability(bag.find("shield", 2)) == 3)
+
+
+func _test_read_only_inventory_and_starter() -> void:
+	var dungeon := DungeonMap.create_blank(8, 8)
+	assert(dungeon.place_entity("player_spawn", 2, 2))
+	var session := GameSession.start_for_party(dungeon, ["burolom", "volcha", "petushan", "luma"])
+	assert(session != null)
+	var starter_id: String = str(session.hero.equipped_instance_ids.get("main_hand", ""))
+	assert(not starter_id.is_empty())
+	assert(session.item_instance(starter_id).item_id == "burolom_drill")
+	assert(session._receive_item("sword", GameSession.INVENTORY_SLOT_COUNT) == GameSession.INVENTORY_SLOT_COUNT)
+	var before: Dictionary = session.party_state_snapshot()
+	var slots: Array[String] = session.inventory_slot_ids()
+	for member in session.party:
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			assert(session.equipment_instance_id(slot_id, member) == str(member.equipped_instance_ids.get(slot_id, "")))
+		for i in range(slots.size()):
+			var instance: ItemInstance = session.item_instance(session.inventory_instance_id(i))
+			assert(instance != null and instance.item_id == slots[i])
+	assert(session.party_state_snapshot() == before)
+	slots[0] = ""
+	assert(not session.inventory_slot_ids()[0].is_empty())
+	assert(session.inventory_instance_id(-1).is_empty())
+	assert(session.inventory_instance_id(GameSession.INVENTORY_SLOT_COUNT).is_empty())
+	var restored := GameSession.new()
+	assert(restored.restore_party_state(before))
+	assert(restored.party_state_snapshot() == before)
+
+
+func _test_battle_shield_commit() -> void:
+	var session := _session()
+	assert(session._receive_item("shield", 2, [5, 11]) == 2)
+	var shield_id: String = session.equipment_instance_id("off_hand")
+	var bag_index: int = session.inventory_slot_ids().find("shield")
+	var bag_id: String = session.inventory_instance_id(bag_index)
+	var copy: HeroState = session.hero.copy_for_battle()
+	assert(copy.consume_shield_block(2) > 0)
+	assert(session.item_instance(shield_id).durability == 5)
+	assert(session.hero.current_shield_durability("shield") == 5)
+	session.hero.apply_battle_result(copy)
+	assert(session.item_instance(shield_id).durability == 3)
+	assert(session.inventory_shield_durability(bag_index) == 11)
+	assert(copy.consume_shield_block(3) > 0)
+	session.hero.apply_battle_result(copy)
+	assert(session.resolve_broken_shield() == "shield")
+	assert(session.resolve_broken_shield().is_empty())
+	assert(session.item_instance(shield_id) == null)
+	assert(session.item_instance(bag_id).durability == 11)
+	assert(session.carried_items["shield"] == 1)
+	session.hero.apply_battle_result(copy)
+	assert(session.equipment_instance_id("off_hand").is_empty())
+	assert(session.resolve_broken_shield().is_empty())
+	assert(session.carried_items["shield"] == 1)
+
+
+func _test_reward_with_selected_member() -> void:
+	var session := _session()
+	assert(session.add_party_member("petushan"))
+	var leader: HeroState = session.hero
+	var other: HeroState = session.party[1]
+	session.inventory_member = other
+	assert(session._receive_item("shield", 2, [4, 9]) == 2)
+	assert(leader.equipped_shield_id == "shield")
+	assert(other.equipped_shield_id.is_empty())
+	var bag_index: int = session.inventory_slot_ids().find("shield")
+	assert(session.transfer_inventory_item("bag", bag_index, "equipment", "off_hand"))
+	assert(other.current_shield_durability("shield") == 9)
+	assert(leader.current_shield_durability("shield") == 4)
+	assert(session._receive_item("key", 100) == 100)
+	assert(session.inventory_slot_ids().count("key") == 1)
+	assert(session._remove_carried_item("key", 99))
+	assert(session.inventory_slot_ids().count("key") == 1)
+	assert(session._remove_carried_item("key", 1))
+	assert(not session.inventory_slot_ids().has("key"))
+	assert(session.item_instance(session.equipment_instance_id("off_hand", leader)).durability == 4)
+	assert(session.item_instance(session.equipment_instance_id("off_hand", other)).durability == 9)
+
+
+func _test_stats_after_mutations() -> void:
+	var session := _session()
+	assert(session._receive_item("sword", 1) == 1)
+	var hero: HeroState = session.hero
+	var instance: ItemInstance = session.item_instance(session.equipment_instance_id("main_hand"))
+	var before: Dictionary = CharacterStats.hero_values(hero)
+	instance.quality_id = "masterwork"
+	instance.rarity = ItemInstance.Rarity.MAGIC
+	instance.affix_ids = ["edge"]
+	instance.modifiers["weapon_damage"] = 2
+	var after: Dictionary = CharacterStats.hero_values(hero)
+	assert(after["melee_power"] > before["melee_power"])
+	assert(hero.effective_max_health() == int(after["max_health"]))
+	hero.strength += 2
+	assert(hero.effective_strength() > int(after["strength"]))
+	var snapshot: Dictionary = session.party_state_snapshot()
+	var preview: Dictionary = CharacterStats.preview_equipment(hero, "main_hand", ItemCatalog.get_item("warhammer"))
+	assert(not preview.is_empty())
+	assert(session.party_state_snapshot() == snapshot)

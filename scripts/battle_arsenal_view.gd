@@ -142,12 +142,12 @@ func _refresh_profile() -> void:
 	health_row.add_theme_constant_override("separation", 5)
 	heading.add_child(health_row)
 	StatIconCatalog.add_icon(health_row, "health", 22.0)
+	var totals: Dictionary = CharacterStats.participant_values(_actor) if _read_only else CharacterStats.hero_values(_hero)
 	var hp := Label.new()
-	hp.text = "%d / %d HP" % [_actor.health, _actor.max_health] if _read_only else "%d / %d HP" % [_hero.health, _hero.effective_max_health()]
+	hp.text = "%d / %d HP" % [_actor.health, _actor.max_health] if _read_only else "%d / %d HP" % [_hero.health, int(totals["max_health"])]
 	hp.add_theme_color_override("font_color", Color("#dc7178"))
 	health_row.add_child(hp)
 
-	var totals: Dictionary = CharacterStats.participant_values(_actor) if _read_only else CharacterStats.hero_values(_hero)
 	var values: Array[Dictionary] = [
 		{"stat": "strength", "text": "Сила  %d" % int(totals["strength"])},
 		{"stat": "agility", "text": "Ловкость  %d" % int(totals["agility"])},

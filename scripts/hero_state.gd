@@ -145,7 +145,7 @@ func unequip_item(item_id: String) -> bool:
 
 ## Постоянная защита складывается из базовой брони и снаряжения.
 func _recalculate_equipment_stats() -> void:
-	defense = int(CharacterStats.hero_values(self, false)["defense"])
+	defense = CharacterStats.hero_base_defense(self)
 
 
 ## Совместимые методы для уже существующей игровой логики.
@@ -180,7 +180,7 @@ func effective_poison_resistance_percent() -> int:
 
 
 func effective_max_health() -> int:
-	return int(CharacterStats.hero_values(self)["max_health"])
+	return CharacterStats.hero_max_health(self)
 
 
 ## Лечит не выше максимума, возвращает фактически восстановленное здоровье.
@@ -425,6 +425,8 @@ func apply_battle_result(snapshot: HeroState) -> void:
 	equipped_shield_id = snapshot.equipped_shield_id
 	equipped_accessories = snapshot.equipped_accessories.duplicate(true)
 	equipped_instance_ids = snapshot.equipped_instance_ids.duplicate(true)
+	if equipped_shield_id.is_empty() and not item_instances.has(str(equipped_instance_ids.get("off_hand", ""))):
+		equipped_instance_ids.erase("off_hand")
 	shield_durabilities = snapshot.shield_durabilities.duplicate(true)
 	last_shield_broken = snapshot.last_shield_broken
 	strength_bonus = snapshot.strength_bonus
@@ -435,7 +437,17 @@ func apply_battle_result(snapshot: HeroState) -> void:
 	vision_phases = snapshot.vision_phases
 	overworld_statuses = snapshot.overworld_statuses.duplicate(true)
 	reset_exploration_phase()
+	sync_equipped_shield_instance()
 	_recalculate_equipment_stats()
+
+
+func sync_equipped_shield_instance() -> void:
+	if equipped_shield_id.is_empty():
+		return
+	var instance: ItemInstance = item_instances.get(str(equipped_instance_ids.get("off_hand", ""))) as ItemInstance
+	if instance != null and instance.item_id == equipped_shield_id:
+		instance.durability = current_shield_durability(equipped_shield_id)
+
 
 func to_snapshot() -> Dictionary:
 	return {

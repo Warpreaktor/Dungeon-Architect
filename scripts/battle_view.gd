@@ -36,7 +36,7 @@ signal item_use_requested(item_id: String)
 @onready var _enemy_sequence_slots: HBoxContainer = %EnemySequenceSlots
 @onready var _enemy_sequence_scroll: ScrollContainer = $OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides/EnemySequenceScroll
 @onready var _battlefield: HBoxContainer = $OuterMargin/Main/Battlefield
-@onready var _hero_party: GridContainer = $OuterMargin/Main/Battlefield/HeroSide/HeroParty
+@onready var _hero_party: HBoxContainer = $OuterMargin/Main/Battlefield/HeroSide/HeroParty
 @onready var _enemy_party: HBoxContainer = $OuterMargin/Main/Battlefield/EnemySide/EnemyParty
 @onready var _main_enemy_card: PanelContainer = $OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard
 @onready var _hero_chain_title: Label = %HeroChainTitle
@@ -236,30 +236,28 @@ func _build_hero_party() -> void:
 
 
 func _apply_team_styles() -> void:
-	var hero_style := StyleBoxFlat.new()
-	hero_style.bg_color = Color("#111f30")
-	hero_style.border_color = Color("#477f9e")
-	hero_style.set_border_width_all(2)
-	hero_style.set_corner_radius_all(10)
-	var enemy_style := StyleBoxFlat.new()
-	enemy_style.bg_color = Color("#291b20")
-	enemy_style.border_color = Color("#b76a58")
-	enemy_style.set_border_width_all(2)
-	enemy_style.set_corner_radius_all(10)
+	var plain_style := StyleBoxEmpty.new()
 	for card in _hero_party.get_children():
-		(card as PanelContainer).add_theme_stylebox_override("panel", hero_style)
+		(card as PanelContainer).add_theme_stylebox_override("panel", plain_style)
 	for card in _enemy_party.get_children():
-		(card as PanelContainer).add_theme_stylebox_override("panel", enemy_style)
+		(card as PanelContainer).add_theme_stylebox_override("panel", plain_style)
 
 
 func _equalize_hero_cards() -> void:
-	var count: int = 0
+	var visible_cards: Array[Control] = []
 	for node in _hero_party.get_children():
 		var card: Control = node as Control
 		card.custom_minimum_size.y = 0.0
 		if card.visible:
-			count += 1
-	_hero_party.columns = 1 if count < 2 else 2
+			visible_cards.append(card)
+	if visible_cards.is_empty():
+		return
+	var count: int = visible_cards.size()
+	var gap: float = float(_hero_party.get_theme_constant("separation"))
+	var available: float = maxf(_hero_party.size.x - gap * float(count - 1), 0.0)
+	var width: float = minf(202.0, maxf(160.0, available / float(count)))
+	for card in visible_cards:
+		card.custom_minimum_size.x = width
 
 
 func _build_round_controls() -> void:

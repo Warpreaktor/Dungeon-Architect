@@ -70,19 +70,20 @@ alignment = 1
 theme_override_constants/separation = 10
 
 [node name="HeroTeamLabel" type="Label" parent="OuterMargin/Main/Battlefield/HeroSide"]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.47, 0.77, 0.99, 1)
 theme_override_font_sizes/font_size = 19
 text = "ОТРЯД"
 horizontal_alignment = 1
 
-[node name="HeroParty" type="GridContainer" parent="OuterMargin/Main/Battlefield/HeroSide"]
+[node name="HeroParty" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/HeroSide"]
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
-columns = 2
-theme_override_constants/h_separation = 12
-theme_override_constants/v_separation = 12
+mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 12
 
 [node name="HeroCard" type="PanelContainer" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty"]
 custom_minimum_size = Vector2(202, 0)
@@ -247,6 +248,7 @@ alignment = 1
 theme_override_constants/separation = 10
 
 [node name="EnemyTeamLabel" type="Label" parent="OuterMargin/Main/Battlefield/EnemySide"]
+visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.98, 0.58, 0.49, 1)
 theme_override_font_sizes/font_size = 19

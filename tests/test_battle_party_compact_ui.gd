@@ -10,11 +10,11 @@ func _verify() -> void:
 	var view: BattleView = scene.instantiate() as BattleView
 	root.add_child(view)
 	await process_frame
-	assert(view._hero_party is GridContainer)
+	assert(view._hero_party is HBoxContainer)
 	assert(view._hero_party.get_parent().name == "HeroSide")
 	assert(view._enemy_party.get_parent().name == "EnemySide")
-	assert((view.get_node("OuterMargin/Main/Battlefield/HeroSide/HeroTeamLabel") as Label).text == "ОТРЯД")
-	assert((view.get_node("OuterMargin/Main/Battlefield/EnemySide/EnemyTeamLabel") as Label).text == "ПРОТИВНИКИ")
+	assert(not (view.get_node("OuterMargin/Main/Battlefield/HeroSide/HeroTeamLabel") as Label).visible)
+	assert(not (view.get_node("OuterMargin/Main/Battlefield/EnemySide/EnemyTeamLabel") as Label).visible)
 	for node_path in [
 		"OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroStats",
 		"OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats",
@@ -30,7 +30,8 @@ func _verify() -> void:
 	view.begin(combat, party[0])
 	await process_frame
 	view._equalize_hero_cards()
-	assert(view._hero_party.columns == 2)
+	assert(view._hero_party.alignment == BoxContainer.ALIGNMENT_CENTER)
+	assert((view.get_node("OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard") as Control).custom_minimum_size.x <= 202.0)
 	for actor_id in ["hero_2", "hero_3", "hero_4"]:
 		assert((view._extra_hero_views[actor_id] as BattleSupportEnemyView).visible)
 
@@ -82,7 +83,7 @@ func _verify() -> void:
 	for actor_id in ["hero_3", "hero_4"]:
 		(view._extra_hero_views[actor_id] as Control).hide()
 	view._equalize_hero_cards()
-	assert(view._hero_party.columns == 1)
+	assert((view.get_node("OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard") as Control).custom_minimum_size.x >= 160.0)
 	view.queue_free()
 	await process_frame
 	quit()

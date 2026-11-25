@@ -74,6 +74,7 @@ func _ready() -> void:
 	column.add_child(_name)
 	_health = HEALTH_METER_SCENE.instantiate() as HealthMeter
 	column.add_child(_health)
+	_health.set_heart_visible(false)
 	_energy = Label.new()
 	_energy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_energy.add_theme_color_override("font_color", Color("#66c9e8"))

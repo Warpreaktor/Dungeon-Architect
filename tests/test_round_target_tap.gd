@@ -29,6 +29,16 @@ func _initialize() -> void:
 	hero.agility = 100
 	var view := _view(hero)
 	assert(view._round_next_actor() == "hero")
+	assert(not view._hero_health_meter.get_node("HeartIcon").visible)
+	assert(not view._enemy_health_meter.get_node("HeartIcon").visible)
+	assert(not view._support_enemy_view._health.get_node("HeartIcon").visible)
+	assert(view._hero_portrait.material == view._turn_glow_material)
+	assert(view._enemy_portrait.material == null)
+	assert(view._support_enemy_view.portrait_node().material == null)
+	var standalone_meter: HealthMeter = load("res://scenes/health_meter.tscn").instantiate() as HealthMeter
+	root.add_child(standalone_meter)
+	assert(standalone_meter.get_node("HeartIcon").visible)
+	standalone_meter.queue_free()
 	var actions: HBoxContainer = view.get_node("OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions")
 	for child in actions.get_children():
 		if child is Button:
@@ -46,6 +56,10 @@ func _initialize() -> void:
 	assert(view._combat.battle_state.events.any(func(e: Dictionary) -> bool:
 		return e.get("type") == "action_start" and e.get("actor_id") == "hero" and e.get("ability_id") == "volcha_wolf_lunge"))
 	assert(view._is_playing_back)
+	assert((view._impact_portraits["hero"] as TextureRect).material == view._turn_glow_material)
+	assert((view._impact_portraits["enemy"] as TextureRect).material == null)
+	view._refresh_round_controls()
+	assert(view._hero_portrait.material == view._turn_glow_material)
 	view._on_target_portrait_input(_tap_event(), "enemy")
 	assert(view._combat.battle_state.round_turn_count == 1)
 	view.queue_free()
@@ -82,6 +96,12 @@ func _initialize() -> void:
 	var duo_view := _view(rooster, party)
 	assert(duo_view._round_next_actor() == "hero_2")
 	assert(duo_view._selected_hero_id == "hero_2")
+	assert(not duo_view._support_hero_view._health.get_node("HeartIcon").visible)
+	assert(duo_view._support_hero_view.portrait_node().material == duo_view._turn_glow_material)
+	assert(duo_view._hero_portrait.material == null)
+	duo_view._select_hero_view("hero")
+	assert(duo_view._support_hero_view.portrait_node().material == duo_view._turn_glow_material)
+	duo_view._select_hero_view("hero_2")
 	var duo_instinct_index: int = duo_view._hero_chain.find("volcha_wolf_instinct")
 	assert(duo_instinct_index >= 0)
 	duo_view._on_slot_selected(duo_instinct_index)
@@ -91,5 +111,23 @@ func _initialize() -> void:
 	assert(duo_view._combat.battle_state.round_turn_count == 1)
 	assert(duo_view._combat.battle_state.events.any(func(e: Dictionary) -> bool:
 		return e.get("type") == "action_start" and e.get("actor_id") == "hero_2" and e.get("ability_id") == "volcha_wolf_instinct"))
+	assert((duo_view._impact_portraits["hero_2"] as TextureRect).material == duo_view._turn_glow_material)
+	duo_view._playback.kill()
+	duo_view._clear_impact_layer()
+	duo_view._after_phase_playback()
+	assert(duo_view._support_hero_view.portrait_node().material == null)
 	duo_view.queue_free()
+
+	var slow_hero := HeroState.new(HeroCatalog.get_hero("volcha"))
+	slow_hero.agility = 0
+	var enemy_view := _view(slow_hero)
+	assert(enemy_view._is_playing_back)
+	var glowing_enemies: int = 0
+	for enemy_id in enemy_view._combat.battle_state.enemy_ids():
+		var portrait: TextureRect = enemy_view._impact_portraits[enemy_id]
+		if portrait.material == enemy_view._turn_glow_material:
+			glowing_enemies += 1
+	assert(glowing_enemies == 1)
+	assert(enemy_view._hero_portrait.material == null)
+	enemy_view.queue_free()
 	quit()

@@ -10,6 +10,10 @@ extends HBoxContainer
 var _value_tween: Tween
 
 
+func set_heart_visible(value: bool) -> void:
+	$HeartIcon.visible = value
+
+
 func set_health(current: int, maximum: int, animated: bool = false) -> void:
 	var max_hp: int = maxi(maximum, 1)
 	var hp: int = clampi(current, 0, max_hp)

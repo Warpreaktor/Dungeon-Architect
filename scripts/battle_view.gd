@@ -43,10 +43,13 @@ signal item_use_requested(item_id: String)
 @onready var _enemy_chain_title: Label = %EnemyChainTitle
 
 const ABILITY_SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
+const TURN_GLOW_SHADER: Shader = preload("res://shaders/battle_turn_glow.gdshader")
 const MAX_CHAIN_SLOT_SIDE: float = 116.0
 const MIN_CHAIN_SLOT_SIDE: float = 64.0
 
 var _combat: CombatSession
+var _turn_glow_material := ShaderMaterial.new()
+var _highlighted_portrait: TextureRect
 var _defense_idle_color: Color = Color.WHITE
 var _hero_chain: Array[String] = []
 var _enemy_chain: Array[String] = []
@@ -130,6 +133,9 @@ const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 
 
 func _ready() -> void:
+	_turn_glow_material.shader = TURN_GLOW_SHADER
+	_hero_health_meter.set_heart_visible(false)
+	_enemy_health_meter.set_heart_visible(false)
 	_sequence_scroll.resized.connect(_resize_chain_slots)
 	_combat_items_button.pressed.connect(_on_combat_items_pressed)
 	_combat_items_button.icon = StatIconCatalog.icon("potion")
@@ -300,6 +306,8 @@ func _refresh_round_controls() -> void:
 	if not _round_mode or _combat == null:
 		return
 	var actor_id: String = _round_next_actor()
+	if not _is_playing_back:
+		_set_turn_highlight(actor_id)
 	var state: BattleState = _combat.battle_state
 	_round_turn_label.text = "Раунд %d" % max(1, state.round_number)
 	if not actor_id.is_empty():
@@ -769,6 +777,17 @@ func _portrait_for_id(actor_id: String) -> TextureRect:
 	return null
 
 
+func _set_turn_highlight(actor_id: String) -> void:
+	var portrait: TextureRect = _portrait_for_id(actor_id)
+	if portrait == _highlighted_portrait:
+		return
+	if is_instance_valid(_highlighted_portrait):
+		_highlighted_portrait.material = null
+	_highlighted_portrait = portrait
+	if portrait != null:
+		portrait.material = _turn_glow_material
+
+
 func _create_impact_layer() -> void:
 	_impact_layer = Control.new()
 	_impact_layer.name = "CombatImpacts"
@@ -808,6 +827,7 @@ func _create_impact_layer() -> void:
 		var portrait := TextureRect.new()
 		portrait.name = "Impact_" + actor_id
 		portrait.texture = original.texture
+		portrait.material = original.material
 		portrait.flip_h = original.flip_h
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -865,6 +885,13 @@ func _clear_impact_layer() -> void:
 
 
 func _play_phase_events(phase_events: Array) -> void:
+	if _round_mode:
+		var actor_id: String = ""
+		for event in phase_events:
+			if event.get("type", "") == "turn":
+				actor_id = str(event.get("actor_id", ""))
+				break
+		_set_turn_highlight(actor_id)
 	_create_impact_layer()
 	_playback = create_tween()
 	_playback.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -1562,6 +1589,7 @@ func _show_defeat() -> void:
 
 
 func _finish_battle(won: bool) -> void:
+	_set_turn_highlight("")
 	var ending: Tween = create_tween()
 	ending.tween_interval(0.6)
 	ending.tween_property(self, "modulate:a", 0.0, 0.25)

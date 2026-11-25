@@ -13,3 +13,6 @@ strength = 10
 agility = 1
 defense = 2
 personal_ability_ids = Array[String](["basic_strike", "guard", "kadavr_regen", "kadavr_curse"])
+
+max_energy = 11
+energy_restoration = 5

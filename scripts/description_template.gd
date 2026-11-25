@@ -42,7 +42,7 @@ static func unresolved_tokens(text: String) -> PackedStringArray:
 
 static func equipment_properties(item: Resource) -> PackedStringArray:
 	var labels: Dictionary = {
-		"armor_bonus": "Броня (план)",
+		"armor_bonus": "Броня",
 		"health_bonus": "HP",
 		"strength_bonus": "Сила",
 		"agility_bonus": "Ловкость",

@@ -24,3 +24,5 @@ icon = ExtResource("3_icon")
 category = 3
 target = 1
 effects = Array[Resource]([SubResource("Effect0")])
+
+resource_costs = {"energy": 3}

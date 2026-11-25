@@ -8,6 +8,8 @@ extends Resource
 @export var map_icon: Texture2D
 @export var personal_ability_ids: Array[String] = []
 @export var starting_weapon_id: String = ""
+@export_range(0, 999, 1) var max_energy: int = 0
+@export_range(0, 999, 1) var energy_restoration: int = 0
 ## Сколько действий в алгоритме доступно без артефактов и усилений.
 @export_range(1, 8, 1) var base_action_slots: int = 3
 @export_range(1, 999, 1) var max_health: int = 1
@@ -21,5 +23,5 @@ extends Resource
 ## Дополнительные очки меткости сверх вклада Ловкости.
 @export_range(0, 999, 1) var accuracy_bonus: int = 0
 @export_range(-1, 100, 1) var base_accuracy_percent: int = -1
-## Legacy unused field, retained for old .tres compatibility; not passive block.
+## Base passive armor, independent of active blocking.
 @export_range(0, 999, 1) var base_defense: int = 0

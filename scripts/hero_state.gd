@@ -7,6 +7,7 @@ extends RefCounted
 var definition: HeroDefinition
 var max_health: int = 0
 var health: int = 0
+var energy: int = 0
 var strength: int = 0
 var agility: int = 0
 var perception: int = 0
@@ -45,6 +46,7 @@ func _init(hero_definition: HeroDefinition = null) -> void:
 	definition = hero_definition if hero_definition != null else HeroCatalog.get_hero(HeroCatalog.DEFAULT_HERO_ID)
 	max_health = definition.max_health
 	health = max_health
+	energy = definition.max_energy
 	strength = definition.strength
 	agility = definition.agility
 	perception = definition.perception
@@ -140,12 +142,9 @@ func unequip_item(item_id: String) -> bool:
 	return true
 
 
-## Пассивная защита не включает щит; тот работает только через «Блок».
-## Постоянной атаки нет: урон вычисляется на момент применения способности.
+## Постоянная защита складывается из базовой брони и снаряжения.
 func _recalculate_equipment_stats() -> void:
-	# No passive block, including defensive bonuses on weapons.
-	# Future armor will have a separate dedicated calculation.
-	defense = 0
+	defense = maxi(base_defense + equipment_bonus("armor_bonus"), 0)
 
 
 ## Совместимые методы для уже существующей игровой логики.
@@ -167,6 +166,8 @@ func equipment_bonus(property_name: String) -> int:
 	for item_id in equipped:
 		var item: ItemDefinition = ItemCatalog.get_item(item_id)
 		if item != null:
+			if property_name == "armor_bonus" and item.equipment_slot in [ItemDefinition.EquipmentSlot.WEAPON, ItemDefinition.EquipmentSlot.SHIELD]:
+				continue
 			total += int(item.get(property_name))
 	return total
 
@@ -177,6 +178,14 @@ func effective_strength() -> int:
 
 func effective_agility() -> int:
 	return maxi(agility + equipment_bonus("agility_bonus"), 0)
+
+
+func effective_perception() -> int:
+	return maxi(perception + equipment_bonus("perception_bonus"), 0)
+
+
+func effective_poison_resistance_percent() -> int:
+	return clampi(equipment_bonus("poison_resistance_percent"), 0, 100)
 
 
 func effective_max_health() -> int:
@@ -232,8 +241,10 @@ func consume_shield_block(incoming: int, maximum_absorption: int = -1) -> int:
 
 
 ## Щит не защищает пассивно, но базовая броня и зелья работают по-прежнему.
-func take_damage(incoming: int) -> int:
+func take_damage(incoming: int, apply_passive_armor: bool = true) -> int:
 	var remaining: int = maxi(incoming, 0)
+	if apply_passive_armor:
+		remaining -= BattleMath.passive_armor_absorption(remaining, defense)
 	if vitality_phases > 0 and vitality_percent > 0 and remaining > 0:
 		remaining = maxi(1, int(float(remaining) * float(100 - vitality_percent) / 100.0))
 	health = maxi(health - remaining, 0)
@@ -384,6 +395,7 @@ func copy_for_battle() -> HeroState:
 	var copy := HeroState.new(definition)
 	copy.max_health = max_health
 	copy.health = health
+	copy.energy = energy
 	copy.strength = strength
 	copy.agility = agility
 	copy.perception = perception
@@ -416,6 +428,7 @@ func apply_battle_result(snapshot: HeroState) -> void:
 	if snapshot == null:
 		return
 	health = snapshot.health
+	energy = snapshot.energy
 	equipped_weapon_id = snapshot.equipped_weapon_id
 	equipped_shield_id = snapshot.equipped_shield_id
 	equipped_accessories = snapshot.equipped_accessories.duplicate(true)
@@ -437,6 +450,7 @@ func to_snapshot() -> Dictionary:
 		"hero_id": definition.hero_id,
 		"max_health": max_health,
 		"health": health,
+		"energy": energy,
 		"strength": strength,
 		"agility": agility,
 		"perception": perception,
@@ -493,6 +507,10 @@ static func from_snapshot(data: Dictionary) -> HeroState:
 	var result := HeroState.new(HeroCatalog.get_hero(hero_id))
 	result.max_health = int(data["max_health"])
 	result.health = int(data["health"])
+	if data.has("energy"):
+		if typeof(data["energy"]) not in [TYPE_INT, TYPE_FLOAT] or float(data["energy"]) != float(int(data["energy"])):
+			return null
+		result.energy = mini(int(data["energy"]), result.definition.max_energy)
 	result.strength = int(data["strength"])
 	result.agility = int(data["agility"])
 	result.perception = int(data.get("perception", result.definition.perception))

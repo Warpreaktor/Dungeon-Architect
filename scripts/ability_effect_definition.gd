@@ -2,7 +2,7 @@ class_name AbilityEffectDefinition
 extends Resource
 
 ## Данные эффекта отделены от алгоритма его исполнения.
-enum Kind { DAMAGE, BLOCK, HEAL, APPLY_STATUS, REMOVE_STATUS, WAIT }
+enum Kind { DAMAGE, BLOCK, HEAL, APPLY_STATUS, REMOVE_STATUS, WAIT, DRAIN_ENERGY, TRANSFER_ENERGY, BARRIER, DELAYED_DAMAGE, MEDITATE, RESONANCE_SEAL, HP_COST }
 enum Recipient { SELF, TARGET }
 enum Clock { LEGACY_HERO_PHASE, OWNER_PHASE, INCOMING_ATTACK, BATTLE }
 enum Stack { REFRESH, ADD, ONCE }
@@ -50,6 +50,9 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 @export_range(1, 99, 1) var max_stacks: int = 99
 @export_range(0, 100, 1) var heal_if_health_at_most_percent: int = 0
 ## Совместимость ресурсов стартовых способностей Волчи.
+@export_range(0.0, 100.0, 0.01) var energy_damage_factor: float = 0.0
+@export_range(0, 999, 1) var energy_damage_cap: int = 0
+@export_range(-999, 0, 1) var energy_floor: int = 0
 @export var modifier_kind: Stat = Stat.NONE
 @export var stack_mode: Stack = Stack.REFRESH
 @export var expires_on_incoming_attack: bool = false
@@ -98,7 +101,7 @@ func stack_description() -> String:
 func validation_error() -> String:
 	if amount < 0 or duration_ticks < 0 or hit_count <= 0 or damage_multiplier < 0.0 or tick_damage < 0:
 		return "Отрицательные параметры эффекта"
-	if kind < Kind.DAMAGE or kind > Kind.WAIT:
+	if kind < Kind.DAMAGE or kind > Kind.HP_COST:
 		return "Неизвестный тип эффекта"
 	if recipient < Recipient.SELF or recipient > Recipient.TARGET:
 		return "Некорректная цель эффекта"

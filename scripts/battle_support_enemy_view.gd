@@ -26,6 +26,7 @@ const DEFENSE_ICON: Texture2D = preload("res://assets/icons/stats/24x24/defense.
 
 var _portrait: TextureRect
 var _name: Label
+var _energy: Label
 var _health: HealthMeter
 var _attack: Label
 var _strength: Label
@@ -72,6 +73,10 @@ func _ready() -> void:
 	column.add_child(_name)
 	_health = HEALTH_METER_SCENE.instantiate() as HealthMeter
 	column.add_child(_health)
+	_energy = Label.new()
+	_energy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_energy.add_theme_color_override("font_color", Color("#66c9e8"))
+	column.add_child(_energy)
 	_health.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
 	var stats := HBoxContainer.new()
 	stats.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -155,6 +160,7 @@ func set_health(health: int, maximum: int) -> void:
 func refresh_stats(participant: BattleParticipant) -> void:
 	if participant == null:
 		return
+	_energy.text = "Энергия %d/%d" % [participant.current_energy(), participant.max_energy]
 	_attack.text = str(participant.melee_attack())
 	_strength.text = "%d" % participant.strength
 	_agility.text = "%d" % participant.effective_agility()

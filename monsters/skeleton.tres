@@ -20,3 +20,6 @@ weapon_replaced_ability_id = "skeleton_rusty_slash"
 max_health = 12
 strength = 5
 agility = 3
+
+max_energy = 8
+energy_restoration = 4

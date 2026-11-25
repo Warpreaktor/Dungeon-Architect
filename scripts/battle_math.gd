@@ -14,5 +14,9 @@ static func ranged_power(weapon_damage: int, bonus_damage: int, agility: int) ->
 	return float(weapon_damage + bonus_damage) + float(maxi(agility, 0)) * RULES.ranged_agility_factor
 
 
+static func passive_armor_absorption(incoming: int, armor_rating: int) -> int:
+	return mini(maxi(incoming, 0), maxi(armor_rating, 0) * RULES.passive_armor_reduction_per_point)
+
+
 static func accuracy_total(agility: int, bonus: int, status_modifier: int) -> int:
 	return maxi(RULES.base_accuracy_percent + maxi(agility, 0) + bonus + status_modifier, 0)

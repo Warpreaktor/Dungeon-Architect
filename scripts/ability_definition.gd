@@ -3,7 +3,7 @@ extends Resource
 
 ## Неизменяемый справочник способностей. HP, доступность и цепочки живут в BattleState.
 enum Category { ATTACK, DEFENSE, SUPPORT, SPECIAL }
-enum Target { SELF, ENEMY, ALLY }
+enum Target { SELF, ENEMY, ALLY, FRIENDLY }
 enum DamageDelivery { MELEE, RANGED, MAGIC }
 
 const UNLIMITED_RANGE: int = -1
@@ -24,6 +24,9 @@ const UNLIMITED_RANGE: int = -1
 ## Необязательные затраты для будущих способностей: {"mana": 4, "rage": 2}.
 ## Не расходуются при составлении алгоритма; только при выполнении.
 @export var resource_costs: Dictionary = {}
+@export var affects_all_enemies: bool = false
+@export_range(0, 20, 1) var cooldown_turns: int = 0
+@export_range(-1, 100, 1) var energy_at_most_percent: int = -1
 
 
 func validation_error() -> String:
@@ -35,7 +38,7 @@ func validation_error() -> String:
 		return "Способность не содержит эффектов"
 	if damage_delivery < DamageDelivery.MELEE or damage_delivery > DamageDelivery.MAGIC:
 		return "Некорректный вид урона"
-	if target < Target.SELF or target > Target.ALLY:
+	if target < Target.SELF or target > Target.FRIENDLY:
 		return "Некорректное правило цели"
 	if minimum_range < 0 or (maximum_range != UNLIMITED_RANGE and maximum_range < minimum_range):
 		return "Некорректная дальность"
@@ -83,6 +86,13 @@ func resource_failure(participant: BattleParticipant) -> String:
 func unavailable_reason(participant: BattleParticipant) -> String:
 	if participant == null or not participant.is_alive():
 		return "Участник боя недоступен"
+	if int(participant.energy_cooldowns.get(ability_id, 0)) > 0:
+		return "Способность восстанавливается"
+	if energy_at_most_percent >= 0 and float(participant.current_energy()) > float(participant.max_energy) * float(energy_at_most_percent) / 100.0:
+		return "Требуется низкий запас Энергии"
+	for effect in effects:
+		if effect.kind == AbilityEffectDefinition.Kind.MEDITATE and participant.current_energy() >= participant.max_energy:
+			return "Энергия уже полная"
 	for requirement in requirements:
 		if requirement == null:
 			return "Некорректное требование"
@@ -93,6 +103,8 @@ func unavailable_reason(participant: BattleParticipant) -> String:
 
 func get_description() -> String:
 	var values: Dictionary = DescriptionTemplate.numeric_values(self)
+	for resource_id in resource_costs:
+		values["cost_" + str(resource_id)] = int(resource_costs[resource_id])
 	values.merge(DescriptionTemplate.numeric_values(description_data, "data_"))
 	for index in effects.size():
 		var effect: AbilityEffectDefinition = effects[index]

@@ -27,7 +27,7 @@ func _configure_card(button: Button, hero_id: String) -> void:
     var stats_label: Label = button.get_node("CardContent/Stats") as Label
     portrait.texture = hero.portrait
     name_label.text = hero.display_name
-    stats_label.text = "%d HP   ·   СИЛ %d   ·   ЛОВ %d" % [hero.max_health, hero.strength, hero.agility]
+    stats_label.text = "%d HP · %d ЭН · СИЛ %d · ЛОВ %d" % [hero.max_health, hero.max_energy, hero.strength, hero.agility]
     button.pressed.connect(func() -> void: character_chosen.emit(hero.hero_id))
 
 func focus_first() -> void:

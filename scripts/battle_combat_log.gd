@@ -72,7 +72,9 @@ static func format_event(event: Dictionary, hero_name: String, enemy_name: Strin
 			return "    %s: предел здоровья %d/%d HP" % [target,
 				int(event.get("hp_after", 0)), int(event.get("hp_max", 0))]
 		"status_tick":
-			return "    %s: кровотечение −%d HP (%d/%d)" % [actor,
+			var source: String = str(event.get("status_id", ""))
+			var label: String = "Кровотечение" if source == "bleeding" else ("Истощение" if source == "energy_exhaustion" else ("Горение" if source == "luma_burning" else source))
+			return "    %s: %s −%d HP (%d/%d)" % [actor, label,
 				int(event.get("damage", 0)), int(event.get("hp_after", 0)), int(event.get("hp_max", 0))]
 		"reload":
 			return "    %s: Отдых" % actor
@@ -90,6 +92,23 @@ static func format_event(event: Dictionary, hero_name: String, enemy_name: Strin
 			return "    %s: расход %s −%d (осталось %d)" % [actor,
 				str(event.get("resource_id", "")), int(event.get("amount", 0)),
 				int(event.get("remaining", 0))]
+		"rest":
+			return "    %s: отдых, Энергия +%d (%d)" % [actor,
+				int(event.get("restored_energy", 0)), int(event.get("remaining_energy", 0))]
+		"energy_restored":
+			return "    %s: Энергия +%d (%d)" % [target,
+				int(event.get("amount", 0)), int(event.get("remaining", 0))]
+		"energy_drained":
+			return "    %s → %s: высасывание %d Энергии" % [actor, target, int(event.get("amount", 0))]
+		"health_spent":
+			return "    %s: цена способности −%d HP (%d/%d)" % [actor,
+				int(event.get("damage", 0)), int(event.get("hp_after", 0)), int(event.get("hp_max", 0))]
+		"energy_barrier":
+			return "    %s: барьер %d HP для %s" % [actor, int(event.get("amount", 0)), target]
+		"delayed_attack_prepared":
+			return "    %s: отложенный удар по %s" % [actor, target]
+		"resonance_applied":
+			return "    %s: Печать резонанса на %s" % [actor, target]
 		"wait":
 			return "    %s: пропуск действия" % actor
 	return ""

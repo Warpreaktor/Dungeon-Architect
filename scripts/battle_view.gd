@@ -80,6 +80,11 @@ var _selected_manual_slot: int = -2
 var _target_outlines: Dictionary = {}
 var _hero_party: HBoxContainer
 var _support_hero_view: BattleSupportEnemyView
+var _extra_hero_views: Dictionary = {}
+var _extra_hero_hp: Dictionary = {}
+var _extra_hero_max: Dictionary = {}
+var _hero_energy_label: Label
+var _enemy_energy_label: Label
 var _selected_hero_id: String = "hero"
 var _round_turn_label: Label
 var _round_mode: bool = false
@@ -161,6 +166,21 @@ func _ready() -> void:
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.24)
 
 
+func _refresh_energy_labels() -> void:
+	if _combat == null:
+		return
+	var hero: BattleParticipant = _combat.battle_state.get_hero()
+	var enemy: BattleParticipant = _combat.battle_state.get_enemy()
+	if _hero_energy_label != null and hero != null:
+		_hero_energy_label.text = "Энергия %d/%d" % [hero.current_energy(), hero.max_energy]
+	if _enemy_energy_label != null and enemy != null:
+		_enemy_energy_label.text = "Энергия %d/%d" % [enemy.current_energy(), enemy.max_energy]
+	for hero_id in _extra_hero_views:
+		var view: BattleSupportEnemyView = _extra_hero_views[hero_id] as BattleSupportEnemyView
+		if view.visible:
+			view.refresh_stats(_combat.battle_state.get_participant(hero_id))
+
+
 func _build_hero_party() -> void:
 	var hero_card: PanelContainer = $OuterMargin/Main/Battlefield/HeroCard
 	_hero_party = HBoxContainer.new()
@@ -178,21 +198,40 @@ func _build_hero_party() -> void:
 	_support_hero_view.info_requested.connect(_touch_info.show_text)
 	_hero_party.add_child(_support_hero_view)
 	_support_hero_view.hide()
+	_extra_hero_views["hero_2"] = _support_hero_view
+	for index in [3, 4]:
+		var extra_view := BattleSupportEnemyView.new()
+		extra_view.name = "Hero%d" % index
+		extra_view.theme = hero_card.theme
+		extra_view.info_requested.connect(_touch_info.show_text)
+		_hero_party.add_child(extra_view)
+		extra_view.hide()
+		_extra_hero_views["hero_%d" % index] = extra_view
 	_hero_party.resized.connect(_equalize_hero_cards)
+	_hero_energy_label = Label.new()
+	_hero_energy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hero_energy_label.add_theme_color_override("font_color", Color("#66c9e8"))
+	_hero_health_meter.get_parent().add_child(_hero_energy_label)
+	_enemy_energy_label = Label.new()
+	_enemy_energy_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_enemy_energy_label.add_theme_color_override("font_color", Color("#66c9e8"))
+	_enemy_health_meter.get_parent().add_child(_enemy_energy_label)
 
 
 func _equalize_hero_cards() -> void:
-	var hero_card: PanelContainer = _hero_party.get_child(0) as PanelContainer
-	hero_card.custom_minimum_size.y = 0.0
-	_support_hero_view.custom_minimum_size.y = 0.0
-	if not _support_hero_view.visible:
+	var visible_cards: Array[Control] = []
+	for node in _hero_party.get_children():
+		var card: Control = node as Control
+		card.custom_minimum_size.y = 0.0
+		if card.visible:
+			visible_cards.append(card)
+	if visible_cards.size() < 2:
 		return
 	var gap: float = float(_hero_party.get_theme_constant("separation"))
-	var width_each: float = maxf((_hero_party.size.x - gap) / 2.0, 0.0)
-	var height_each: float = minf(_hero_party.size.y, maxf(width_each,
-		maxf(hero_card.get_combined_minimum_size().y, _support_hero_view.get_combined_minimum_size().y)))
-	hero_card.custom_minimum_size.y = height_each
-	_support_hero_view.custom_minimum_size.y = height_each
+	var width_each: float = maxf((_hero_party.size.x - gap * float(visible_cards.size() - 1)) / float(visible_cards.size()), 0.0)
+	var height_each: float = minf(_hero_party.size.y, maxf(width_each, 80.0))
+	for card in visible_cards:
+		card.custom_minimum_size.y = height_each
 
 
 func _build_round_controls() -> void:
@@ -261,8 +300,12 @@ func _continue_round() -> void:
 	if not _round_mode or _combat == null or _is_playing_back:
 		return
 	var actor_id: String = _round_next_actor()
-	if actor_id.is_empty() and not (_combat.is_victory or _combat.is_defeat):
+	if not (_combat.is_victory or _combat.is_defeat):
 		actor_id = _combat.battle_state.prepare_next_round()
+	if _combat.is_victory or _combat.is_defeat:
+		_is_playing_back = true
+		_play_phase_events(_combat.battle_state.events.slice(_round_event_cursor))
+		return
 	if actor_id in _combat.battle_state.enemy_ids():
 		_execute_round_turn()
 	else:
@@ -311,16 +354,22 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 		support_name += " (2)"
 	_support_enemy_view.configure(support, portrait, support_name, support_definition.portrait_flip_h)
 	call_deferred("_equalize_enemy_cards")
-	var other_id: String = "hero_2"
-	var other: BattleParticipant = combat.battle_state.get_participant(other_id)
-	if other != null:
-		var member: HeroState = combat.hero_sources.get(other_id) as HeroState
-		var texture: Texture2D = member.definition.portrait if member != null and member.definition != null else null
-		_support_hero_view.configure(other, texture, _hero_name_for_id(other_id))
-		_support_hero_view.reveal_all()
-		_status_presenter.setup({other_id: _support_hero_view.portrait_node()})
-		_bind_target_portrait(_support_hero_view.portrait_node(), other_id)
-		call_deferred("_equalize_hero_cards")
+	_extra_hero_hp.clear()
+	_extra_hero_max.clear()
+	for extra_id in combat.battle_state.hero_ids():
+		if extra_id == "hero" or not _extra_hero_views.has(extra_id):
+			continue
+		var extra_actor: BattleParticipant = combat.battle_state.get_participant(extra_id)
+		var extra_member: HeroState = combat.hero_sources.get(extra_id) as HeroState
+		var extra_view: BattleSupportEnemyView = _extra_hero_views[extra_id] as BattleSupportEnemyView
+		var texture: Texture2D = extra_member.definition.portrait if extra_member != null and extra_member.definition != null else null
+		extra_view.configure(extra_actor, texture, _hero_name_for_id(extra_id))
+		extra_view.reveal_all()
+		_status_presenter.setup({extra_id: extra_view.portrait_node()})
+		_bind_target_portrait(extra_view.portrait_node(), extra_id)
+		_extra_hero_hp[extra_id] = extra_actor.health
+		_extra_hero_max[extra_id] = extra_actor.max_health
+	call_deferred("_equalize_hero_cards")
 	if support != null:
 		_status_presenter.setup({combat.battle_state.support_enemy_id: _support_enemy_view.portrait_node()})
 	if hero.definition != null:
@@ -345,10 +394,11 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_enemy_portrait.flip_h = combat.enemy_definition.portrait_flip_h
 	_enemy_portrait.modulate = Color.WHITE
 	_hero_health_meter.set_health(hero.health, hero.effective_max_health())
+	_refresh_energy_labels()
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
 	_visible_hero_hp = hero.health
-	_visible_support_hero_hp = other.health if other != null else 0
-	_visible_support_hero_max = other.max_health if other != null else 0
+	_visible_support_hero_hp = int(_extra_hero_hp.get("hero_2", 0))
+	_visible_support_hero_max = int(_extra_hero_max.get("hero_2", 0))
 	_visible_enemy_hp = combat.enemy_health
 	_visible_support_hp = support.health if support != null else 0
 	_visible_hero_max = hero.effective_max_health()
@@ -371,9 +421,10 @@ func _start_round_combat() -> void:
 		return
 	_manual_started = false
 	_select_hero_view("hero")
-	var other: BattleParticipant = _combat.battle_state.get_participant("hero_2")
-	if other != null:
-		_support_hero_view.hide_action_slots()
+	for extra_id in _extra_hero_views:
+		var extra_view: BattleSupportEnemyView = _extra_hero_views[extra_id] as BattleSupportEnemyView
+		if extra_view.visible:
+			extra_view.hide_action_slots()
 	_refresh_chain_slots()
 	_refresh_round_controls()
 	call_deferred("_continue_round")
@@ -691,7 +742,9 @@ func _play_selected_manual_action(target_id: String) -> void:
 func _portrait_for_id(actor_id: String) -> TextureRect:
 	match actor_id:
 		"hero": return _hero_portrait
-		"hero_2": return _support_hero_view.portrait_node()
+		"hero_2", "hero_3", "hero_4":
+			var view: BattleSupportEnemyView = _extra_hero_views.get(actor_id) as BattleSupportEnemyView
+			return view.portrait_node() if view != null and view.visible else null
 		"enemy": return _enemy_portrait
 		BattleState.SUPPORT_ENEMY_ID: return _support_enemy_view.portrait_node()
 	return null
@@ -713,13 +766,15 @@ func _create_impact_layer() -> void:
 	_status_presenter.clear_impact()
 	var center: Vector2 = _battlefield.get_global_rect().get_center() - global_position
 	var actor_ids: Array[String] = ["hero", "enemy"]
-	if _combat.battle_state.get_participant("hero_2") != null:
-		actor_ids.append("hero_2")
+	for hero_id in _combat.battle_state.hero_ids():
+		if hero_id != "hero" and _extra_hero_views.has(hero_id):
+			actor_ids.append(hero_id)
 	if _combat.battle_state.get_participant(BattleState.SUPPORT_ENEMY_ID) != null:
 		actor_ids.append(BattleState.SUPPORT_ENEMY_ID)
 	var portrait_sizes: Dictionary = {"hero": _hero_portrait.size, "enemy": _enemy_portrait.size}
-	if actor_ids.has("hero_2"):
-		portrait_sizes["hero_2"] = _support_hero_view.portrait_node().size
+	for hero_id in actor_ids:
+		if _extra_hero_views.has(hero_id):
+			portrait_sizes[hero_id] = (_extra_hero_views[hero_id] as BattleSupportEnemyView).portrait_node().size
 	if actor_ids.has(BattleState.SUPPORT_ENEMY_ID):
 		portrait_sizes[BattleState.SUPPORT_ENEMY_ID] = _support_enemy_view.portrait_node().size
 	var available_height: float = _battlefield.size.y * (1.0 - clash_formation_vertical_padding_fraction * 2.0)
@@ -976,9 +1031,9 @@ func _display_phase_event(event: Dictionary) -> void:
 			if healed_id == "hero":
 				_visible_hero_hp += healed
 				_hero_health_meter.set_health(_visible_hero_hp, _visible_hero_max, true)
-			elif healed_id == "hero_2":
-				_visible_support_hero_hp += healed
-				_support_hero_view.set_health(_visible_support_hero_hp, _visible_support_hero_max)
+			elif _extra_hero_views.has(healed_id):
+				_set_extra_hero_health(healed_id, int(_extra_hero_hp.get(healed_id, 0)) + healed,
+					int(_extra_hero_max.get(healed_id, 0)))
 			elif healed_id == "enemy":
 				_visible_enemy_hp += healed
 				_enemy_health_meter.set_health(_visible_enemy_hp, _visible_enemy_max, true)
@@ -995,10 +1050,8 @@ func _display_phase_event(event: Dictionary) -> void:
 				_visible_hero_hp = actual_hp
 				_visible_hero_max = actual_max
 				_hero_health_meter.set_health(actual_hp, actual_max, true)
-			elif target_id == "hero_2":
-				_visible_support_hero_hp = actual_hp
-				_visible_support_hero_max = actual_max
-				_support_hero_view.set_health(actual_hp, actual_max)
+			elif _extra_hero_views.has(target_id):
+				_set_extra_hero_health(target_id, actual_hp, actual_max)
 			elif target_id == "enemy":
 				_visible_enemy_hp = actual_hp
 				_visible_enemy_max = actual_max
@@ -1018,9 +1071,9 @@ func _display_phase_event(event: Dictionary) -> void:
 			if target_id == "hero":
 				_visible_hero_hp -= amount
 				_hero_health_meter.set_health(_visible_hero_hp, _visible_hero_max, true)
-			elif target_id == "hero_2":
-				_visible_support_hero_hp -= amount
-				_support_hero_view.set_health(_visible_support_hero_hp, _visible_support_hero_max)
+			elif _extra_hero_views.has(target_id):
+				_set_extra_hero_health(target_id, int(_extra_hero_hp.get(target_id, 0)) - amount,
+					int(_extra_hero_max.get(target_id, 0)))
 			elif target_id == "enemy":
 				_visible_enemy_hp -= amount
 				_enemy_health_meter.set_health(_visible_enemy_hp, _visible_enemy_max, true)
@@ -1040,7 +1093,7 @@ func _display_phase_event(event: Dictionary) -> void:
 		"failed":
 			# Текущий слот коротко вспыхивает красным, без текстовых предупреждений.
 			var slot_index: int = int(event.get("slot_index", -1))
-			if actor_id != BattleState.SUPPORT_ENEMY_ID and actor_id != "hero_2":
+			if actor_id != BattleState.SUPPORT_ENEMY_ID and not _extra_hero_views.has(actor_id):
 				var row: HBoxContainer = _sequence_slots if actor_id == "hero" else _enemy_sequence_slots
 				if slot_index >= 0 and slot_index < row.get_child_count():
 					(row.get_child(slot_index) as BattleAbilitySlot).flash_empty()
@@ -1058,8 +1111,9 @@ func _emit_combat_event_log(event: Dictionary) -> void:
 			message = "  Раунд %d · ход %s" % [int(event.get("round", 0)), _hero_name_for_id(str(event.get("actor_id", ""))) if str(event.get("actor_id", "")) in _combat.battle_state.hero_ids() else _enemy_name_for_id(str(event.get("actor_id", "")))]
 		var actor_id: String = str(event.get("actor_id", ""))
 		var target_id: String = str(event.get("target_id", ""))
-		if actor_id == "hero_2" or target_id == "hero_2":
-			message = message.replace("hero_2", _hero_name_for_id("hero_2"))
+		for extra_id in _extra_hero_views:
+			if actor_id == extra_id or target_id == extra_id:
+				message = message.replace(extra_id, _hero_name_for_id(extra_id))
 	if not message.is_empty():
 		combat_log_line.emit(message)
 
@@ -1081,9 +1135,9 @@ func _impact(event: Dictionary) -> void:
 	if target_id == "hero":
 		_visible_hero_hp -= hp_damage
 		_hero_health_meter.set_health(_visible_hero_hp, _visible_hero_max, true)
-	elif target_id == "hero_2":
-		_visible_support_hero_hp -= hp_damage
-		_support_hero_view.set_health(_visible_support_hero_hp, _visible_support_hero_max)
+	elif _extra_hero_views.has(target_id):
+		_set_extra_hero_health(target_id, int(_extra_hero_hp.get(target_id, 0)) - hp_damage,
+			int(_extra_hero_max.get(target_id, 0)))
 	elif target_id == "enemy":
 		_visible_enemy_hp -= hp_damage
 		_enemy_health_meter.set_health(_visible_enemy_hp, _visible_enemy_max, true)
@@ -1123,8 +1177,8 @@ func _flash_shield(actor_id: String) -> void:
 
 
 func _set_block_display(actor_id: String, amount: int) -> void:
-	if actor_id == "hero_2":
-		_support_hero_view.set_block(amount)
+	if _extra_hero_views.has(actor_id):
+		(_extra_hero_views[actor_id] as BattleSupportEnemyView).set_block(amount)
 		return
 	if actor_id == BattleState.SUPPORT_ENEMY_ID:
 		_support_enemy_view.set_block(amount)
@@ -1226,6 +1280,7 @@ func _after_phase_playback() -> void:
 
 
 func _after_round_playback() -> void:
+	_refresh_energy_labels()
 	var state: BattleState = _combat.battle_state
 	_status_presenter.sync(state.participants)
 	_refresh_accuracy_and_dodge()
@@ -1234,11 +1289,11 @@ func _after_round_playback() -> void:
 		if actor == null:
 			continue
 		_set_block_display(actor_id, actor.block_armor)
-		if actor_id == "hero_2":
-			_visible_support_hero_hp = actor.health
-			_visible_support_hero_max = actor.max_health
-			_support_hero_view.refresh_health(actor)
-			_support_hero_view.refresh_stats(actor)
+		if _extra_hero_views.has(actor_id):
+			_set_extra_hero_health(actor_id, actor.health, actor.max_health)
+			var view: BattleSupportEnemyView = _extra_hero_views[actor_id] as BattleSupportEnemyView
+			view.refresh_health(actor)
+			view.refresh_stats(actor)
 		elif actor_id == BattleState.SUPPORT_ENEMY_ID:
 			_support_enemy_view.refresh_health(actor)
 			_support_enemy_view.refresh_stats(actor)
@@ -1274,12 +1329,20 @@ func _after_round_playback() -> void:
 
 ## При проигрывании показываем снимок результата события, а не конечное
 ## состояние уже рассчитанной фазы.
+func _set_extra_hero_health(actor_id: String, health: int, maximum: int) -> void:
+	_extra_hero_hp[actor_id] = health
+	_extra_hero_max[actor_id] = maximum
+	var view: BattleSupportEnemyView = _extra_hero_views.get(actor_id) as BattleSupportEnemyView
+	if view != null:
+		view.set_health(health, maximum)
+
+
 func _set_accuracy_and_dodge_from_event(event: Dictionary) -> void:
 	if not event.has("dodge_after"):
 		return
 	var target_id: String = str(event.get("target_id", ""))
-	if target_id == "hero_2":
-		_support_hero_view.set_precision(int(event.get("dodge_after", 0)), int(event.get("accuracy_after", 0)))
+	if _extra_hero_views.has(target_id):
+		(_extra_hero_views[target_id] as BattleSupportEnemyView).set_precision(int(event.get("dodge_after", 0)), int(event.get("accuracy_after", 0)))
 		return
 	if target_id == BattleState.SUPPORT_ENEMY_ID:
 		_support_enemy_view.set_precision(int(event.get("dodge_after", 0)), int(event.get("accuracy_after", 0)))
@@ -1303,8 +1366,10 @@ func _refresh_accuracy_and_dodge() -> void:
 	_hero_accuracy_value.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + hero.accuracy_percent())
 	_enemy_dodge_value.text = "%d%%" % enemy.dodge_percent()
 	_enemy_accuracy_value.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + enemy.accuracy_percent())
-	if _support_hero_view != null and _support_hero_view.visible:
-		_support_hero_view.refresh_stats(_combat.battle_state.get_participant("hero_2"))
+	for hero_id in _extra_hero_views:
+		var view: BattleSupportEnemyView = _extra_hero_views[hero_id] as BattleSupportEnemyView
+		if view.visible:
+			view.refresh_stats(_combat.battle_state.get_participant(hero_id))
 	if _support_enemy_view != null:
 		_support_enemy_view.refresh_stats(_combat.battle_state.get_participant(BattleState.SUPPORT_ENEMY_ID))
 	_hero_dodge_value.tooltip_text = "Собственное уклонение, без учёта меткости противника"

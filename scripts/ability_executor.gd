@@ -43,7 +43,14 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 		actor.resource_amounts[resource_id] = remaining
 		event_list.append({"type": "resource_spent", "actor_id": actor_id,
 			"ability_id": ability_id, "resource_id": resource_id, "amount": cost, "remaining": remaining})
+	var energy_before_cast: int = actor.current_energy() + int(ability.resource_costs.get("energy", 0))
+	if ability.cooldown_turns > 0:
+		actor.energy_cooldowns[ability_id] = ability.cooldown_turns + 1
+	if ability.affects_all_enemies:
+		event_list.append_array(EnergyAbilityResolver.resolve_area(context, actor, ability, energy_before_cast))
+		return {"success": true, "reason": "", "events": event_list}
 	var last_hit: Dictionary = {}
+	var resonance_triggered: bool = false
 	var stance_counter_used: bool = false
 	for effect in ability.effects:
 		var recipient: BattleParticipant = actor if effect.recipient == AbilityEffectDefinition.Recipient.SELF else target
@@ -51,7 +58,7 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 			return _failure("Нет цели эффекта")
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
-				var raw_damage: int = preview_damage(actor, ability, effect, recipient)
+				var raw_damage: int = preview_damage(actor, ability, effect, recipient, -1, energy_before_cast)
 				# Атака опускает собственный поднятый блок, но не меняет
 				# уклонение: оно тратится только при входящей атаке.
 				if actor.block_armor > 0:
@@ -82,6 +89,11 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					last_hit["hit_index"] = hit_index
 					last_hit["hit_count"] = effect.hit_count
 					event_list.append(last_hit)
+					if not resonance_triggered and not bool(last_hit.get("dodged", false)):
+						var resonance: Dictionary = EnergyAbilityResolver.on_hit(actor, recipient)
+						if not resonance.is_empty():
+							resonance_triggered = true
+							event_list.append(resonance)
 					if not effect.target_status_id.is_empty() and effect.consume_target_status_on_hit and not bool(last_hit.get("dodged", false)):
 						if recipient.remove_status(effect.target_status_id):
 							event_list.append({"type": "status_removed", "actor_id": actor_id,
@@ -174,13 +186,15 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 			AbilityEffectDefinition.Kind.WAIT:
 				event_list.append({"type": "wait", "actor_id": actor_id, "target_id": recipient.participant_id,
 					"ability_id": ability_id})
+			_:
+				event_list.append_array(EnergyAbilityResolver.resolve(context, actor, recipient, ability, effect, energy_before_cast))
 	return {"success": true, "reason": "", "events": event_list}
 
 
 ## Общая формула для движка и подсказок. Урон приёма = урон
 ## подходящего оружия + (Сила или Ловкость) / 2 + мощность эффекта.
 ## Бонус блока считается от суммы, дроби обрезаются один раз в самом конце.
-static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition, effect: AbilityEffectDefinition, target: BattleParticipant = null, slot_index: int = -1) -> int:
+static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition, effect: AbilityEffectDefinition, target: BattleParticipant = null, slot_index: int = -1, energy_before: int = -999999) -> int:
 	if actor == null or ability == null or effect == null or effect.kind != AbilityEffectDefinition.Kind.DAMAGE:
 		return 0
 	var equipment_and_stat: float = 0.0
@@ -191,6 +205,9 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 			equipment_and_stat = actor.ranged_attack_value(actor.team_id != "enemies" or MonsterWeaponStrike.is_weapon_strike(ability.ability_id))
 		# Для магии пока нет характеристики, применяем только мощность эффекта.
 	var base: float = equipment_and_stat + float(effect.amount)
+	if effect.energy_damage_factor > 0.0:
+		var current: int = actor.current_energy() if energy_before == -999999 else energy_before
+		base += minf(float(maxi(current, 0)) * effect.energy_damage_factor, float(effect.energy_damage_cap))
 	var multiplier: float = effect.effective_damage_multiplier()
 	if effect.first_slot_multiplier > 0.0:
 		# В редакторе раскладки пользуемся позицией предпросмотра.
@@ -208,6 +225,8 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 		elif target.is_resting and effect.vs_rest_multiplier > 0.0:
 			multiplier = effect.vs_rest_multiplier
 	var total: float = maxf(base * (multiplier + float(actor.block_attack_bonus_percent) / float(BattleMath.PERCENT_SCALE)), 0.0)
+	if ability.damage_delivery == AbilityDefinition.DamageDelivery.MAGIC:
+		total *= actor.energy_factor()
 	if target != null and effect.bonus_vs_damaged_armor_percent > 0 and target.has_damaged_armor():
 		total *= 1.0 + float(effect.bonus_vs_damaged_armor_percent) / float(BattleMath.PERCENT_SCALE)
 	return maxi(floori(total) + actor.status_modifier(AbilityEffectDefinition.Stat.ATTACK_POWER), 0)

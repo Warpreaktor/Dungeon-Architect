@@ -18,3 +18,5 @@ category = 0
 damage_delivery = 1
 target = 1
 effects = Array[Resource]([SubResource("Effect0")])
+
+resource_costs = {"energy": 5}

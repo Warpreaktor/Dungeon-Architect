@@ -126,7 +126,7 @@ func display_member(member: HeroState) -> void:
 	visible = true
 	_portrait.texture = member.definition.portrait if member.definition != null else null
 	var name_text: String = member.definition.display_name if member.definition != null else "Герой"
-	_portrait.tooltip_text = "%s: %d/%d HP" % [name_text, member.health, member.effective_max_health()]
+	_portrait.tooltip_text = "%s: %d/%d HP · %d/%d Энергия" % [name_text, member.health, member.effective_max_health(), member.energy, member.definition.max_energy]
 	var max_health: int = member.effective_max_health()
 	_health_bar.max_value = float(max_health)
 	_health_bar.value = float(clampi(member.health, 0, max_health))

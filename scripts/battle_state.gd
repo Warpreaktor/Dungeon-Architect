@@ -42,6 +42,8 @@ var round_cursor: int = 0
 var round_tie_order: Dictionary = {}
 var round_turn_count: int = 0
 var round_combat_active: bool = false
+var _prepared_turn_actor: String = ""
+var _prepared_turn_event_start: int = 0
 var last_phase_events: Array[Dictionary] = []
 ## One RNG for reproducible combat decisions.
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
@@ -97,6 +99,7 @@ func start_round_combat() -> Dictionary:
 	round_turn_count = 0
 	round_order.clear()
 	round_tie_order.clear()
+	_prepared_turn_actor = ""
 	return {"success": true}
 
 
@@ -119,6 +122,12 @@ func prepare_next_round() -> String:
 	if actor_id.is_empty():
 		_open_round()
 		actor_id = next_round_actor_id()
+	if not actor_id.is_empty() and _prepared_turn_actor != actor_id:
+		_prepared_turn_event_start = events.size()
+		_prepared_turn_actor = actor_id
+		var actor: BattleParticipant = get_participant(actor_id)
+		events.append_array(EnergyAbilityResolver.at_turn_start(create_context(), actor))
+		update_outcome()
 	return actor_id
 
 
@@ -177,7 +186,18 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 		slot_index = actor.action_cursor
 		ability_id = actor.action_chain[slot_index]
 		actor.action_cursor = (actor.action_cursor + 1) % actor.action_chain.size()
-	var start_event: int = events.size()
+		var enemy_ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
+		if enemy_ability == null or not enemy_ability.unavailable_reason(actor).is_empty():
+			var available: Array[String] = []
+			for known_id in AbilityCatalog.known_ability_ids(actor):
+				var candidate: AbilityDefinition = AbilityCatalog.get_ability(known_id)
+				if candidate != null and candidate.unavailable_reason(actor).is_empty():
+					available.append(known_id)
+			if available.is_empty():
+				is_rest = true
+			else:
+				ability_id = available[0]
+	var start_event: int = _prepared_turn_event_start
 	var tick: int = round_turn_count + 1
 	round_turn_count = tick
 	round_cursor += 1
@@ -185,8 +205,10 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 	events.append({"type": "turn", "round": round_number, "tick": tick, "actor_id": actor_id,
 		"slot_index": slot_index, "reload": is_rest})
 	if is_rest:
+		var restored: int = actor.change_energy(actor.energy_restoration)
 		events.append({"type": "rest", "actor_id": actor_id, "tick": tick, "slot_index": -1,
-			"target_id": actor_id})
+			"target_id": actor_id, "restored_energy": restored,
+			"remaining_energy": actor.current_energy()})
 	else:
 		events.append({"type": "action_start", "actor_id": actor_id,
 			"ability_id": ability_id, "slot_index": slot_index, "tick": tick})
@@ -206,6 +228,7 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 			events.append({"type": "rest", "actor_id": actor_id,
 				"slot_index": slot_index, "tick": tick, "premature": true})
 	actor.is_resting = false
+	_prepared_turn_actor = ""
 	if not (is_victory or is_defeat):
 		_advance_round_owner_clocks(actor_id, tick)
 	var round_finished: bool = round_cursor >= round_order.size() or is_victory or is_defeat
@@ -235,6 +258,7 @@ func _advance_round_owner_clocks(actor_id: String, tick: int) -> void:
 			"target_id": actor_id, "hp_after": actor.health, "hp_max": actor.max_health,
 			"hp_difference": actor.health - before_health})
 	actor.advance_consumable_phase()
+	events.append_array(EnergyAbilityResolver.at_turn_end(actor))
 	update_outcome()
 
 

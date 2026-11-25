@@ -60,8 +60,20 @@ func target_error(source_id: String, target_id: String, ability: AbilityDefiniti
 		AbilityDefinition.Target.ALLY:
 			if source_id == target_id or source.team_id != target.team_id:
 				return "Недопустимая цель"
+		AbilityDefinition.Target.FRIENDLY:
+			if source.team_id != target.team_id:
+				return "Недопустимая цель"
 		_:
 			return "Неизвестное правило выбора цели"
+	for effect in ability.effects:
+		if effect.kind == AbilityEffectDefinition.Kind.DRAIN_ENERGY and target.current_energy() <= effect.energy_floor:
+			return "У цели нет доступной Энергии"
+		if effect.kind == AbilityEffectDefinition.Kind.TRANSFER_ENERGY and target.current_energy() >= target.max_energy:
+			return "Энергия союзника уже полная"
+		if effect.kind == AbilityEffectDefinition.Kind.DELAYED_DAMAGE and source.energy_delayed_attacks.has(target_id):
+			return "На цели уже есть отложенная атака"
+		if effect.kind == AbilityEffectDefinition.Kind.RESONANCE_SEAL and target.energy_resonance_charges > 0:
+			return "Цель уже отмечена Печатью"
 	if positions.has(source_id) and positions.has(target_id):
 		var source_pos: Vector2i = positions[source_id]
 		var target_pos: Vector2i = positions[target_id]

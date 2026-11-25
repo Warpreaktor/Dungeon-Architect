@@ -44,6 +44,15 @@ var last_rest_tick: int = -1
 ## Неиспользуемые пока в контенте запасы будущих ресурсов (ярость, мана и т.д.).
 ## Это изменяемые данные конкретного участника боя, не .tres.
 var resource_amounts: Dictionary = {}
+var max_energy: int = 0
+var energy_restoration: int = 0
+var energy_barrier_hp: int = 0
+var energy_meditation_pending: int = 0
+var energy_delayed_attacks: Dictionary = {}
+var energy_resonance_charges: int = 0
+var energy_resonance_turns: int = 0
+var energy_resonance_restore: int = 0
+var energy_cooldowns: Dictionary = {}
 const PERCENT_SCALE: int = BattleMath.PERCENT_SCALE
 
 # Снимок героя остаётся изолирован от прогресса прохождения.
@@ -60,6 +69,9 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant.team_id = "heroes"
 	participant.definition_id = source.definition.hero_id if source.definition != null else ""
 	participant._hero_snapshot = source.copy_for_battle()
+	participant.max_energy = source.definition.max_energy
+	participant.energy_restoration = source.definition.energy_restoration
+	participant.resource_amounts["energy"] = source.energy
 	participant.statuses = participant._hero_snapshot.overworld_statuses.duplicate(true)
 	participant._equipment.set_snapshot(participant._hero_snapshot)
 	participant.personal_ability_ids = source.definition.personal_ability_ids.duplicate() if source.definition != null else []
@@ -87,7 +99,7 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 	participant.health = source.max_health
 	participant.strength = source.strength
 	participant.agility = source.agility
-	participant.defense = 0 # Passive armor is not implemented yet.
+	participant.defense = 0
 	participant.base_dodge_percent = source.base_dodge_percent
 	participant.accuracy_bonus = source.accuracy_bonus
 	participant.personal_ability_ids = source.personal_ability_ids.duplicate()
@@ -95,6 +107,9 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 		if action != null and not participant.learned_ability_ids.has(action.ability_id):
 			participant.learned_ability_ids.append(action.ability_id)
 	participant.resource_amounts = source.starting_resources.duplicate(true)
+	participant.max_energy = source.max_energy
+	participant.energy_restoration = source.energy_restoration
+	participant.resource_amounts["energy"] = source.max_energy
 	participant.action_slot_capacity = clampi(source.base_action_slots, 1, BattleChainPlanner.MAX_ACTIONS)
 	return participant
 
@@ -111,7 +126,7 @@ func refresh_from_hero() -> void:
 	if _hero_snapshot.definition != null:
 		base_dodge_percent = _hero_snapshot.definition.base_dodge_percent + _hero_snapshot.equipment_bonus("dodge_bonus_percent")
 		accuracy_bonus = _hero_snapshot.definition.accuracy_bonus + _hero_snapshot.equipment_bonus("accuracy_bonus_percent")
-	defense = 0 # Shield/weapon equipment is not passive blocking.
+	defense = _hero_snapshot.defense
 	equipped_weapon_id = _hero_snapshot.equipped_weapon_id
 	equipped_shield_id = _hero_snapshot.equipped_shield_id
 	effects = {
@@ -135,7 +150,7 @@ func weapon_damage(kind: int) -> int:
 
 func melee_attack_value(include_equipment: bool = true) -> float:
 	var item_damage: int = weapon_damage(ItemDefinition.WeaponKind.MELEE) if include_equipment else 0
-	return BattleMath.melee_power(item_damage, int(effects.get("strength_bonus", 0)), strength)
+	return BattleMath.melee_power(item_damage, int(effects.get("strength_bonus", 0)), effective_strength())
 
 
 func ranged_attack_value(include_equipment: bool = true) -> float:
@@ -205,10 +220,13 @@ func receive_damage(incoming: int, armor_pierce_fraction: float = 0.0) -> int:
 	if _hero_snapshot != null:
 		_hero_snapshot.last_shield_broken = ""
 	var raw: int = maxi(incoming, 0)
-	# Расщепляем повреждение ДО активного блока. Пока отдельной брони нет.
-	# ceili обеспечивает минимум 1 пробивающего урона при ненулевом пробитии.
+	var absorbed_barrier: int = mini(raw, energy_barrier_hp)
+	energy_barrier_hp -= absorbed_barrier
+	raw -= absorbed_barrier
+	# Пробитие обходит пассивную броню и активный блок.
 	var pierced: int = ceili(float(raw) * clampf(armor_pierce_fraction, 0.0, 1.0))
-	var armor_after_base: int = maxi(raw - pierced, 0)
+	var armor_after_base: int = raw - pierced
+	armor_after_base -= BattleMath.passive_armor_absorption(armor_after_base, effective_defense())
 	var requested_block: int = mini(armor_after_base, block_armor)
 	var absorption: Dictionary = _equipment.absorb(equipped_shield_id, armor_after_base, requested_block)
 	var blocked: int = int(absorption["blocked"])
@@ -219,17 +237,66 @@ func receive_damage(incoming: int, armor_pierce_fraction: float = 0.0) -> int:
 	# Блок защищает от одного попадания, даже если оно было нулевым.
 	block_armor = 0
 	if _hero_snapshot != null:
-		var taken: int = _hero_snapshot.take_damage(pierced + armor_after_base - blocked)
+		var taken: int = _hero_snapshot.take_damage(pierced + armor_after_base - blocked, false)
 		refresh_from_hero()
+		if taken > 0:
+			energy_meditation_pending = 0
 		return taken
 	var taken: int = pierced + maxi(armor_after_base - blocked, 0)
 	health = maxi(health - taken, 0)
+	if taken > 0:
+		energy_meditation_pending = 0
 	return taken
+
+
+func current_energy() -> int:
+	return int(resource_amounts.get("energy", 0))
+
+
+func change_energy(delta: int) -> int:
+	var previous: int = current_energy()
+	var next: int = mini(previous + delta, max_energy)
+	resource_amounts["energy"] = next
+	return next - previous
+
+
+func energy_factor() -> float:
+	if max_energy <= 0:
+		return 1.0
+	var current: int = current_energy()
+	var rules: BattleRules = BattleMath.RULES
+	if current < 0:
+		return rules.energy_negative_factor
+	if current == 0:
+		return rules.energy_zero_factor
+	if float(current) <= float(max_energy) * rules.energy_fatigue_threshold:
+		return rules.energy_fatigue_factor
+	return 1.0
+
+
+func effective_strength() -> int:
+	return maxi(floori(float(strength) * energy_factor()), 0)
+
+
+func effective_defense() -> int:
+	return maxi(floori(float(defense) * energy_factor()), 0)
+
+
+func energy_debt_damage() -> int:
+	if current_energy() >= 0:
+		return 0
+	var damage: int = ceili(float(-current_energy()) * BattleMath.RULES.energy_debt_hp_factor)
+	if _hero_snapshot != null:
+		_hero_snapshot.health = maxi(_hero_snapshot.health - damage, 0)
+		refresh_from_hero()
+	else:
+		health = maxi(health - damage, 0)
+	return damage
 
 
 ## Все значения в процентных пунктах. Фактическое уклонение зависит от противника.
 func effective_agility() -> int:
-	return maxi(agility + status_modifier(AbilityEffectDefinition.Stat.AGILITY), 0)
+	return maxi(floori(float(agility + status_modifier(AbilityEffectDefinition.Stat.AGILITY)) * energy_factor()), 0)
 
 
 func dodge_percent() -> int:
@@ -341,4 +408,5 @@ func commit_hero_result(destination: HeroState) -> void:
 			if bool(persistent[status_id].get("battle_only", false)):
 				persistent.erase(status_id)
 		_hero_snapshot.overworld_statuses = persistent
+		_hero_snapshot.energy = current_energy()
 		destination.apply_battle_result(_hero_snapshot)

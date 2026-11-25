@@ -21,3 +21,6 @@ max_health = 20
 strength = 6
 agility = 1
 accuracy_bonus = -6
+
+max_energy = 12
+energy_restoration = 4

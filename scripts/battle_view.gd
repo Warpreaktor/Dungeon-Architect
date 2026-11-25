@@ -9,8 +9,8 @@ signal shield_broken(item_id: String, member: HeroState)
 signal combat_log_line(message: String)
 signal item_use_requested(item_id: String)
 
-@onready var _hero_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroHealthMeter
-@onready var _enemy_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyHealthMeter
+@onready var _hero_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroHealthMeter
+@onready var _enemy_health_meter: HealthMeter = $OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyHealthMeter
 @onready var _hero_portrait: TextureRect = %HeroPortrait
 @onready var _hero_attack_value: Label = %HeroAttackValue
 @onready var _hero_strength_value: Label = %HeroStrengthValue
@@ -19,7 +19,7 @@ signal item_use_requested(item_id: String)
 @onready var _hero_accuracy_value: Label = %HeroAccuracyValue
 @onready var _hero_defense_icon: TextureRect = %HeroDefenseIcon
 @onready var _hero_defense_value: Label = %HeroDefenseValue
-@onready var _hero_name: Label = $OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroName
+@onready var _hero_name: Label = $OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroName
 @onready var _enemy_attack_value: Label = %EnemyAttackValue
 @onready var _enemy_strength_value: Label = %EnemyStrengthValue
 @onready var _enemy_agility_value: Label = %EnemyAgilityValue
@@ -36,8 +36,9 @@ signal item_use_requested(item_id: String)
 @onready var _enemy_sequence_slots: HBoxContainer = %EnemySequenceSlots
 @onready var _enemy_sequence_scroll: ScrollContainer = $OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/SequenceSides/EnemySequenceScroll
 @onready var _battlefield: HBoxContainer = $OuterMargin/Main/Battlefield
-@onready var _enemy_party: HBoxContainer = $OuterMargin/Main/Battlefield/EnemyParty
-@onready var _main_enemy_card: PanelContainer = $OuterMargin/Main/Battlefield/EnemyParty/EnemyCard
+@onready var _hero_party: GridContainer = $OuterMargin/Main/Battlefield/HeroSide/HeroParty
+@onready var _enemy_party: HBoxContainer = $OuterMargin/Main/Battlefield/EnemySide/EnemyParty
+@onready var _main_enemy_card: PanelContainer = $OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard
 @onready var _hero_chain_title: Label = %HeroChainTitle
 @onready var _enemy_chain_title: Label = %EnemyChainTitle
 
@@ -78,12 +79,19 @@ var _visible_support_max: int = 0
 var _manual_started: bool = false
 var _selected_manual_slot: int = -2
 var _target_outlines: Dictionary = {}
-var _hero_party: HBoxContainer
 var _support_hero_view: BattleSupportEnemyView
 var _extra_hero_views: Dictionary = {}
 var _extra_hero_hp: Dictionary = {}
 var _extra_hero_max: Dictionary = {}
 var _hero_energy_label: Label
+var _hero_profile: BattleArsenalView
+var _inspection_timer: Timer
+var _inspection_touch_index: int = -1
+var _inspection_actor_id: String = ""
+var _inspection_touch_position: Vector2 = Vector2.ZERO
+var _inspection_triggered: bool = false
+const LONG_PRESS_SECONDS: float = 0.55
+const LONG_PRESS_MOVE_TOLERANCE: float = 24.0
 var _enemy_energy_label: Label
 var _selected_hero_id: String = "hero"
 var _round_turn_label: Label
@@ -155,11 +163,22 @@ func _ready() -> void:
 	_enemy_party.add_child(_support_enemy_view)
 	_support_enemy_view.hide()
 	_build_hero_party()
+	_apply_team_styles()
 	_build_round_controls()
+	_hero_profile = BattleArsenalView.new()
+	_hero_profile.name = "HeroProfile"
+	_hero_profile.z_index = 30
+	add_child(_hero_profile)
+	_inspection_timer = Timer.new()
+	_inspection_timer.one_shot = true
+	_inspection_timer.wait_time = LONG_PRESS_SECONDS
+	_inspection_timer.timeout.connect(_on_inspection_long_press)
+	add_child(_inspection_timer)
 	_bind_target_portrait(_hero_portrait, "hero")
 	_bind_target_portrait(_enemy_portrait, "enemy")
 	_bind_target_portrait(_support_enemy_view.portrait_node(), BattleState.SUPPORT_ENEMY_ID)
 	_enemy_health_meter.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
+	_hero_health_meter.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
 	_enemy_party.resized.connect(_equalize_enemy_cards)
 	_result_text.text = ""
 	modulate.a = 0.0
@@ -182,21 +201,17 @@ func _refresh_energy_labels() -> void:
 
 
 func _build_hero_party() -> void:
-	var hero_card: PanelContainer = $OuterMargin/Main/Battlefield/HeroCard
-	_hero_party = HBoxContainer.new()
-	_hero_party.name = "HeroParty"
-	_hero_party.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_hero_party.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_battlefield.remove_child(hero_card)
-	_battlefield.add_child(_hero_party)
-	_battlefield.move_child(_hero_party, 0)
-	_hero_party.add_child(hero_card)
+	var hero_card: PanelContainer = $OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard
 	hero_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hero_card.mouse_filter = Control.MOUSE_FILTER_PASS
+	hero_card.gui_input.connect(_on_target_portrait_input.bind("hero"))
 	_support_hero_view = BattleSupportEnemyView.new()
 	_support_hero_view.name = "SecondHero"
 	_support_hero_view.theme = hero_card.theme
 	_support_hero_view.info_requested.connect(_touch_info.show_text)
 	_hero_party.add_child(_support_hero_view)
+	_support_hero_view.mouse_filter = Control.MOUSE_FILTER_PASS
+	_support_hero_view.gui_input.connect(_on_target_portrait_input.bind("hero_2"))
 	_support_hero_view.hide()
 	_extra_hero_views["hero_2"] = _support_hero_view
 	for index in [3, 4]:
@@ -205,6 +220,8 @@ func _build_hero_party() -> void:
 		extra_view.theme = hero_card.theme
 		extra_view.info_requested.connect(_touch_info.show_text)
 		_hero_party.add_child(extra_view)
+		extra_view.mouse_filter = Control.MOUSE_FILTER_PASS
+		extra_view.gui_input.connect(_on_target_portrait_input.bind("hero_%d" % index))
 		extra_view.hide()
 		_extra_hero_views["hero_%d" % index] = extra_view
 	_hero_party.resized.connect(_equalize_hero_cards)
@@ -218,20 +235,31 @@ func _build_hero_party() -> void:
 	_enemy_health_meter.get_parent().add_child(_enemy_energy_label)
 
 
+func _apply_team_styles() -> void:
+	var hero_style := StyleBoxFlat.new()
+	hero_style.bg_color = Color("#111f30")
+	hero_style.border_color = Color("#477f9e")
+	hero_style.set_border_width_all(2)
+	hero_style.set_corner_radius_all(10)
+	var enemy_style := StyleBoxFlat.new()
+	enemy_style.bg_color = Color("#291b20")
+	enemy_style.border_color = Color("#b76a58")
+	enemy_style.set_border_width_all(2)
+	enemy_style.set_corner_radius_all(10)
+	for card in _hero_party.get_children():
+		(card as PanelContainer).add_theme_stylebox_override("panel", hero_style)
+	for card in _enemy_party.get_children():
+		(card as PanelContainer).add_theme_stylebox_override("panel", enemy_style)
+
+
 func _equalize_hero_cards() -> void:
-	var visible_cards: Array[Control] = []
+	var count: int = 0
 	for node in _hero_party.get_children():
 		var card: Control = node as Control
 		card.custom_minimum_size.y = 0.0
 		if card.visible:
-			visible_cards.append(card)
-	if visible_cards.size() < 2:
-		return
-	var gap: float = float(_hero_party.get_theme_constant("separation"))
-	var width_each: float = maxf((_hero_party.size.x - gap * float(visible_cards.size() - 1)) / float(visible_cards.size()), 0.0)
-	var height_each: float = minf(_hero_party.size.y, maxf(width_each, 80.0))
-	for card in visible_cards:
-		card.custom_minimum_size.y = height_each
+			count += 1
+	_hero_party.columns = 1 if count < 2 else 2
 
 
 func _build_round_controls() -> void:
@@ -429,17 +457,12 @@ func _start_round_combat() -> void:
 
 
 func _equalize_enemy_cards() -> void:
-	_main_enemy_card.custom_minimum_size.y = 0.0
-	_support_enemy_view.custom_minimum_size.y = 0.0
-	if not _support_enemy_view.visible:
-		return
+	var count: int = 1 + int(_support_enemy_view.visible)
 	var gap: float = float(_enemy_party.get_theme_constant("separation"))
-	var card_width: float = maxf((_enemy_party.size.x - gap) / float(_enemy_party.get_child_count()), 0.0)
-	var content_height: float = maxf(_main_enemy_card.get_combined_minimum_size().y,
-		_support_enemy_view.get_combined_minimum_size().y)
-	var side: float = minf(maxf(card_width, content_height), _enemy_party.size.y)
-	_main_enemy_card.custom_minimum_size.y = side
-	_support_enemy_view.custom_minimum_size.y = side
+	var available: float = maxf(_enemy_party.size.x - gap * float(count - 1), 0.0)
+	var width: float = minf(220.0, maxf(202.0, available / float(count)))
+	_main_enemy_card.custom_minimum_size = Vector2(width, 0.0)
+	_support_enemy_view.custom_minimum_size = Vector2(width, 0.0)
 
 
 func _refresh_chain_slots() -> void:
@@ -1418,13 +1441,72 @@ func _bind_target_portrait(portrait: TextureRect, actor_id: String) -> void:
 	outline.hide()
 
 
+func _open_hero_profile(actor_id: String) -> void:
+	if _combat == null or not _combat.battle_state.hero_ids().has(actor_id):
+		return
+	var source: HeroState = _combat.hero_sources.get(actor_id) as HeroState
+	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
+	if source == null or actor == null:
+		return
+	_hero_profile.open_for(source, actor, true)
+	_hero_profile.move_to_front()
+
+
+func _on_inspection_long_press() -> void:
+	if _inspection_touch_index < 0 or _inspection_actor_id.is_empty():
+		return
+	_inspection_triggered = true
+	_open_hero_profile(_inspection_actor_id)
+
+
+func _clear_inspection_touch() -> void:
+	_inspection_timer.stop()
+	_inspection_touch_index = -1
+	_inspection_actor_id = ""
+	_inspection_touch_position = Vector2.ZERO
+	_inspection_triggered = false
+
+
 func _on_target_portrait_input(event: InputEvent, actor_id: String) -> void:
+	if _combat == null:
+		return
 	var pressed: bool = false
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
+		if mouse_event.device == InputEvent.DEVICE_ID_EMULATION:
+			return
+		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_RIGHT and actor_id in _combat.battle_state.hero_ids():
+			_open_hero_profile(actor_id)
+			get_viewport().set_input_as_handled()
+			return
 		pressed = mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed
+	elif event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		if drag.index == _inspection_touch_index and drag.position.distance_to(_inspection_touch_position) > LONG_PRESS_MOVE_TOLERANCE:
+			_clear_inspection_touch()
+		return
 	elif event is InputEventScreenTouch:
-		pressed = (event as InputEventScreenTouch).pressed
+		var touch := event as InputEventScreenTouch
+		if actor_id in _combat.battle_state.hero_ids():
+			if touch.pressed:
+				_clear_inspection_touch()
+				_inspection_touch_index = touch.index
+				_inspection_actor_id = actor_id
+				_inspection_touch_position = touch.position
+				_inspection_timer.start()
+				return
+			if touch.index != _inspection_touch_index or actor_id != _inspection_actor_id:
+				return
+			var was_long_press: bool = _inspection_triggered
+			_clear_inspection_touch()
+			if was_long_press:
+				get_viewport().set_input_as_handled()
+				return
+			pressed = true
+		else:
+			pressed = touch.pressed
+	else:
+		return
 	if _round_mode:
 		if not pressed or _is_playing_back:
 			return

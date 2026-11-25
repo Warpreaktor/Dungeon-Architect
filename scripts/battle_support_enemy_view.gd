@@ -3,16 +3,16 @@ extends PanelContainer
 
 signal info_requested(content: String)
 
-const PORTRAIT_SIZE: Vector2 = Vector2(128.0, 148.0)
+const PORTRAIT_SIZE: Vector2 = Vector2(112.0, 120.0)
 const SLOT_SIZE: Vector2 = Vector2(40.0, 40.0)
 const SLOT_SEPARATION: int = 3
-const CONTENT_MARGIN: int = 14
-const CONTENT_SEPARATION: int = 10
+const CONTENT_MARGIN: int = 10
+const CONTENT_SEPARATION: int = 7
 const ROW_SEPARATION: int = 14
 const STAT_SEPARATION: int = 5
 const STAT_ICON_SIZE: Vector2 = Vector2(24.0, 24.0)
 const PRECISION_SEPARATION: int = 5
-const NAME_FONT_SIZE: int = 20
+const NAME_FONT_SIZE: int = 18
 const STAT_FONT_SIZE: int = 13
 const PRECISION_FONT_SIZE: int = 12
 const ATTACK_FONT_SIZE: int = 18
@@ -42,8 +42,9 @@ var _participant: BattleParticipant
 
 
 func _ready() -> void:
-	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	custom_minimum_size.x = 202.0
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var margin := MarginContainer.new()
 	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
@@ -82,6 +83,7 @@ func _ready() -> void:
 	stats.alignment = BoxContainer.ALIGNMENT_CENTER
 	stats.add_theme_constant_override("separation", STAT_SEPARATION)
 	column.add_child(stats)
+	stats.hide()
 	_add_icon(stats, ATTACK_ICON)
 	_attack = _add_label(stats, ATTACK_FONT_SIZE)
 	_add_icon(stats, StatIconCatalog.icon("strength"))
@@ -96,6 +98,7 @@ func _ready() -> void:
 	precision.alignment = BoxContainer.ALIGNMENT_CENTER
 	precision.add_theme_constant_override("separation", PRECISION_SEPARATION)
 	column.add_child(precision)
+	precision.hide()
 	_add_icon(precision, StatIconCatalog.icon("evasion"))
 	_dodge = _add_label(precision, PRECISION_FONT_SIZE, DODGE_COLOR)
 	_add_icon(precision, StatIconCatalog.icon("accuracy"))

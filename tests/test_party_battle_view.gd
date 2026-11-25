@@ -24,9 +24,9 @@ func _initialize() -> void:
 	assert(screen != null)
 	root.add_child(screen)
 	await process_frame
-	assert(screen.get_node_or_null("OuterMargin/Main/Battlefield/HeroParty/SecondHero") != null)
-	assert(screen.get_node_or_null("OuterMargin/Main/Battlefield/HeroParty/HeroCard") != null)
-	assert(screen.get_node_or_null("OuterMargin/Main/Battlefield/EnemyParty/SupportEnemy") != null)
+	assert(screen.get_node_or_null("OuterMargin/Main/Battlefield/HeroSide/HeroParty/SecondHero") != null)
+	assert(screen.get_node_or_null("OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard") != null)
+	assert(screen.get_node_or_null("OuterMargin/Main/Battlefield/EnemySide/EnemyParty/SupportEnemy") != null)
 	var wolf := HeroState.new(HeroCatalog.get_hero("volcha"))
 	var rooster := HeroState.new(HeroCatalog.get_hero("petushan"))
 	var monster: MonsterDefinition = MonsterCatalog.get_monster("skeleton")

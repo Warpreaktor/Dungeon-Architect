@@ -62,30 +62,53 @@ size_flags_vertical = 3
 mouse_filter = 2
 theme_override_constants/separation = 18
 
-[node name="HeroCard" type="PanelContainer" parent="OuterMargin/Main/Battlefield"]
+[node name="HeroSide" type="VBoxContainer" parent="OuterMargin/Main/Battlefield"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+alignment = 1
+theme_override_constants/separation = 10
+
+[node name="HeroTeamLabel" type="Label" parent="OuterMargin/Main/Battlefield/HeroSide"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.47, 0.77, 0.99, 1)
+theme_override_font_sizes/font_size = 19
+text = "ОТРЯД"
+horizontal_alignment = 1
+
+[node name="HeroParty" type="GridContainer" parent="OuterMargin/Main/Battlefield/HeroSide"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+columns = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
+
+[node name="HeroCard" type="PanelContainer" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty"]
+custom_minimum_size = Vector2(202, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 mouse_filter = 2
 theme = ExtResource("2_theme")
 
-[node name="HeroMargin" type="MarginContainer" parent="OuterMargin/Main/Battlefield/HeroCard"]
+[node name="HeroMargin" type="MarginContainer" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 12
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 9
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 9
 
-[node name="HeroColumn" type="VBoxContainer" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin"]
+[node name="HeroColumn" type="VBoxContainer" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin"]
 layout_mode = 2
 mouse_filter = 2
 alignment = 1
 theme_override_constants/separation = 10
 
-[node name="HeroPortrait" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
+[node name="HeroPortrait" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(128, 148)
+custom_minimum_size = Vector2(112, 120)
 layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
@@ -93,24 +116,25 @@ texture = ExtResource("4_hero")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="HeroName" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
+[node name="HeroName" type="Label" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 18
 text = "Герой"
 horizontal_alignment = 1
 
-[node name="HeroHealthMeter" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn" instance=ExtResource("6_health_meter")]
+[node name="HeroHealthMeter" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn" instance=ExtResource("6_health_meter")]
 layout_mode = 2
 
-[node name="HeroStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
+[node name="HeroStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn"]
 layout_mode = 2
+visible = false
 size_flags_horizontal = 4
 mouse_filter = 2
 alignment = 1
 theme_override_constants/separation = 5
 
-[node name="HeroAttackIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+[node name="HeroAttackIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -119,14 +143,14 @@ texture = ExtResource("7_attack")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="HeroAttackValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+[node name="HeroAttackValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 18
 text = "1"
 
-[node name="HeroStrengthIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+[node name="HeroStrengthIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
 mouse_filter = 2
@@ -134,7 +158,7 @@ texture = ExtResource("stat_strength")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="HeroStrengthValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+[node name="HeroStrengthValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
@@ -142,7 +166,7 @@ theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "СИЛ 0"
 
-[node name="HeroAgilityIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+[node name="HeroAgilityIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
 mouse_filter = 2
@@ -150,7 +174,7 @@ texture = ExtResource("stat_agility")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="HeroAgilityValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+[node name="HeroAgilityValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
@@ -158,7 +182,7 @@ theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "ЛОВ 0"
 
-[node name="HeroDefenseIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+[node name="HeroDefenseIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -167,21 +191,22 @@ texture = ExtResource("8_shield")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="HeroDefenseValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroStats"]
+[node name="HeroDefenseValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 18
 text = "0"
 
-[node name="HeroPrecisionStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn"]
+[node name="HeroPrecisionStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn"]
 layout_mode = 2
+visible = false
 size_flags_horizontal = 4
 mouse_filter = 2
 alignment = 1
 theme_override_constants/separation = 5
 
-[node name="HeroEvasionIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
+[node name="HeroEvasionIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
 custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
 mouse_filter = 2
@@ -189,7 +214,7 @@ texture = ExtResource("stat_evasion")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="HeroDodgeValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
+[node name="HeroDodgeValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
@@ -198,7 +223,7 @@ theme_override_font_sizes/font_size = 12
 text = "УКЛ 0%"
 tooltip_text = "Уклонение: Ловкость + эффекты, минус меткость атакующего"
 
-[node name="HeroAccuracyIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
+[node name="HeroAccuracyIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
 custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
 mouse_filter = 2
@@ -206,7 +231,7 @@ texture = ExtResource("stat_accuracy")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="HeroAccuracyValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
+[node name="HeroAccuracyValue" type="Label" parent="OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard/HeroMargin/HeroColumn/HeroPrecisionStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
@@ -214,30 +239,45 @@ theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 12
 text = "МЕТ"
 
-[node name="EnemyParty" type="HBoxContainer" parent="OuterMargin/Main/Battlefield"]
+[node name="EnemySide" type="VBoxContainer" parent="OuterMargin/Main/Battlefield"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-mouse_filter = 2
 alignment = 1
-theme_override_constants/separation = 14
+theme_override_constants/separation = 10
 
-[node name="EnemyCard" type="PanelContainer" parent="OuterMargin/Main/Battlefield/EnemyParty"]
+[node name="EnemyTeamLabel" type="Label" parent="OuterMargin/Main/Battlefield/EnemySide"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.58, 0.49, 1)
+theme_override_font_sizes/font_size = 19
+text = "ПРОТИВНИКИ"
+horizontal_alignment = 1
+
+[node name="EnemyParty" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/EnemySide"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 mouse_filter = 2
+alignment = 1
+theme_override_constants/separation = 14
+
+[node name="EnemyCard" type="PanelContainer" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty"]
+custom_minimum_size = Vector2(202, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+mouse_filter = 2
 theme = ExtResource("2_theme")
 
-[node name="EnemyMargin" type="MarginContainer" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard"]
+[node name="EnemyMargin" type="MarginContainer" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard"]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 12
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 9
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 9
 
-[node name="EnemyStack" type="VBoxContainer" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin"]
+[node name="EnemyStack" type="VBoxContainer" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -245,9 +285,9 @@ mouse_filter = 2
 alignment = 1
 theme_override_constants/separation = 10
 
-[node name="EnemyPortrait" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack"]
+[node name="EnemyPortrait" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(128, 148)
+custom_minimum_size = Vector2(112, 120)
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
@@ -257,32 +297,33 @@ expand_mode = 1
 stretch_mode = 5
 pivot_offset = Vector2(64, 74)
 
-[node name="EnemyColumn" type="VBoxContainer" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack"]
+[node name="EnemyColumn" type="VBoxContainer" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack"]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 alignment = 1
 theme_override_constants/separation = 10
 
-[node name="EnemyName" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn"]
+[node name="EnemyName" type="Label" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 18
 text = "Монстр"
 horizontal_alignment = 1
 
-[node name="EnemyHealthMeter" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn" instance=ExtResource("6_health_meter")]
+[node name="EnemyHealthMeter" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn" instance=ExtResource("6_health_meter")]
 layout_mode = 2
 
-[node name="EnemyStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn"]
+[node name="EnemyStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn"]
 layout_mode = 2
+visible = false
 size_flags_horizontal = 4
 mouse_filter = 2
 alignment = 1
 theme_override_constants/separation = 5
 
-[node name="EnemyAttackIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
+[node name="EnemyAttackIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
 mouse_filter = 2
@@ -290,14 +331,14 @@ texture = ExtResource("9_attack")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="EnemyAttackValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
+[node name="EnemyAttackValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 18
 text = "0"
 
-[node name="EnemyStrengthIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
+[node name="EnemyStrengthIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
 mouse_filter = 2
@@ -305,7 +346,7 @@ texture = ExtResource("stat_strength")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="EnemyStrengthValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
+[node name="EnemyStrengthValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
@@ -313,7 +354,7 @@ theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "СИЛ 0"
 
-[node name="EnemyAgilityIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
+[node name="EnemyAgilityIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
 mouse_filter = 2
@@ -321,7 +362,7 @@ texture = ExtResource("stat_agility")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="EnemyAgilityValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
+[node name="EnemyAgilityValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
@@ -329,7 +370,7 @@ theme_override_colors/font_color = Color(0.91, 0.76, 0.53, 1)
 theme_override_font_sizes/font_size = 13
 text = "ЛОВ 0"
 
-[node name="EnemyDefenseIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
+[node name="EnemyDefenseIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
@@ -338,21 +379,22 @@ texture = ExtResource("8_shield")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="EnemyDefenseValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
+[node name="EnemyDefenseValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/font_size = 18
 text = "0"
 
-[node name="EnemyPrecisionStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn"]
+[node name="EnemyPrecisionStats" type="HBoxContainer" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn"]
 layout_mode = 2
+visible = false
 size_flags_horizontal = 4
 mouse_filter = 2
 alignment = 1
 theme_override_constants/separation = 5
 
-[node name="EnemyEvasionIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
+[node name="EnemyEvasionIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
 custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
 mouse_filter = 2
@@ -360,7 +402,7 @@ texture = ExtResource("stat_evasion")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="EnemyDodgeValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
+[node name="EnemyDodgeValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2
@@ -369,7 +411,7 @@ theme_override_font_sizes/font_size = 12
 text = "УКЛ 0%"
 tooltip_text = "Уклонение: Ловкость + эффекты, минус меткость атакующего"
 
-[node name="EnemyAccuracyIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
+[node name="EnemyAccuracyIcon" type="TextureRect" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
 custom_minimum_size = Vector2(18, 18)
 layout_mode = 2
 mouse_filter = 2
@@ -377,7 +419,7 @@ texture = ExtResource("stat_accuracy")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="EnemyAccuracyValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
+[node name="EnemyAccuracyValue" type="Label" parent="OuterMargin/Main/Battlefield/EnemySide/EnemyParty/EnemyCard/EnemyMargin/EnemyStack/EnemyColumn/EnemyPrecisionStats"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2

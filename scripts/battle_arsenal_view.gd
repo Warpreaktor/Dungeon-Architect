@@ -8,6 +8,7 @@ const SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 
 var _hero: HeroState
 var _actor: BattleParticipant
+var _read_only: bool = false
 var _skills_grid: GridContainer
 var _details: AcceptDialog
 var _panel: PanelContainer
@@ -23,13 +24,16 @@ func _ready() -> void:
 	_build_interface()
 
 
-func open_for(hero: HeroState, actor: BattleParticipant = null) -> void:
+func open_for(hero: HeroState, actor: BattleParticipant = null, read_only: bool = false) -> void:
 	if hero == null:
 		return
 	_hero = hero
 	_actor = actor if actor != null else BattleParticipant.from_hero(hero)
+	_read_only = read_only
+	_arsenal_content.visible = not _read_only
 	visible = true
-	_refresh()
+	if not _read_only:
+		_refresh()
 	_refresh_profile()
 	_resize_panel()
 
@@ -139,21 +143,24 @@ func _refresh_profile() -> void:
 	heading.add_child(health_row)
 	StatIconCatalog.add_icon(health_row, "health", 22.0)
 	var hp := Label.new()
-	hp.text = "%d / %d HP" % [_hero.health, _hero.effective_max_health()]
+	hp.text = "%d / %d HP" % [_actor.health, _actor.max_health] if _read_only else "%d / %d HP" % [_hero.health, _hero.effective_max_health()]
 	hp.add_theme_color_override("font_color", Color("#dc7178"))
 	health_row.add_child(hp)
 
-	var totals: Dictionary = CharacterStats.hero_values(_hero)
+	var totals: Dictionary = CharacterStats.participant_values(_actor) if _read_only else CharacterStats.hero_values(_hero)
 	var values: Array[Dictionary] = [
 		{"stat": "strength", "text": "Сила  %d" % int(totals["strength"])},
 		{"stat": "agility", "text": "Ловкость  %d" % int(totals["agility"])},
 		{"stat": "attack", "text": "Атака  %d" % int(totals["melee_attack"])},
 		{"stat": "defense", "text": "Броня  %d" % int(totals["defense"])},
 		{"stat": "evasion", "text": "Уклонение  %d%%" % int(totals["dodge_percent"])},
-		{"stat": "accuracy", "text": "Меткость  %d%%" % int(totals["accuracy_percent"])},
-		{"stat": "combat_slots", "text": "Боевые слоты  %d" % _hero.action_slot_capacity()},
-		{"stat": "gold", "text": "Золото  %d" % _hero.gold}
+		{"stat": "accuracy", "text": "Меткость  %d%%" % int(totals["accuracy_percent"])}
 	]
+	if _read_only:
+		values.append({"stat": "magic", "text": "Энергия  %d / %d" % [_actor.current_energy(), _actor.max_energy]})
+	else:
+		values.append({"stat": "combat_slots", "text": "Боевые слоты  %d" % _hero.action_slot_capacity()})
+		values.append({"stat": "gold", "text": "Золото  %d" % _hero.gold})
 	var stats := GridContainer.new()
 	stats.columns = 2
 	stats.add_theme_constant_override("h_separation", 12)
@@ -168,8 +175,9 @@ func _refresh_profile() -> void:
 		label.text = str(value["text"])
 		row.add_child(label)
 
-	var weapon: ItemDefinition = ItemCatalog.get_item(_hero.equipped_weapon_id)
-	var shield: ItemDefinition = ItemCatalog.get_item(_hero.equipped_shield_id)
+	var equipment_hero: HeroState = _actor._hero_snapshot if _read_only and _actor._hero_snapshot != null else _hero
+	var weapon: ItemDefinition = ItemCatalog.get_item(equipment_hero.equipped_weapon_id)
+	var shield: ItemDefinition = ItemCatalog.get_item(equipment_hero.equipped_shield_id)
 	for value in ["Оружие  %s" % (weapon.display_name if weapon != null else "Нет"), "Щит  %s" % (shield.display_name if shield != null else "Нет")]:
 		var label := Label.new()
 		label.text = value
@@ -179,10 +187,10 @@ func _refresh_profile() -> void:
 func _resize_panel() -> void:
 	if _panel == null:
 		return
-	var width := minf(1180.0, maxf(320.0, size.x - 32.0))
-	_panel.custom_minimum_size = Vector2(width, minf(620.0, maxf(240.0, size.y - 32.0)))
+	var width := minf(520.0 if _read_only else 1180.0, maxf(320.0, size.x - 32.0))
+	_panel.custom_minimum_size = Vector2(width, minf(560.0 if _read_only else 620.0, maxf(240.0, size.y - 32.0)))
 	if _content_layout != null:
-		_content_layout.vertical = width < 860.0
+		_content_layout.vertical = _read_only or width < 860.0
 		_profile_content.custom_minimum_size.x = 0.0 if _content_layout.vertical else 320.0
 		if _skills_grid != null:
 			var side: float = 60.0 if width < 440.0 else (88.0 if _content_layout.vertical else 112.0)
@@ -216,7 +224,7 @@ func _refresh() -> void:
 
 
 func _toggle_ability(ability_id: String) -> void:
-	if _hero == null or not AbilityCatalog.can_prepare(_actor, ability_id):
+	if _read_only or _hero == null or not AbilityCatalog.can_prepare(_actor, ability_id):
 		return
 	var active: Array[String] = []
 	for id in _hero.get_saved_action_slots():

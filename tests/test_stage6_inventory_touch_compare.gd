@@ -106,6 +106,8 @@ func _test_ring_choice_and_party_members() -> void:
 	await process_frame
 	view._on_bag_slot_activated(bag_index)
 	assert(view._equip_target.visible and view._equip_target.item_count == 2)
+	assert(view._equip_target.get_item_metadata(0) == "ring_left")
+	assert(view._equip_target.get_item_metadata(1) == "ring_right")
 	view._on_comparison_target_changed(1)
 	assert(view._comparison_target == "ring_right")
 	assert(view._item_comparison.text.contains("Надето (Кольцо):"))

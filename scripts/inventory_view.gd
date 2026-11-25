@@ -336,7 +336,7 @@ func _update_equipment_actions(item: ItemDefinition, instance: ItemInstance, bag
 		_equip_target.clear()
 		for ring_slot in ["ring_left", "ring_right"]:
 			_equip_target.add_item(str(EquipmentSlotRules.LABELS[ring_slot]) + (" (левое)" if ring_slot == "ring_left" else " (правое)"))
-		_equip_target.set_item_metadata(_equip_target.item_count - 1, ring_slot)
+			_equip_target.set_item_metadata(_equip_target.item_count - 1, ring_slot)
 		_equip_target.select(0 if compare_slot == "ring_left" else 1)
 		_equip_target.show()
 	_equip_button.show()

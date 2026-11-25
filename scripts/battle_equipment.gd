@@ -34,7 +34,7 @@ func block_armor(shield_id: String, unarmed_armor: int) -> int:
 	if _hero != null and has_shield(shield_id):
 		var shield: ItemDefinition = ItemCatalog.get_item(shield_id)
 		if shield != null:
-			return maxi(shield.defense_bonus, 0)
+			return CharacterStats.slot_item_value(_hero, "off_hand", "defense_bonus")
 	return unarmed_armor
 
 
@@ -51,5 +51,5 @@ func has_damaged_shield(shield_id: String) -> bool:
 	var shield: ItemDefinition = ItemCatalog.get_item(shield_id)
 	if shield == null:
 		return false
-	var full: int = maxi(shield.max_durability, shield.defense_bonus)
+	var full: int = maxi(CharacterStats.slot_item_value(_hero, "off_hand", "max_durability"), CharacterStats.slot_item_value(_hero, "off_hand", "defense_bonus"))
 	return shield_durability(shield_id) < full

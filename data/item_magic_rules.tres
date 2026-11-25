@@ -1,0 +1,196 @@
+[gd_resource type="Resource" script_class="ItemMagicRules" load_steps=22 format=3]
+
+[ext_resource type="Script" path="res://scripts/item_magic_rules.gd" id="1_rules"]
+[ext_resource type="Script" path="res://scripts/item_quality_definition.gd" id="2_quality"]
+[ext_resource type="Script" path="res://scripts/item_rarity_definition.gd" id="3_rarity"]
+[ext_resource type="Script" path="res://scripts/item_affix_definition.gd" id="4_affix"]
+
+[sub_resource type="Resource" id="quality_standard"]
+script = ExtResource("2_quality")
+quality_id = "standard"
+display_name = "Обычное"
+roll_weight = 70
+scaling_percent = 100
+
+
+[sub_resource type="Resource" id="quality_sturdy"]
+script = ExtResource("2_quality")
+quality_id = "sturdy"
+display_name = "Добротное"
+roll_weight = 23
+scaling_percent = 115
+
+
+[sub_resource type="Resource" id="quality_masterwork"]
+script = ExtResource("2_quality")
+quality_id = "masterwork"
+display_name = "Мастерское"
+roll_weight = 7
+scaling_percent = 135
+
+
+[sub_resource type="Resource" id="rarity_0"]
+script = ExtResource("3_rarity")
+tier = 0
+display_name = "обычное"
+color = Color(0.76, 0.79, 0.83, 1)
+roll_weight = 78
+minimum_affixes = 0
+maximum_affixes = 0
+
+
+[sub_resource type="Resource" id="rarity_1"]
+script = ExtResource("3_rarity")
+tier = 1
+display_name = "волшебное"
+color = Color(0.4, 0.65, 0.96, 1)
+roll_weight = 19
+minimum_affixes = 1
+maximum_affixes = 1
+
+
+[sub_resource type="Resource" id="rarity_2"]
+script = ExtResource("3_rarity")
+tier = 2
+display_name = "редкое"
+color = Color(0.93, 0.76, 0.35, 1)
+roll_weight = 3
+minimum_affixes = 2
+maximum_affixes = 3
+
+
+[sub_resource type="Resource" id="rarity_3"]
+script = ExtResource("3_rarity")
+tier = 3
+display_name = "уникальное"
+color = Color(0.95, 0.52, 0.26, 1)
+roll_weight = 0
+minimum_affixes = 3
+maximum_affixes = 4
+
+
+[sub_resource type="Resource" id="affix_vigor"]
+script = ExtResource("4_affix")
+affix_id = "vigor"
+display_name = "Живучесть"
+stat_id = "health_bonus"
+roll_weight = 20
+minimum_value = 2
+maximum_value = 5
+allowed_categories = PackedInt32Array(3)
+allowed_slots = PackedInt32Array(3, 4, 5, 6, 7, 8, 9)
+
+
+[sub_resource type="Resource" id="affix_might"]
+script = ExtResource("4_affix")
+affix_id = "might"
+display_name = "Мощь"
+stat_id = "strength_bonus"
+roll_weight = 12
+minimum_value = 1
+maximum_value = 3
+allowed_categories = PackedInt32Array(3)
+allowed_slots = PackedInt32Array(1, 5, 6, 7, 8)
+
+
+[sub_resource type="Resource" id="affix_swiftness"]
+script = ExtResource("4_affix")
+affix_id = "swiftness"
+display_name = "Проворство"
+stat_id = "agility_bonus"
+roll_weight = 12
+minimum_value = 1
+maximum_value = 2
+allowed_categories = PackedInt32Array(3)
+allowed_slots = PackedInt32Array(3, 5, 6, 8, 9)
+
+
+[sub_resource type="Resource" id="affix_insight"]
+script = ExtResource("4_affix")
+affix_id = "insight"
+display_name = "Проницательность"
+stat_id = "perception_bonus"
+roll_weight = 10
+minimum_value = 1
+maximum_value = 3
+allowed_categories = PackedInt32Array(3)
+allowed_slots = PackedInt32Array(3, 5, 6)
+
+
+[sub_resource type="Resource" id="affix_warding"]
+script = ExtResource("4_affix")
+affix_id = "warding"
+display_name = "Защита"
+stat_id = "armor_bonus"
+roll_weight = 15
+minimum_value = 1
+maximum_value = 3
+allowed_categories = PackedInt32Array(3)
+allowed_slots = PackedInt32Array(3, 4, 7, 8, 9)
+
+
+[sub_resource type="Resource" id="affix_keen"]
+script = ExtResource("4_affix")
+affix_id = "keen"
+display_name = "Точность"
+stat_id = "accuracy_bonus_percent"
+roll_weight = 14
+minimum_value = 3
+maximum_value = 8
+allowed_categories = PackedInt32Array(3)
+allowed_slots = PackedInt32Array(1, 5, 6, 8)
+
+
+[sub_resource type="Resource" id="affix_evasion"]
+script = ExtResource("4_affix")
+affix_id = "evasion"
+display_name = "Уклонение"
+stat_id = "dodge_bonus_percent"
+roll_weight = 12
+minimum_value = 2
+maximum_value = 6
+allowed_categories = PackedInt32Array(3)
+allowed_slots = PackedInt32Array(3, 5, 6, 9)
+
+
+[sub_resource type="Resource" id="affix_venom_ward"]
+script = ExtResource("4_affix")
+affix_id = "venom_ward"
+display_name = "Защита от яда"
+stat_id = "poison_resistance_percent"
+roll_weight = 10
+minimum_value = 4
+maximum_value = 12
+allowed_categories = PackedInt32Array(3)
+allowed_slots = PackedInt32Array(3, 4, 5, 6, 7, 8, 9)
+
+
+[sub_resource type="Resource" id="affix_edge"]
+script = ExtResource("4_affix")
+affix_id = "edge"
+display_name = "Острота"
+stat_id = "weapon_damage"
+roll_weight = 12
+minimum_value = 1
+maximum_value = 3
+allowed_categories = PackedInt32Array(3)
+allowed_slots = PackedInt32Array(1)
+
+
+[sub_resource type="Resource" id="affix_guard"]
+script = ExtResource("4_affix")
+affix_id = "guard"
+display_name = "Стойкость щита"
+stat_id = "defense_bonus"
+roll_weight = 12
+minimum_value = 1
+maximum_value = 3
+allowed_categories = PackedInt32Array(3)
+allowed_slots = PackedInt32Array(2)
+
+
+[resource]
+script = ExtResource("1_rules")
+qualities = Array[ExtResource("2_quality")]([SubResource("quality_standard"), SubResource("quality_sturdy"), SubResource("quality_masterwork")])
+rarities = Array[ExtResource("3_rarity")]([SubResource("rarity_0"), SubResource("rarity_1"), SubResource("rarity_2"), SubResource("rarity_3")])
+affixes = Array[ExtResource("4_affix")]([SubResource("affix_vigor"), SubResource("affix_might"), SubResource("affix_swiftness"), SubResource("affix_insight"), SubResource("affix_warding"), SubResource("affix_keen"), SubResource("affix_evasion"), SubResource("affix_venom_ward"), SubResource("affix_edge"), SubResource("affix_guard")])

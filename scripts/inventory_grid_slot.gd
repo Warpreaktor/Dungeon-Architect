@@ -11,6 +11,7 @@ var session: GameSession
 var _icon: TextureRect
 var _count: Label
 var _selected: bool = false
+var _rarity_color: Color = Color(0.3, 0.4, 0.46, 1)
 var _cell_size: float = 54.0
 var _drag_drop_state: int = 0
 var _drag_state_source: String = ""
@@ -46,6 +47,8 @@ func configure(index: int, definition: ItemDefinition, quantity: int, selected: 
 	slot_index = index
 	item_id = definition.item_id if definition != null else ""
 	_selected = selected
+	var instance: ItemInstance = session.item_instance(session.inventory_instance_id(index)) if session != null and definition != null else null
+	_rarity_color = ItemMagicCatalog.display_color(instance) if instance != null and instance.rarity != ItemInstance.Rarity.COMMON else Color(0.3, 0.4, 0.46, 1)
 	_cell_size = cell_size
 	custom_minimum_size = Vector2(cell_size, cell_size)
 	if _icon != null:
@@ -68,7 +71,7 @@ func set_drag_drop_state(state: int, source: String = "") -> void:
 func _apply_style() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.18, 0.24, 0.29, 1) if _selected else Color(0.055, 0.085, 0.12, 1)
-	style.border_color = Color(0.92, 0.73, 0.36) if _drag_drop_state == 1 else (Color(0.82, 0.28, 0.3) if _drag_drop_state == 2 else (Color(0.93, 0.73, 0.38, 1) if _selected else Color(0.3, 0.4, 0.46, 1)))
+	style.border_color = Color(0.92, 0.73, 0.36) if _drag_drop_state == 1 else (Color(0.82, 0.28, 0.3) if _drag_drop_state == 2 else (Color(0.93, 0.73, 0.38, 1) if _selected else _rarity_color))
 	style.set_border_width_all(2 if (_selected or _drag_drop_state != 0) else 1)
 	style.set_corner_radius_all(4)
 	add_theme_stylebox_override("panel", style)

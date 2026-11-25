@@ -148,12 +148,13 @@ func _select_equipped(slot_id: String) -> void:
 		_clear_item_info()
 		return
 	_selected_index = -1
-	_show_item_definition(item_id)
+	_show_item_definition(item_id, -1, slot_id)
 
 
 func _clear_item_info() -> void:
 	_item_icon.texture = null
 	_item_name.text = ""
+	_item_name.remove_theme_color_override("font_color")
 	_item_description.text = ""
 	_item_properties.text = ""
 
@@ -209,13 +210,25 @@ func _show_item(index: int) -> void:
 	_show_item_definition(item_id, index)
 
 
-func _show_item_definition(item_id: String, bag_index: int = -1) -> void:
+func _show_item_definition(item_id: String, bag_index: int = -1, equipped_slot: String = "") -> void:
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
 	if item == null:
 		return
+	var instance_id: String = _session.inventory_instance_id(bag_index) if bag_index >= 0 else (_session.equipment_instance_id(equipped_slot) if not equipped_slot.is_empty() else "")
+	var instance: ItemInstance = _session.item_instance(instance_id)
 	_item_icon.texture = item.icon
-	_item_name.text = item.display_name
-	_item_description.text = item.get_description()
+	_item_name.text = ItemMagicCatalog.display_name(item, instance)
+	_item_name.add_theme_color_override("font_color", ItemMagicCatalog.display_color(instance))
+	_item_description.text = item.get_description(instance)
+	if bag_index >= 0 and item.category == ItemDefinition.Category.EQUIPMENT and _selected_member != null:
+		var compare_slot: String = _comparison_slot(item)
+		if not compare_slot.is_empty():
+			var before: Dictionary = CharacterStats.hero_values(_selected_member)
+			var after: Dictionary = CharacterStats.preview_equipment(_selected_member, compare_slot, item, instance)
+			if not after.is_empty():
+				var differences: PackedStringArray = DescriptionTemplate.comparison(before, after)
+				if not differences.is_empty():
+					_item_description.text += "\n\nИзменение при экипировке (%s):\n%s" % [EquipmentSlotRules.LABELS[compare_slot], "\n".join(differences)]
 	_use_feedback.text = ""
 	var category := "Квестовый предмет"
 	match item.category:
@@ -226,6 +239,13 @@ func _show_item_definition(item_id: String, bag_index: int = -1) -> void:
 		ItemDefinition.Category.CURRENCY:
 			category = "Валюта"
 	var details := category
+	if instance != null:
+		var rarity: ItemRarityDefinition = ItemMagicCatalog.rarity(instance.rarity)
+		var quality: ItemQualityDefinition = ItemMagicCatalog.quality(instance.quality_id)
+		if quality != null:
+			details += " · " + quality.display_name
+		if rarity != null:
+			details += " · " + rarity.display_name
 	var count: int = int(_session.carried_items.get(item_id, 0))
 	if item.stackable:
 		details += "  ·  количество: %d" % count
@@ -241,13 +261,15 @@ func _show_item_definition(item_id: String, bag_index: int = -1) -> void:
 		_:
 			if item.healing_amount > 0:
 				details += "\nВосстанавливает: до %d HP" % item.healing_amount
-	if item.weapon_damage > 0:
-		details += "\nУрон оружия: %d (%s)" % [item.weapon_damage, "дальний" if item.weapon_kind == ItemDefinition.WeaponKind.RANGED else "ближний"]
-	if item.defense_bonus > 0:
-		details += "\nБлок: +%d" % item.defense_bonus
+	var weapon_damage: int = ItemMagicCatalog.effective_value(item, instance, "weapon_damage")
+	if weapon_damage > 0:
+		details += "\nУрон оружия: %d (%s)" % [weapon_damage, "дальний" if item.weapon_kind == ItemDefinition.WeaponKind.RANGED else "ближний"]
+	var block: int = ItemMagicCatalog.effective_value(item, instance, "defense_bonus")
+	if block > 0:
+		details += "\nБлок: +%d" % block
 		if item.max_durability > 0:
-			var durability: int = _session.inventory_shield_durability(bag_index) if bag_index >= 0 else _selected_member.current_shield_durability(item_id)
-			details += "\nПрочность: %d / %d" % [durability, item.max_durability]
+			var durability: int = instance.durability if instance != null else (_session.inventory_shield_durability(bag_index) if bag_index >= 0 else _selected_member.current_shield_durability(item_id))
+			details += "\nПрочность: %d / %d" % [durability, ItemMagicCatalog.effective_value(item, instance, "max_durability")]
 	if bag_index < 0 and _is_equipped(item_id):
 		details += "\nНадето"
 	_item_properties.text = details.replace("\n", " · ")

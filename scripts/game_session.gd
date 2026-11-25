@@ -180,12 +180,22 @@ func equipment_instance_id(slot_id: String, member: HeroState = null) -> String:
 	return str(selected.equipped_instance_ids.get(slot_id, "")) if selected != null else ""
 
 
-func _create_item_instance(item_id: String, durability: int = -1) -> ItemInstance:
+func _create_item_instance(item_id: String, durability: int = -1, roll_magic: bool = false) -> ItemInstance:
 	_next_item_instance_number += 1
 	var result: ItemInstance = ItemInstance.create("item_%d" % _next_item_instance_number, ItemCatalog.get_item(item_id), durability)
 	if result != null:
+		if roll_magic:
+			ItemMagicCatalog.roll(result, ItemCatalog.get_item(item_id), trap_random)
+			if _is_shield(item_id) and durability < 0:
+				result.durability = maxi(result.stat("max_durability"), result.stat("defense_bonus"))
 		_item_instances[result.instance_id] = result
 	return result
+
+
+func _sync_item_instances_to_party() -> void:
+	for member in party:
+		if member != null:
+			member.item_instances = _item_instances
 
 
 func _ensure_item_instances() -> void:
@@ -231,6 +241,7 @@ func _ensure_item_instances() -> void:
 	for instance_id in _item_instances.keys():
 		if not used.has(instance_id):
 			_item_instances.erase(instance_id)
+	_sync_item_instances_to_party()
 
 
 func _instance_at(kind: String, slot: Variant, member: HeroState) -> String:
@@ -403,10 +414,12 @@ func transfer_inventory_item(from_kind: String, from_slot: Variant, to_kind: Str
 				member.equipped_accessories.erase(slot_id)
 			else:
 				member.equipped_accessories[slot_id] = item_id
-	member._recalculate_equipment_stats()
 	member.health = mini(member.health, member.effective_max_health())
 	_apply_shield_layout(_inventory_order, equipped, plan["shield_layout"])
 	_update_instance_shield_values(plan["shield_layout"], member)
+	_sync_item_instances_to_party()
+	member._recalculate_equipment_stats()
+	member.health = mini(member.health, member.effective_max_health())
 	return true
 
 
@@ -743,6 +756,9 @@ func take_ground_loot(container_id: String, entry_index: int) -> int:
 		if _is_shield(item_id):
 			_apply_shield_layout(bag, equipped, shield_layout)
 			_update_instance_shield_values(shield_layout, hero)
+		_sync_item_instances_to_party()
+		hero._recalculate_equipment_stats()
+		_sync_item_instances_to_party()
 		keys = int(carried_items.get("key", 0))
 		potions = int(carried_items.get("potion", 0))
 	entry["quantity"] = int(entry["quantity"]) - amount
@@ -1023,6 +1039,10 @@ func restore_party_state(snapshot: Dictionary) -> bool:
 	carried_items = new_carried.duplicate(true)
 	_inventory_order = restored_slots
 	_item_instances = restored_instances
+	_sync_item_instances_to_party()
+	for member in party:
+		if member.health > member.effective_max_health():
+			return false
 	_bag_instance_ids = restored_bag_instances
 	_next_item_instance_number = restored_serial
 	if not snapshot.has("item_instances"):
@@ -1350,7 +1370,7 @@ func win_pending_encounter() -> bool:
 			DungeonMap.monster_gold_amount(defeated),
 			DungeonMap.monster_item_quantities(defeated))
 		for reward in rewards:
-			_receive_item(str(reward["item_id"]), int(reward["quantity"]), reward.get("durabilities", []))
+			_receive_item(str(reward["item_id"]), int(reward["quantity"]), reward.get("durabilities", []), bool(reward.get("roll_magic", false)))
 		if not rewards.is_empty():
 			_activate_message_at(target, "monster_defeated", defeated_id, rewards)
 	return move_by(target.x - player_pos.x, target.y - player_pos.y)
@@ -1624,12 +1644,12 @@ func _open_chest(chest: Dictionary) -> void:
 		DungeonMap.chest_gold_amount(chest),
 		DungeonMap.chest_item_quantities(chest))
 	for reward in rewards:
-		_receive_item(str(reward["item_id"]), int(reward["quantity"]))
+		_receive_item(str(reward["item_id"]), int(reward["quantity"]), [], bool(reward.get("roll_magic", false)))
 	_activate_message_at(Vector2i(int(chest["x"]), int(chest["y"])), "chest_open", str(chest["id"]), rewards)
 
 
 ## Общая логика подбора. Описание предмета — Resource, состояние находок — GameSession.
-func _receive_item(item_id: String, quantity: int, durabilities: Array = []) -> int:
+func _receive_item(item_id: String, quantity: int, durabilities: Array = [], roll_magic: bool = false) -> int:
 	if item_id == "key_yellow":
 		item_id = "key"
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
@@ -1644,6 +1664,7 @@ func _receive_item(item_id: String, quantity: int, durabilities: Array = []) -> 
 	var shield_layout: Dictionary = _shield_layout(bag, equipped)
 	var received: int = 0
 	var overflow_durabilities: Array = []
+	var overflow_instances: Array[Dictionary] = []
 	for index in range(quantity):
 		var location: String = ""
 		if item.stackable and bag.has(item_id):
@@ -1662,30 +1683,41 @@ func _receive_item(item_id: String, quantity: int, durabilities: Array = []) -> 
 				location = "bag:%d" % free
 				bag[free] = item_id
 		if location.is_empty():
+			var durability: int = int(durabilities[index]) if index < durabilities.size() else -1
+			if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
+				var overflow_instance: ItemInstance = _create_item_instance(item_id, durability, roll_magic)
+				if overflow_instance != null:
+					overflow_instances.append(overflow_instance.to_dict())
+					_item_instances.erase(overflow_instance.instance_id)
 			if _is_shield(item_id):
-				overflow_durabilities.append(int(durabilities[index]) if index < durabilities.size() else _new_shield_durability(item_id))
+				var overflow_shield_durability: int = int(durabilities[index]) if index < durabilities.size() else _new_shield_durability(item_id)
+				if not overflow_instances.is_empty():
+					overflow_shield_durability = int(overflow_instances.back()["durability"])
+				overflow_durabilities.append(overflow_shield_durability)
 			continue
 		if location.begins_with("equipment:"):
 			equipped[location.trim_prefix("equipment:")] = item_id
+		var created_instance: ItemInstance = null
 		if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
 			var current_durability: int = int(durabilities[index]) if index < durabilities.size() else -1
-			var instance: ItemInstance = _create_item_instance(item_id, current_durability)
+			created_instance = _create_item_instance(item_id, current_durability, roll_magic)
 			if location.begins_with("bag:"):
-				_bag_instance_ids[int(location.trim_prefix("bag:"))] = instance.instance_id
+				_bag_instance_ids[int(location.trim_prefix("bag:"))] = created_instance.instance_id
 			elif location.begins_with("equipment:"):
-				hero.equipped_instance_ids[location.trim_prefix("equipment:")] = instance.instance_id
+				hero.equipped_instance_ids[location.trim_prefix("equipment:")] = created_instance.instance_id
 		if _is_shield(item_id) and location != "stack":
-			shield_layout[location] = int(durabilities[index]) if index < durabilities.size() else _new_shield_durability(item_id)
+			shield_layout[location] = int(durabilities[index]) if index < durabilities.size() else (created_instance.durability if created_instance != null else _new_shield_durability(item_id))
 		received += 1
 	if received > 0:
 		carried_items[item_id] = int(carried_items.get(item_id, 0)) + received
 		_inventory_order = bag
 		hero.equipped_weapon_id = str(equipped["main_hand"])
 		hero.equipped_shield_id = str(equipped["off_hand"])
-		hero._recalculate_equipment_stats()
 		if _is_shield(item_id):
 			_apply_shield_layout(bag, equipped, shield_layout)
 			_update_instance_shield_values(shield_layout, hero)
+		_sync_item_instances_to_party()
+		hero._recalculate_equipment_stats()
 		keys = int(carried_items.get("key", 0))
 		potions = int(carried_items.get("potion", 0))
 	var overflow: int = quantity - received
@@ -1693,6 +1725,8 @@ func _receive_item(item_id: String, quantity: int, durabilities: Array = []) -> 
 		var entry: Dictionary = {"item_id": item_id, "quantity": overflow}
 		if _is_shield(item_id):
 			entry["durabilities"] = overflow_durabilities
+		if not overflow_instances.is_empty():
+			entry["instances"] = overflow_instances
 		_append_ground_loot(player_pos, [entry])
 	return received
 
@@ -1904,7 +1938,7 @@ func _claim_exit_reward(stairs: Dictionary) -> void:
 	var rewards: Array[Dictionary] = _resolve_rewards(DungeonMap.chest_contents(stairs), false,
 		DungeonMap.chest_gold_amount(stairs), DungeonMap.chest_item_quantities(stairs))
 	for reward in rewards:
-		_receive_item(str(reward["item_id"]), int(reward["quantity"]))
+		_receive_item(str(reward["item_id"]), int(reward["quantity"]), [], bool(reward.get("roll_magic", false)))
 	if not rewards.is_empty():
 		_message_events.append({"text": "Награда за прохождение подземелья", "activation": "exit_reward", "loot": rewards})
 

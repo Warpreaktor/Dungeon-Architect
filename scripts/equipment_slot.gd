@@ -27,6 +27,7 @@ var _empty_icon_material: ShaderMaterial
 var _last_visual_state: int = -1
 var _drag_state_source: String = ""
 var _virtual_two_handed: bool = false
+var _rarity_color: Color = Color(0.36, 0.49, 0.57)
 
 
 func _ready() -> void:
@@ -60,6 +61,9 @@ func configure(next_slot_id: String, next_session: GameSession) -> void:
 	session = next_session
 	item_id = session.equipment_item_id(slot_id) if session != null else ""
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	var instance: ItemInstance = session.item_instance(session.equipment_instance_id(slot_id)) if session != null and item != null else null
+	_rarity_color = ItemMagicCatalog.display_color(instance) if instance != null and instance.rarity != ItemInstance.Rarity.COMMON else Color(0.36, 0.49, 0.57)
+	_last_visual_state = -1
 	_virtual_two_handed = false
 	var placeholder: Texture2D = EMPTY_ICONS.get(slot_id) as Texture2D
 	_icon.texture = item.icon if item != null else placeholder
@@ -91,7 +95,7 @@ func _style(highlight: bool, invalid: bool = false) -> void:
 	_last_visual_state = state
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.13, 0.24, 0.29, 0.95) if highlight else (Color(0.075, 0.105, 0.15, 0.97) if _virtual_two_handed else Color(0.06, 0.09, 0.14, 0.97))
-	style.border_color = Color(0.82, 0.29, 0.30) if invalid else (Color(0.9, 0.72, 0.38) if highlight else Color(0.36, 0.49, 0.57))
+	style.border_color = Color(0.82, 0.29, 0.30) if invalid else (Color(0.9, 0.72, 0.38) if highlight else _rarity_color)
 	style.set_border_width_all(2 if highlight else 1)
 	style.set_corner_radius_all(7)
 	add_theme_stylebox_override("panel", style)

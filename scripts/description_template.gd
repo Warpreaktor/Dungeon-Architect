@@ -40,20 +40,12 @@ static func unresolved_tokens(text: String) -> PackedStringArray:
 	return result
 
 
-static func equipment_properties(item: Resource) -> PackedStringArray:
-	var labels: Dictionary = {
-		"armor_bonus": "Броня",
-		"health_bonus": "HP",
-		"strength_bonus": "Сила",
-		"agility_bonus": "Ловкость",
-		"perception_bonus": "Чутьё",
-		"dodge_bonus_percent": "Уклонение",
-		"accuracy_bonus_percent": "Меткость",
-		"poison_resistance_percent": "Сопротивление яду"
-	}
+static func equipment_properties(item: ItemDefinition, instance: ItemInstance = null) -> PackedStringArray:
 	var lines := PackedStringArray()
-	for key in labels:
-		var value: int = int(item.get(key))
+	if item == null:
+		return lines
+	for key in CharacterStats.EQUIPMENT_FIELDS:
+		var value: int = ItemMagicCatalog.effective_value(item, instance, key)
 		if value == 0:
 			continue
 		var suffix: String = " п.п." if key in ["dodge_bonus_percent", "accuracy_bonus_percent"] else ("%" if key == "poison_resistance_percent" else "")

@@ -25,6 +25,7 @@ var equipped_weapon_id: String = ""
 var equipped_shield_id: String = ""
 var equipped_accessories: Dictionary = {}
 var equipped_instance_ids: Dictionary = {}
+var item_instances: Dictionary = {}
 ## Состояние экземпляров щитов: каждый найденный щит имеет собственную прочность.
 var shield_durabilities: Dictionary = {} # item_id -> Array[int]
 var last_shield_broken: String = ""
@@ -66,7 +67,7 @@ func weapon_damage(kind: int) -> int:
 	var item: ItemDefinition = ItemCatalog.get_item(equipped_weapon_id)
 	if item == null or item.equipment_slot != ItemDefinition.EquipmentSlot.WEAPON or item.weapon_kind != kind:
 		return 0
-	return maxi(item.weapon_damage, 0)
+	return CharacterStats.slot_item_value(self, "main_hand", "weapon_damage")
 
 
 func melee_attack_value() -> float:
@@ -215,7 +216,7 @@ func consume_shield_block(incoming: int, maximum_absorption: int = -1) -> int:
 	var durability: int = current_shield_durability(equipped_shield_id)
 	if item == null or durability <= 0:
 		return 0
-	var blocked: int = mini(incoming, maxi(item.defense_bonus, 0))
+	var blocked: int = mini(incoming, CharacterStats.slot_item_value(self, "off_hand", "defense_bonus"))
 	if maximum_absorption >= 0:
 		blocked = mini(blocked, maximum_absorption)
 	var values: Array = shield_durabilities.get(equipped_shield_id, [])
@@ -399,6 +400,7 @@ func copy_for_battle() -> HeroState:
 	copy.equipped_shield_id = equipped_shield_id
 	copy.equipped_accessories = equipped_accessories.duplicate(true)
 	copy.equipped_instance_ids = equipped_instance_ids.duplicate(true)
+	copy.item_instances = item_instances
 	copy.shield_durabilities = shield_durabilities.duplicate(true)
 	copy.last_shield_broken = last_shield_broken
 	copy.strength_bonus = strength_bonus
@@ -576,6 +578,6 @@ static func from_snapshot(data: Dictionary) -> HeroState:
 	result.overworld_statuses = statuses.duplicate(true)
 	result._potion_phase_progress = int(data["potion_phase_progress"])
 	result._recalculate_equipment_stats()
-	if result.health > result.effective_max_health():
+	if result.health > result.effective_max_health() and result.equipped_instance_ids.is_empty():
 		return null
 	return result

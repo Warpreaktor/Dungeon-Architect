@@ -37,14 +37,21 @@ enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 @export_range(0, 9999, 1) var effect_duration_phases: int = 0
 
 
-func get_description() -> String:
+func get_description(instance: ItemInstance = null) -> String:
 	var values: Dictionary = DescriptionTemplate.numeric_values(self)
+	if instance != null:
+		for field in ItemMagicCatalog.MODIFIER_FIELDS + ["max_durability"]:
+			values[field] = ItemMagicCatalog.effective_value(self, instance, field)
 	values["duration_phases"] = DescriptionTemplate.phases(effect_duration_phases)
 	values["vision_cells"] = DescriptionTemplate.quantity(effect_value, "клетку", "клетки", "клеток")
 	if item_id in LockCatalog.LOCK_IDS:
 		values["lock_color"] = LockCatalog.label(item_id)
 	var result: String = DescriptionTemplate.render(description, values)
-	var equipment_stats: PackedStringArray = DescriptionTemplate.equipment_properties(self)
+	var equipment_stats: PackedStringArray = DescriptionTemplate.equipment_properties(self, instance)
 	if not equipment_stats.is_empty():
 		result += "\n" + "\n".join(equipment_stats)
+	if instance != null:
+		var affixes: PackedStringArray = ItemMagicCatalog.affix_lines(instance)
+		if not affixes.is_empty():
+			result += "\n" + ", ".join(affixes)
 	return result

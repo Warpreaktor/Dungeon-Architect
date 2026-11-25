@@ -41,7 +41,10 @@ static func roll_loot(rng: RandomNumberGenerator = null, table: WeightedLootTabl
 	if item_id.is_empty():
 		return {}
 	var definition: ItemDefinition = get_item(item_id)
-	return {"item_id": item_id, "quantity": table.quantity(item_id, definition.default_quantity, rng)}
+	var reward: Dictionary = {"item_id": item_id, "quantity": table.quantity(item_id, definition.default_quantity, rng)}
+	if definition.category == ItemDefinition.Category.EQUIPMENT and not definition.stackable:
+		reward["roll_magic"] = true
+	return reward
 
 
 static func ids_by_category(category: int) -> Array[String]:

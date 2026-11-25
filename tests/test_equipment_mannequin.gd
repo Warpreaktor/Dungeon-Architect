@@ -66,15 +66,15 @@ func _initialize() -> void:
 	get_root().add_child.call_deferred(view)
 	await process_frame
 	view.open_for(session)
-	assert(view.get_node("Center/Card/Margins/Content/BodyScroll/Columns/Bag/BagGrid").get_child_count() == 40)
-	assert(view.get_node("Center/Card/Margins/Content/BodyScroll/Columns/EquipmentArea/EquipmentMannequin").slots.size() == 10)
+	assert(view.get_node("Center/Card/Margins/Content/Columns/Bag/BagGrid").get_child_count() == 40)
+	assert(view.get_node("Center/Card/Margins/Content/Columns/EquipmentArea/EquipmentMannequin").slots.size() == 10)
 
 	var two_handed := GameSession.start_for(map)
 	two_handed._receive_item("warhammer", 1)
 	assert(two_handed.hero.equipped_weapon_id == "warhammer")
 	assert(two_handed.equipment_item_id("off_hand").is_empty())
 	view.open_for(two_handed)
-	var mannequin: EquipmentMannequin = view.get_node("Center/Card/Margins/Content/BodyScroll/Columns/EquipmentArea/EquipmentMannequin") as EquipmentMannequin
+	var mannequin: EquipmentMannequin = view.get_node("Center/Card/Margins/Content/Columns/EquipmentArea/EquipmentMannequin") as EquipmentMannequin
 	var off_hand: EquipmentSlotControl = mannequin.slots["off_hand"] as EquipmentSlotControl
 	assert(off_hand.item_id.is_empty())
 	assert(off_hand._icon.texture == ItemCatalog.get_item("warhammer").icon)
@@ -84,7 +84,7 @@ func _initialize() -> void:
 	assert(off_hand._last_visual_state == 2)
 	off_hand.set_drag_drop_state(0)
 	assert(off_hand._last_visual_state == 0)
-	var bag_slot: InventoryGridSlot = view.get_node("Center/Card/Margins/Content/BodyScroll/Columns/Bag/BagGrid").get_child(0) as InventoryGridSlot
+	var bag_slot: InventoryGridSlot = view.get_node("Center/Card/Margins/Content/Columns/Bag/BagGrid").get_child(0) as InventoryGridSlot
 	bag_slot.set_drag_drop_state(1, "touch")
 	assert(bag_slot._drag_drop_state == 1)
 	bag_slot.set_drag_drop_state(0)

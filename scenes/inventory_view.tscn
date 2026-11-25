@@ -66,7 +66,6 @@ mouse_filter = 0
 [node name="Card" type="PanelContainer" parent="Center"]
 unique_name_in_owner = true
 layout_mode = 2
-custom_minimum_size = Vector2(1110, 620)
 mouse_filter = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_card")
 
@@ -86,18 +85,12 @@ layout_mode = 2
 theme_override_constants/separation = 12
 
 
-[node name="CloseButton" type="Button" parent="Center/Card/Margins/Content/Header"]
-unique_name_in_owner = true
-size_flags_horizontal = 8
-custom_minimum_size = Vector2(104, 38)
+[node name="GoldBar" type="HBoxContainer" parent="Center/Card/Margins/Content/Header"]
 layout_mode = 2
-focus_mode = 2
-text = "Закрыть"
+size_flags_horizontal = 3
+size_flags_vertical = 4
 
-[node name="GoldBar" type="HBoxContainer" parent="Center/Card/Margins/Content"]
-layout_mode = 2
-
-[node name="GoldIcon" type="TextureRect" parent="Center/Card/Margins/Content/GoldBar"]
+[node name="GoldIcon" type="TextureRect" parent="Center/Card/Margins/Content/Header/GoldBar"]
 custom_minimum_size = Vector2(22, 22)
 layout_mode = 2
 mouse_filter = 2
@@ -105,67 +98,63 @@ texture = ExtResource("stat_gold")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="GoldLabel" type="Label" parent="Center/Card/Margins/Content/GoldBar"]
+[node name="GoldLabel" type="Label" parent="Center/Card/Margins/Content/Header/GoldBar"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "0"
 theme_override_colors/font_color = Color(0.97, 0.81, 0.44, 1)
 
+[node name="CloseButton" type="Button" parent="Center/Card/Margins/Content/Header"]
+unique_name_in_owner = true
+size_flags_vertical = 4
+custom_minimum_size = Vector2(104, 38)
+layout_mode = 2
+focus_mode = 2
+text = "Закрыть"
+
 [node name="Separator" type="HSeparator" parent="Center/Card/Margins/Content"]
 layout_mode = 2
 
-[node name="BodyScroll" type="ScrollContainer" parent="Center/Card/Margins/Content"]
-layout_mode = 2
-size_flags_vertical = 3
-horizontal_scroll_mode = 1
-scroll_deadzone = 12
-
-[node name="Columns" type="GridContainer" parent="Center/Card/Margins/Content/BodyScroll"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-columns = 2
-theme_override_constants/h_separation = 14
-theme_override_constants/v_separation = 12
-
-[node name="Bag" type="VBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 8
-
-
-[node name="BagGrid" type="GridContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/Bag"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-columns = 10
-theme_override_constants/h_separation = 4
-theme_override_constants/v_separation = 4
-
-[node name="EquipmentArea" type="VBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 430)
-layout_mode = 2
-size_flags_horizontal = 3
-
-
-[node name="HeroSelector" type="HFlowContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/EquipmentArea"]
+[node name="HeroSelector" type="HFlowContainer" parent="Center/Card/Margins/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 alignment = 1
 theme_override_constants/separation = 8
 
-[node name="EquipmentMannequin" type="Control" parent="Center/Card/Margins/Content/BodyScroll/Columns/EquipmentArea"]
+[node name="Columns" type="Control" parent="Center/Card/Margins/Content"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(320, 395)
 layout_mode = 2
-size_flags_horizontal = 3
 size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="Bag" type="Control" parent="Center/Card/Margins/Content/Columns"]
+unique_name_in_owner = true
+layout_mode = 0
+mouse_filter = 2
+
+[node name="BagGrid" type="GridContainer" parent="Center/Card/Margins/Content/Columns/Bag"]
+unique_name_in_owner = true
+layout_mode = 0
+columns = 10
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
+
+[node name="EquipmentArea" type="Control" parent="Center/Card/Margins/Content/Columns"]
+unique_name_in_owner = true
+layout_mode = 0
+mouse_filter = 2
+
+[node name="EquipmentMannequin" type="Control" parent="Center/Card/Margins/Content/Columns/EquipmentArea"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
 script = ExtResource("2_mannequin")
 
 [node name="ItemDetails" type="HBoxContainer" parent="Center/Card/Margins/Content"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 198)
 theme_override_constants/separation = 12
 
 [node name="ItemIcon" type="TextureRect" parent="Center/Card/Margins/Content/ItemDetails"]
@@ -179,35 +168,37 @@ stretch_mode = 5
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="ItemName" type="Label" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
+[node name="DetailScroll" type="ScrollContainer" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
 unique_name_in_owner = true
 layout_mode = 2
+horizontal_scroll_mode = 0
+scroll_deadzone = 12
+
+[node name="Details" type="VBoxContainer" parent="Center/Card/Margins/Content/ItemDetails/ItemText/DetailScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ItemName" type="Label" parent="Center/Card/Margins/Content/ItemDetails/ItemText/DetailScroll/Details"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
 text = ""
 theme_override_font_sizes/font_size = 18
 
-[node name="ItemDescription" type="RichTextLabel" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
+[node name="ItemDescription" type="RichTextLabel" parent="Center/Card/Margins/Content/ItemDetails/ItemText/DetailScroll/Details"]
 unique_name_in_owner = true
 layout_mode = 2
-custom_minimum_size = Vector2(0, 34)
 size_flags_horizontal = 3
-size_flags_vertical = 3
-scroll_active = true
+fit_content = true
+scroll_active = false
 
-[node name="ItemProperties" type="Label" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
+[node name="ItemProperties" type="Label" parent="Center/Card/Margins/Content/ItemDetails/ItemText/DetailScroll/Details"]
 unique_name_in_owner = true
 layout_mode = 2
 autowrap_mode = 3
 text = ""
 
-[node name="ItemComparison" type="RichTextLabel" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
-unique_name_in_owner = true
-visible = false
-custom_minimum_size = Vector2(0, 60)
-layout_mode = 2
-size_flags_vertical = 3
-scroll_active = true
-
-[node name="EquipmentActions" type="HBoxContainer" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
+[node name="EquipmentActions" type="HFlowContainer" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -216,6 +207,13 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 custom_minimum_size = Vector2(120, 40)
+
+[node name="CompareButton" type="Button" parent="Center/Card/Margins/Content/ItemDetails/ItemText/EquipmentActions"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(100, 40)
+text = "Сравнить"
 
 [node name="EquipButton" type="Button" parent="Center/Card/Margins/Content/ItemDetails/ItemText/EquipmentActions"]
 unique_name_in_owner = true
@@ -234,4 +232,5 @@ text = "Снять"
 [node name="UseFeedback" type="Label" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
 unique_name_in_owner = true
 layout_mode = 2
+autowrap_mode = 3
 text = ""

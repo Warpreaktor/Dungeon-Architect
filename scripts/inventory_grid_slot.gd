@@ -32,6 +32,7 @@ func _ready() -> void:
 	_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_count = Label.new()
 	_count.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_count.clip_text = true
 	_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_count.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	_count.add_theme_font_size_override("font_size", 13)
@@ -75,6 +76,7 @@ func configure(index: int, definition: ItemDefinition, quantity: int, selected: 
 func set_cell_size(value: float) -> void:
 	var minimum := Vector2(value, value)
 	if custom_minimum_size != minimum:
+		_count.add_theme_font_size_override("font_size", clampi(roundi(13.0 * value / 44.0), 1, 13))
 		custom_minimum_size = minimum
 	_cell_size = value
 

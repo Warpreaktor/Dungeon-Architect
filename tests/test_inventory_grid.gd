@@ -37,8 +37,8 @@ func _initialize() -> void:
 	get_root().add_child.call_deferred(view)
 	await process_frame
 	view.open_for(session)
-	assert(view.get_node("Center/Card/Margins/Content/BodyScroll/Columns/Bag/BagGrid").get_child_count() == 40)
-	assert(view.get_node("Center/Card/Margins/Content/BodyScroll/Columns/Bag/BagGrid").columns == 10)
+	assert(view.get_node("Center/Card/Margins/Content/Columns/Bag/BagGrid").get_child_count() == 40)
+	assert(view.get_node("Center/Card/Margins/Content/Columns/Bag/BagGrid").columns == 10)
 	await _test_reuse(view, dungeon)
 	view.queue_free()
 	print("Inventory grid: OK")

@@ -52,6 +52,7 @@ func _ready() -> void:
 	_icon.offset_bottom = -6
 	_glyph = Label.new()
 	_glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_glyph.clip_text = true
 	_glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_glyph.add_theme_font_size_override("font_size", 23)
@@ -61,6 +62,14 @@ func _ready() -> void:
 	add_theme_stylebox_override("panel", _panel_style)
 	_style(false)
 	set_process(false)
+
+
+func set_slot_size(side: float) -> void:
+	var minimum := Vector2(side, side)
+	if custom_minimum_size != minimum:
+		_glyph.add_theme_font_size_override("font_size", maxi(1, roundi(23.0 * side / 58.0)))
+		custom_minimum_size = minimum
+	size = minimum
 
 
 func configure(next_slot_id: String, next_session: GameSession, virtual_texture: Texture2D = null) -> void:
@@ -134,7 +143,7 @@ func _get_drag_data(_pos: Vector2) -> Variant:
 		return null
 	var preview := TextureRect.new()
 	preview.texture = _icon.texture
-	preview.custom_minimum_size = Vector2(58, 58)
+	preview.custom_minimum_size = size
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	set_drag_preview(preview)

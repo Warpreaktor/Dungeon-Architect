@@ -17,8 +17,8 @@ func _initialize() -> void:
 	view.open_for(session)
 	assert(not view.has_node("Center/Card/Margins/Content/ItemDetails/UseButton"))
 	assert(not view.has_node("Center/Card/Margins/Content/Header/Title"))
-	assert(not view.has_node("Center/Card/Margins/Content/BodyScroll/Columns/Bag/BagTitle"))
-	assert(not view.has_node("Center/Card/Margins/Content/BodyScroll/Columns/EquipmentArea/EquipmentTitle"))
+	assert(not view.has_node("Center/Card/Margins/Content/Columns/Bag/BagTitle"))
+	assert(not view.has_node("Center/Card/Margins/Content/Columns/EquipmentArea/EquipmentTitle"))
 
 	var index: int = session.inventory_slot_ids().find("potion_health_small")
 	assert(index >= 0)

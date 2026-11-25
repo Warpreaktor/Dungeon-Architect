@@ -67,8 +67,10 @@ func _layout_slots() -> void:
 		return
 	_portrait.position = Vector2(size.x * 0.23, size.y * 0.15)
 	_portrait.size = Vector2(size.x * 0.54, size.y * 0.72)
+	var side: float = maxf(1.0, floorf(minf(58.0, minf(size.x / 4.5, size.y / 6.0))))
+	var slot_size := Vector2(side, side)
 	for slot_id in slots:
 		var slot: EquipmentSlotControl = slots[slot_id]
 		var center: Vector2 = POSITIONS.get(slot_id, Vector2(0.5, 0.5))
-		slot.position = Vector2(size.x * center.x - 29, size.y * center.y - 29)
-		slot.size = Vector2(58, 58)
+		slot.set_slot_size(side)
+		slot.position = (size - slot_size) * center

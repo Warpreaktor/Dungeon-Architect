@@ -4,6 +4,7 @@ extends SceneTree
 func _initialize() -> void:
 	await _test_equipment_actions_and_magic_instances()
 	await _test_ring_choice_and_party_members()
+	await _test_responsive_layout()
 	print("DA-6.08: equipment comparison and direct actions OK")
 	quit()
 
@@ -56,14 +57,24 @@ func _test_equipment_actions_and_magic_instances() -> void:
 	assert(view._item_properties.text.contains("Слот: Правая рука"))
 	assert(view._item_properties.text.contains("Качество: Добротное"))
 	assert(view._item_properties.text.contains("Редкость: волшебное"))
-	assert(view._item_comparison.visible)
-	assert(view._item_comparison.text.contains("Надето (Правая рука):"))
-	assert(view._item_comparison.text.contains("Ближний урон:"))
+	assert(view._compare_button.visible)
+	assert(view._comparison_text.contains("Надето (Правая рука):"))
+	assert(view._comparison_text.contains("Ближний урон:"))
+	assert(view._comparison_text.contains(ItemMagicCatalog.display_name(ItemCatalog.get_item("sword"), magic)))
+	assert(not view._comparison_overlay.is_open())
+	view._compare_button.pressed.emit()
+	assert(view._comparison_overlay.is_open())
+	assert(view._comparison_overlay._description.text == view._comparison_text)
+	assert(session.equipment_instance_id("main_hand") == old_id)
+	assert(session.item_instance(magic_id).to_dict() == original)
+	view.close_by_player()
+	assert(view.visible and not view._comparison_overlay.is_open())
 	view._equip_button.pressed.emit()
 	assert(session.equipment_instance_id("main_hand") == magic_id)
 	assert(session.inventory_instance_id(bag_index) == old_id)
 	assert(session.item_instance(magic_id).to_dict() == original)
 	assert(view._unequip_button.visible and not view._unequip_button.disabled)
+	assert(not view._compare_button.visible)
 	view._unequip_button.pressed.emit()
 	assert(session.equipment_item_id("main_hand").is_empty())
 	assert(session.item_instance(magic_id).to_dict() == original)
@@ -110,8 +121,12 @@ func _test_ring_choice_and_party_members() -> void:
 	assert(view._equip_target.get_item_metadata(1) == "ring_right")
 	view._on_comparison_target_changed(1)
 	assert(view._comparison_target == "ring_right")
-	assert(view._item_comparison.text.contains("Надето (Кольцо):"))
-	assert(view._item_comparison.text.contains("Сила:"))
+	assert(view._comparison_text.contains("Надето (Кольцо):"))
+	assert(view._comparison_text.contains("Сила:"))
+	view._compare_button.pressed.emit()
+	assert(view._comparison_overlay.is_open())
+	assert(view._comparison_overlay._description.text.contains("Сила:"))
+	view._comparison_overlay.hide_info()
 	view._equip_button.pressed.emit()
 	assert(session.equipment_instance_id("ring_right") == new_id)
 	assert(session.equipment_instance_id("ring_left") == left_id)
@@ -123,5 +138,45 @@ func _test_ring_choice_and_party_members() -> void:
 	assert(view._selected_index >= 0)
 	assert(session.equipment_instance_id("ring_right", session.party[0]) == new_id)
 	assert(session.equipment_instance_id("ring_right", session.party[1]).is_empty())
+	view.queue_free()
+	await process_frame
+
+
+func _test_responsive_layout() -> void:
+	var dungeon := DungeonMap.create_blank(8, 8)
+	assert(dungeon.place_entity("player_spawn", 2, 2))
+	var session := GameSession.start_for_party(dungeon, ["petushan", "volcha", "burolom", "luma"])
+	assert(session._receive_item("sword", 41) > 0)
+	var view: InventoryView = _open(session)
+	var original_size: Vector2i = root.size
+	var original_scale: Window.ContentScaleMode = root.content_scale_mode
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	for resolution in [Vector2i(1280, 800), Vector2i(1024, 600), Vector2i(800, 480), Vector2i(600, 900), Vector2i(480, 800)]:
+		root.size = resolution
+		view._resize_card()
+		for frame in range(4):
+			await process_frame
+		assert(root.get_visible_rect().grow(1.0).encloses(view._card.get_global_rect()))
+		var body_rect: Rect2 = view._columns.get_global_rect().grow(1.0)
+		assert(body_rect.encloses(view._bag.get_global_rect()))
+		assert(body_rect.encloses(view._mannequin.get_global_rect()))
+		assert(not view._bag.get_global_rect().intersects(view._mannequin.get_global_rect()))
+		var bag_rect: Rect2 = view._bag.get_global_rect().grow(1.0)
+		for cell in view._bag_slots:
+			assert(bag_rect.encloses(cell.get_global_rect()))
+		var equipment_rect: Rect2 = view._mannequin.get_global_rect().grow(1.0)
+		var occupied: Array[Rect2] = []
+		for slot: EquipmentSlotControl in view._mannequin.slots.values():
+			var rect: Rect2 = slot.get_global_rect()
+			assert(equipment_rect.encloses(rect))
+			for previous in occupied:
+				assert(not rect.intersects(previous))
+			occupied.append(rect)
+		assert(occupied.size() == EquipmentSlotRules.SLOT_IDS.size())
+		assert(view._compare_button.visible)
+		assert(view._card.get_global_rect().grow(1.0).encloses(view._compare_button.get_global_rect()))
+	assert(not view.has_node("Center/Card/Margins/Content/BodyScroll"))
+	root.content_scale_mode = original_scale
+	root.size = original_size
 	view.queue_free()
 	await process_frame

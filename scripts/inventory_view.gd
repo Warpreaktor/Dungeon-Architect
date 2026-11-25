@@ -6,14 +6,17 @@ signal item_use_requested(item_id: String)
 signal equipment_changed
 
 @onready var _card: PanelContainer = %Card
-@onready var _columns: GridContainer = %Columns
+@onready var _columns: Control = %Columns
+@onready var _bag: Control = %Bag
+@onready var _equipment_area: Control = %EquipmentArea
+@onready var _detail_scroll: ScrollContainer = %DetailScroll
 @onready var _bag_grid: GridContainer = %BagGrid
 @onready var _gold_label: Label = %GoldLabel
 @onready var _item_icon: TextureRect = %ItemIcon
 @onready var _item_name: Label = %ItemName
 @onready var _item_description: RichTextLabel = %ItemDescription
 @onready var _item_properties: Label = %ItemProperties
-@onready var _item_comparison: RichTextLabel = %ItemComparison
+@onready var _compare_button: Button = %CompareButton
 @onready var _equip_target: OptionButton = %EquipTarget
 @onready var _equip_button: Button = %EquipButton
 @onready var _unequip_button: Button = %UnequipButton
@@ -33,6 +36,8 @@ var _selected_item_id: String = ""
 var _selected_index: int = -1
 var _selected_equipped_slot: String = ""
 var _comparison_target: String = ""
+var _comparison_text: String = ""
+var _comparison_overlay: TouchInfoOverlay
 var _bag_cell_size: float = 52.0
 var _touch_index: int = -1
 var _touch_origin: Vector2
@@ -53,10 +58,14 @@ func _ready() -> void:
 	add_child(_item_action_menu)
 	_close_button.pressed.connect(close_by_player)
 	_equip_button.pressed.connect(_equip_selected)
+	_compare_button.pressed.connect(_show_comparison)
+	_comparison_overlay = TouchInfoOverlay.new()
+	add_child(_comparison_overlay)
 	_unequip_button.pressed.connect(_unequip_selected)
 	_equip_target.item_selected.connect(_on_comparison_target_changed)
 	_mannequin.item_transferred.connect(_transfer_item)
 	_mannequin.slot_selected.connect(_select_equipped)
+	_columns.resized.connect(_layout_body)
 	get_viewport().size_changed.connect(_resize_card)
 	_resize_card()
 	hide()
@@ -66,6 +75,7 @@ func _ready() -> void:
 func open_for(session: GameSession) -> void:
 	if session == null or session.hero == null:
 		return
+	_comparison_overlay.hide_info()
 	_cancel_drag()
 	if _session != null:
 		_session.inventory_member = null
@@ -80,6 +90,7 @@ func open_for(session: GameSession) -> void:
 	_resize_card()
 	_refresh_contents()
 	show()
+	_layout_body()
 	set_process_input(true)
 	_close_button.grab_focus()
 
@@ -155,6 +166,7 @@ func _refresh_contents() -> void:
 	_cancel_touch_drag()
 	_entries = _session.inventory_slot_ids()
 	_ensure_bag_slots(_entries.size())
+	_layout_body()
 	_gold_label.text = "%d" % _selected_member.gold
 	_mannequin.show_hero(_session)
 	_restore_selection()
@@ -251,8 +263,8 @@ func _clear_item_info() -> void:
 	_item_name.remove_theme_color_override("font_color")
 	_item_description.text = ""
 	_item_properties.text = ""
-	_item_comparison.text = ""
-	_item_comparison.hide()
+	_comparison_text = ""
+	_compare_button.hide()
 	_equip_target.hide()
 	_equip_button.hide()
 	_unequip_button.hide()
@@ -317,6 +329,7 @@ func _show_item_definition(item_id: String, bag_index: int = -1, equipped_slot: 
 	_item_name.text = ItemMagicCatalog.display_name(item, instance)
 	_item_name.add_theme_color_override("font_color", ItemMagicCatalog.display_color(instance))
 	_item_description.text = item.get_description(instance)
+	_detail_scroll.scroll_vertical = 0
 	_update_equipment_actions(item, instance, bag_index, equipped_slot)
 	_use_feedback.text = ""
 	var category := "Квестовый предмет"
@@ -384,7 +397,8 @@ func _comparison_slot(item: ItemDefinition) -> String:
 
 
 func _update_equipment_actions(item: ItemDefinition, instance: ItemInstance, bag_index: int, equipped_slot: String) -> void:
-	_item_comparison.hide()
+	_comparison_text = ""
+	_compare_button.hide()
 	_equip_target.hide()
 	_equip_button.hide()
 	_unequip_button.hide()
@@ -416,15 +430,27 @@ func _update_equipment_actions(item: ItemDefinition, instance: ItemInstance, bag
 	var before: Dictionary = CharacterStats.hero_values(_selected_member)
 	var after: Dictionary = CharacterStats.preview_equipment(_selected_member, compare_slot, item, instance)
 	var lines := PackedStringArray()
+	lines.append("Выбрано: %s" % ItemMagicCatalog.display_name(item, instance))
+	lines.append_array(DescriptionTemplate.equipment_properties(item, instance))
+	lines.append("")
 	lines.append("Надето (%s): %s" % [EquipmentSlotRules.LABELS[compare_slot], equipped_name])
 	if equipped_item != null:
 		lines.append_array(DescriptionTemplate.equipment_properties(equipped_item, equipped_instance))
 	if not after.is_empty():
 		var differences: PackedStringArray = DescriptionTemplate.comparison_details(before, after)
+		lines.append("")
 		lines.append("После замены для %s:" % _selected_member.definition.display_name)
 		lines.append_array(differences if not differences.is_empty() else PackedStringArray(["Характеристики не изменятся"]))
-	_item_comparison.text = "\n".join(lines)
-	_item_comparison.show()
+	_comparison_text = "\n".join(lines)
+	_compare_button.show()
+
+
+func _show_comparison() -> void:
+	if not _compare_button.visible or _comparison_text.is_empty():
+		return
+	_cancel_drag()
+	_item_action_menu.hide()
+	_comparison_overlay.show_info("Сравнение экипировки", _comparison_text)
 
 
 func _on_comparison_target_changed(index: int) -> void:
@@ -479,17 +505,53 @@ func show_equipment_result(item_id: String, message: String = "") -> void:
 
 func _resize_card() -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	_columns.columns = 1 if viewport_size.x < 1040.0 else 2
 	_card.custom_minimum_size = Vector2(
-		minf(1190.0, maxf(300.0, viewport_size.x - 24.0)),
-		minf(760.0, maxf(240.0, viewport_size.y - 24.0))
+		minf(1190.0, maxf(1.0, viewport_size.x - 24.0)),
+		minf(760.0, maxf(1.0, viewport_size.y - 24.0))
 	)
-	var available_width: float = _card.custom_minimum_size.x - 60.0
-	if _columns.columns == 2:
-		available_width -= 358.0
-	_bag_cell_size = clampf((available_width - 9.0 * 4.0) / 10.0, 44.0, 59.0)
+	_detail_scroll.custom_minimum_size.y = _card.custom_minimum_size.y * 0.16
+	_layout_body()
+
+
+func _layout_body() -> void:
+	var available: Vector2 = _columns.size
+	if available.x <= 0.0 or available.y <= 0.0:
+		return
+	var gap: float = 14.0
+	var stacked: bool = available.x < available.y * 1.5
+	var bag_size: Vector2
+	var equipment_size: Vector2
+	if stacked:
+		var bag_height: float = maxf(0.0, available.y - gap) * 0.42
+		bag_size = Vector2(available.x, bag_height)
+		equipment_size = Vector2(available.x, maxf(0.0, available.y - bag_height - gap))
+		_equipment_area.position = Vector2(0.0, bag_height + gap)
+	else:
+		var bag_width: float = maxf(0.0, available.x - gap) * 0.60
+		bag_size = Vector2(bag_width, available.y)
+		equipment_size = Vector2(maxf(0.0, available.x - bag_width - gap), available.y)
+		_equipment_area.position = Vector2(bag_width + gap, 0.0)
+	_bag.size = bag_size
+	var fitted_width: float = minf(equipment_size.x, equipment_size.y * 1.2)
+	_equipment_area.position.x += (equipment_size.x - fitted_width) * 0.5
+	equipment_size.x = fitted_width
+	_equipment_area.size = equipment_size
+	var columns: int = _bag_grid.columns
+	var rows: int = maxi(1, ceili(float(_bag_slots.size()) / float(columns)))
+	var h_gap: float = float(_bag_grid.get_theme_constant("h_separation"))
+	var v_gap: float = float(_bag_grid.get_theme_constant("v_separation"))
+	_bag_cell_size = maxf(1.0, floorf(minf(59.0, minf(
+		(bag_size.x - h_gap * (columns - 1)) / columns,
+		(bag_size.y - v_gap * (rows - 1)) / rows
+	))))
 	for slot in _bag_slots:
 		slot.set_cell_size(_bag_cell_size)
+	var grid_size := Vector2(
+		_bag_cell_size * columns + h_gap * (columns - 1),
+		_bag_cell_size * rows + v_gap * (rows - 1)
+	)
+	_bag_grid.size = grid_size
+	_bag_grid.position = (bag_size - grid_size) * 0.5
 
 
 func _source_at(point: Vector2) -> Dictionary:
@@ -515,7 +577,7 @@ func _target_at(point: Vector2) -> Dictionary:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible or _session == null:
+	if not visible or _session == null or _comparison_overlay.is_open():
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -607,11 +669,15 @@ func _cancel_drag() -> void:
 
 
 func close_by_player() -> void:
+	if _comparison_overlay.is_open():
+		_comparison_overlay.hide_info()
+		return
 	dismiss()
 	closed.emit()
 
 
 func dismiss() -> void:
+	_comparison_overlay.hide_info()
 	_item_action_menu.hide()
 	_popup_slot = -1
 	_cancel_drag()

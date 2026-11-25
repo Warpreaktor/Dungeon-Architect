@@ -70,19 +70,19 @@ func weapon_damage(kind: int) -> int:
 
 
 func melee_attack_value() -> float:
-	return BattleMath.melee_power(weapon_damage(ItemDefinition.WeaponKind.MELEE), strength_bonus, effective_strength())
+	return float(CharacterStats.hero_values(self)["melee_power"])
 
 
 func ranged_attack_value() -> float:
-	return BattleMath.ranged_power(weapon_damage(ItemDefinition.WeaponKind.RANGED), strength_bonus, effective_agility())
+	return float(CharacterStats.hero_values(self)["ranged_power"])
 
 
 func melee_attack() -> int:
-	return floori(melee_attack_value())
+	return int(CharacterStats.hero_values(self)["melee_attack"])
 
 
 func ranged_attack() -> int:
-	return floori(ranged_attack_value())
+	return int(CharacterStats.hero_values(self)["ranged_attack"])
 
 
 func action_slot_capacity() -> int:
@@ -144,7 +144,7 @@ func unequip_item(item_id: String) -> bool:
 
 ## Постоянная защита складывается из базовой брони и снаряжения.
 func _recalculate_equipment_stats() -> void:
-	defense = maxi(base_defense + equipment_bonus("armor_bonus"), 0)
+	defense = int(CharacterStats.hero_values(self, false)["defense"])
 
 
 ## Совместимые методы для уже существующей игровой логики.
@@ -159,37 +159,27 @@ func equip_shield(item: ItemDefinition) -> void:
 
 
 func equipment_bonus(property_name: String) -> int:
-	var total: int = 0
-	var equipped: Array[String] = [equipped_weapon_id, equipped_shield_id]
-	for item_id in equipped_accessories.values():
-		equipped.append(str(item_id))
-	for item_id in equipped:
-		var item: ItemDefinition = ItemCatalog.get_item(item_id)
-		if item != null:
-			if property_name == "armor_bonus" and item.equipment_slot in [ItemDefinition.EquipmentSlot.WEAPON, ItemDefinition.EquipmentSlot.SHIELD]:
-				continue
-			total += int(item.get(property_name))
-	return total
+	return CharacterStats.equipment_bonus(self, property_name)
 
 
 func effective_strength() -> int:
-	return maxi(strength + equipment_bonus("strength_bonus"), 0)
+	return int(CharacterStats.hero_values(self)["strength"])
 
 
 func effective_agility() -> int:
-	return maxi(agility + equipment_bonus("agility_bonus"), 0)
+	return int(CharacterStats.hero_values(self)["agility"])
 
 
 func effective_perception() -> int:
-	return maxi(perception + equipment_bonus("perception_bonus"), 0)
+	return int(CharacterStats.hero_values(self)["perception"])
 
 
 func effective_poison_resistance_percent() -> int:
-	return clampi(equipment_bonus("poison_resistance_percent"), 0, 100)
+	return int(CharacterStats.hero_values(self)["poison_resistance_percent"])
 
 
 func effective_max_health() -> int:
-	return BattleStatusRules.health_limit(max_health + equipment_bonus("health_bonus"), overworld_statuses)
+	return int(CharacterStats.hero_values(self)["max_health"])
 
 
 ## Лечит не выше максимума, возвращает фактически восстановленное здоровье.
@@ -244,7 +234,7 @@ func consume_shield_block(incoming: int, maximum_absorption: int = -1) -> int:
 func take_damage(incoming: int, apply_passive_armor: bool = true) -> int:
 	var remaining: int = maxi(incoming, 0)
 	if apply_passive_armor:
-		remaining -= BattleMath.passive_armor_absorption(remaining, defense)
+		remaining -= BattleMath.passive_armor_absorption(remaining, int(CharacterStats.hero_values(self)["defense"]))
 	if vitality_phases > 0 and vitality_percent > 0 and remaining > 0:
 		remaining = maxi(1, int(float(remaining) * float(100 - vitality_percent) / 100.0))
 	health = maxi(health - remaining, 0)

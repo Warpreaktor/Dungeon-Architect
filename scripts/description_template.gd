@@ -57,8 +57,19 @@ static func equipment_properties(item: Resource) -> PackedStringArray:
 		if value == 0:
 			continue
 		var suffix: String = " п.п." if key in ["dodge_bonus_percent", "accuracy_bonus_percent"] else ("%" if key == "poison_resistance_percent" else "")
-		lines.append("%s: %s%d%s" % [labels[key], "+" if value > 0 else "", value, suffix])
+		lines.append("%s: %s%s%s" % [CharacterStats.EQUIPMENT_LABELS[key], "+" if value > 0 else "", number(value), suffix])
 	return lines
+
+
+static func comparison(before: Dictionary, after: Dictionary) -> PackedStringArray:
+	var changes := PackedStringArray()
+	for key in CharacterStats.COMPARISON_FIELDS:
+		var delta: float = float(after.get(key, 0)) - float(before.get(key, 0))
+		if is_zero_approx(delta):
+			continue
+		var suffix: String = " п.п." if key in CharacterStats.PERCENT_FIELDS else ""
+		changes.append("%s: %s%s%s" % [CharacterStats.COMPARISON_LABELS[key], "+" if delta > 0 else "", number(delta), suffix])
+	return changes
 
 
 static func quantity(value: int, singular: String, few: String, many: String) -> String:

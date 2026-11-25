@@ -375,21 +375,19 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	if hero.definition != null:
 		_hero_name.text = hero.definition.display_name
 		_hero_portrait.texture = hero.definition.portrait
-	_hero_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_hero()))
-	_hero_strength_value.text = "%d" % hero.strength
-	_hero_agility_value.text = "%d" % hero.agility
-	_refresh_accuracy_and_dodge()
-	_hero_defense_value.text = str(_combat.battle_state.get_hero().block_armor)
 	_defense_idle_color = Color(0.55, 0.60, 0.67, 0.65)
-	_hero_defense_icon.modulate = _defense_idle_color
+	_hero_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_hero()))
+	_hero_strength_value.text = "%d" % _combat.battle_state.get_hero().effective_strength()
+	_hero_agility_value.text = "%d" % _combat.battle_state.get_hero().effective_agility()
+	_refresh_accuracy_and_dodge()
+	_set_block_display("hero", _combat.battle_state.get_hero().block_armor)
 	_hero_chain_title.text = _hero_name.text.to_upper()
 	_enemy_name.text = combat.enemy_definition.display_name
 	_enemy_chain_title.text = _enemy_name.text.to_upper()
 	_enemy_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_enemy()))
-	_enemy_strength_value.text = "%d" % _combat.battle_state.get_enemy().strength
-	_enemy_agility_value.text = "%d" % _combat.battle_state.get_enemy().agility
-	_enemy_defense_value.text = str(_combat.battle_state.get_enemy().block_armor)
-	_enemy_defense_icon.modulate = Color(0.55, 0.60, 0.67, 0.65)
+	_enemy_strength_value.text = "%d" % _combat.battle_state.get_enemy().effective_strength()
+	_enemy_agility_value.text = "%d" % _combat.battle_state.get_enemy().effective_agility()
+	_set_block_display("enemy", _combat.battle_state.get_enemy().block_armor)
 	_enemy_portrait.texture = combat.enemy_definition.portrait if combat.enemy_definition.portrait != null else combat.enemy_definition.icon
 	_enemy_portrait.flip_h = combat.enemy_definition.portrait_flip_h
 	_enemy_portrait.modulate = Color.WHITE
@@ -1187,8 +1185,11 @@ func _set_block_display(actor_id: String, amount: int) -> void:
 		return
 	var value: Label = _hero_defense_value if actor_id == "hero" else _enemy_defense_value
 	var icon: TextureRect = _hero_defense_icon if actor_id == "hero" else _enemy_defense_icon
-	value.text = str(amount)
-	icon.modulate = Color.WHITE if amount > 0 else _defense_idle_color
+	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id) if _combat != null else null
+	var armor: int = actor.effective_defense() if actor != null else 0
+	value.text = "%d / %d" % [armor, amount] if amount > 0 else str(armor)
+	value.tooltip_text = "Броня: %d\nАктивный блок: %d" % [armor, amount]
+	icon.modulate = Color.WHITE if armor > 0 or amount > 0 else _defense_idle_color
 
 
 func _show_reload_icon(actor_id: String) -> void:
@@ -1362,12 +1363,16 @@ func _refresh_accuracy_and_dodge() -> void:
 	var enemy: BattleParticipant = _combat.battle_state.get_enemy()
 	if hero == null or enemy == null:
 		return
+	_hero_strength_value.text = "%d" % hero.effective_strength()
+	_enemy_strength_value.text = "%d" % enemy.effective_strength()
 	_hero_agility_value.text = "%d" % hero.effective_agility()
 	_enemy_agility_value.text = "%d" % enemy.effective_agility()
 	_hero_dodge_value.text = "%d%%" % hero.dodge_percent()
 	_hero_accuracy_value.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + hero.accuracy_percent())
 	_enemy_dodge_value.text = "%d%%" % enemy.dodge_percent()
 	_enemy_accuracy_value.text = "%d%%" % (BattleParticipant.PERCENT_SCALE + enemy.accuracy_percent())
+	_set_block_display("hero", hero.block_armor)
+	_set_block_display("enemy", enemy.block_armor)
 	for hero_id in _extra_hero_views:
 		var view: BattleSupportEnemyView = _extra_hero_views[hero_id] as BattleSupportEnemyView
 		if view.visible:

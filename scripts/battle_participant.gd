@@ -77,11 +77,8 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant.personal_ability_ids = source.definition.personal_ability_ids.duplicate() if source.definition != null else []
 	participant.base_dodge_percent = source.definition.base_dodge_percent if source.definition != null else 0
 	participant.accuracy_bonus = source.definition.accuracy_bonus if source.definition != null else 0
-	if source.definition != null and source.definition.base_accuracy_percent >= 0:
-		participant.accuracy_bonus += source.definition.base_accuracy_percent - BattleMath.accuracy_total(source.definition.agility, 0, 0)
 	participant.learned_ability_ids = source.learned_ability_ids.duplicate()
 	participant.action_slot_capacity = source.action_slot_capacity()
-	participant._base_max_health = participant._hero_snapshot.max_health + participant._hero_snapshot.equipment_bonus("health_bonus")
 	participant.refresh_from_hero()
 	participant._sync_status_health_limit(false)
 	return participant
@@ -99,7 +96,7 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 	participant.health = source.max_health
 	participant.strength = source.strength
 	participant.agility = source.agility
-	participant.defense = 0
+	participant.defense = source.defense
 	participant.base_dodge_percent = source.base_dodge_percent
 	participant.accuracy_bonus = source.accuracy_bonus
 	participant.personal_ability_ids = source.personal_ability_ids.duplicate()
@@ -118,15 +115,15 @@ func refresh_from_hero() -> void:
 	if _hero_snapshot == null:
 		return
 	_equipment.set_snapshot(_hero_snapshot)
-	_base_max_health = _hero_snapshot.max_health + _hero_snapshot.equipment_bonus("health_bonus")
+	var stats: Dictionary = CharacterStats.hero_values(_hero_snapshot, false)
+	_base_max_health = int(stats["max_health"])
 	max_health = BattleStatusRules.health_limit(_base_max_health, statuses)
 	health = _hero_snapshot.health
-	strength = _hero_snapshot.effective_strength()
-	agility = _hero_snapshot.effective_agility()
-	if _hero_snapshot.definition != null:
-		base_dodge_percent = _hero_snapshot.definition.base_dodge_percent + _hero_snapshot.equipment_bonus("dodge_bonus_percent")
-		accuracy_bonus = _hero_snapshot.definition.accuracy_bonus + _hero_snapshot.equipment_bonus("accuracy_bonus_percent")
-	defense = _hero_snapshot.defense
+	strength = int(stats["strength"])
+	agility = int(stats["agility"])
+	base_dodge_percent = int(stats["base_dodge_percent"])
+	accuracy_bonus = int(stats["accuracy_bonus"])
+	defense = int(stats["defense"])
 	equipped_weapon_id = _hero_snapshot.equipped_weapon_id
 	equipped_shield_id = _hero_snapshot.equipped_shield_id
 	effects = {
@@ -150,20 +147,20 @@ func weapon_damage(kind: int) -> int:
 
 func melee_attack_value(include_equipment: bool = true) -> float:
 	var item_damage: int = weapon_damage(ItemDefinition.WeaponKind.MELEE) if include_equipment else 0
-	return BattleMath.melee_power(item_damage, int(effects.get("strength_bonus", 0)), effective_strength())
+	return BattleMath.melee_power(item_damage, int(effects.get("strength_bonus", 0)) if int(effects.get("strength_phases", 0)) > 0 else 0, effective_strength())
 
 
 func ranged_attack_value(include_equipment: bool = true) -> float:
 	var item_damage: int = weapon_damage(ItemDefinition.WeaponKind.RANGED) if include_equipment else 0
-	return BattleMath.ranged_power(item_damage, int(effects.get("strength_bonus", 0)), effective_agility())
+	return BattleMath.ranged_power(item_damage, int(effects.get("strength_bonus", 0)) if int(effects.get("strength_phases", 0)) > 0 else 0, effective_agility())
 
 
 func melee_attack() -> int:
-	return floori(melee_attack_value())
+	return int(CharacterStats.participant_values(self)["melee_attack"])
 
 
 func ranged_attack() -> int:
-	return floori(ranged_attack_value())
+	return int(CharacterStats.participant_values(self)["ranged_attack"])
 
 
 func sync_consumable_from_hero(source: HeroState) -> void:
@@ -261,25 +258,15 @@ func change_energy(delta: int) -> int:
 
 
 func energy_factor() -> float:
-	if max_energy <= 0:
-		return 1.0
-	var current: int = current_energy()
-	var rules: BattleRules = BattleMath.RULES
-	if current < 0:
-		return rules.energy_negative_factor
-	if current == 0:
-		return rules.energy_zero_factor
-	if float(current) <= float(max_energy) * rules.energy_fatigue_threshold:
-		return rules.energy_fatigue_factor
-	return 1.0
+	return CharacterStats.energy_factor(current_energy(), max_energy)
 
 
 func effective_strength() -> int:
-	return maxi(floori(float(strength) * energy_factor()), 0)
+	return int(CharacterStats.participant_values(self)["strength"])
 
 
 func effective_defense() -> int:
-	return maxi(floori(float(defense) * energy_factor()), 0)
+	return int(CharacterStats.participant_values(self)["defense"])
 
 
 func energy_debt_damage() -> int:
@@ -296,20 +283,15 @@ func energy_debt_damage() -> int:
 
 ## Все значения в процентных пунктах. Фактическое уклонение зависит от противника.
 func effective_agility() -> int:
-	return maxi(floori(float(agility + status_modifier(AbilityEffectDefinition.Stat.AGILITY)) * energy_factor()), 0)
+	return int(CharacterStats.participant_values(self)["agility"])
 
 
 func dodge_percent() -> int:
-	# Не обрезаем до 100 до вычитания меткости: её бонусы могут
-	# противодействовать даже суммарному уклонению свыше 100%.
-	return maxi(base_dodge_percent + effective_agility()
-		+ status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT), 0)
+	return int(CharacterStats.participant_values(self)["dodge_percent"])
 
 
 func accuracy_percent() -> int:
-	return BattleMath.accuracy_total(
-		effective_agility(), accuracy_bonus, status_modifier(AbilityEffectDefinition.Stat.ACCURACY)
-	) - PERCENT_SCALE
+	return int(CharacterStats.participant_values(self)["accuracy_percent"]) - PERCENT_SCALE
 
 
 func dodge_chance_against(attacker: BattleParticipant) -> int:

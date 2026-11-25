@@ -253,7 +253,7 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 		"accuracy_after": target.accuracy_percent(),
 		"was_blocking": was_blocking,
 		"blocked": 0 if dodged else maxi(raw - taken, 0), "hp_after": target.health,
-		"hp_max": target.max_health, "armor_after": target.defense,
+		"hp_max": target.max_health, "armor_after": target.effective_defense(),
 		"active_block_after": target.block_armor,
 		"shield_durability_after": shield_durability_after,
 		"shield_blocked": target.last_shield_blocked, "block_absorbed": target.last_block_absorbed,

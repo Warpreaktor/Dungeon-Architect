@@ -162,7 +162,7 @@ func refresh_stats(participant: BattleParticipant) -> void:
 		return
 	_energy.text = "Энергия %d/%d" % [participant.current_energy(), participant.max_energy]
 	_attack.text = str(participant.melee_attack())
-	_strength.text = "%d" % participant.strength
+	_strength.text = "%d" % participant.effective_strength()
 	_agility.text = "%d" % participant.effective_agility()
 	set_block(participant.block_armor)
 	_dodge.text = "%d%%" % participant.dodge_percent()
@@ -170,8 +170,10 @@ func refresh_stats(participant: BattleParticipant) -> void:
 
 
 func set_block(amount: int) -> void:
-	_defense.text = str(amount)
-	_defense_icon.modulate = Color.WHITE if amount > 0 else DEFENSE_IDLE_COLOR
+	var armor: int = _participant.effective_defense() if _participant != null else 0
+	_defense.text = "%d / %d" % [armor, amount] if amount > 0 else str(armor)
+	_defense.tooltip_text = "Броня: %d\nАктивный блок: %d" % [armor, amount]
+	_defense_icon.modulate = Color.WHITE if armor > 0 or amount > 0 else DEFENSE_IDLE_COLOR
 
 
 func set_precision(dodge: int, accuracy: int) -> void:

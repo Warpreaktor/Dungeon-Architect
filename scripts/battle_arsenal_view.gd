@@ -143,14 +143,14 @@ func _refresh_profile() -> void:
 	hp.add_theme_color_override("font_color", Color("#dc7178"))
 	health_row.add_child(hp)
 
-	var actor := BattleParticipant.from_hero(_hero)
+	var totals: Dictionary = CharacterStats.hero_values(_hero)
 	var values: Array[Dictionary] = [
-		{"stat": "strength", "text": "Сила  %d" % _hero.effective_strength()},
-		{"stat": "agility", "text": "Ловкость  %d" % _hero.effective_agility()},
-		{"stat": "attack", "text": "Атака  %d" % actor.melee_attack()},
-		{"stat": "defense", "text": "Защита  %d" % actor.block_armor},
-		{"stat": "evasion", "text": "Уклонение  %d%%" % actor.dodge_percent()},
-		{"stat": "accuracy", "text": "Меткость  %d%%" % (BattleParticipant.PERCENT_SCALE + actor.accuracy_percent())},
+		{"stat": "strength", "text": "Сила  %d" % int(totals["strength"])},
+		{"stat": "agility", "text": "Ловкость  %d" % int(totals["agility"])},
+		{"stat": "attack", "text": "Атака  %d" % int(totals["melee_attack"])},
+		{"stat": "defense", "text": "Броня  %d" % int(totals["defense"])},
+		{"stat": "evasion", "text": "Уклонение  %d%%" % int(totals["dodge_percent"])},
+		{"stat": "accuracy", "text": "Меткость  %d%%" % int(totals["accuracy_percent"])},
 		{"stat": "combat_slots", "text": "Боевые слоты  %d" % _hero.action_slot_capacity()},
 		{"stat": "gold", "text": "Золото  %d" % _hero.gold}
 	]

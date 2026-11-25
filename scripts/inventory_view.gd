@@ -253,6 +253,19 @@ func _show_item_definition(item_id: String, bag_index: int = -1) -> void:
 	_item_properties.text = details.replace("\n", " · ")
 
 
+func _comparison_slot(item: ItemDefinition) -> String:
+	if item.equipment_slot == ItemDefinition.EquipmentSlot.RING:
+		if str(_selected_member.equipped_accessories.get("ring_left", "")).is_empty():
+			return "ring_left"
+		if str(_selected_member.equipped_accessories.get("ring_right", "")).is_empty():
+			return "ring_right"
+		return "ring_left"
+	for slot_id in EquipmentSlotRules.SLOT_IDS:
+		if EquipmentSlotRules.accepts(slot_id, item):
+			return slot_id
+	return ""
+
+
 func _is_equipped(item_id: String) -> bool:
 	if _session == null or _selected_member == null:
 		return false

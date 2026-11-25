@@ -13,7 +13,6 @@ enum Rank { COMMON, ELITE, BOSS }
 @export var icon: Texture2D
 @export var battle_bond: BattleBondDefinition
 @export var fury_rules: MonsterFuryRules
-@export_range(0, 999, 1) var health_per_additional_hero: int = 0
 @export var personal_ability_ids: Array[String] = []
 @export var ai_profiles: Array[MonsterTacticProfile] = []
 @export var reconsider_tactics_each_phase: bool = false

@@ -19,9 +19,19 @@ func _initialize() -> void:
 	var party: Array[HeroState] = []
 	for id in ["volcha", "petushan", "burolom", "luma"]:
 		party.append(HeroState.new(HeroCatalog.get_hero(id)))
-		var scaled: BattleState = BattleState.begin_for_party(definition, party, 53)
-		assert(scaled.get_enemy().max_health == definition.max_health + definition.health_per_additional_hero * (party.size() - 1))
-		assert(scaled.get_enemy().health == scaled.get_enemy().max_health)
+		var encounter: BattleState = BattleState.begin_for_party(definition, party, 53)
+		assert(encounter.get_enemy().max_health == definition.max_health)
+		assert(encounter.get_enemy().health == definition.max_health)
+		var support: BattleParticipant = encounter.add_support_enemy(definition)
+		assert(support.max_health == definition.max_health and support.health == definition.max_health)
+	party[2].health = 0
+	party[3].health = 0
+	var survivors: BattleState = BattleState.begin_for_party(definition, party, 53)
+	assert(survivors.living_hero_ids().size() == 2)
+	assert(survivors.get_enemy().max_health == definition.max_health)
+	assert(survivors.get_enemy().health == definition.max_health)
+	party[2] = HeroState.new(HeroCatalog.get_hero("burolom"))
+	party[3] = HeroState.new(HeroCatalog.get_hero("luma"))
 	var state: BattleState = BattleState.begin_for_party(definition, party, 53)
 	var boss: BattleParticipant = state.get_enemy()
 	var rules: MonsterFuryRules = definition.fury_rules

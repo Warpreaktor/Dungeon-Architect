@@ -88,14 +88,14 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	return participant
 
 
-static func from_monster(source: MonsterDefinition, id: String = "enemy", hero_count: int = 1) -> BattleParticipant:
+static func from_monster(source: MonsterDefinition, id: String = "enemy") -> BattleParticipant:
 	if source == null:
 		return null
 	var participant := BattleParticipant.new()
 	participant.participant_id = id
 	participant.team_id = "enemies"
 	participant.definition_id = source.monster_id
-	participant.max_health = source.max_health + source.health_per_additional_hero * maxi(hero_count - 1, 0)
+	participant.max_health = source.max_health
 	participant._base_max_health = participant.max_health
 	participant.health = participant.max_health
 	participant.fury_rules = source.fury_rules

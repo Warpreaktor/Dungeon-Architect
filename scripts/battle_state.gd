@@ -63,11 +63,7 @@ static func begin_for_party(monster: MonsterDefinition, heroes: Array[HeroState]
 	else:
 		state.rng.seed = rng_seed
 	state.enemy_definition = monster
-	var living_count: int = 0
-	for member in heroes:
-		if member != null and member.health > 0:
-			living_count += 1
-	var enemy: BattleParticipant = BattleParticipant.from_monster(monster, state.enemy_id, living_count)
+	var enemy: BattleParticipant = BattleParticipant.from_monster(monster, state.enemy_id)
 	state.participants[state.enemy_id] = enemy
 	if enemy != null:
 		enemy.action_chain = MonsterCardDraw.draw(monster, enemy, state.rng)
@@ -329,7 +325,7 @@ func add_support_enemy(definition: MonsterDefinition) -> BattleParticipant:
 	var existing: BattleParticipant = get_participant(support_enemy_id)
 	if existing != null:
 		return existing
-	var participant: BattleParticipant = BattleParticipant.from_monster(definition, support_enemy_id, living_hero_ids().size())
+	var participant: BattleParticipant = BattleParticipant.from_monster(definition, support_enemy_id)
 	participant.action_chain = MonsterCardDraw.draw(definition, participant, rng)
 	participants[support_enemy_id] = participant
 	support_enemy_definition = definition

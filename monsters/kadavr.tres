@@ -13,7 +13,6 @@ display_name = "Одинокий Кадавр"
 icon = ExtResource("2_icon")
 portrait = ExtResource("3_portrait")
 fury_rules = ExtResource("4_fury")
-health_per_additional_hero = 26
 max_health = 146
 strength = 12
 agility = 2

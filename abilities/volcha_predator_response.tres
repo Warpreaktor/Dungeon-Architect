@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/volcha/predator_response.png" id="3_icon"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+kind = 3
+recipient = 0
+status_id = "volcha_predator_response"
+status_label = "Ответ хищника"
+status_stat = 5
+status_modifier = 25
+duration_ticks = 1
+status_clock = 4
+counter_damage_multiplier = 0.8
+battle_only = true
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "volcha_predator_response"
+display_name = "Ответ хищника"
+description = "Готовится к следующей ближней атаке: уклонение +{effect_0_status_modifier} п.п. и ответный удар ×{effect_0_counter_damage_multiplier}. {effect_0_stack_description}"
+icon = ExtResource("3_icon")
+category = 1
+target = 0
+effects = Array[Resource]([SubResource("Effect0")])
+
+resource_costs = {"energy": 4}

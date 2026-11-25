@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c2hqg6h1ti0cc"
-path="res://.godot/imported/extra_04.png-ba6c520c14769c0e862e7b518f02855d.ctex"
+uid="uid://c663haj7boeo0"
+path="res://.godot/imported/find_weakness.png-ab9b20de52aa206105a5162c36fdf78e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/volcha/extra_04.png"
-dest_files=["res://.godot/imported/extra_04.png-ba6c520c14769c0e862e7b518f02855d.ctex"]
+source_file="res://assets/abilities/volcha/find_weakness.png"
+dest_files=["res://.godot/imported/find_weakness.png-ab9b20de52aa206105a5162c36fdf78e.ctex"]
 
 [params]
 

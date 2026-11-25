@@ -4,9 +4,9 @@ extends Resource
 ## Данные эффекта отделены от алгоритма его исполнения.
 enum Kind { DAMAGE, BLOCK, HEAL, APPLY_STATUS, REMOVE_STATUS, WAIT, DRAIN_ENERGY, TRANSFER_ENERGY, BARRIER, DELAYED_DAMAGE, MEDITATE, RESONANCE_SEAL, HP_COST }
 enum Recipient { SELF, TARGET }
-enum Clock { LEGACY_HERO_PHASE, OWNER_PHASE, INCOMING_ATTACK, BATTLE }
+enum Clock { LEGACY_HERO_PHASE, OWNER_PHASE, INCOMING_ATTACK, BATTLE, MELEE_INCOMING_ATTACK, OUTGOING_ATTACK }
 enum Stack { REFRESH, ADD, ONCE }
-enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
+enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER, MELEE_DODGE_PERCENT, ARMOR_PIERCE_PERCENT, ARMOR }
 
 
 @export var kind: Kind = Kind.DAMAGE
@@ -23,6 +23,9 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 @export_range(0.0, 10.0, 0.01) var vs_block_multiplier: float = 0.0
 @export var target_status_id: String = ""
 @export_range(0.0, 10.0, 0.01) var vs_target_status_multiplier: float = 0.0
+@export var actor_status_id: String = ""
+@export_range(0, 100, 1) var target_health_below_percent: int = 0
+@export_range(0.0, 10.0, 0.01) var vs_low_health_multiplier: float = 0.0
 @export var consume_target_status_on_hit: bool = false
 @export_range(1, 20, 1) var hit_count: int = 1
 @export_range(0, 20, 1) var distinct_targets: int = 0
@@ -38,6 +41,7 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER }
 ## APPLY_STATUS metadata: positive percentages, signed attribute changes.
 @export var status_stat: Stat = Stat.NONE
 @export var status_modifier: int = 0
+@export_range(0, 999, 1) var armor_penalty: int = 0
 @export var status_clock: Clock = Clock.LEGACY_HERO_PHASE
 @export var stack_policy: Stack = Stack.REFRESH
 @export var requires_unblocked_hit: bool = false
@@ -88,6 +92,10 @@ func effective_stack_policy() -> int:
 
 
 func status_duration_description() -> String:
+	if effective_status_clock() == Clock.MELEE_INCOMING_ATTACK:
+		return "до следующей входящей ближней атаки"
+	if effective_status_clock() == Clock.OUTGOING_ATTACK:
+		return "до следующей собственной атаки"
 	if effective_status_clock() == Clock.BATTLE:
 		return "до конца боя"
 	if effective_status_clock() == Clock.INCOMING_ATTACK:

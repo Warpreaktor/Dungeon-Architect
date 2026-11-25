@@ -84,7 +84,7 @@ static func resolve_area(context: BattleContext, actor: BattleParticipant,
 				AbilityEffectDefinition.Kind.DAMAGE:
 					var raw: int = AbilityExecutor.preview_damage(actor, ability, effect, target, -1, energy_before)
 					last_hit = AbilityExecutor.apply_damage(actor, target, raw, ability.ability_id,
-						context.rng, effect.armor_pierce_fraction, effect.accuracy_offset_percent)
+						context.rng, AbilityExecutor.attack_pierce(actor, effect), effect.accuracy_offset_percent, ability.damage_delivery)
 					result.append(last_hit)
 					if not bool(last_hit.get("dodged", false)) and not resonance_triggered.has(target_id):
 						var bonus: Dictionary = on_hit(actor, target)
@@ -140,7 +140,7 @@ static func at_turn_start(context: BattleContext, actor: BattleParticipant) -> A
 		if target == null or not target.is_alive():
 			continue
 		var hit: Dictionary = AbilityExecutor.apply_damage(actor, target, int(attack.get("damage", 0)),
-			str(attack.get("ability_id", "")), context.rng)
+			str(attack.get("ability_id", "")), context.rng, 0.0, 0, AbilityDefinition.DamageDelivery.MAGIC)
 		result.append(hit)
 		if target.fury_rules != null:
 			if int(hit.get("hp_damage", 0)) > 0:

@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/volcha/last_fang.png" id="3_icon"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+kind = 0
+recipient = 1
+hit_count = 2
+damage_multiplier = 0.5
+
+[sub_resource type="Resource" id="Effect1"]
+script = ExtResource("2_effect")
+kind = 0
+recipient = 1
+damage_multiplier = 1.2
+actor_status_id = "volcha_find_weakness"
+target_status_id = "volcha_tendon_cut"
+vs_target_status_multiplier = 1.6
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "volcha_last_fang"
+display_name = "Последний клык"
+description = "{effect_0_hit_count_text} ×{effect_0_damage_multiplier}, затем завершающий выпад ×{effect_1_damage_multiplier}. Если действует «Найти слабину» или цель под эффектом «Подрезать сухожилия», завершающий выпад ×{effect_1_vs_target_status_multiplier}."
+icon = ExtResource("3_icon")
+category = 0
+target = 1
+effects = Array[Resource]([SubResource("Effect0"), SubResource("Effect1")])
+
+resource_costs = {"energy": 6}

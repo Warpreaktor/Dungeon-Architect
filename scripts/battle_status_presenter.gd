@@ -10,7 +10,11 @@ const STATUS_ICONS: Dictionary = {
 	"fallen_hero_infection": preload("res://assets/abilities/fallen_hero/rotten_bite.png"),
 	"rabbit_master_mark": preload("res://assets/abilities/statuses/rabbit_master_mark.png"),
 	"burolom_crack": preload("res://assets/abilities/burolom/notch.png"),
-	"kadavr_grip": preload("res://assets/abilities/kadavr/kadavr_curse.png")
+	"kadavr_grip": preload("res://assets/abilities/kadavr/kadavr_curse.png"),
+	"volcha_predator_response": preload("res://assets/abilities/volcha/predator_response.png"),
+	"volcha_find_weakness": preload("res://assets/abilities/volcha/find_weakness.png"),
+	"volcha_blade_dance": preload("res://assets/abilities/volcha/blade_dance.png"),
+	"volcha_tendon_cut": preload("res://assets/abilities/volcha/cut_tendons.png")
 }
 const STATUS_MARKER_GAP: float = 0.04
 const BLEED_FLASH_IN_SECONDS: float = 0.18

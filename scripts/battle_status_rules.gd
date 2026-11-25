@@ -13,6 +13,8 @@ static func health_limit(base_maximum: int, statuses: Dictionary) -> int:
 static func modifier(statuses: Dictionary, stat: int) -> int:
 	var total: int = 0
 	for active in statuses.values():
+		if stat == AbilityEffectDefinition.Stat.ARMOR:
+			total -= int(active.get("armor_penalty", 0)) * int(active.get("stacks", 1))
 		if int(active.get("stat", AbilityEffectDefinition.Stat.NONE)) == stat:
 			total += int(active.get("modifier", 0)) * int(active.get("stacks", 1))
 	return total
@@ -34,6 +36,7 @@ static func apply(statuses: Dictionary, effect: AbilityEffectDefinition, tick: i
 		"label": previous.get("label", effect.status_label if not effect.status_label.is_empty() else effect.status_id),
 		"amount": effect.amount,
 		"modifier": effect.effective_status_modifier(),
+		"armor_penalty": effect.armor_penalty,
 		"stat": effect.effective_status_stat(),
 		"clock": effect.effective_status_clock(),
 		"ticks": effect.duration_ticks,
@@ -119,6 +122,12 @@ static func describe(status: Dictionary) -> String:
 	var block_penalty: int = int(status.get("next_block_penalty", 0))
 	if block_penalty > 0:
 		parts.append("Следующий блок: −%d" % block_penalty)
+	var armor_penalty: int = int(status.get("armor_penalty", 0)) * stacks
+	if armor_penalty > 0:
+		parts.append("Броня: −%d" % armor_penalty)
+	var counter: float = float(status.get("counter_damage_multiplier", 0.0))
+	if counter > 0.0:
+		parts.append("Контратака: ×%s" % DescriptionTemplate.number(counter))
 	var value: int = int(status.get("modifier", 0)) * stacks
 	if value != 0:
 		var label: String = "Модификатор"
@@ -127,8 +136,15 @@ static func describe(status: Dictionary) -> String:
 			AbilityEffectDefinition.Stat.ACCURACY: label = "Меткость"
 			AbilityEffectDefinition.Stat.DODGE_PERCENT: label = "Уклонение"
 			AbilityEffectDefinition.Stat.ATTACK_POWER: label = "Атака"
+			AbilityEffectDefinition.Stat.MELEE_DODGE_PERCENT: label = "Уклонение от ближней атаки, п.п."
+			AbilityEffectDefinition.Stat.ARMOR_PIERCE_PERCENT: label = "Пробитие брони и блока, %"
+			AbilityEffectDefinition.Stat.ARMOR: label = "Броня"
 		parts.append("%s: %+d" % [label, value])
-	if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.BATTLE:
+	if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK:
+		parts.append("До следующей входящей ближней атаки")
+	elif int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.OUTGOING_ATTACK:
+		parts.append("До следующей собственной атаки")
+	elif int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.BATTLE:
 		parts.append("До конца боя")
 	elif int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.INCOMING_ATTACK:
 		parts.append("Осталось входящих атак: %d" % int(status.get("ticks", 0)))

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cd2ljarkdnu8p"
-path="res://.godot/imported/extra_05.png-ce2f555a3b54b84fc87a00dec4df279f.ctex"
+uid="uid://dibx8r081qsac"
+path="res://.godot/imported/predator_response.png-d25ff3e8e2ecfb4dc35e5fc3c08a02f3.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/volcha/extra_05.png"
-dest_files=["res://.godot/imported/extra_05.png-ce2f555a3b54b84fc87a00dec4df279f.ctex"]
+source_file="res://assets/abilities/volcha/predator_response.png"
+dest_files=["res://.godot/imported/predator_response.png-d25ff3e8e2ecfb4dc35e5fc3c08a02f3.ctex"]
 
 [params]
 

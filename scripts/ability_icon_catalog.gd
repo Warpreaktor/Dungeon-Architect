@@ -18,12 +18,11 @@ const ICON_PATHS := {
 	"petushan_not_in_brow_but_eye": "res://assets/abilities/petushan/not_in_brow_but_eye.png",
 	"petushan_spur_under_rib": "res://assets/abilities/petushan/spur_under_rib.png",
 
-	# Нарезанные запасные иконки Волчи на будущее.
-	"volcha_extra_01": "res://assets/abilities/volcha/extra_01.png",
-	"volcha_extra_02": "res://assets/abilities/volcha/extra_02.png",
-	"volcha_extra_03": "res://assets/abilities/volcha/extra_03.png",
-	"volcha_extra_04": "res://assets/abilities/volcha/extra_04.png",
-	"volcha_extra_05": "res://assets/abilities/volcha/extra_05.png"
+	"volcha_predator_response": "res://assets/abilities/volcha/predator_response.png",
+	"volcha_find_weakness": "res://assets/abilities/volcha/find_weakness.png",
+	"volcha_blade_dance": "res://assets/abilities/volcha/blade_dance.png",
+	"volcha_hunting_instinct": "res://assets/abilities/volcha/hunting_instinct.png",
+	"volcha_last_fang": "res://assets/abilities/volcha/last_fang.png"
 }
 
 

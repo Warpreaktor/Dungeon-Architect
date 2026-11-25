@@ -54,10 +54,16 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 					lines.append("Уклонение: %+d п.п. %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
 				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.ATTACK_POWER:
 					lines.append("Мощность атак: %+d %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
+				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.MELEE_DODGE_PERCENT:
+					lines.append("Уклонение от ближней атаки: %+d п.п. %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
+				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.ARMOR_PIERCE_PERCENT:
+					lines.append("Пробитие брони и блока: %d%% %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
 				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.AGILITY:
 					lines.append("Ловкость: %+d %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
 				else:
 					lines.append("Эффект «%s»: %d %s" % [effect.status_id, effect.effective_status_modifier(), effect.status_duration_description()])
+				if effect.armor_penalty > 0:
+					lines.append("Броня: −%d %s" % [effect.armor_penalty, effect.status_duration_description()])
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:
 				lines.append("Снимает эффект «%s»" % effect.status_id)
 			AbilityEffectDefinition.Kind.WAIT:

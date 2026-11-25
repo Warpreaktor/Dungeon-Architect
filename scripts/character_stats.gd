@@ -184,7 +184,7 @@ static func resolve(base: Dictionary, equipment: Dictionary, statuses: Dictionar
 	var strength: int = maxi(floori(float(maxi(int(base.get("strength", 0)) + int(equipment.get("strength_bonus", 0)), 0)) * factor), 0)
 	var agility_raw: int = int(base.get("agility", 0)) + int(equipment.get("agility_bonus", 0)) + BattleStatusRules.modifier(statuses, AbilityEffectDefinition.Stat.AGILITY)
 	var agility: int = maxi(floori(float(maxi(agility_raw, 0)) * factor), 0)
-	var defense: int = _defense_value(int(base.get("defense", 0)), int(equipment.get("armor_bonus", 0)), factor)
+	var defense: int = _defense_value(int(base.get("defense", 0)), int(equipment.get("armor_bonus", 0)) + BattleStatusRules.modifier(statuses, AbilityEffectDefinition.Stat.ARMOR), factor)
 	var maximum: int = _health_limit(int(base.get("max_health", 0)), int(equipment.get("health_bonus", 0)), statuses)
 	var dodge_base: int = int(base.get("base_dodge_percent", 0)) + int(equipment.get("dodge_bonus_percent", 0))
 	var accuracy_bonus: int = int(base.get("accuracy_bonus", 0)) + int(equipment.get("accuracy_bonus_percent", 0))

@@ -8,7 +8,8 @@ func _initialize() -> void:
 	var hero := battle.get_hero()
 	var enemy := battle.get_enemy()
 	var expected: Array[String] = ["volcha_wolf_lunge", "volcha_strike_and_rebound",
-		"volcha_wolf_instinct"]
+		"volcha_wolf_instinct", "volcha_broken_rhythm", "volcha_cut_tendons",
+		"volcha_predator_response", "volcha_find_weakness", "volcha_blade_dance", "volcha_hunting_instinct", "volcha_last_fang"]
 	assert(hero.personal_ability_ids == expected)
 	assert(hero.block_armor == 0 and enemy.block_armor == 0)
 	for id in expected:
@@ -45,6 +46,7 @@ func _initialize() -> void:
 	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == 0)
 
 	# Защитные эффекты остаются после отдыха и собственного бафа.
+	hero.resource_amounts["energy"] = hero.max_energy
 	assert(battle.execute_definition("hero", "hero", instinct).success)
 	var dodge_before_rest: int = hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT)
 	hero.end_phase()
@@ -82,21 +84,22 @@ func _initialize() -> void:
 	AbilityExecutor.apply_damage(enemy, hero, 1, "test_hit", battle.rng)
 	assert(hero.block_armor == 0)
 
-	# Закрытые навыки проверяем как отдельно изученные, а не стартовые.
-	hero.learned_ability_ids.append_array(["volcha_broken_rhythm", "volcha_cut_tendons"])
+	hero.resource_amounts["energy"] = hero.max_energy
+	hero.block_attack_bonus_percent = 0
 	var rhythm: AbilityDefinition = AbilityCatalog.get_ability("volcha_broken_rhythm")
 	var rhythm_effect: AbilityEffectDefinition = rhythm.effects[0]
 	assert(rhythm_effect.hit_count == 3)
-	assert(AbilityExecutor.preview_damage(hero, rhythm, rhythm_effect, enemy) == floori(float(base) * 0.25))
+	assert(AbilityExecutor.preview_damage(hero, rhythm, rhythm_effect, enemy) == floori(float(base) * rhythm_effect.damage_multiplier))
 	enemy.is_resting = true
-	assert(AbilityExecutor.preview_damage(hero, rhythm, rhythm_effect, enemy) == floori(float(base) * 0.4))
+	assert(AbilityExecutor.preview_damage(hero, rhythm, rhythm_effect, enemy) == floori(float(base) * rhythm_effect.vs_rest_multiplier))
 	enemy.prepare_block(2)
-	assert(AbilityExecutor.preview_damage(hero, rhythm, rhythm_effect, enemy) == floori(float(base) * 0.15))
+	assert(AbilityExecutor.preview_damage(hero, rhythm, rhythm_effect, enemy) == floori(float(base) * rhythm_effect.vs_block_multiplier))
 	enemy.block_armor = 0
 	enemy.is_resting = false
 
 	hero.accuracy_bonus = BattleMath.PERCENT_SCALE
 	var tendons: AbilityDefinition = AbilityCatalog.get_ability("volcha_cut_tendons")
+	hero.resource_amounts["energy"] = hero.max_energy
 	assert(battle.execute_definition("hero", "enemy", tendons).success)
 	assert(enemy.status_modifier(AbilityEffectDefinition.Stat.AGILITY) == -2)
 	assert(enemy.ranged_attack_value() == float(enemy.agility - 2) * 0.5)
@@ -106,6 +109,7 @@ func _initialize() -> void:
 	assert(enemy.status_modifier(AbilityEffectDefinition.Stat.AGILITY) == 0)
 	# A debuff applied in a partly completed enemy cycle survives that partial rest.
 	enemy.action_cursor = 1
+	hero.resource_amounts["energy"] = hero.max_energy
 	assert(battle.execute_definition("hero", "enemy", tendons).success)
 	enemy.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
 	assert(enemy.status_modifier(AbilityEffectDefinition.Stat.AGILITY) == -2)
@@ -114,9 +118,56 @@ func _initialize() -> void:
 	enemy.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
 	assert(enemy.status_modifier(AbilityEffectDefinition.Stat.AGILITY) == 0)
 	enemy.action_cursor = 0
+	hero.resource_amounts["energy"] = hero.max_energy
 	assert(battle.execute_definition("hero", "enemy", tendons).success)
 	enemy.prepare_block(2)
 	battle.execute_definition("hero", "enemy", tendons)
 	assert(enemy.statuses.has("volcha_tendon_cut"))
 	assert(enemy.statuses["volcha_tendon_cut"].ticks == 2)
+	_test_new_abilities()
 	quit()
+
+
+func _test_new_abilities() -> void:
+	var source := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var battle := BattleState.begin(MonsterCatalog.get_monster("kadavr"), source)
+	var hero := battle.get_hero()
+	var enemy := battle.get_enemy()
+	assert(AbilityCatalog.known_ability_ids(hero).size() == 10)
+	assert(source.get_saved_action_slots() == ["volcha_wolf_lunge", "volcha_strike_and_rebound", "volcha_wolf_instinct"])
+	var stance: AbilityDefinition = AbilityCatalog.get_ability("volcha_predator_response")
+	assert(battle.execute_ability("hero", "hero", stance.ability_id).success)
+	assert(hero.statuses.has(stance.ability_id))
+	AbilityExecutor.apply_damage(enemy, hero, 0, "test_ranged", null, 0.0, 0, AbilityDefinition.DamageDelivery.RANGED)
+	assert(hero.statuses.has(stance.ability_id))
+	var incoming: Dictionary = battle.execute_ability("enemy", "hero", "kadavr_curse")
+	assert(incoming.success)
+	assert(not hero.statuses.has(stance.ability_id))
+	assert(incoming.events.any(func(e: Dictionary) -> bool: return e.get("type") == "counter" and e.get("ability_id") == stance.ability_id))
+	var weakness: AbilityDefinition = AbilityCatalog.get_ability("volcha_find_weakness")
+	var fang: AbilityDefinition = AbilityCatalog.get_ability("volcha_last_fang")
+	hero.resource_amounts["energy"] = hero.max_energy
+	var normal: int = AbilityExecutor.preview_damage(hero, fang, fang.effects[1], enemy)
+	assert(battle.execute_ability("hero", "hero", weakness.ability_id).success)
+	assert(is_equal_approx(AbilityExecutor.attack_pierce(hero, fang.effects[0]), float(weakness.effects[0].status_modifier) / 100.0))
+	assert(AbilityExecutor.preview_damage(hero, fang, fang.effects[1], enemy) >= normal)
+	hero.resource_amounts["energy"] = hero.max_energy
+	var result: Dictionary = battle.execute_ability("hero", "enemy", fang.ability_id)
+	assert(result.success)
+	assert(not hero.statuses.has(weakness.ability_id))
+	assert(result.events.filter(func(e: Dictionary) -> bool: return e.get("type") == "attack" and e.get("actor_id") == "hero").size() == 3)
+	hero.resource_amounts["energy"] = hero.max_energy
+	var dance: AbilityDefinition = AbilityCatalog.get_ability("volcha_blade_dance")
+	assert(battle.execute_ability("hero", "hero", dance.ability_id).success)
+	assert(hero.status_modifier(AbilityEffectDefinition.Stat.ATTACK_POWER) == dance.effects[0].status_modifier)
+	assert(hero.status_modifier(AbilityEffectDefinition.Stat.ARMOR) == -dance.effects[0].armor_penalty)
+	hero.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
+	assert(hero.statuses.has(dance.ability_id))
+	hero.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
+	assert(not hero.statuses.has(dance.ability_id))
+	hero.resource_amounts["energy"] = hero.max_energy
+	var hunting: AbilityDefinition = AbilityCatalog.get_ability("volcha_hunting_instinct")
+	enemy.health = enemy.max_health
+	var full_hp_damage: int = AbilityExecutor.preview_damage(hero, hunting, hunting.effects[0], enemy)
+	enemy.health = 1
+	assert(AbilityExecutor.preview_damage(hero, hunting, hunting.effects[0], enemy) >= full_hp_damage)

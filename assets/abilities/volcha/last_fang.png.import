@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bcr1we7tk625l"
-path="res://.godot/imported/extra_03.png-de9e53d8cd8539af5b2236a9ce8ab7d8.ctex"
+uid="uid://cd2ljarkdnu8p"
+path="res://.godot/imported/last_fang.png-0ebd8d9f3f9fc0b985e52ef5367ab59c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/volcha/extra_03.png"
-dest_files=["res://.godot/imported/extra_03.png-de9e53d8cd8539af5b2236a9ce8ab7d8.ctex"]
+source_file="res://assets/abilities/volcha/last_fang.png"
+dest_files=["res://.godot/imported/last_fang.png-0ebd8d9f3f9fc0b985e52ef5367ab59c.ctex"]
 
 [params]
 

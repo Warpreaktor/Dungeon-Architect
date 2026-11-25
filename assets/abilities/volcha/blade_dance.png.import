@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dibx8r081qsac"
-path="res://.godot/imported/extra_01.png-731e2842c58b655c1fb9ec74f4eb762f.ctex"
+uid="uid://bcr1we7tk625l"
+path="res://.godot/imported/blade_dance.png-3383993ed99a58b1368d1a3217addd50.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/volcha/extra_01.png"
-dest_files=["res://.godot/imported/extra_01.png-731e2842c58b655c1fb9ec74f4eb762f.ctex"]
+source_file="res://assets/abilities/volcha/blade_dance.png"
+dest_files=["res://.godot/imported/blade_dance.png-3383993ed99a58b1368d1a3217addd50.ctex"]
 
 [params]
 

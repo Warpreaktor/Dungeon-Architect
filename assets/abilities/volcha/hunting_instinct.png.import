@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c663haj7boeo0"
-path="res://.godot/imported/extra_02.png-385c3dcf4ae105a572891e8d546659b9.ctex"
+uid="uid://c2hqg6h1ti0cc"
+path="res://.godot/imported/hunting_instinct.png-9e4b945d9a4608edde12b653518da98f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/volcha/extra_02.png"
-dest_files=["res://.godot/imported/extra_02.png-385c3dcf4ae105a572891e8d546659b9.ctex"]
+source_file="res://assets/abilities/volcha/hunting_instinct.png"
+dest_files=["res://.godot/imported/hunting_instinct.png-9e4b945d9a4608edde12b653518da98f.ctex"]
 
 [params]
 

@@ -101,8 +101,9 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					var saved_block: int = recipient.block_armor if protector != null and recipient == protector else 0
 					if protector != null and recipient == protector:
 						recipient.block_armor = 0
+					var incoming_stances: Dictionary = recipient.statuses.duplicate() if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else {}
 					last_hit = apply_damage(actor, recipient, raw_damage, ability_id, context.rng,
-						effect.armor_pierce_fraction, accuracy_offset)
+						attack_pierce(actor, effect), accuracy_offset, ability.damage_delivery)
 					if protector != null and recipient == protector:
 						recipient.block_armor = saved_block
 					last_hit["hit_index"] = hit_index
@@ -119,8 +120,18 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 						if recipient.remove_status(effect.target_status_id):
 							event_list.append({"type": "status_removed", "actor_id": actor_id,
 								"target_id": recipient.participant_id, "status_id": effect.target_status_id, "removed": true})
+					var counter_statuses: Dictionary = recipient.statuses.duplicate()
+					for status_id in incoming_stances:
+						var incoming: Dictionary = incoming_stances[status_id]
+						if int(incoming.get("clock", -1)) == AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK:
+							counter_statuses[status_id] = incoming
+							if not recipient.statuses.has(status_id):
+								event_list.append({"type": "status_removed", "actor_id": recipient.participant_id,
+									"target_id": recipient.participant_id, "status_id": status_id, "removed": true})
 					if not stance_counter_used and recipient.is_alive() and actor.is_alive() and recipient != actor:
-						for status in recipient.statuses.values():
+						for status in counter_statuses.values():
+							if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK and ability.damage_delivery != AbilityDefinition.DamageDelivery.MELEE:
+								continue
 							var retaliation_multiplier: float = float(status.get("counter_damage_multiplier", 0.0))
 							if retaliation_multiplier > 0.0:
 								stance_counter_used = true
@@ -243,8 +254,10 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 		if first_in_draft or first_in_execution:
 			multiplier = effect.first_slot_multiplier
 	if target != null:
-		if not effect.target_status_id.is_empty() and target.statuses.has(effect.target_status_id) and effect.vs_target_status_multiplier > 0.0:
+		if effect.vs_target_status_multiplier > 0.0 and ((not effect.target_status_id.is_empty() and target.statuses.has(effect.target_status_id)) or (not effect.actor_status_id.is_empty() and actor.statuses.has(effect.actor_status_id))):
 			multiplier = effect.vs_target_status_multiplier
+		if effect.target_health_below_percent > 0 and effect.vs_low_health_multiplier > 0.0 and target.health * BattleMath.PERCENT_SCALE < target.max_health * effect.target_health_below_percent:
+			multiplier = effect.vs_low_health_multiplier
 		if target.block_armor > 0 and effect.vs_block_multiplier > 0.0:
 			multiplier = effect.vs_block_multiplier
 		elif (target.is_resting or (effect.vs_recent_rest and target.last_round_action_was_rest)) and effect.vs_rest_multiplier > 0.0:
@@ -262,16 +275,23 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 	return maxi(floori(total), 0)
 
 
-static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "", rng: RandomNumberGenerator = null, armor_pierce_fraction: float = 0.0, accuracy_offset_percent: int = 0) -> Dictionary:
+static func attack_pierce(actor: BattleParticipant, effect: AbilityEffectDefinition) -> float:
+	return clampf(effect.armor_pierce_fraction + float(actor.status_modifier(AbilityEffectDefinition.Stat.ARMOR_PIERCE_PERCENT)) / float(BattleMath.PERCENT_SCALE), 0.0, 1.0)
+
+
+static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "", rng: RandomNumberGenerator = null, armor_pierce_fraction: float = 0.0, accuracy_offset_percent: int = 0, delivery: int = AbilityDefinition.DamageDelivery.MELEE) -> Dictionary:
 	var raw: int = maxi(amount, 0)
 	# Снимок делаем непосредственно в момент удара. В конце фазы HP и
 	# прочность уже могут быть другими после следующих действий.
 	var shield_before: String = target.equipped_shield_id
 	var was_blocking: bool = target.block_armor > 0
-	var dodge_percent: int = clampi(target.dodge_chance_against(actor) - accuracy_offset_percent, 0, BattleMath.PERCENT_SCALE)
+	var melee_dodge: int = target.status_modifier(AbilityEffectDefinition.Stat.MELEE_DODGE_PERCENT) if delivery == AbilityDefinition.DamageDelivery.MELEE else 0
+	var dodge_percent: int = clampi(target.dodge_chance_against(actor) + melee_dodge - accuracy_offset_percent, 0, BattleMath.PERCENT_SCALE)
 	var dodged: bool = rng != null and dodge_percent > 0 and rng.randf() < float(dodge_percent) / float(BattleMath.PERCENT_SCALE)
 	# Even an avoided attack spends 'next incoming attack' dodge bonuses.
 	target.advance_status_clock(AbilityEffectDefinition.Clock.INCOMING_ATTACK)
+	if delivery == AbilityDefinition.DamageDelivery.MELEE:
+		target.advance_status_clock(AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK)
 	var hp_before: int = target.health
 	var taken: int = 0 if dodged else target.receive_damage(raw, armor_pierce_fraction)
 	var guard_triggered: bool = not dodged and target.fury_guard_armed
@@ -342,6 +362,10 @@ static func _finish_action(context: BattleContext, actor: BattleParticipant, abi
 		all_missed = all_missed and missed
 		if not missed:
 			all_blocked = all_blocked and hp_damage == 0 and int(event.get("block_absorbed", 0)) > 0
+	if outgoing_hits > 0:
+		for status_id in actor.advance_status_clock(AbilityEffectDefinition.Clock.OUTGOING_ATTACK):
+			events.append({"type": "status_removed", "actor_id": actor.participant_id,
+				"target_id": actor.participant_id, "status_id": status_id, "removed": true})
 	for id in health_damage:
 		var target: BattleParticipant = context.get_participant(str(id))
 		if target != null and target.fury_rules != null:

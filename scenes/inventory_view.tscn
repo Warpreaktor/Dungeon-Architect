@@ -149,7 +149,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 
-[node name="HeroSelector" type="HBoxContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/EquipmentArea"]
+[node name="HeroSelector" type="HFlowContainer" parent="Center/Card/Margins/Content/BodyScroll/Columns/EquipmentArea"]
 unique_name_in_owner = true
 layout_mode = 2
 alignment = 1
@@ -165,7 +165,7 @@ script = ExtResource("2_mannequin")
 
 [node name="ItemDetails" type="HBoxContainer" parent="Center/Card/Margins/Content"]
 layout_mode = 2
-custom_minimum_size = Vector2(0, 88)
+custom_minimum_size = Vector2(0, 198)
 theme_override_constants/separation = 12
 
 [node name="ItemIcon" type="TextureRect" parent="Center/Card/Margins/Content/ItemDetails"]
@@ -196,10 +196,42 @@ scroll_active = true
 [node name="ItemProperties" type="Label" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
 unique_name_in_owner = true
 layout_mode = 2
+autowrap_mode = 3
 text = ""
 
+[node name="ItemComparison" type="RichTextLabel" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_vertical = 3
+scroll_active = true
 
-[node name="UseFeedback" type="Label" parent="Center/Card/Margins/Content/ItemDetails"]
+[node name="EquipmentActions" type="HBoxContainer" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EquipTarget" type="OptionButton" parent="Center/Card/Margins/Content/ItemDetails/ItemText/EquipmentActions"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(120, 40)
+
+[node name="EquipButton" type="Button" parent="Center/Card/Margins/Content/ItemDetails/ItemText/EquipmentActions"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(98, 40)
+text = "Надеть"
+
+[node name="UnequipButton" type="Button" parent="Center/Card/Margins/Content/ItemDetails/ItemText/EquipmentActions"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(98, 40)
+text = "Снять"
+
+[node name="UseFeedback" type="Label" parent="Center/Card/Margins/Content/ItemDetails/ItemText"]
 unique_name_in_owner = true
 layout_mode = 2
 text = ""

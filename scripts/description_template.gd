@@ -64,6 +64,22 @@ static func comparison(before: Dictionary, after: Dictionary) -> PackedStringArr
 	return changes
 
 
+static func comparison_details(before: Dictionary, after: Dictionary) -> PackedStringArray:
+	var changes := PackedStringArray()
+	for key in CharacterStats.COMPARISON_FIELDS:
+		var previous: float = float(before.get(key, 0))
+		var proposed: float = float(after.get(key, 0))
+		var delta: float = proposed - previous
+		if is_zero_approx(delta):
+			continue
+		var suffix: String = " п.п." if key in CharacterStats.PERCENT_FIELDS else ""
+		changes.append("%s: %s%s → %s%s (%s%s%s)" % [
+			CharacterStats.COMPARISON_LABELS[key], number(previous), suffix,
+			number(proposed), suffix, "+" if delta > 0 else "", number(delta), suffix
+		])
+	return changes
+
+
 static func quantity(value: int, singular: String, few: String, many: String) -> String:
 	var last: int = absi(value) % 10
 	var last_pair: int = absi(value) % 100

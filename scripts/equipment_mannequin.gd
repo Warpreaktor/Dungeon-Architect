@@ -45,6 +45,12 @@ func show_hero(session: GameSession) -> void:
 	_layout_slots()
 
 
+func set_selected_slot(slot_id: String) -> void:
+	for key in slots:
+		var slot: EquipmentSlotControl = slots[key]
+		slot.set_selected(str(key) == slot_id)
+
+
 func _apply_two_handed_shadow() -> void:
 	if _session == null or _session._inventory_equipment_member() == null:
 		return

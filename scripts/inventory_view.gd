@@ -13,15 +13,21 @@ signal equipment_changed
 @onready var _item_name: Label = %ItemName
 @onready var _item_description: RichTextLabel = %ItemDescription
 @onready var _item_properties: Label = %ItemProperties
+@onready var _item_comparison: RichTextLabel = %ItemComparison
+@onready var _equip_target: OptionButton = %EquipTarget
+@onready var _equip_button: Button = %EquipButton
+@onready var _unequip_button: Button = %UnequipButton
 @onready var _use_feedback: Label = %UseFeedback
 @onready var _mannequin: EquipmentMannequin = %EquipmentMannequin
-@onready var _hero_selector: HBoxContainer = %HeroSelector
+@onready var _hero_selector: HFlowContainer = %HeroSelector
 @onready var _close_button: Button = %CloseButton
 
 var _session: GameSession
 var _selected_member: HeroState
 var _entries: Array[String] = []
 var _selected_index: int = -1
+var _selected_equipped_slot: String = ""
+var _comparison_target: String = ""
 var _bag_cell_size: float = 52.0
 var _touch_index: int = -1
 var _touch_origin: Vector2
@@ -40,6 +46,9 @@ func _ready() -> void:
 	_item_action_menu.id_pressed.connect(_on_item_action_pressed)
 	add_child(_item_action_menu)
 	_close_button.pressed.connect(close_by_player)
+	_equip_button.pressed.connect(_equip_selected)
+	_unequip_button.pressed.connect(_unequip_selected)
+	_equip_target.item_selected.connect(_on_comparison_target_changed)
 	_mannequin.item_transferred.connect(_transfer_item)
 	_mannequin.slot_selected.connect(_select_equipped)
 	get_viewport().size_changed.connect(_resize_card)
@@ -56,6 +65,9 @@ func open_for(session: GameSession) -> void:
 	_rebuild_hero_selector()
 	_item_action_menu.hide()
 	_popup_slot = -1
+	_selected_index = -1
+	_selected_equipped_slot = ""
+	_comparison_target = ""
 	_use_feedback.text = ""
 	_refresh_contents()
 	_resize_card()
@@ -87,6 +99,8 @@ func _select_member(member: HeroState) -> void:
 	_selected_member = member
 	_session.inventory_member = member
 	_selected_index = -1
+	_selected_equipped_slot = ""
+	_comparison_target = ""
 	_rebuild_hero_selector()
 	_refresh_contents()
 
@@ -98,8 +112,11 @@ func _refresh_contents() -> void:
 	var hero: HeroState = _selected_member
 	_gold_label.text = "%d" % hero.gold
 	_mannequin.show_hero(_session)
-	if _selected_index < 0 or _selected_index >= _entries.size() or _entries[_selected_index].is_empty():
+	if not _selected_equipped_slot.is_empty() and _session.equipment_item_id(_selected_equipped_slot).is_empty():
+		_selected_equipped_slot = ""
+	if _selected_equipped_slot.is_empty() and (_selected_index < 0 or _selected_index >= _entries.size() or _entries[_selected_index].is_empty()):
 		_selected_index = _first_occupied_slot()
+	_mannequin.set_selected_slot(_selected_equipped_slot)
 	for index in range(_entries.size()):
 		var item_id: String = _entries[index]
 		var definition: ItemDefinition = ItemCatalog.get_item(item_id) if not item_id.is_empty() else null
@@ -109,7 +126,9 @@ func _refresh_contents() -> void:
 		slot.configure(index, definition, quantity, index == _selected_index, _bag_cell_size, _session)
 		slot.activated.connect(_on_bag_slot_activated)
 		slot.transferred.connect(_transfer_item)
-	if _selected_index < 0:
+	if not _selected_equipped_slot.is_empty():
+		_show_item_definition(_session.equipment_item_id(_selected_equipped_slot), -1, _selected_equipped_slot)
+	elif _selected_index < 0:
 		_clear_item_info()
 	else:
 		_show_item(_selected_index)
@@ -128,9 +147,8 @@ func _transfer_item(from_kind: String, from_slot: Variant, to_kind: String, to_s
 	if _session == null or not _session.transfer_inventory_item(from_kind, from_slot, to_kind, to_slot):
 		return
 	_selected_index = int(to_slot) if to_kind == "bag" else -1
+	_selected_equipped_slot = str(to_slot) if to_kind == "equipment" else ""
 	_refresh_contents()
-	if to_kind == "equipment":
-		_select_equipped(str(to_slot))
 	if from_kind == "equipment" or to_kind == "equipment":
 		equipment_changed.emit()
 		if to_kind == "equipment":
@@ -145,10 +163,15 @@ func _select_equipped(slot_id: String) -> void:
 		return
 	var item_id: String = _session.equipment_item_id(slot_id)
 	if item_id.is_empty():
+		_selected_equipped_slot = ""
+		_selected_index = -1
+		_mannequin.set_selected_slot("")
 		_clear_item_info()
 		return
 	_selected_index = -1
-	_show_item_definition(item_id, -1, slot_id)
+	_selected_equipped_slot = slot_id
+	_comparison_target = ""
+	_refresh_contents()
 
 
 func _clear_item_info() -> void:
@@ -157,6 +180,11 @@ func _clear_item_info() -> void:
 	_item_name.remove_theme_color_override("font_color")
 	_item_description.text = ""
 	_item_properties.text = ""
+	_item_comparison.text = ""
+	_item_comparison.hide()
+	_equip_target.hide()
+	_equip_button.hide()
+	_unequip_button.hide()
 
 
 func _on_bag_slot_activated(index: int) -> void:
@@ -202,6 +230,8 @@ func _show_item(index: int) -> void:
 	if item_id.is_empty():
 		return
 	_selected_index = index
+	_selected_equipped_slot = ""
+	_mannequin.set_selected_slot("")
 	for child in _bag_grid.get_children():
 		if child is InventoryGridSlot:
 			var definition: ItemDefinition = ItemCatalog.get_item(child.item_id) if not child.item_id.is_empty() else null
@@ -220,15 +250,7 @@ func _show_item_definition(item_id: String, bag_index: int = -1, equipped_slot: 
 	_item_name.text = ItemMagicCatalog.display_name(item, instance)
 	_item_name.add_theme_color_override("font_color", ItemMagicCatalog.display_color(instance))
 	_item_description.text = item.get_description(instance)
-	if bag_index >= 0 and item.category == ItemDefinition.Category.EQUIPMENT and _selected_member != null:
-		var compare_slot: String = _comparison_slot(item)
-		if not compare_slot.is_empty():
-			var before: Dictionary = CharacterStats.hero_values(_selected_member)
-			var after: Dictionary = CharacterStats.preview_equipment(_selected_member, compare_slot, item, instance)
-			if not after.is_empty():
-				var differences: PackedStringArray = DescriptionTemplate.comparison(before, after)
-				if not differences.is_empty():
-					_item_description.text += "\n\nИзменение при экипировке (%s):\n%s" % [EquipmentSlotRules.LABELS[compare_slot], "\n".join(differences)]
+	_update_equipment_actions(item, instance, bag_index, equipped_slot)
 	_use_feedback.text = ""
 	var category := "Квестовый предмет"
 	match item.category:
@@ -239,13 +261,17 @@ func _show_item_definition(item_id: String, bag_index: int = -1, equipped_slot: 
 		ItemDefinition.Category.CURRENCY:
 			category = "Валюта"
 	var details := category
+	if item.category == ItemDefinition.Category.EQUIPMENT:
+		var item_slot: String = equipped_slot if not equipped_slot.is_empty() else _comparison_slot(item)
+		if not item_slot.is_empty():
+			details += " · Слот: " + str(EquipmentSlotRules.LABELS[item_slot])
 	if instance != null:
 		var rarity: ItemRarityDefinition = ItemMagicCatalog.rarity(instance.rarity)
 		var quality: ItemQualityDefinition = ItemMagicCatalog.quality(instance.quality_id)
 		if quality != null:
-			details += " · " + quality.display_name
+			details += " · Качество: " + quality.display_name
 		if rarity != null:
-			details += " · " + rarity.display_name
+			details += " · Редкость: " + rarity.display_name
 	var count: int = int(_session.carried_items.get(item_id, 0))
 	if item.stackable:
 		details += "  ·  количество: %d" % count
@@ -270,12 +296,14 @@ func _show_item_definition(item_id: String, bag_index: int = -1, equipped_slot: 
 		if item.max_durability > 0:
 			var durability: int = instance.durability if instance != null else (_session.inventory_shield_durability(bag_index) if bag_index >= 0 else _selected_member.current_shield_durability(item_id))
 			details += "\nПрочность: %d / %d" % [durability, ItemMagicCatalog.effective_value(item, instance, "max_durability")]
-	if bag_index < 0 and _is_equipped(item_id):
+	if not equipped_slot.is_empty():
 		details += "\nНадето"
 	_item_properties.text = details.replace("\n", " · ")
 
 
 func _comparison_slot(item: ItemDefinition) -> String:
+	if not _comparison_target.is_empty() and EquipmentSlotRules.accepts(_comparison_target, item):
+		return _comparison_target
 	if item.equipment_slot == ItemDefinition.EquipmentSlot.RING:
 		if str(_selected_member.equipped_accessories.get("ring_left", "")).is_empty():
 			return "ring_left"
@@ -288,10 +316,74 @@ func _comparison_slot(item: ItemDefinition) -> String:
 	return ""
 
 
-func _is_equipped(item_id: String) -> bool:
-	if _session == null or _selected_member == null:
-		return false
-	return _session._equipment_snapshot(_selected_member).values().has(item_id)
+func _update_equipment_actions(item: ItemDefinition, instance: ItemInstance, bag_index: int, equipped_slot: String) -> void:
+	_item_comparison.hide()
+	_equip_target.hide()
+	_equip_button.hide()
+	_unequip_button.hide()
+	if _session == null or _selected_member == null or item.category != ItemDefinition.Category.EQUIPMENT:
+		return
+	if not equipped_slot.is_empty():
+		_unequip_button.show()
+		_unequip_button.disabled = _session.inventory_slot_ids().find("") < 0
+		return
+	if bag_index < 0:
+		return
+	var compare_slot: String = _comparison_slot(item)
+	if compare_slot.is_empty():
+		return
+	if item.equipment_slot == ItemDefinition.EquipmentSlot.RING:
+		_equip_target.clear()
+		for ring_slot in ["ring_left", "ring_right"]:
+			_equip_target.add_item(str(EquipmentSlotRules.LABELS[ring_slot]) + (" (левое)" if ring_slot == "ring_left" else " (правое)"))
+		_equip_target.set_item_metadata(_equip_target.item_count - 1, ring_slot)
+		_equip_target.select(0 if compare_slot == "ring_left" else 1)
+		_equip_target.show()
+	_equip_button.show()
+	_equip_button.text = "Заменить" if not _session.equipment_item_id(compare_slot).is_empty() else "Надеть"
+	_equip_button.disabled = not _session.can_transfer_inventory_item("bag", bag_index, "equipment", compare_slot)
+	var equipped_id: String = _session.equipment_item_id(compare_slot)
+	var equipped_item: ItemDefinition = ItemCatalog.get_item(equipped_id)
+	var equipped_instance: ItemInstance = _session.item_instance(_session.equipment_instance_id(compare_slot))
+	var equipped_name: String = ItemMagicCatalog.display_name(equipped_item, equipped_instance) if equipped_item != null else "Пусто"
+	var before: Dictionary = CharacterStats.hero_values(_selected_member)
+	var after: Dictionary = CharacterStats.preview_equipment(_selected_member, compare_slot, item, instance)
+	var lines := PackedStringArray()
+	lines.append("Надето (%s): %s" % [EquipmentSlotRules.LABELS[compare_slot], equipped_name])
+	if equipped_item != null:
+		lines.append_array(DescriptionTemplate.equipment_properties(equipped_item, equipped_instance))
+	if not after.is_empty():
+		var differences: PackedStringArray = DescriptionTemplate.comparison_details(before, after)
+		lines.append("После замены для %s:" % _selected_member.definition.display_name)
+		lines.append_array(differences if not differences.is_empty() else PackedStringArray(["Характеристики не изменятся"]))
+	_item_comparison.text = "\n".join(lines)
+	_item_comparison.show()
+
+
+func _on_comparison_target_changed(index: int) -> void:
+	if _session == null or _selected_index < 0:
+		return
+	_comparison_target = str(_equip_target.get_item_metadata(index))
+	_show_item_definition(_entries[_selected_index], _selected_index)
+
+
+func _equip_selected() -> void:
+	if _session == null or _selected_index < 0 or _selected_index >= _entries.size():
+		return
+	var item: ItemDefinition = ItemCatalog.get_item(_entries[_selected_index])
+	if item == null:
+		return
+	var slot_id: String = _comparison_slot(item)
+	if not slot_id.is_empty():
+		_transfer_item("bag", _selected_index, "equipment", slot_id)
+
+
+func _unequip_selected() -> void:
+	if _session == null or _selected_equipped_slot.is_empty():
+		return
+	var empty_index: int = _session.inventory_slot_ids().find("")
+	if empty_index >= 0:
+		_transfer_item("equipment", _selected_equipped_slot, "bag", empty_index)
 
 
 func show_use_result(item_id: String, message: String) -> void:
@@ -442,3 +534,5 @@ func dismiss() -> void:
 		_session.inventory_member = null
 	_session = null
 	_selected_member = null
+	_selected_equipped_slot = ""
+	_comparison_target = ""

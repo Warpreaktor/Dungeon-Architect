@@ -82,8 +82,8 @@ func _test_comparison_and_inventory() -> void:
 	var index: int = session.inventory_slot_ids().find(item.item_id)
 	assert(index >= 0)
 	view._show_item(index)
-	assert(view._item_description.text.contains("Изменение при экипировке"))
-	assert(view._item_description.text.contains("Броня: +%d" % item.armor_bonus))
+	assert(view._item_comparison.text.contains("После замены"))
+	assert(view._item_comparison.text.contains("Броня:") and view._item_comparison.text.contains("(+%d)" % item.armor_bonus))
 	view.queue_free()
 	assert(hero.equipped_accessories.is_empty())
 

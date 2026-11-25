@@ -27,6 +27,7 @@ var _empty_icon_material: ShaderMaterial
 var _last_visual_state: int = -1
 var _drag_state_source: String = ""
 var _virtual_two_handed: bool = false
+var _selected: bool = false
 var _rarity_color: Color = Color(0.36, 0.49, 0.57)
 
 
@@ -83,20 +84,26 @@ func show_virtual_item(texture: Texture2D) -> void:
 	_style(false)
 
 
+func set_selected(value: bool) -> void:
+	_selected = value
+	_last_visual_state = -1
+	_style(false)
+
+
 func set_drag_drop_state(state: int, source: String = "") -> void:
 	_drag_state_source = source if state != 0 else ""
 	_style(state == 1, state == 2)
 
 
 func _style(highlight: bool, invalid: bool = false) -> void:
-	var state: int = 2 if invalid else (1 if highlight else 0)
+	var state: int = 2 if invalid else (1 if highlight else (3 if _selected else 0))
 	if state == _last_visual_state:
 		return
 	_last_visual_state = state
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.13, 0.24, 0.29, 0.95) if highlight else (Color(0.075, 0.105, 0.15, 0.97) if _virtual_two_handed else Color(0.06, 0.09, 0.14, 0.97))
-	style.border_color = Color(0.82, 0.29, 0.30) if invalid else (Color(0.9, 0.72, 0.38) if highlight else _rarity_color)
-	style.set_border_width_all(2 if highlight else 1)
+	style.bg_color = Color(0.13, 0.24, 0.29, 0.95) if highlight or _selected else (Color(0.075, 0.105, 0.15, 0.97) if _virtual_two_handed else Color(0.06, 0.09, 0.14, 0.97))
+	style.border_color = Color(0.82, 0.29, 0.30) if invalid else (Color(0.9, 0.72, 0.38) if highlight or _selected else _rarity_color)
+	style.set_border_width_all(2 if highlight or _selected else 1)
 	style.set_corner_radius_all(7)
 	add_theme_stylebox_override("panel", style)
 

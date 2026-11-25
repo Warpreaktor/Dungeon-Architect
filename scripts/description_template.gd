@@ -1,6 +1,8 @@
 class_name DescriptionTemplate
 extends RefCounted
 
+const QUALITY_COLOR: Color = Color("#e6c99a")
+
 
 static func numeric_values(resource: Resource, prefix: String = "") -> Dictionary:
 	var values: Dictionary = {}
@@ -40,7 +42,21 @@ static func unresolved_tokens(text: String) -> PackedStringArray:
 	return result
 
 
-static func equipment_properties(item: ItemDefinition, instance: ItemInstance = null) -> PackedStringArray:
+static func escape_bbcode(value: String) -> String:
+	return value.replace("[", "[lb]")
+
+
+static func colored(value: String, color: Color) -> String:
+	return "[color=#%s]%s[/color]" % [color.to_html(false), escape_bbcode(value)]
+
+
+static func equipment_value(item: ItemDefinition, instance: ItemInstance, field: String, value: String, rich: bool = false) -> String:
+	if rich and ItemMagicCatalog.quality_value(item, instance, field) > ItemMagicCatalog.quality_value(item, null, field):
+		return colored(value, QUALITY_COLOR)
+	return value
+
+
+static func equipment_properties(item: ItemDefinition, instance: ItemInstance = null, rich: bool = false) -> PackedStringArray:
 	var lines := PackedStringArray()
 	if item == null:
 		return lines
@@ -49,7 +65,18 @@ static func equipment_properties(item: ItemDefinition, instance: ItemInstance = 
 		if value == 0:
 			continue
 		var suffix: String = " п.п." if key in ["dodge_bonus_percent", "accuracy_bonus_percent"] else ("%" if key == "poison_resistance_percent" else "")
-		lines.append("%s: %s%s%s" % [CharacterStats.EQUIPMENT_LABELS[key], "+" if value > 0 else "", number(value), suffix])
+		var formatted: String = ("+" if value > 0 else "") + number(value) + suffix
+		lines.append("%s: %s" % [CharacterStats.EQUIPMENT_LABELS[key], equipment_value(item, instance, key, formatted, rich)])
+	var damage: int = ItemMagicCatalog.effective_value(item, instance, "weapon_damage")
+	if damage > 0:
+		lines.append("Урон оружия: %s (%s)" % [equipment_value(item, instance, "weapon_damage", number(damage), rich), "дальний" if item.weapon_kind == ItemDefinition.WeaponKind.RANGED else "ближний"])
+	var block: int = ItemMagicCatalog.effective_value(item, instance, "defense_bonus")
+	if block > 0:
+		lines.append("Блок: %s" % equipment_value(item, instance, "defense_bonus", "+" + number(block), rich))
+	var maximum: int = ItemMagicCatalog.effective_value(item, instance, "max_durability")
+	if maximum > 0:
+		var current: int = instance.durability if instance != null else maximum
+		lines.append("Прочность: %d / %s" % [current, equipment_value(item, instance, "max_durability", number(maximum), rich)])
 	return lines
 
 

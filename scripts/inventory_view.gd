@@ -14,7 +14,7 @@ signal equipment_changed
 @onready var _details: VBoxContainer = %Details
 @onready var _tooltip_close: Button = %TooltipClose
 @onready var _use_button: Button = %UseButton
-@onready var _item_comparison: Label = %ItemComparison
+@onready var _item_comparison: RichTextLabel = %ItemComparison
 @onready var _comparison_separator: HSeparator = %ComparisonSeparator
 @onready var _bag_grid: GridContainer = %BagGrid
 @onready var _gold_label: Label = %GoldLabel
@@ -260,6 +260,7 @@ func _clear_item_info() -> void:
 	_item_name.remove_theme_color_override("font_color")
 	_item_description.text = ""
 	_item_properties.text = ""
+	_item_properties.hide()
 	_comparison_text = ""
 	_item_comparison.text = ""
 	_item_comparison.hide()
@@ -314,57 +315,18 @@ func _show_item_definition(item_id: String, bag_index: int = -1, equipped_slot: 
 	_item_icon.texture = item.icon
 	_item_name.text = ItemMagicCatalog.display_name(item, instance)
 	_item_name.add_theme_color_override("font_color", ItemMagicCatalog.display_color(instance))
-	_item_description.text = item.get_description(instance)
+	_item_description.text = item.get_description(instance, true)
 	_detail_scroll.scroll_vertical = 0
 	_update_equipment_actions(item, instance, bag_index, equipped_slot)
 	_use_button.visible = bag_index >= 0 and item.category == ItemDefinition.Category.CONSUMABLE
 	_use_feedback.text = ""
-	var category := "Квестовый предмет"
-	match item.category:
-		ItemDefinition.Category.CONSUMABLE:
-			category = "Расходник"
-		ItemDefinition.Category.EQUIPMENT:
-			category = "Снаряжение"
-		ItemDefinition.Category.CURRENCY:
-			category = "Валюта"
-	var details := category
-	if item.category == ItemDefinition.Category.EQUIPMENT:
-		var item_slot: String = equipped_slot if not equipped_slot.is_empty() else _comparison_slot(item)
-		if not item_slot.is_empty():
-			details += " · Слот: " + str(EquipmentSlotRules.LABELS[item_slot])
-	if instance != null:
-		var rarity: ItemRarityDefinition = ItemMagicCatalog.rarity(instance.rarity)
-		var quality: ItemQualityDefinition = ItemMagicCatalog.quality(instance.quality_id)
-		if quality != null:
-			details += " · Качество: " + quality.display_name
-		if rarity != null:
-			details += " · Редкость: " + rarity.display_name
+	var details := PackedStringArray()
 	if item.stackable and bag_index >= 0:
-		details += "  ·  количество: %d / %d" % [_session.inventory_slot_quantity(bag_index), item.stack_limit()]
-	match item.consumable_effect:
-		ItemDefinition.ConsumableEffect.HEAL:
-			details += "\nВосстанавливает: до %d HP" % item.healing_amount
-		ItemDefinition.ConsumableEffect.ATTACK:
-			details += "\nАтака: +%d на %s" % [item.effect_value, DescriptionTemplate.phases(item.effect_duration_phases)]
-		ItemDefinition.ConsumableEffect.RESIST:
-			details += "\nПолучаемый урон: −%d%% на %s" % [item.effect_value, DescriptionTemplate.phases(item.effect_duration_phases)]
-		ItemDefinition.ConsumableEffect.VISION:
-			details += "\nОбзор: +%d на %s" % [item.effect_value, DescriptionTemplate.phases(item.effect_duration_phases)]
-		_:
-			if item.healing_amount > 0:
-				details += "\nВосстанавливает: до %d HP" % item.healing_amount
-	var weapon_damage: int = ItemMagicCatalog.effective_value(item, instance, "weapon_damage")
-	if weapon_damage > 0:
-		details += "\nУрон оружия: %d (%s)" % [weapon_damage, "дальний" if item.weapon_kind == ItemDefinition.WeaponKind.RANGED else "ближний"]
-	var block: int = ItemMagicCatalog.effective_value(item, instance, "defense_bonus")
-	if block > 0:
-		details += "\nБлок: +%d" % block
-		if item.max_durability > 0:
-			var durability: int = instance.durability if instance != null else (_session.inventory_shield_durability(bag_index) if bag_index >= 0 else _selected_member.current_shield_durability(item_id))
-			details += "\nПрочность: %d / %d" % [durability, ItemMagicCatalog.effective_value(item, instance, "max_durability")]
+		details.append("Количество: %d / %d" % [_session.inventory_slot_quantity(bag_index), item.stack_limit()])
 	if not equipped_slot.is_empty():
-		details += "\nНадето"
-	_item_properties.text = details
+		details.append("Надето")
+	_item_properties.text = "\n".join(details)
+	_item_properties.visible = not details.is_empty()
 	_queue_tooltip_layout()
 
 
@@ -419,19 +381,14 @@ func _update_equipment_actions(item: ItemDefinition, instance: ItemInstance, bag
 	var before: Dictionary = CharacterStats.hero_values(_selected_member)
 	var after: Dictionary = CharacterStats.preview_equipment(_selected_member, compare_slot, item, instance)
 	var lines := PackedStringArray()
-	lines.append("Надето (%s): %s" % [EquipmentSlotRules.LABELS[compare_slot], equipped_name])
+	var name_text: String = DescriptionTemplate.colored(equipped_name, ItemMagicCatalog.display_color(equipped_instance)) if equipped_item != null else equipped_name
+	lines.append("Надето (%s): %s" % [EquipmentSlotRules.LABELS[compare_slot], name_text])
 	if equipped_item != null:
-		lines.append_array(DescriptionTemplate.equipment_properties(equipped_item, equipped_instance))
-		var equipped_damage: int = ItemMagicCatalog.effective_value(equipped_item, equipped_instance, "weapon_damage")
-		if equipped_damage > 0:
-			lines.append("Урон оружия: %d (%s)" % [equipped_damage, "дальний" if equipped_item.weapon_kind == ItemDefinition.WeaponKind.RANGED else "ближний"])
-		var equipped_block: int = ItemMagicCatalog.effective_value(equipped_item, equipped_instance, "defense_bonus")
-		if equipped_block > 0:
-			lines.append("Блок: +%d" % equipped_block)
+		lines.append_array(DescriptionTemplate.equipment_properties(equipped_item, equipped_instance, true))
 	if not after.is_empty():
 		var differences: PackedStringArray = DescriptionTemplate.comparison_details(before, after)
 		lines.append("")
-		lines.append("После замены для %s:" % _selected_member.definition.display_name)
+		lines.append("После замены для %s:" % DescriptionTemplate.escape_bbcode(_selected_member.definition.display_name))
 		lines.append_array(differences if not differences.is_empty() else PackedStringArray(["Характеристики не изменятся"]))
 	_comparison_text = "\n".join(lines)
 	_item_comparison.text = _comparison_text

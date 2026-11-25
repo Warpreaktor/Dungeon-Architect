@@ -43,15 +43,23 @@ static func modifier_is_valid(item: ItemDefinition, key: String) -> bool:
 	return true
 
 
-static func effective_value(item: ItemDefinition, instance: ItemInstance, field: String) -> int:
+static func quality_value(item: ItemDefinition, instance: ItemInstance, field: String) -> int:
 	if item == null or not (field in MODIFIER_FIELDS or field == "max_durability"):
 		return 0
 	var base: int = int(item.get(field))
+	if instance != null and field in SCALED_FIELDS:
+		var definition: ItemQualityDefinition = quality(instance.quality_id)
+		if definition != null and definition.accepts(item):
+			return roundi(float(base) * float(definition.scaling_percent) / 100.0)
+	return base
+
+
+static func effective_value(item: ItemDefinition, instance: ItemInstance, field: String) -> int:
+	if item == null or not (field in MODIFIER_FIELDS or field == "max_durability"):
+		return 0
+	var base: int = quality_value(item, instance, field)
 	if instance == null:
 		return base
-	var quality_definition: ItemQualityDefinition = quality(instance.quality_id)
-	if quality_definition != null and quality_definition.accepts(item) and field in SCALED_FIELDS:
-		base = roundi(float(base) * float(quality_definition.scaling_percent) / 100.0)
 	var modifier: int = 0
 	if modifier_is_valid(item, field) and instance.modifiers.has(field):
 		var minimum: int = 0
@@ -68,19 +76,8 @@ static func effective_value(item: ItemDefinition, instance: ItemInstance, field:
 	return maxi(value, 0) if field in SCALED_FIELDS else value
 
 
-static func display_name(item: ItemDefinition, instance: ItemInstance) -> String:
-	if item == null:
-		return ""
-	if instance == null:
-		return item.display_name
-	var parts: Array[String] = [item.display_name]
-	var quality_definition: ItemQualityDefinition = quality(instance.quality_id)
-	if quality_definition != null and instance.quality_id != RULES.default_quality_id:
-		parts.append(quality_definition.display_name)
-	var rarity_definition: ItemRarityDefinition = rarity(instance.rarity)
-	if rarity_definition != null and instance.rarity != ItemInstance.Rarity.COMMON:
-		parts.append(rarity_definition.display_name)
-	return " · ".join(parts)
+static func display_name(item: ItemDefinition, _instance: ItemInstance) -> String:
+	return item.display_name if item != null else ""
 
 
 static func display_color(instance: ItemInstance) -> Color:

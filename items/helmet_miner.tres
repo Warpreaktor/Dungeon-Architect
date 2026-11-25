@@ -7,7 +7,7 @@
 script = ExtResource("1_definition")
 item_id = "helmet_miner"
 display_name = "Шлем проходчика"
-description = "Защита и снаряжение проходчика."
+description = "Защитный шлем проходчика."
 icon = ExtResource("2_icon")
 category = 3
 stackable = false

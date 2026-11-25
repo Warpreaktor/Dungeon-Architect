@@ -227,6 +227,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 fit_content = true
 scroll_active = false
+bbcode_enabled = true
 mouse_filter = 2
 
 [node name="ItemProperties" type="Label" parent="ItemTooltip/Content/DetailScroll/Details"]
@@ -239,12 +240,14 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
-[node name="ItemComparison" type="Label" parent="ItemTooltip/Content/DetailScroll/Details"]
+[node name="ItemComparison" type="RichTextLabel" parent="ItemTooltip/Content/DetailScroll/Details"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-autowrap_mode = 3
-theme_override_colors/font_color = Color(0.94, 0.82, 0.59, 1)
+fit_content = true
+scroll_active = false
+bbcode_enabled = true
+mouse_filter = 2
 
 [node name="UseFeedback" type="Label" parent="ItemTooltip/Content/DetailScroll/Details"]
 unique_name_in_owner = true

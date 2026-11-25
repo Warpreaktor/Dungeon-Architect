@@ -4,6 +4,7 @@ extends SceneTree
 func _initialize() -> void:
 	_test_resource_catalog_and_roll()
 	_test_quality_rarity_and_description()
+	_test_quality_highlighting()
 	_test_equipment_battle_and_preview()
 	_test_save_restore_and_legacy()
 	_test_magic_health_roundtrip()
@@ -54,7 +55,7 @@ func _test_quality_rarity_and_description() -> void:
 	magic.modifiers["weapon_damage"] = 2
 	assert(magic.item_id == regular.item_id)
 	assert(magic.stat("weapon_damage") > regular.stat("weapon_damage"))
-	assert(magic.display_name() != regular.display_name())
+	assert(magic.display_name() == regular.display_name())
 	assert(not sword.get_description(magic).is_empty())
 	assert(sword.get_description(magic).contains("Острота"))
 	assert(ItemMagicCatalog.display_color(magic) != ItemMagicCatalog.display_color(regular))
@@ -63,6 +64,46 @@ func _test_quality_rarity_and_description() -> void:
 	assert(copy.quality_id == magic.quality_id)
 	assert(copy.modifiers == magic.modifiers)
 	assert(copy.affix_ids == magic.affix_ids)
+
+
+func _test_quality_highlighting() -> void:
+	var sword: ItemDefinition = ItemCatalog.get_item("sword").duplicate() as ItemDefinition
+	sword.weapon_damage = 10
+	var instance: ItemInstance = ItemInstance.create("quality_test", sword)
+	assert(not sword.get_description(instance, true).contains("[color="))
+	instance.quality_id = "sturdy"
+	var damage: int = ItemMagicCatalog.effective_value(sword, instance, "weapon_damage")
+	assert(sword.get_description(instance, true).contains(DescriptionTemplate.colored(str(damage), DescriptionTemplate.QUALITY_COLOR)))
+	assert(not sword.get_description(instance).contains("[color="))
+	sword.weapon_damage = 1
+	instance.rarity = ItemInstance.Rarity.MAGIC
+	instance.affix_ids = ["edge"]
+	instance.modifiers["weapon_damage"] = 2
+	assert(ItemMagicCatalog.effective_value(sword, instance, "weapon_damage") == 3)
+	assert(not sword.get_description(instance, true).contains("[color="))
+	var armor: ItemDefinition = ItemCatalog.get_item("armor_chain_shirt").duplicate() as ItemDefinition
+	armor.armor_bonus = 10
+	armor.health_bonus = 5
+	var armor_instance: ItemInstance = ItemInstance.create("armor_quality_test", armor)
+	armor_instance.quality_id = "masterwork"
+	var lines: PackedStringArray = DescriptionTemplate.equipment_properties(armor, armor_instance, true)
+	assert(lines[0].contains("[color="))
+	assert("HP: +5" in lines)
+	var shield: ItemDefinition = ItemCatalog.get_item("shield").duplicate() as ItemDefinition
+	shield.defense_bonus = 10
+	shield.max_durability = 10
+	var shield_instance: ItemInstance = ItemInstance.create("shield_quality_test", shield, 4)
+	shield_instance.quality_id = "masterwork"
+	var shield_text: String = shield.get_description(shield_instance, true)
+	assert(shield_text.contains("Блок: [color="))
+	assert(shield_text.contains("Прочность: 4 / [color="))
+	var colors: Array[Color] = []
+	for tier in [ItemInstance.Rarity.COMMON, ItemInstance.Rarity.MAGIC, ItemInstance.Rarity.RARE, ItemInstance.Rarity.UNIQUE]:
+		instance.rarity = tier
+		var color: Color = ItemMagicCatalog.display_color(instance)
+		assert(not colors.has(color))
+		colors.append(color)
+		assert(ItemMagicCatalog.display_name(sword, instance) == sword.display_name)
 
 
 func _test_equipment_battle_and_preview() -> void:
@@ -100,7 +141,8 @@ func _test_equipment_battle_and_preview() -> void:
 	var magic_index: int = session.inventory_slot_ids().find(armor.item_id)
 	assert(magic_index >= 0)
 	view._show_item(magic_index)
-	assert(view._item_name.text.contains("волшебное"))
+	assert(view._item_name.text == armor.display_name)
+	assert(view._item_name.get_theme_color("font_color") == ItemMagicCatalog.display_color(magic))
 	assert(view._item_comparison.text.contains("После замены"))
 	assert(view._item_description.text.contains("Броня:"))
 	view.queue_free()

@@ -30,7 +30,10 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 				if effect.hit_count > 1:
 					lines.append("Ударов: %d" % effect.hit_count)
 			AbilityEffectDefinition.Kind.BLOCK:
-				lines.append("Защищает от следующего попадания или до собственной атаки; сила блока зависит от щита")
+				if participant != null and participant.fury_rules != null:
+					lines.append("Блок: %d" % participant.preview_block_armor(effect.amount))
+				else:
+					lines.append("Защищает от следующего попадания или до собственной атаки; сила блока зависит от щита")
 				lines.append("После атакующего приёма блок пропадает")
 				lines.append("+%d%% базового урона к следующей атаке за каждый блок (через фазы)" % BattleMath.RULES.block_attack_bonus_percent)
 			AbilityEffectDefinition.Kind.HEAL:

@@ -1,18 +1,27 @@
-[gd_resource type="Resource" script_class="MonsterDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="MonsterDefinition" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/monster_definition.gd" id="1_script"]
 [ext_resource type="Texture2D" path="res://assets/icons/monsters/kadavr.png" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/monsters/kadavr_portrait.png" id="3_portrait"]
+[ext_resource type="Resource" path="res://data/kadavr_fury.tres" id="4_fury"]
 
 [resource]
 script = ExtResource("1_script")
 monster_id = "kadavr"
-display_name = "Кадавр"
+rank = 2
+display_name = "Одинокий Кадавр"
 icon = ExtResource("2_icon")
-max_health = 42
-strength = 10
-agility = 1
+portrait = ExtResource("3_portrait")
+fury_rules = ExtResource("4_fury")
+health_per_additional_hero = 26
+max_health = 146
+strength = 12
+agility = 2
+accuracy_bonus = -7
 defense = 2
-personal_ability_ids = Array[String](["basic_strike", "guard", "kadavr_regen", "kadavr_curse"])
-
-max_energy = 11
+personal_ability_ids = Array[String](["kadavr_search", "kadavr_curse", "kadavr_despair_swing", "kadavr_last_order", "kadavr_regen", "kadavr_unleashed"])
+guaranteed_card_ids = Array[String](["kadavr_search", "kadavr_curse", "kadavr_despair_swing", "kadavr_last_order", "kadavr_regen", "kadavr_unleashed"])
+random_card_count = 0
+base_action_slots = 6
+max_energy = 24
 energy_restoration = 5

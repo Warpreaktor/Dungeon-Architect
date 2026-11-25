@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/kadavr/kadavr_unleashed.png" id="3_icon"]
+
+[ext_resource type="Resource" path="res://data/kadavr_fury.tres" id="4_fury"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+kind = 0
+recipient = 1
+damage_multiplier = 0.85
+hit_count = 3
+distinct_targets = 3
+repeat_targets = true
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "kadavr_unleashed"
+display_name = "СОРВАННЫЙ ПОВОДОК"
+description = "При {data_maximum} ед. Безумия наносит {effect_0_hit_count} независимых ударов ×{effect_0_damage_multiplier}, сперва по разным противникам (до {effect_0_distinct_targets}), затем возможны повторы. Обнуляет Безумие."
+icon = ExtResource("3_icon")
+description_data = ExtResource("4_fury")
+category = 0
+target = 1
+damage_delivery = 0
+effects = Array[Resource]([SubResource("Effect0")])
+resource_costs = {"energy": 8}
+requires_full_fury = true
+reset_fury_after_cast = true

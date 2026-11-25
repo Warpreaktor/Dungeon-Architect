@@ -164,7 +164,7 @@ func set_health(health: int, maximum: int) -> void:
 func refresh_stats(participant: BattleParticipant) -> void:
 	if participant == null:
 		return
-	_energy.text = "Энергия %d/%d" % [participant.current_energy(), participant.max_energy]
+	_energy.text = participant.energy_display_text()
 	_attack.text = str(participant.melee_attack())
 	_strength.text = "%d" % participant.effective_strength()
 	_agility.text = "%d" % participant.effective_agility()

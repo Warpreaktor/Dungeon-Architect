@@ -206,7 +206,7 @@ func _refresh_energy_labels() -> void:
 	if _hero_energy_label != null and hero != null:
 		_hero_energy_label.text = "Энергия %d/%d" % [hero.current_energy(), hero.max_energy]
 	if _enemy_energy_label != null and enemy != null:
-		_enemy_energy_label.text = "Энергия %d/%d" % [enemy.current_energy(), enemy.max_energy]
+		_enemy_energy_label.text = enemy.energy_display_text()
 	for hero_id in _extra_hero_views:
 		var view: BattleSupportEnemyView = _extra_hero_views[hero_id] as BattleSupportEnemyView
 		if view.visible:
@@ -476,8 +476,8 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 	_visible_enemy_hp = combat.enemy_health
 	_visible_support_hp = support.health if support != null else 0
 	_visible_hero_max = hero.effective_max_health()
-	_visible_enemy_max = combat.enemy_definition.max_health
-	_visible_support_max = combat.support_enemy_definition.max_health if support != null else 0
+	_visible_enemy_max = combat.enemy_max_health
+	_visible_support_max = support.max_health if support != null else 0
 	_status_presenter.reset()
 	_status_presenter.sync(_combat.battle_state.participants)
 	_enemy_chain = _combat.battle_state.get_enemy().action_chain.duplicate()

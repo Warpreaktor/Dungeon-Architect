@@ -23,7 +23,12 @@ static func draw(definition: MonsterDefinition, participant: BattleParticipant, 
 	for ability_id in fixed:
 		if result.size() >= capacity:
 			break
-		if not result.has(ability_id) and AbilityCatalog.can_prepare(participant, ability_id):
+		var definition_ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
+		var gated: bool = (definition_ability != null and definition_ability.requires_full_fury
+			and participant.fury_rules != null and AbilityCatalog.knows_ability(participant, ability_id)
+			and definition_ability.validation_error().is_empty()
+			and definition_ability.unavailable_reason(participant, true).is_empty())
+		if not result.has(ability_id) and (gated or AbilityCatalog.can_prepare(participant, ability_id)):
 			result.append(ability_id)
 	var candidates: Array[String] = []
 	for ability_id in definition.personal_ability_ids:

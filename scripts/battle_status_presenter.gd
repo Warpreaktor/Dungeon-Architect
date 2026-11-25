@@ -9,7 +9,8 @@ const STATUS_ICONS: Dictionary = {
 	"petushan_accuracy_down": preload("res://assets/abilities/statuses/accuracy_down.png"),
 	"fallen_hero_infection": preload("res://assets/abilities/fallen_hero/rotten_bite.png"),
 	"rabbit_master_mark": preload("res://assets/abilities/statuses/rabbit_master_mark.png"),
-	"burolom_crack": preload("res://assets/abilities/burolom/notch.png")
+	"burolom_crack": preload("res://assets/abilities/burolom/notch.png"),
+	"kadavr_grip": preload("res://assets/abilities/kadavr/kadavr_curse.png")
 }
 const STATUS_MARKER_GAP: float = 0.04
 const BLEED_FLASH_IN_SECONDS: float = 0.18

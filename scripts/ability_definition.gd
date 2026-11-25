@@ -25,6 +25,12 @@ const UNLIMITED_RANGE: int = -1
 ## Не расходуются при составлении алгоритма; только при выполнении.
 @export var resource_costs: Dictionary = {}
 @export var affects_all_enemies: bool = false
+@export var requires_full_fury: bool = false
+@export var arms_fury_guard: bool = false
+@export_range(0, 999, 1) var fury_spend_after_cast: int = 0
+@export var reset_fury_after_cast: bool = false
+@export_range(0.0, 1.0, 0.01) var damage_heal_ratio: float = 0.0
+@export_range(0, 999, 1) var damage_heal_cap: int = 0
 @export_range(0, 20, 1) var cooldown_turns: int = 0
 @export_range(-1, 100, 1) var energy_at_most_percent: int = -1
 
@@ -83,9 +89,11 @@ func resource_failure(participant: BattleParticipant) -> String:
 	return ""
 
 
-func unavailable_reason(participant: BattleParticipant) -> String:
+func unavailable_reason(participant: BattleParticipant, ignore_fury: bool = false) -> String:
 	if participant == null or not participant.is_alive():
 		return "Участник боя недоступен"
+	if requires_full_fury and not ignore_fury and not participant.is_fury_unleashed():
+		return "Требуется Срыв"
 	if int(participant.energy_cooldowns.get(ability_id, 0)) > 0:
 		return "Способность восстанавливается"
 	if energy_at_most_percent >= 0 and float(participant.current_energy()) > float(participant.max_energy) * float(energy_at_most_percent) / 100.0:
@@ -103,6 +111,7 @@ func unavailable_reason(participant: BattleParticipant) -> String:
 
 func get_description() -> String:
 	var values: Dictionary = DescriptionTemplate.numeric_values(self)
+	values["damage_heal_percent"] = damage_heal_ratio * BattleMath.PERCENT_SCALE
 	for resource_id in resource_costs:
 		values["cost_" + str(resource_id)] = int(resource_costs[resource_id])
 	values.merge(DescriptionTemplate.numeric_values(description_data, "data_"))

@@ -1,20 +1,26 @@
-[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/kadavr/kadavr_regen.png" id="3_icon"]
 
 [sub_resource type="Resource" id="Effect0"]
 script = ExtResource("2_effect")
-kind = 2
-recipient = 0
-amount = 3
+kind = 0
+recipient = 1
+amount = 9
 
 [resource]
 script = ExtResource("1_script")
 ability_id = "kadavr_regen"
-display_name = "Восстановление Кадавра"
-category = 2
-target = 0
+display_name = "Судорога мёртвой магии"
+description = "Магический удар с базовой мощностью {effect_0_amount}. Восстанавливает {damage_heal_percent}% фактического урона по HP, не более {damage_heal_cap} HP. Снижает Безумие на {fury_spend_after_cast}."
+icon = ExtResource("3_icon")
+category = 0
+target = 1
+damage_delivery = 2
 effects = Array[Resource]([SubResource("Effect0")])
-
-resource_costs = {"energy": 4}
+resource_costs = {"energy": 5}
+damage_heal_ratio = 0.5
+damage_heal_cap = 7
+fury_spend_after_cast = 2

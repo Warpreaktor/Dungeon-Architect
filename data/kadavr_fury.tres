@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MonsterFuryRules" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/monster_fury_rules.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+maximum = 6
+gain_on_health_damage = 1
+gain_on_missed_action = 2
+gain_on_blocked_action = 1
+gain_on_guard_hit = 2
+round_gain_cap = 3
+physical_bonus = 0.25
+incoming_health_bonus = 0.25
+block_penalty = 2

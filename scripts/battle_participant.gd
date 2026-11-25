@@ -39,6 +39,10 @@ var statuses: Dictionary = {}
 ## Number of completed own cycles (including the non-editable rest).
 var completed_phases: int = 0
 var is_resting: bool = false
+var last_round_action_was_rest: bool = false
+var fury_rules: MonsterFuryRules
+var fury_gained_this_round: int = 0
+var fury_guard_armed: bool = false
 ## Для совпадения наложения статуса и отдыха в одном такте.
 var last_rest_tick: int = -1
 ## Неиспользуемые пока в контенте запасы будущих ресурсов (ярость, мана и т.д.).
@@ -84,16 +88,17 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	return participant
 
 
-static func from_monster(source: MonsterDefinition, id: String = "enemy") -> BattleParticipant:
+static func from_monster(source: MonsterDefinition, id: String = "enemy", hero_count: int = 1) -> BattleParticipant:
 	if source == null:
 		return null
 	var participant := BattleParticipant.new()
 	participant.participant_id = id
 	participant.team_id = "enemies"
 	participant.definition_id = source.monster_id
-	participant.max_health = source.max_health
-	participant._base_max_health = source.max_health
-	participant.health = source.max_health
+	participant.max_health = source.max_health + source.health_per_additional_hero * maxi(hero_count - 1, 0)
+	participant._base_max_health = participant.max_health
+	participant.health = participant.max_health
+	participant.fury_rules = source.fury_rules
 	participant.strength = source.strength
 	participant.agility = source.agility
 	participant.defense = source.defense
@@ -104,6 +109,8 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 		if action != null and not participant.learned_ability_ids.has(action.ability_id):
 			participant.learned_ability_ids.append(action.ability_id)
 	participant.resource_amounts = source.starting_resources.duplicate(true)
+	if participant.fury_rules != null:
+		participant.resource_amounts["fury"] = 0
 	participant.max_energy = source.max_energy
 	participant.energy_restoration = source.energy_restoration
 	participant.resource_amounts["energy"] = source.max_energy
@@ -189,6 +196,8 @@ func preview_block_armor(base_armor: int = BattleMath.USE_DEFAULT_BLOCK_ARMOR) -
 	var armor: int = _equipment.block_armor(equipped_shield_id, maxi(BattleMath.RULES.unarmed_block_armor, requested))
 	for status in statuses.values():
 		armor -= int(status.get("next_block_penalty", 0))
+	if is_fury_unleashed():
+		armor -= fury_rules.block_penalty
 	return maxi(armor, 0)
 
 
@@ -240,10 +249,42 @@ func receive_damage(incoming: int, armor_pierce_fraction: float = 0.0) -> int:
 			energy_meditation_pending = 0
 		return taken
 	var taken: int = pierced + maxi(armor_after_base - blocked, 0)
+	if is_fury_unleashed():
+		taken = floori(float(taken) * (1.0 + fury_rules.incoming_health_bonus))
 	health = maxi(health - taken, 0)
 	if taken > 0:
 		energy_meditation_pending = 0
 	return taken
+
+
+func fury() -> int:
+	return int(resource_amounts.get("fury", 0))
+
+
+func is_fury_unleashed() -> bool:
+	return fury_rules != null and fury() >= fury_rules.maximum
+
+
+func gain_fury(amount: int) -> void:
+	if fury_rules == null or amount <= 0 or not is_alive():
+		return
+	var gained: int = mini(amount, mini(fury_rules.maximum - fury(), maxi(fury_rules.round_gain_cap - fury_gained_this_round, 0)))
+	resource_amounts["fury"] = fury() + gained
+	fury_gained_this_round += gained
+
+
+func spend_fury(amount: int) -> void:
+	if fury_rules != null:
+		resource_amounts["fury"] = maxi(fury() - amount, 0)
+
+
+func energy_display_text() -> String:
+	var text: String = "Энергия %d/%d" % [current_energy(), max_energy]
+	if fury_rules != null:
+		text += "\nБезумие %d/%d" % [fury(), fury_rules.maximum]
+		if is_fury_unleashed():
+			text += " · Срыв"
+	return text
 
 
 func current_energy() -> int:
@@ -303,7 +344,7 @@ func status_modifier(stat: int) -> int:
 
 
 func apply_status(effect: AbilityEffectDefinition, tick: int) -> void:
-	var partial_phase: bool = not is_resting and action_cursor > 0
+	var partial_phase: bool = not effect.full_owner_turns and not is_resting and action_cursor > 0
 	BattleStatusRules.apply(statuses, effect, tick, partial_phase)
 	_sync_status_health_limit(false)
 

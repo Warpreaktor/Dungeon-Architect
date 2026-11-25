@@ -48,8 +48,10 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 		actor.energy_cooldowns[ability_id] = ability.cooldown_turns + 1
 	if ability.affects_all_enemies:
 		event_list.append_array(EnergyAbilityResolver.resolve_area(context, actor, ability, energy_before_cast))
+		_finish_action(context, actor, ability, event_list)
 		return {"success": true, "reason": "", "events": event_list}
 	var last_hit: Dictionary = {}
+	var damaged_targets: Dictionary = {}
 	var resonance_triggered: bool = false
 	var stance_counter_used: bool = false
 	for effect in ability.effects:
@@ -58,7 +60,13 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 			return _failure("Нет цели эффекта")
 		match effect.kind:
 			AbilityEffectDefinition.Kind.DAMAGE:
-				var raw_damage: int = preview_damage(actor, ability, effect, recipient, -1, energy_before_cast)
+				var hit_count: int = effect.fury_hit_count if actor.is_fury_unleashed() and effect.fury_hit_count > 0 else effect.hit_count
+				var attack_targets: Array[String] = _attack_targets(context, actor, recipient, ability, effect, hit_count)
+				var raw_by_target: Dictionary = {}
+				var damage_target_ids: Array[String] = context.target_ids(actor_id, ability) if effect.repeat_targets else attack_targets
+				for id in damage_target_ids:
+					if not raw_by_target.has(id):
+						raw_by_target[id] = preview_damage(actor, ability, effect, context.get_participant(id), -1, energy_before_cast)
 				# Атака опускает собственный поднятый блок, но не меняет
 				# уклонение: оно тратится только при входящей атаке.
 				if actor.block_armor > 0:
@@ -66,9 +74,20 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 						"target_id": actor_id, "ability_id": ability_id, "armor": 0})
 				actor.block_armor = 0
 				actor.block_attack_bonus_percent = 0
-				for hit_index in range(effect.hit_count):
-					var original_target: BattleParticipant = target if effect.recipient == AbilityEffectDefinition.Recipient.TARGET else actor
+				actor.fury_guard_armed = false
+				for hit_index in range(attack_targets.size()):
+					if not actor.is_alive():
+						break
+					var original_target: BattleParticipant = context.get_participant(attack_targets[hit_index])
+					if original_target == null or not original_target.is_alive():
+						if not effect.repeat_targets:
+							continue
+						var living: Array[String] = context.target_ids(actor_id, ability)
+						if living.is_empty():
+							break
+						original_target = context.get_participant(living[context.rng.randi_range(0, living.size() - 1)] if context.rng != null else living[0])
 					recipient = original_target
+					var raw_damage: int = int(raw_by_target.get(original_target.participant_id, 0))
 					var protector_id: String = str(context.redirects.get(recipient.participant_id, ""))
 					var protector: BattleParticipant = context.get_participant(protector_id) if not protector_id.is_empty() else null
 					if protector != null and protector.is_alive():
@@ -87,8 +106,10 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					if protector != null and recipient == protector:
 						recipient.block_armor = saved_block
 					last_hit["hit_index"] = hit_index
-					last_hit["hit_count"] = effect.hit_count
+					last_hit["hit_count"] = attack_targets.size()
 					event_list.append(last_hit)
+					if int(last_hit.get("hp_damage", 0)) > 0:
+						damaged_targets[recipient.participant_id] = true
 					if not resonance_triggered and not bool(last_hit.get("dodged", false)):
 						var resonance: Dictionary = EnergyAbilityResolver.on_hit(actor, recipient)
 						if not resonance.is_empty():
@@ -112,7 +133,7 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					if protector != null and recipient == protector and protector.is_alive() and actor.is_alive() and context.counter_multiplier > 0.0:
 						var counter_damage: int = floori(protector.melee_attack_value() * context.counter_multiplier)
 						event_list.append(apply_damage(protector, actor, counter_damage, context.counter_ability_id, context.rng))
-					if not recipient.is_alive():
+					if not recipient.is_alive() and effect.distinct_targets == 0:
 						break
 			AbilityEffectDefinition.Kind.BLOCK:
 				var cleared: Array[String] = []
@@ -120,6 +141,7 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					if int((recipient.statuses[status_id] as Dictionary).get("next_block_penalty", 0)) > 0:
 						cleared.append(str(status_id))
 				recipient.prepare_block(effect.amount)
+				recipient.fury_guard_armed = ability.arms_fury_guard and recipient.fury_rules != null
 				for status_id in cleared:
 					event_list.append({"type": "status_removed", "actor_id": actor_id,
 							"target_id": recipient.participant_id, "status_id": status_id, "removed": true})
@@ -136,6 +158,8 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					"hp_after": recipient.health, "hp_max": recipient.max_health})
 			AbilityEffectDefinition.Kind.APPLY_STATUS:
 				if not recipient.is_alive():
+					continue
+				if effect.requires_any_health_damage and not damaged_targets.has(recipient.participant_id):
 					continue
 				if effect.requires_health_damage and int(last_hit.get("damage", 0)) <= 0:
 					continue
@@ -188,6 +212,7 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					"ability_id": ability_id})
 			_:
 				event_list.append_array(EnergyAbilityResolver.resolve(context, actor, recipient, ability, effect, energy_before_cast))
+	_finish_action(context, actor, ability, event_list)
 	return {"success": true, "reason": "", "events": event_list}
 
 
@@ -222,14 +247,19 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 			multiplier = effect.vs_target_status_multiplier
 		if target.block_armor > 0 and effect.vs_block_multiplier > 0.0:
 			multiplier = effect.vs_block_multiplier
-		elif target.is_resting and effect.vs_rest_multiplier > 0.0:
+		elif (target.is_resting or (effect.vs_recent_rest and target.last_round_action_was_rest)) and effect.vs_rest_multiplier > 0.0:
 			multiplier = effect.vs_rest_multiplier
+	if actor.is_fury_unleashed() and effect.fury_hit_multiplier > 0.0:
+		multiplier = effect.fury_hit_multiplier
 	var total: float = maxf(base * (multiplier + float(actor.block_attack_bonus_percent) / float(BattleMath.PERCENT_SCALE)), 0.0)
 	if ability.damage_delivery == AbilityDefinition.DamageDelivery.MAGIC:
 		total *= actor.energy_factor()
 	if target != null and effect.bonus_vs_damaged_armor_percent > 0 and target.has_damaged_armor():
 		total *= 1.0 + float(effect.bonus_vs_damaged_armor_percent) / float(BattleMath.PERCENT_SCALE)
-	return maxi(floori(total) + actor.status_modifier(AbilityEffectDefinition.Stat.ATTACK_POWER), 0)
+	total += actor.status_modifier(AbilityEffectDefinition.Stat.ATTACK_POWER)
+	if actor.is_fury_unleashed() and ability.damage_delivery != AbilityDefinition.DamageDelivery.MAGIC:
+		total *= 1.0 + actor.fury_rules.physical_bonus
+	return maxi(floori(total), 0)
 
 
 static func apply_damage(actor: BattleParticipant, target: BattleParticipant, amount: int, ability_id: String = "", rng: RandomNumberGenerator = null, armor_pierce_fraction: float = 0.0, accuracy_offset_percent: int = 0) -> Dictionary:
@@ -242,10 +272,15 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 	var dodged: bool = rng != null and dodge_percent > 0 and rng.randf() < float(dodge_percent) / float(BattleMath.PERCENT_SCALE)
 	# Even an avoided attack spends 'next incoming attack' dodge bonuses.
 	target.advance_status_clock(AbilityEffectDefinition.Clock.INCOMING_ATTACK)
+	var hp_before: int = target.health
 	var taken: int = 0 if dodged else target.receive_damage(raw, armor_pierce_fraction)
+	var guard_triggered: bool = not dodged and target.fury_guard_armed
+	if guard_triggered:
+		target.fury_guard_armed = false
 	var shield_durability_after: int = target.shield_durability(shield_before)
 	return {"type": "attack", "actor_id": actor.participant_id, "target_id": target.participant_id,
 		"ability_id": ability_id, "raw_damage": raw, "damage": taken,
+		"hp_damage": maxi(hp_before - target.health, 0), "fury_guard_triggered": guard_triggered,
 		"dodged": dodged, "dodge_chance": dodge_percent,
 		"attacker_accuracy": actor.accuracy_percent(), "target_dodge": target.dodge_percent(),
 		"dodge_after": target.dodge_percent(),
@@ -258,6 +293,78 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 		"shield_durability_after": shield_durability_after,
 		"shield_blocked": target.last_shield_blocked, "block_absorbed": target.last_block_absorbed,
 		"shield_broken": target.last_shield_broken}
+
+
+static func _attack_targets(context: BattleContext, actor: BattleParticipant, target: BattleParticipant,
+		ability: AbilityDefinition, effect: AbilityEffectDefinition, hit_count: int) -> Array[String]:
+	var result: Array[String] = []
+	if effect.distinct_targets <= 0:
+		for _index in range(hit_count):
+			result.append(target.participant_id)
+		return result
+	var remaining: Array[String] = context.target_ids(actor.participant_id, ability)
+	remaining.erase(target.participant_id)
+	result.append(target.participant_id)
+	var unique_count: int = mini(effect.distinct_targets, hit_count) if effect.repeat_targets else effect.distinct_targets
+	while result.size() < unique_count and not remaining.is_empty():
+		var index: int = context.rng.randi_range(0, remaining.size() - 1) if context.rng != null and remaining.size() > 1 else 0
+		result.append(remaining.pop_at(index))
+	if effect.repeat_targets:
+		var candidates: Array[String] = result.duplicate()
+		while result.size() < hit_count:
+			var index: int = context.rng.randi_range(0, candidates.size() - 1) if context.rng != null and candidates.size() > 1 else 0
+			result.append(candidates[index])
+	return result
+
+
+static func _finish_action(context: BattleContext, actor: BattleParticipant, ability: AbilityDefinition,
+		events: Array[Dictionary]) -> void:
+	var health_damage: Dictionary = {}
+	var guard_hits: Dictionary = {}
+	var outgoing_hits: int = 0
+	var all_missed: bool = true
+	var all_blocked: bool = true
+	var dealt: int = 0
+	for event in events:
+		if str(event.get("type", "")) not in ["attack", "counter"]:
+			continue
+		var target_id: String = str(event.get("target_id", ""))
+		var hp_damage: int = int(event.get("hp_damage", 0))
+		if hp_damage > 0:
+			health_damage[target_id] = true
+		if bool(event.get("fury_guard_triggered", false)):
+			guard_hits[target_id] = true
+		if str(event.get("actor_id", "")) != actor.participant_id or str(event.get("ability_id", "")) != ability.ability_id:
+			continue
+		outgoing_hits += 1
+		dealt += hp_damage
+		var missed: bool = bool(event.get("dodged", false))
+		all_missed = all_missed and missed
+		if not missed:
+			all_blocked = all_blocked and hp_damage == 0 and int(event.get("block_absorbed", 0)) > 0
+	for id in health_damage:
+		var target: BattleParticipant = context.get_participant(str(id))
+		if target != null and target.fury_rules != null:
+			target.gain_fury(target.fury_rules.gain_on_health_damage)
+	for id in guard_hits:
+		var target: BattleParticipant = context.get_participant(str(id))
+		if target != null and target.fury_rules != null:
+			target.gain_fury(target.fury_rules.gain_on_guard_hit)
+	if actor.fury_rules != null:
+		if outgoing_hits > 0:
+			if all_missed:
+				actor.gain_fury(actor.fury_rules.gain_on_missed_action)
+			elif all_blocked:
+				actor.gain_fury(actor.fury_rules.gain_on_blocked_action)
+		if ability.reset_fury_after_cast:
+			actor.spend_fury(actor.fury())
+		else:
+			actor.spend_fury(ability.fury_spend_after_cast)
+	if ability.damage_heal_ratio > 0.0 and dealt > 0 and actor.is_alive():
+		var amount: int = mini(floori(float(dealt) * ability.damage_heal_ratio), ability.damage_heal_cap)
+		var healed: int = actor.restore_health(amount)
+		events.append({"type": "heal", "actor_id": actor.participant_id, "target_id": actor.participant_id,
+			"ability_id": ability.ability_id, "healed": healed, "hp_after": actor.health, "hp_max": actor.max_health})
 
 
 static func _failure(reason: String) -> Dictionary:

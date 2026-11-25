@@ -63,7 +63,11 @@ static func begin_for_party(monster: MonsterDefinition, heroes: Array[HeroState]
 	else:
 		state.rng.seed = rng_seed
 	state.enemy_definition = monster
-	var enemy: BattleParticipant = BattleParticipant.from_monster(monster)
+	var living_count: int = 0
+	for member in heroes:
+		if member != null and member.health > 0:
+			living_count += 1
+	var enemy: BattleParticipant = BattleParticipant.from_monster(monster, state.enemy_id, living_count)
 	state.participants[state.enemy_id] = enemy
 	if enemy != null:
 		enemy.action_chain = MonsterCardDraw.draw(monster, enemy, state.rng)
@@ -150,6 +154,9 @@ func _open_round() -> void:
 	round_order = BattleClashPlanner.ordered_actors(participants, active, round_tie_order)
 	round_cursor = 0
 	round_number += 1
+	for actor in participants.values():
+		if actor != null:
+			(actor as BattleParticipant).fury_gained_this_round = 0
 	events.append({"type": "round_started", "round": round_number, "order": round_order.duplicate()})
 
 
@@ -202,6 +209,7 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 	round_turn_count = tick
 	round_cursor += 1
 	actor.is_resting = is_rest
+	actor.last_round_action_was_rest = is_rest
 	events.append({"type": "turn", "round": round_number, "tick": tick, "actor_id": actor_id,
 		"slot_index": slot_index, "reload": is_rest})
 	if is_rest:
@@ -321,7 +329,7 @@ func add_support_enemy(definition: MonsterDefinition) -> BattleParticipant:
 	var existing: BattleParticipant = get_participant(support_enemy_id)
 	if existing != null:
 		return existing
-	var participant: BattleParticipant = BattleParticipant.from_monster(definition, support_enemy_id)
+	var participant: BattleParticipant = BattleParticipant.from_monster(definition, support_enemy_id, living_hero_ids().size())
 	participant.action_chain = MonsterCardDraw.draw(definition, participant, rng)
 	participants[support_enemy_id] = participant
 	support_enemy_definition = definition

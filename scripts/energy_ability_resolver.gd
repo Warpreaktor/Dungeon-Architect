@@ -139,8 +139,14 @@ static func at_turn_start(context: BattleContext, actor: BattleParticipant) -> A
 		var target: BattleParticipant = context.get_participant(str(target_id))
 		if target == null or not target.is_alive():
 			continue
-		result.append(AbilityExecutor.apply_damage(actor, target, int(attack.get("damage", 0)),
-			str(attack.get("ability_id", "")), context.rng))
+		var hit: Dictionary = AbilityExecutor.apply_damage(actor, target, int(attack.get("damage", 0)),
+			str(attack.get("ability_id", "")), context.rng)
+		result.append(hit)
+		if target.fury_rules != null:
+			if int(hit.get("hp_damage", 0)) > 0:
+				target.gain_fury(target.fury_rules.gain_on_health_damage)
+			if bool(hit.get("fury_guard_triggered", false)):
+				target.gain_fury(target.fury_rules.gain_on_guard_hit)
 	return result
 
 

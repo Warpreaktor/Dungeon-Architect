@@ -8,8 +8,21 @@ func _initialize() -> void:
 	hero.register_shield(shield)
 	assert(hero.equip_item(shield))
 	var initial_durability: int = hero.current_shield_durability("shield")
-	var battle: BattleState = BattleState.begin(MonsterCatalog.get_monster("kadavr"), hero)
+	var monster := MonsterDefinition.new()
+	monster.monster_id = "executor_fixture"
+	monster.display_name = "Противник"
+	monster.max_health = 100
+	monster.strength = 10
+	monster.defense = 2
+	monster.max_energy = 24
+	monster.personal_ability_ids = ["basic_strike", "guard", "test_heal", "test_curse"]
+	monster.guaranteed_card_ids = ["basic_strike"]
+	monster.random_card_count = 0
+	var battle: BattleState = BattleState.begin(monster, hero, 7)
+	battle.rng = null
 	var actor: BattleParticipant = battle.get_hero()
+	if not actor.personal_ability_ids.has("basic_strike"):
+		actor.personal_ability_ids.append("basic_strike")
 	var enemy: BattleParticipant = battle.get_enemy()
 	assert(actor.block_armor == 0 and actor.block_attack_bonus_percent == 0)
 	assert(actor.defense == hero.base_defense) # Щит не даёт пассивной брони.
@@ -19,7 +32,7 @@ func _initialize() -> void:
 	assert(hero.health == hero.max_health) # Изменяется только копия.
 
 	var block: Dictionary = battle.execute_ability("hero", "hero", "guard")
-	assert(block.success and block.events[0]["type"] == "block")
+	assert(block.success and block.events.any(func(event: Dictionary) -> bool: return event["type"] == "block"))
 	assert(actor.block_attack_bonus_percent == 25)
 	assert(actor.block_armor == shield.defense_bonus)
 	var guard_damage: Dictionary = AbilityExecutor.apply_damage(enemy, actor, shield.defense_bonus + 1)
@@ -33,9 +46,10 @@ func _initialize() -> void:
 	assert(actor.block_attack_bonus_percent == 50)
 	var hp_before: int = enemy.health
 	var hit: Dictionary = battle.execute_ability("hero", "enemy", "basic_strike")
-	assert(hit.success and hit.events.size() == 1)
-	assert(hit.events[0].damage == maxi(floori((hero.melee_attack_value() + 1.0) * 1.5) - enemy.defense, 0))
-	assert(enemy.health == hp_before - hit.events[0].damage)
+	assert(hit.success)
+	var attack_event: Dictionary = hit.events.filter(func(event: Dictionary) -> bool: return event["type"] == "attack")[0]
+	assert(attack_event.damage == maxi(floori((hero.melee_attack_value() + 1.0) * 1.5) - enemy.defense, 0))
+	assert(enemy.health == hp_before - attack_event.damage)
 	assert(actor.block_attack_bonus_percent == 0)
 	assert(not battle.execute_ability("hero", "enemy", "not_registered").success)
 	assert(not battle.execute_ability("hero", "hero", "basic_strike").success)
@@ -53,9 +67,28 @@ func _initialize() -> void:
 	assert(battle.execute_ability("enemy", "enemy", "guard").success)
 	assert(enemy.block_attack_bonus_percent == 25)
 	var enemy_hp: int = enemy.health
-	assert(battle.execute_ability("enemy", "enemy", "kadavr_regen").success)
+	var heal := AbilityDefinition.new()
+	heal.ability_id = "test_heal"
+	heal.display_name = "Лечение"
+	heal.target = AbilityDefinition.Target.SELF
+	var heal_effect := AbilityEffectDefinition.new()
+	heal_effect.kind = AbilityEffectDefinition.Kind.HEAL
+	heal_effect.recipient = AbilityEffectDefinition.Recipient.SELF
+	heal_effect.amount = 3
+	heal.effects = [heal_effect]
+	assert(battle.execute_definition("enemy", "enemy", heal).success)
 	assert(enemy.health == mini(enemy_hp + 3, enemy.max_health))
-	assert(battle.execute_ability("enemy", "hero", "kadavr_curse").success)
+	var curse := AbilityDefinition.new()
+	curse.ability_id = "test_curse"
+	curse.display_name = "Ослабление"
+	var curse_effect := AbilityEffectDefinition.new()
+	curse_effect.kind = AbilityEffectDefinition.Kind.APPLY_STATUS
+	curse_effect.status_id = "attack_down"
+	curse_effect.status_stat = AbilityEffectDefinition.Stat.ATTACK_POWER
+	curse_effect.status_modifier = -2
+	curse_effect.duration_ticks = 2
+	curse.effects = [curse_effect]
+	assert(battle.execute_definition("enemy", "hero", curse).success)
 	assert(actor.statuses.has("attack_down"))
 	battle.end_phase()
 	assert(actor.statuses.has("attack_down"))
@@ -70,7 +103,7 @@ func _initialize() -> void:
 	assert(battle.events.size() == old_events and actor.health == old_hp)
 
 	# Отдельные схватки не могут делить прочность или эффекты.
-	var other: BattleState = BattleState.begin(MonsterCatalog.get_monster("kadavr"), hero)
+	var other: BattleState = BattleState.begin(monster, hero)
 	assert(other.get_hero().block_attack_bonus_percent == 0)
 	assert(other.get_hero()._hero_snapshot.current_shield_durability("shield") == initial_durability)
 	actor.commit_hero_result(hero)

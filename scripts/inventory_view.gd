@@ -25,6 +25,11 @@ signal equipment_changed
 var _session: GameSession
 var _selected_member: HeroState
 var _entries: Array[String] = []
+var _bag_slots: Array[InventoryGridSlot] = []
+var _selector_members: Array[HeroState] = []
+var _highlighted_index: int = -1
+var _selected_instance_id: String = ""
+var _selected_item_id: String = ""
 var _selected_index: int = -1
 var _selected_equipped_slot: String = ""
 var _comparison_target: String = ""
@@ -34,6 +39,7 @@ var _touch_origin: Vector2
 var _touch_started_at: int = 0
 var _touch_source: Dictionary = {}
 var _touch_dragging: bool = false
+var _touch_target: Dictionary = {}
 var _touch_preview: TextureRect
 var _item_action_menu: PopupMenu
 var _popup_slot: int = -1
@@ -54,84 +60,153 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_resize_card)
 	_resize_card()
 	hide()
+	set_process_input(false)
 
 
 func open_for(session: GameSession) -> void:
 	if session == null or session.hero == null:
 		return
+	_cancel_drag()
+	if _session != null:
+		_session.inventory_member = null
 	_session = session
 	_selected_member = session.hero
 	_session.inventory_member = _selected_member
 	_rebuild_hero_selector()
 	_item_action_menu.hide()
 	_popup_slot = -1
-	_selected_index = -1
-	_selected_equipped_slot = ""
-	_comparison_target = ""
+	_reset_selection()
 	_use_feedback.text = ""
-	_refresh_contents()
 	_resize_card()
+	_refresh_contents()
 	show()
+	set_process_input(true)
 	_close_button.grab_focus()
 
 
 
 func _rebuild_hero_selector() -> void:
-	for child in _hero_selector.get_children():
+	_selector_members.clear()
+	for member in _session.party_members():
+		if member != null and member.health > 0:
+			_selector_members.append(member)
+	while _hero_selector.get_child_count() > _selector_members.size():
+		var child: Node = _hero_selector.get_child(_hero_selector.get_child_count() - 1)
 		_hero_selector.remove_child(child)
 		child.queue_free()
-	for member in _session.party_members():
-		if member == null or member.health <= 0:
-			continue
+	while _hero_selector.get_child_count() < _selector_members.size():
+		var index: int = _hero_selector.get_child_count()
 		var button := Button.new()
-		button.text = member.definition.display_name
 		button.toggle_mode = true
-		button.button_pressed = member == _selected_member
 		button.custom_minimum_size = Vector2(106, 40)
-		button.pressed.connect(_select_member.bind(member))
+		button.pressed.connect(_select_member_at.bind(index))
 		_hero_selector.add_child(button)
+	for index in range(_selector_members.size()):
+		var button: Button = _hero_selector.get_child(index) as Button
+		button.text = _selector_members[index].definition.display_name
+		button.set_pressed_no_signal(_selector_members[index] == _selected_member)
+
+
+func _select_member_at(index: int) -> void:
+	if index >= 0 and index < _selector_members.size():
+		_select_member(_selector_members[index])
 
 
 func _select_member(member: HeroState) -> void:
 	if _session == null or not _session.party.has(member) or member.health <= 0:
 		return
-	_cancel_touch_drag()
+	_cancel_drag()
+	_item_action_menu.hide()
+	_popup_slot = -1
 	_selected_member = member
 	_session.inventory_member = member
+	_reset_selection()
+	_rebuild_hero_selector()
+	_gold_label.text = "%d" % _selected_member.gold
+	_mannequin.show_hero(_session)
+	_selected_index = _first_occupied_slot()
+	_update_selection()
+
+
+func _reset_selection() -> void:
 	_selected_index = -1
 	_selected_equipped_slot = ""
+	_selected_instance_id = ""
+	_selected_item_id = ""
 	_comparison_target = ""
-	_rebuild_hero_selector()
-	_refresh_contents()
+
+
+func _ensure_bag_slots(count: int) -> void:
+	while _bag_slots.size() > count:
+		var slot: InventoryGridSlot = _bag_slots.pop_back()
+		_bag_grid.remove_child(slot)
+		slot.queue_free()
+	while _bag_slots.size() < count:
+		var slot := InventoryGridSlot.new()
+		_bag_grid.add_child(slot)
+		slot.activated.connect(_on_bag_slot_activated)
+		slot.transferred.connect(_transfer_item)
+		_bag_slots.append(slot)
+
 
 func _refresh_contents() -> void:
-	for child in _bag_grid.get_children():
-		_bag_grid.remove_child(child)
-		child.queue_free()
+	_item_action_menu.hide()
+	_popup_slot = -1
+	_cancel_touch_drag()
 	_entries = _session.inventory_slot_ids()
-	var hero: HeroState = _selected_member
-	_gold_label.text = "%d" % hero.gold
+	_ensure_bag_slots(_entries.size())
+	_gold_label.text = "%d" % _selected_member.gold
 	_mannequin.show_hero(_session)
-	if not _selected_equipped_slot.is_empty() and _session.equipment_item_id(_selected_equipped_slot).is_empty():
-		_selected_equipped_slot = ""
-	if _selected_equipped_slot.is_empty() and (_selected_index < 0 or _selected_index >= _entries.size() or _entries[_selected_index].is_empty()):
-		_selected_index = _first_occupied_slot()
-	_mannequin.set_selected_slot(_selected_equipped_slot)
+	_restore_selection()
 	for index in range(_entries.size()):
 		var item_id: String = _entries[index]
 		var definition: ItemDefinition = ItemCatalog.get_item(item_id) if not item_id.is_empty() else null
 		var quantity: int = int(_session.carried_items.get(item_id, 0)) if definition != null and definition.stackable else 1
-		var slot := InventoryGridSlot.new()
-		_bag_grid.add_child(slot)
-		slot.configure(index, definition, quantity, index == _selected_index, _bag_cell_size, _session)
-		slot.activated.connect(_on_bag_slot_activated)
-		slot.transferred.connect(_transfer_item)
+		_bag_slots[index].configure(index, definition, quantity, index == _selected_index, _bag_cell_size, _session)
+	_update_selection()
+
+
+func _restore_selection() -> void:
+	if not _selected_instance_id.is_empty():
+		_selected_index = -1
+		_selected_equipped_slot = ""
+		for index in range(_entries.size()):
+			if _session.inventory_instance_id(index) == _selected_instance_id:
+				_selected_index = index
+				return
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			if _session.equipment_instance_id(slot_id) == _selected_instance_id:
+				_selected_equipped_slot = slot_id
+				return
+		_reset_selection()
+	elif not _selected_item_id.is_empty():
+		_selected_index = _entries.find(_selected_item_id)
+	if not _selected_equipped_slot.is_empty() and _session.equipment_item_id(_selected_equipped_slot).is_empty():
+		_selected_equipped_slot = ""
+	if _selected_equipped_slot.is_empty() and (_selected_index < 0 or _selected_index >= _entries.size() or _entries[_selected_index].is_empty()):
+		_selected_index = _first_occupied_slot()
+		_comparison_target = ""
+
+
+func _update_selection() -> void:
+	if _highlighted_index >= 0 and _highlighted_index < _bag_slots.size() and _highlighted_index != _selected_index:
+		_bag_slots[_highlighted_index].set_selected(false)
+	if _selected_index >= 0 and _selected_index < _bag_slots.size():
+		_bag_slots[_selected_index].set_selected(true)
+	_highlighted_index = _selected_index
+	_mannequin.set_selected_slot(_selected_equipped_slot)
 	if not _selected_equipped_slot.is_empty():
-		_show_item_definition(_session.equipment_item_id(_selected_equipped_slot), -1, _selected_equipped_slot)
-	elif _selected_index < 0:
-		_clear_item_info()
+		_selected_instance_id = _session.equipment_instance_id(_selected_equipped_slot)
+		_selected_item_id = _session.equipment_item_id(_selected_equipped_slot)
+		_show_item_definition(_selected_item_id, -1, _selected_equipped_slot)
+	elif _selected_index >= 0:
+		_selected_instance_id = _session.inventory_instance_id(_selected_index)
+		_selected_item_id = _entries[_selected_index]
+		_show_item_definition(_selected_item_id, _selected_index)
 	else:
-		_show_item(_selected_index)
+		_selected_instance_id = ""
+		_selected_item_id = ""
+		_clear_item_info()
 
 
 func _first_occupied_slot() -> int:
@@ -146,6 +221,7 @@ func _transfer_item(from_kind: String, from_slot: Variant, to_kind: String, to_s
 	_popup_slot = -1
 	if _session == null or not _session.transfer_inventory_item(from_kind, from_slot, to_kind, to_slot):
 		return
+	_reset_selection()
 	_selected_index = int(to_slot) if to_kind == "bag" else -1
 	_selected_equipped_slot = str(to_slot) if to_kind == "equipment" else ""
 	_refresh_contents()
@@ -161,17 +237,12 @@ func _transfer_item(from_kind: String, from_slot: Variant, to_kind: String, to_s
 func _select_equipped(slot_id: String) -> void:
 	if _session == null:
 		return
-	var item_id: String = _session.equipment_item_id(slot_id)
-	if item_id.is_empty():
-		_selected_equipped_slot = ""
-		_selected_index = -1
-		_mannequin.set_selected_slot("")
-		_clear_item_info()
-		return
-	_selected_index = -1
-	_selected_equipped_slot = slot_id
-	_comparison_target = ""
-	_refresh_contents()
+	_item_action_menu.hide()
+	_popup_slot = -1
+	_reset_selection()
+	if not _session.equipment_item_id(slot_id).is_empty():
+		_selected_equipped_slot = slot_id
+	_update_selection()
 
 
 func _clear_item_info() -> void:
@@ -199,11 +270,10 @@ func _on_bag_slot_activated(index: int) -> void:
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
 	if item == null or item.category != ItemDefinition.Category.CONSUMABLE:
 		return
-	var cells: Array[Node] = _bag_grid.get_children()
-	if index >= cells.size():
+	if index >= _bag_slots.size():
 		return
 	_popup_slot = index
-	var rect: Rect2 = (cells[index] as Control).get_global_rect()
+	var rect: Rect2 = _bag_slots[index].get_global_rect()
 	var menu_size := Vector2i(164, 44)
 	var viewport_rect: Rect2 = get_viewport().get_visible_rect()
 	var popup_position := Vector2i(
@@ -229,20 +299,17 @@ func _show_item(index: int) -> void:
 	var item_id := _entries[index]
 	if item_id.is_empty():
 		return
+	if index != _selected_index or not _selected_equipped_slot.is_empty():
+		_comparison_target = ""
 	_selected_index = index
 	_selected_equipped_slot = ""
-	_mannequin.set_selected_slot("")
-	for child in _bag_grid.get_children():
-		if child is InventoryGridSlot:
-			var definition: ItemDefinition = ItemCatalog.get_item(child.item_id) if not child.item_id.is_empty() else null
-			var quantity: int = int(_session.carried_items.get(child.item_id, 0)) if definition != null and definition.stackable else 1
-			child.configure(child.slot_index, definition, quantity, child.slot_index == _selected_index, _bag_cell_size, _session)
-	_show_item_definition(item_id, index)
+	_update_selection()
 
 
 func _show_item_definition(item_id: String, bag_index: int = -1, equipped_slot: String = "") -> void:
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
 	if item == null:
+		_clear_item_info()
 		return
 	var instance_id: String = _session.inventory_instance_id(bag_index) if bag_index >= 0 else (_session.equipment_instance_id(equipped_slot) if not equipped_slot.is_empty() else "")
 	var instance: ItemInstance = _session.item_instance(instance_id)
@@ -325,7 +392,7 @@ func _update_equipment_actions(item: ItemDefinition, instance: ItemInstance, bag
 		return
 	if not equipped_slot.is_empty():
 		_unequip_button.show()
-		_unequip_button.disabled = _session.inventory_slot_ids().find("") < 0
+		_unequip_button.disabled = _entries.find("") < 0
 		return
 	if bag_index < 0:
 		return
@@ -392,9 +459,10 @@ func show_use_result(item_id: String, message: String) -> void:
 	if _session == null:
 		return
 	_refresh_contents()
-	var index: int = _entries.find(item_id)
-	if index >= 0:
-		_show_item(index)
+	if _selected_item_id != item_id:
+		var index: int = _entries.find(item_id)
+		if index >= 0:
+			_show_item(index)
 	_use_feedback.text = message
 
 
@@ -402,9 +470,10 @@ func show_equipment_result(item_id: String, message: String = "") -> void:
 	if _session == null:
 		return
 	_refresh_contents()
-	var index: int = _entries.find(item_id)
-	if index >= 0:
-		_show_item(index)
+	if _selected_item_id != item_id:
+		var index: int = _entries.find(item_id)
+		if index >= 0:
+			_show_item(index)
 	_use_feedback.text = message
 
 
@@ -419,13 +488,13 @@ func _resize_card() -> void:
 	if _columns.columns == 2:
 		available_width -= 358.0
 	_bag_cell_size = clampf((available_width - 9.0 * 4.0) / 10.0, 44.0, 59.0)
-	if _session != null:
-		_refresh_contents()
+	for slot in _bag_slots:
+		slot.set_cell_size(_bag_cell_size)
 
 
 func _source_at(point: Vector2) -> Dictionary:
-	for child in _bag_grid.get_children():
-		if child is InventoryGridSlot and not child.item_id.is_empty() and child.get_global_rect().has_point(point):
+	for child in _bag_slots:
+		if not child.item_id.is_empty() and child.get_global_rect().has_point(point):
 			return {"kind": "bag", "slot": child.slot_index}
 	for slot_id in _mannequin.slots:
 		var slot: EquipmentSlotControl = _mannequin.slots[slot_id]
@@ -435,8 +504,8 @@ func _source_at(point: Vector2) -> Dictionary:
 
 
 func _target_at(point: Vector2) -> Dictionary:
-	for child in _bag_grid.get_children():
-		if child is InventoryGridSlot and child.get_global_rect().has_point(point):
+	for child in _bag_slots:
+		if child.get_global_rect().has_point(point):
 			return {"kind": "bag", "slot": child.slot_index}
 	for slot_id in _mannequin.slots:
 		var slot: EquipmentSlotControl = _mannequin.slots[slot_id]
@@ -460,6 +529,9 @@ func _input(event: InputEvent) -> void:
 			_touch_started_at = Time.get_ticks_msec()
 			_touch_dragging = false
 		elif event.index == _touch_index:
+			if event.canceled:
+				_cancel_touch_drag()
+				return
 			if _touch_dragging:
 				var destination: Dictionary = _target_at(event.position)
 				if not destination.is_empty():
@@ -475,8 +547,7 @@ func _input(event: InputEvent) -> void:
 			_touch_preview = TextureRect.new()
 			var item_id: String = ""
 			if str(_touch_source["kind"]) == "bag":
-				var ids: Array[String] = _session.inventory_slot_ids()
-				item_id = ids[int(_touch_source["slot"])]
+				item_id = _entries[int(_touch_source["slot"])]
 			else:
 				item_id = _session.equipment_item_id(str(_touch_source["slot"]))
 			var item: ItemDefinition = ItemCatalog.get_item(item_id)
@@ -491,33 +562,48 @@ func _input(event: InputEvent) -> void:
 			_update_touch_target(_target_at(event.position))
 
 
+func _set_touch_target_state(destination: Dictionary, state: int) -> void:
+	if destination.is_empty():
+		return
+	if destination["kind"] == "bag":
+		var index: int = int(destination["slot"])
+		if index >= 0 and index < _bag_slots.size():
+			_bag_slots[index].set_drag_drop_state(state, "touch")
+	else:
+		var slot: EquipmentSlotControl = _mannequin.slots.get(destination["slot"]) as EquipmentSlotControl
+		if slot != null:
+			slot.set_drag_drop_state(state, "touch")
+
+
 func _update_touch_target(destination: Dictionary) -> void:
-	for child in _bag_grid.get_children():
-		if child is InventoryGridSlot:
-			var is_target: bool = not destination.is_empty() and str(destination["kind"]) == "bag" and int(destination["slot"]) == child.slot_index
-			var accepted: bool = is_target and _session.can_transfer_inventory_item(str(_touch_source["kind"]), _touch_source["slot"], "bag", child.slot_index)
-			var state: int = (1 if accepted else 2) if is_target else 0
-			child.set_drag_drop_state(state, "touch")
-	for slot_id in _mannequin.slots:
-		var slot: EquipmentSlotControl = _mannequin.slots[slot_id]
-		var can_accept: bool = not destination.is_empty() and str(destination["kind"]) == "equipment" and str(destination["slot"]) == slot_id and _session.can_transfer_inventory_item(str(_touch_source["kind"]), _touch_source["slot"], "equipment", slot_id)
-		var is_target: bool = not destination.is_empty() and str(destination["kind"]) == "equipment" and str(destination["slot"]) == slot_id
-		slot.set_drag_drop_state((1 if can_accept else 2) if is_target else 0, "touch")
+	if destination == _touch_target:
+		return
+	_set_touch_target_state(_touch_target, 0)
+	_touch_target = destination.duplicate()
+	if not destination.is_empty():
+		var accepted: bool = _session.can_transfer_inventory_item(str(_touch_source["kind"]), _touch_source["slot"], str(destination["kind"]), destination["slot"])
+		_set_touch_target_state(destination, 1 if accepted else 2)
 
 
 func _cancel_touch_drag() -> void:
 	_touch_index = -1
 	_touch_source.clear()
 	_touch_dragging = false
-	for child in _bag_grid.get_children():
-		if child is InventoryGridSlot:
-			child.set_drag_drop_state(0)
-	for slot_id in _mannequin.slots:
-		var slot: EquipmentSlotControl = _mannequin.slots[slot_id]
-		slot.set_drag_drop_state(0)
+	_set_touch_target_state(_touch_target, 0)
+	_touch_target.clear()
 	if _touch_preview != null:
 		_touch_preview.queue_free()
 		_touch_preview = null
+
+
+func _cancel_drag() -> void:
+	_cancel_touch_drag()
+	if visible and get_viewport().gui_is_dragging():
+		get_viewport().gui_cancel_drag()
+	for slot in _bag_slots:
+		slot.cancel_gesture()
+	for slot in _mannequin.slots.values():
+		slot.set_drag_drop_state(0)
 
 
 func close_by_player() -> void:
@@ -528,11 +614,15 @@ func close_by_player() -> void:
 func dismiss() -> void:
 	_item_action_menu.hide()
 	_popup_slot = -1
-	_cancel_touch_drag()
+	_cancel_drag()
 	hide()
+	set_process_input(false)
 	if _session != null:
 		_session.inventory_member = null
 	_session = null
 	_selected_member = null
-	_selected_equipped_slot = ""
-	_comparison_target = ""
+	_selector_members.clear()
+	for slot in _bag_slots:
+		slot.session = null
+	_mannequin.clear_session()
+	_reset_selection()

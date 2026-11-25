@@ -17,6 +17,8 @@ var _drag_drop_state: int = 0
 var _drag_state_source: String = ""
 var _mouse_press_started: bool = false
 var _mouse_dragged: bool = false
+var _panel_style := StyleBoxFlat.new()
+var _mouse_drop_data: Dictionary = {}
 
 
 func _ready() -> void:
@@ -39,42 +41,68 @@ func _ready() -> void:
 	_count.add_theme_constant_override("shadow_offset_y", 1)
 	add_child(_count)
 	_count.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_icon.offset_left = 5.0
+	_icon.offset_top = 5.0
+	_icon.offset_right = -5.0
+	_icon.offset_bottom = -5.0
+	_panel_style.set_corner_radius_all(4)
+	add_theme_stylebox_override("panel", _panel_style)
 	_apply_style()
+	set_process(false)
 
 
 func configure(index: int, definition: ItemDefinition, quantity: int, selected: bool, cell_size: float, next_session: GameSession = null) -> void:
 	session = next_session
 	slot_index = index
 	item_id = definition.item_id if definition != null else ""
-	_selected = selected
 	var instance: ItemInstance = session.item_instance(session.inventory_instance_id(index)) if session != null and definition != null else null
-	_rarity_color = ItemMagicCatalog.display_color(instance) if instance != null and instance.rarity != ItemInstance.Rarity.COMMON else Color(0.3, 0.4, 0.46, 1)
-	_cell_size = cell_size
-	custom_minimum_size = Vector2(cell_size, cell_size)
-	if _icon != null:
-		_icon.texture = definition.icon if definition != null else null
-		_icon.offset_left = 5.0
-		_icon.offset_top = 5.0
-		_icon.offset_right = -5.0
-		_icon.offset_bottom = -5.0
-	if _count != null:
-		_count.text = str(quantity) if definition != null and quantity > 1 else ""
+	var rarity: Color = ItemMagicCatalog.display_color(instance) if instance != null and instance.rarity != ItemInstance.Rarity.COMMON else Color(0.3, 0.4, 0.46, 1)
+	var style_changed: bool = rarity != _rarity_color or selected != _selected
+	_rarity_color = rarity
+	_selected = selected
+	set_cell_size(cell_size)
+	var texture: Texture2D = definition.icon if definition != null else null
+	if _icon.texture != texture:
+		_icon.texture = texture
+	var count_text: String = str(quantity) if definition != null and quantity > 1 else ""
+	if _count.text != count_text:
+		_count.text = count_text
+	set_drag_drop_state(0)
+	if style_changed:
+		_apply_style()
+
+
+func set_cell_size(value: float) -> void:
+	var minimum := Vector2(value, value)
+	if custom_minimum_size != minimum:
+		custom_minimum_size = minimum
+	_cell_size = value
+
+
+func set_selected(value: bool) -> void:
+	if _selected == value:
+		return
+	_selected = value
 	_apply_style()
 
 
 func set_drag_drop_state(state: int, source: String = "") -> void:
+	var next_source: String = source if state != 0 else ""
+	if _drag_state_source != next_source:
+		_drag_state_source = next_source
+		set_process(next_source == "mouse")
+	if next_source != "mouse":
+		_mouse_drop_data.clear()
+	if _drag_drop_state == state:
+		return
 	_drag_drop_state = state
-	_drag_state_source = source if state != 0 else ""
 	_apply_style()
 
 
 func _apply_style() -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.18, 0.24, 0.29, 1) if _selected else Color(0.055, 0.085, 0.12, 1)
-	style.border_color = Color(0.92, 0.73, 0.36) if _drag_drop_state == 1 else (Color(0.82, 0.28, 0.3) if _drag_drop_state == 2 else (Color(0.93, 0.73, 0.38, 1) if _selected else _rarity_color))
-	style.set_border_width_all(2 if (_selected or _drag_drop_state != 0) else 1)
-	style.set_corner_radius_all(4)
-	add_theme_stylebox_override("panel", style)
+	_panel_style.bg_color = Color(0.18, 0.24, 0.29, 1) if _selected else Color(0.055, 0.085, 0.12, 1)
+	_panel_style.border_color = Color(0.92, 0.73, 0.36) if _drag_drop_state == 1 else (Color(0.82, 0.28, 0.3) if _drag_drop_state == 2 else (Color(0.93, 0.73, 0.38, 1) if _selected else _rarity_color))
+	_panel_style.set_border_width_all(2 if (_selected or _drag_drop_state != 0) else 1)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -91,7 +119,7 @@ func _gui_input(event: InputEvent) -> void:
 func _get_drag_data(_at_position: Vector2) -> Variant:
 	_mouse_dragged = true
 	_mouse_press_started = false
-	if item_id.is_empty():
+	if item_id.is_empty() or session == null:
 		return null
 	var preview := TextureRect.new()
 	preview.texture = _icon.texture
@@ -103,13 +131,19 @@ func _get_drag_data(_at_position: Vector2) -> Variant:
 
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
-	var valid: bool = data is Dictionary and data.has("kind") and data.has("slot") and session != null and session.can_transfer_inventory_item(str(data["kind"]), data["slot"], "bag", slot_index)
+	if not data is Dictionary or not data.has("kind") or not data.has("slot") or session == null:
+		return false
+	if _drag_state_source == "mouse" and _mouse_drop_data == data:
+		return _drag_drop_state == 1
+	var valid: bool = session.can_transfer_inventory_item(str(data["kind"]), data["slot"], "bag", slot_index)
+	_mouse_drop_data = data.duplicate()
 	set_drag_drop_state(1 if valid else 2, "mouse")
 	return valid
 
 
 func _process(_delta: float) -> void:
-	if _drag_state_source != "mouse":
+	if not is_visible_in_tree() or _drag_state_source != "mouse":
+		set_drag_drop_state(0)
 		return
 	var viewport := get_viewport()
 	if viewport == null or not viewport.gui_is_dragging():
@@ -119,11 +153,15 @@ func _process(_delta: float) -> void:
 		set_drag_drop_state(0)
 
 
+func cancel_gesture() -> void:
+	_mouse_press_started = false
+	_mouse_dragged = false
+	set_drag_drop_state(0)
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_DRAG_END and _icon != null:
-		_mouse_press_started = false
-		_mouse_dragged = false
-		set_drag_drop_state(0)
+		cancel_gesture()
 
 
 func _drop_data(_at_position: Vector2, data: Variant) -> void:

@@ -14,7 +14,7 @@ const POSITIONS: Dictionary = {
 
 var slots: Dictionary = {}
 var _portrait: TextureRect
-var _session: GameSession
+var _selected_slot: String = ""
 
 
 func _ready() -> void:
@@ -36,30 +36,30 @@ func _ready() -> void:
 
 
 func show_hero(session: GameSession) -> void:
-	_session = session
-	_portrait.texture = session._inventory_equipment_member().definition.portrait if session != null and session._inventory_equipment_member() != null else null
+	var member: HeroState = session._inventory_equipment_member() if session != null else null
+	var portrait: Texture2D = member.definition.portrait if member != null else null
+	if _portrait.texture != portrait:
+		_portrait.texture = portrait
+	var weapon: ItemDefinition = ItemCatalog.get_item(member.equipped_weapon_id) if member != null else null
+	var shadow: Texture2D = weapon.icon if weapon != null and weapon.two_handed else null
 	for slot_id in slots:
 		var slot: EquipmentSlotControl = slots[slot_id]
-		slot.configure(str(slot_id), session)
-	_apply_two_handed_shadow()
-	_layout_slots()
+		slot.configure(str(slot_id), session, shadow if slot_id == "off_hand" else null)
+
+
+func clear_session() -> void:
+	for slot in slots.values():
+		slot.session = null
 
 
 func set_selected_slot(slot_id: String) -> void:
-	for key in slots:
-		var slot: EquipmentSlotControl = slots[key]
-		slot.set_selected(str(key) == slot_id)
-
-
-func _apply_two_handed_shadow() -> void:
-	if _session == null or _session._inventory_equipment_member() == null:
+	if _selected_slot == slot_id:
 		return
-	var off_hand: EquipmentSlotControl = slots.get("off_hand") as EquipmentSlotControl
-	if off_hand == null or not off_hand.item_id.is_empty():
-		return
-	var weapon: ItemDefinition = ItemCatalog.get_item(_session._inventory_equipment_member().equipped_weapon_id)
-	if weapon != null and weapon.two_handed and weapon.icon != null:
-		off_hand.show_virtual_item(weapon.icon)
+	if slots.has(_selected_slot):
+		slots[_selected_slot].set_selected(false)
+	_selected_slot = slot_id
+	if slots.has(_selected_slot):
+		slots[_selected_slot].set_selected(true)
 
 
 func _layout_slots() -> void:

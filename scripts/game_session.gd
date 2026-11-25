@@ -2132,3 +2132,102 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, ca
 	if not saved_campaign_id.is_empty() and not session.set_campaign(campaigns[saved_campaign_id]):
 		return null
 	return session
+
+
+func developer_remove_bag_slot(index: int) -> bool:
+	if not DeveloperMode.is_enabled() or not is_editor_test:
+		return false
+	var bag: Array[String] = inventory_slot_ids()
+	if index < 0 or index >= bag.size() or bag[index].is_empty():
+		return false
+	var item_id: String = bag[index]
+	var definition: ItemDefinition = ItemCatalog.get_item(item_id)
+	if definition == null:
+		return false
+	if definition.stackable:
+		return _remove_carried_item(item_id, int(carried_items.get(item_id, 0)))
+	_ensure_item_instances()
+	var member: HeroState = _inventory_equipment_member()
+	var equipped: Dictionary = _equipment_snapshot(member)
+	var shield_layout: Dictionary = _shield_layout(bag, equipped, member) if _is_shield(item_id) else {}
+	_item_instances.erase(_bag_instance_ids[index])
+	_bag_instance_ids[index] = ""
+	bag[index] = ""
+	_inventory_order = bag
+	carried_items[item_id] = maxi(0, int(carried_items.get(item_id, 0)) - 1)
+	if _is_shield(item_id):
+		shield_layout.erase("bag:%d" % index)
+		_apply_shield_layout(bag, equipped, shield_layout, member)
+		_update_instance_shield_values(shield_layout, member)
+	_sync_item_instances_to_party()
+	for hero_member in party:
+		hero_member._recalculate_equipment_stats()
+	keys = int(carried_items.get("key", 0))
+	potions = int(carried_items.get("potion", 0))
+	return true
+
+
+func developer_add_item(item_id: String, quantity: int = 1) -> Dictionary:
+	if not DeveloperMode.is_enabled() or not is_editor_test or hero == null:
+		return {}
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	if item == null or quantity < 1 or quantity > 9999:
+		return {}
+	if item.category == ItemDefinition.Category.CURRENCY:
+		hero.gold += quantity
+		return {"received": quantity, "instances": []}
+	_ensure_item_instances()
+	var bag: Array[String] = _inventory_slots_snapshot()
+	var created_ids: Array[String] = []
+	var added: int = 0
+	for _n in range(quantity):
+		var index: int = bag.find(item_id) if item.stackable else -1
+		if index < 0:
+			index = bag.find("")
+		if index < 0:
+			break
+		bag[index] = item_id
+		if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
+			var instance: ItemInstance = _create_item_instance(item_id)
+			if instance == null:
+				break
+			_bag_instance_ids[index] = instance.instance_id
+			created_ids.append(instance.instance_id)
+		added += 1
+	if added > 0:
+		_inventory_order = bag
+		carried_items[item_id] = int(carried_items.get(item_id, 0)) + added
+		if _is_shield(item_id):
+			var layout: Dictionary = _shield_layout(bag, _equipment_snapshot(hero), hero)
+			for i in range(bag.size()):
+				if bag[i] == item_id and not layout.has("bag:%d" % i):
+					layout["bag:%d" % i] = _new_shield_durability(item_id)
+			_apply_shield_layout(bag, _equipment_snapshot(hero), layout, hero)
+		_sync_item_instances_to_party()
+		keys = int(carried_items.get("key", 0))
+		potions = int(carried_items.get("potion", 0))
+	return {"received": added, "instances": created_ids}
+
+
+func developer_refresh_shield(instance_id: String) -> void:
+	if not DeveloperMode.is_enabled() or not is_editor_test:
+		return
+	var instance: ItemInstance = item_instance(instance_id)
+	if instance == null or not _is_shield(instance.item_id):
+		return
+	var bag: Array[String] = _inventory_slots_snapshot()
+	var index: int = _bag_instance_ids.find(instance_id)
+	if index >= 0:
+		var equipped: Dictionary = _equipment_snapshot(hero)
+		var layout: Dictionary = _shield_layout(bag, equipped, hero)
+		layout["bag:%d" % index] = instance.durability
+		_apply_shield_layout(bag, equipped, layout, hero)
+		return
+	for member in party:
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			if str(member.equipped_instance_ids.get(slot_id, "")) == instance_id:
+				var equipped: Dictionary = _equipment_snapshot(member)
+				var layout: Dictionary = _shield_layout(bag, equipped, member)
+				layout["equipment:%s" % slot_id] = instance.durability
+				_apply_shield_layout(bag, equipped, layout, member)
+				return

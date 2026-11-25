@@ -17,6 +17,7 @@ const SETTINGS_MAP_PROPERTIES := 1
 const SETTINGS_TEST_HERO := 2
 const SETTINGS_CONSOLE := 3
 const SETTINGS_CAMPAIGN := 4
+const SETTINGS_DEVELOPER := 5
 const VIEW_REACHABILITY := 1
 const VIEW_GRID := 2
 const HERO_HUD_SCENE: PackedScene = preload("res://scenes/hero_hud.tscn")
@@ -90,6 +91,8 @@ var _progress_maps_directory: String = SavedMapLibrary.DIRECTORY
 var _editor_maps_directory: String = SavedMapLibrary.DIRECTORY
 var _campaign_library: CampaignLibrary = CampaignLibrary.new()
 var _test_party_ids: Array[String] = [HeroCatalog.DEFAULT_HERO_ID]
+var _developer_preview: GameSession
+var _developer_inventory: DeveloperInventoryDialog
 var _editor_header: PanelContainer
 var _floating_console: FloatingDebugConsole
 var _arsenal_view: BattleArsenalView
@@ -306,6 +309,9 @@ func _build_interface() -> void:
 	settings_popup.add_item("Тестовый герой", SETTINGS_TEST_HERO)
 	settings_popup.add_item("Управление кампанией", SETTINGS_CAMPAIGN)
 	settings_popup.add_check_item("Показать консоль", SETTINGS_CONSOLE)
+	if DeveloperMode.is_available():
+		settings_popup.add_check_item("Режим разработчика", SETTINGS_DEVELOPER)
+		settings_popup.set_item_checked(settings_popup.get_item_index(SETTINGS_DEVELOPER), DeveloperMode.is_enabled())
 	settings_popup.id_pressed.connect(_on_settings_option_selected)
 	toolbar.add_child(_settings_menu)
 	_register_editor_control(_settings_menu)
@@ -400,6 +406,7 @@ func _build_interface() -> void:
 	_canvas.move_selection_changed.connect(_on_move_selection_changed)
 	_canvas.move_failed.connect(_on_move_failed)
 	_canvas.configurable_entity_tapped.connect(_on_configurable_entity_tapped)
+	_canvas.developer_interaction_enabled = DeveloperMode.is_enabled() and not standalone_game
 	_canvas.message_cell_tapped.connect(_on_message_cell_tapped)
 	_canvas.ground_loot_tapped.connect(_open_ground_loot)
 	canvas_host.add_child(_canvas)
@@ -654,6 +661,11 @@ func _create_dialogs() -> void:
 	_settings_tabs.add_child(_test_hero_panel)
 	_test_hero_panel.select_party(_test_party_ids)
 	_test_hero_panel.party_selected.connect(_on_test_party_selected)
+	if DeveloperMode.is_available() and not standalone_game:
+		_developer_inventory = DeveloperInventoryDialog.new()
+		_developer_inventory.name = "DeveloperInventory"
+		add_child(_developer_inventory)
+		_developer_inventory.loadout_changed.connect(_on_developer_loadout_changed)
 
 	# Диагностика остаётся доступной по запросу, но не забирает ширину у карты.
 	_issues_dialog = PopupPanel.new()
@@ -1163,6 +1175,18 @@ func _on_settings_option_selected(id: int) -> void:
 			_settings_tabs.current_tab = 1
 			_test_hero_panel.select_party(_test_party_ids)
 			_settings_dialog.popup_centered_clamped(Vector2i(490, 440))
+		SETTINGS_DEVELOPER:
+			if not DeveloperMode.is_available():
+				return
+			var enabled: bool = not DeveloperMode.is_enabled()
+			if not DeveloperMode.set_enabled(enabled):
+				_set_status("Не удалось сохранить режим разработчика")
+				return
+			_settings_menu.get_popup().set_item_checked(_settings_menu.get_popup().get_item_index(SETTINGS_DEVELOPER), enabled)
+			_canvas.developer_interaction_enabled = enabled
+			_developer_preview = null
+			if _developer_inventory != null:
+				_developer_inventory.hide()
 
 
 func _on_test_party_selected(hero_ids: Array[String]) -> void:
@@ -1177,6 +1201,7 @@ func _on_test_party_selected(hero_ids: Array[String]) -> void:
 			return
 		unique_ids[hero_id] = true
 	_test_party_ids = hero_ids.duplicate()
+	_developer_preview = null
 	var config := ConfigFile.new()
 	config.load(EDITOR_SETTINGS_PATH)
 	config.set_value("editor", "test_party_ids", _test_party_ids)
@@ -1293,6 +1318,7 @@ func _register_editor_control(control: Control) -> void:
 
 func _set_map(new_map: DungeonMap) -> void:
 	_clear_reachability()
+	_developer_preview = null
 	map_data = new_map
 	game_session = null
 	is_play_mode = false
@@ -1336,6 +1362,8 @@ func _flash_party_damage() -> void:
 
 func _on_configurable_entity_tapped(kind: String, entity_id: String) -> void:
 	match kind:
+		"player_spawn":
+			_open_developer_inventory()
 		"door":
 			_on_door_tapped(entity_id)
 		"stairs_down", "portal":
@@ -2660,6 +2688,38 @@ func _toggle_play_mode() -> void:
 		_start_play_mode()
 
 
+func _developer_session() -> GameSession:
+	if not DeveloperMode.is_enabled() or standalone_game or map_data == null:
+		return null
+	if _developer_preview != null:
+		return _developer_preview
+	var temporary_map: DungeonMap = DungeonMap.from_dict(map_data.to_dict().duplicate(true))
+	var session: GameSession = GameSession.start_for_party(temporary_map, _test_party_ids)
+	if session == null:
+		return null
+	session.is_editor_test = true
+	var saved: Dictionary = DeveloperMode.loadout(map_data.map_id, _test_party_ids)
+	if not saved.is_empty() and not session.restore_party_state(saved):
+		_set_status("Инвентарь разработчика не удалось восстановить")
+	_developer_preview = session
+	return session
+
+
+func _open_developer_inventory() -> void:
+	if not DeveloperMode.is_enabled() or standalone_game or is_play_mode or _developer_inventory == null:
+		return
+	var session: GameSession = _developer_session()
+	if session != null:
+		_developer_inventory.open_for(session)
+
+
+func _on_developer_loadout_changed() -> void:
+	if _developer_preview == null or map_data == null or not DeveloperMode.is_enabled():
+		return
+	if not DeveloperMode.save_loadout(map_data.map_id, _test_party_ids, _developer_preview.party_state_snapshot()):
+		_set_status("Не удалось сохранить инвентарь разработчика")
+
+
 func _start_play_mode() -> void:
 	_clear_held_movement()
 	_settings_dialog.hide()
@@ -2676,6 +2736,11 @@ func _start_play_mode() -> void:
 	if session == null:
 		_set_status("Нельзя начать игру: на карте нет доступной точки старта героя." if standalone_game else "Нельзя начать тест: поставь на карте точку старта героя.")
 		return
+	if not standalone_game and DeveloperMode.is_enabled():
+		var preview: GameSession = _developer_session()
+		if preview != null and not session.restore_party_state(preview.party_state_snapshot()):
+			_set_status("Не удалось восстановить инвентарь разработчика")
+			return
 	if standalone_game and _startup_campaign != null and not session.set_campaign(_startup_campaign):
 		_set_status("Невозможно начать игру: стартовая карта не входит в кампанию.")
 		return

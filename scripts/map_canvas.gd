@@ -38,6 +38,7 @@ var game_session: GameSession
 var mode: String = "edit" # edit | play
 var reachability_result: Dictionary = {}
 var selected_tool: String = "wall"
+var developer_interaction_enabled: bool = false
 var show_grid: bool = true
 var camera_offset := Vector2.ZERO
 var zoom: float = 1.0
@@ -615,6 +616,8 @@ func _configurable_at(cell: Vector2i) -> Dictionary:
 		if kind == "message" and selected_tool == "hand":
 			message_entity = entity
 			continue
+		if kind == "player_spawn" and developer_interaction_enabled and selected_tool == "hand":
+			return entity
 		if kind in ["chest", "trigger", "message", "monster", "door", "stairs_down", "portal"] and (selected_tool == "hand" or kind == selected_tool or (kind == "monster" and selected_tool.begins_with("monster:"))):
 			return entity
 	return message_entity

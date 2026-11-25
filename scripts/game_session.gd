@@ -75,6 +75,7 @@ static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_m
 	var spawn := map_ref.find_entity_position("player_spawn")
 	if spawn.x < 0 or spawn.y < 0:
 		return null
+	ItemCatalog.prepare()
 	var session := GameSession.new()
 	session.map_data = map_ref
 	for hero_id in hero_ids:
@@ -2144,6 +2145,7 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, ca
 	session._refresh_visibility()
 	if not saved_campaign_id.is_empty() and not session.set_campaign(campaigns[saved_campaign_id]):
 		return null
+	ItemCatalog.prepare()
 	return session
 
 

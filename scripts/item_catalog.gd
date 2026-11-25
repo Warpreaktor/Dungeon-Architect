@@ -7,6 +7,52 @@ const LEGACY_IDS := {"key_yellow": "key"}
 const LEGACY_UNLISTED_EQUIPMENT_IDS := ["leather_armor", "leather_boots", "leather_gloves", "plain_amulet", "cloth_belt", "copper_ring"]
 const STARTER_ONLY_EQUIPMENT_IDS := ["burolom_drill"]
 
+static var _prepared: bool = false
+static var _default_loot_stages: Array[int] = []
+static var _default_loot_weights: Dictionary = {}
+
+
+static func prepare() -> void:
+	if _prepared:
+		return
+	ResourceCatalog.warm(ITEM_DIRECTORY)
+	_prepare_default_loot()
+	_prepared = true
+
+
+static func _prepare_default_loot() -> void:
+	if not _default_loot_stages.is_empty():
+		return
+	_default_loot_stages.append(0)
+	for minimum_stage in LOOT_TABLE.minimum_item_stage.values():
+		var stage: int = maxi(int(minimum_stage), 0)
+		if not _default_loot_stages.has(stage):
+			_default_loot_stages.append(stage)
+	_default_loot_stages.sort()
+	for stage in _default_loot_stages:
+		_default_loot_weights[stage] = _available_loot_weights(LOOT_TABLE, stage)
+
+
+static func _available_loot_weights(table: WeightedLootTable, stage: int) -> Dictionary:
+	var available: Dictionary = {}
+	for item_id in table.weights:
+		var item: ItemDefinition = get_item(str(item_id))
+		if item != null and item.category != ItemDefinition.Category.QUEST and table.allows(str(item_id), stage):
+			available[item_id] = table.weights[item_id]
+	return available
+
+
+static func _prepared_loot_weights(stage: int) -> Dictionary:
+	if stage < 0:
+		return {}
+	_prepare_default_loot()
+	var unlocked_stage: int = 0
+	for minimum_stage in _default_loot_stages:
+		if minimum_stage > stage:
+			break
+		unlocked_stage = minimum_stage
+	return _default_loot_weights[unlocked_stage]
+
 
 static func list_ids() -> Array[String]:
 	var ids: Array[String] = ResourceCatalog.list_ids(ITEM_DIRECTORY)
@@ -32,11 +78,7 @@ static func quantity_for_entity(entity: Dictionary) -> int:
 
 
 static func roll_loot(rng: RandomNumberGenerator = null, table: WeightedLootTable = LOOT_TABLE, stage: int = 0) -> Dictionary:
-	var available: Dictionary = {}
-	for item_id in table.weights:
-		var item: ItemDefinition = get_item(str(item_id))
-		if item != null and item.category != ItemDefinition.Category.QUEST and table.allows(str(item_id), stage):
-			available[item_id] = table.weights[item_id]
+	var available: Dictionary = _prepared_loot_weights(stage) if table == LOOT_TABLE else _available_loot_weights(table, stage)
 	var item_id: String = table.draw_id(available, rng)
 	if item_id.is_empty():
 		return {}

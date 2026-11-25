@@ -2,6 +2,7 @@ extends SceneTree
 
 
 func _initialize() -> void:
+	_check_resource_cache()
 	_check_catalog(HeroCatalog.list_ids(), "res://heroes")
 	_check_catalog(MonsterCatalog.list_ids(), "res://monsters")
 	_check_catalog(ItemCatalog.list_ids(), "res://items")
@@ -16,6 +17,7 @@ func _initialize() -> void:
 	assert(MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID) != null)
 	assert(MonsterCatalog.get_monster("small_monster") == MonsterCatalog.get_monster(MonsterCatalog.LEGACY_IDS["small_monster"]))
 	_check_loot()
+	_check_prepared_loot()
 	_check_equipment()
 	quit()
 
@@ -95,3 +97,65 @@ func _check_equipment() -> void:
 	assert(participant.block_armor == 0)
 	assert(participant.shield_durability(shield.item_id) <= initial_durability)
 	assert(hero.current_shield_durability(shield.item_id) == initial_durability)
+
+
+func _check_resource_cache() -> void:
+	var ids: Array[String] = ResourceCatalog.list_ids(ItemCatalog.ITEM_DIRECTORY)
+	var original: Array[String] = ids.duplicate()
+	ids.clear()
+	assert(ResourceCatalog.list_ids(ItemCatalog.ITEM_DIRECTORY) == original)
+	var resource: ItemDefinition = ItemCatalog.get_item("ring_wooden")
+	assert(resource != null)
+	var reference: WeakRef = weakref(resource)
+	resource = null
+	assert(reference.get_ref() != null)
+	assert(ItemCatalog.get_item("ring_wooden") == reference.get_ref())
+	assert(ResourceCatalog.load_by_id(HeroCatalog.HERO_DIRECTORY, "ring_wooden") == null)
+	assert(ResourceCatalog.load_by_id(ItemCatalog.ITEM_DIRECTORY, "../items/ring_wooden") == null)
+	assert(ItemCatalog.get_item("key_yellow") == ItemCatalog.get_item("key"))
+	ItemCatalog.prepare()
+	for item_id in original:
+		assert(ResourceLoader.has_cached(ItemCatalog.ITEM_DIRECTORY.path_join(item_id + ".tres")))
+
+
+func _check_prepared_loot() -> void:
+	var table: WeightedLootTable = ItemCatalog.LOOT_TABLE
+	var stages: Array[int] = [-1, 0, 1, 2, 100]
+	for stage in stages:
+		_compare_loot(table, stage)
+	var custom := WeightedLootTable.new()
+	custom.weights = {"key": 100, "missing_item": 100, "sword": 0, "gold": 3, "shield": 1}
+	custom.minimum_item_stage = {"shield": 1}
+	custom.quantity_ranges = {"gold": Vector2i(2, 8)}
+	_compare_loot(custom, 0)
+	_compare_loot(custom, 1)
+	custom.weights = {"sword": 1}
+	_compare_loot(custom, 1)
+	custom.weights = {"gold": -1}
+	_compare_loot(custom, 1)
+
+
+func _compare_loot(table: WeightedLootTable, stage: int) -> void:
+	var actual := RandomNumberGenerator.new()
+	var expected := RandomNumberGenerator.new()
+	actual.seed = 607401
+	expected.seed = actual.seed
+	for _draw in range(100):
+		assert(ItemCatalog.roll_loot(actual, table, stage) == _reference_loot(expected, table, stage))
+		assert(actual.state == expected.state)
+
+
+func _reference_loot(rng: RandomNumberGenerator, table: WeightedLootTable, stage: int) -> Dictionary:
+	var available: Dictionary = {}
+	for item_id in table.weights:
+		var item: ItemDefinition = ItemCatalog.get_item(str(item_id))
+		if item != null and item.category != ItemDefinition.Category.QUEST and table.allows(str(item_id), stage):
+			available[item_id] = table.weights[item_id]
+	var item_id: String = table.draw_id(available, rng)
+	if item_id.is_empty():
+		return {}
+	var definition: ItemDefinition = ItemCatalog.get_item(item_id)
+	var reward: Dictionary = {"item_id": item_id, "quantity": table.quantity(item_id, definition.default_quantity, rng)}
+	if definition.category == ItemDefinition.Category.EQUIPMENT and not definition.stackable:
+		reward["roll_magic"] = true
+	return reward

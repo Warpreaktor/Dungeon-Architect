@@ -836,26 +836,35 @@ func _create_dialogs() -> void:
 	_legacy_campaign_dialog.title = "Собрать карты в кампанию"
 	_legacy_campaign_dialog.ok_button_text = "Подтвердить состав"
 	_legacy_campaign_dialog.dialog_hide_on_ok = false
+	_legacy_campaign_dialog.wrap_controls = false
 	_legacy_campaign_dialog.confirmed.connect(_confirm_legacy_campaign)
 	add_child(_legacy_campaign_dialog)
+	var legacy_scroll := ScrollContainer.new()
+	legacy_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	legacy_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	legacy_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	legacy_scroll.follow_focus = true
+	_legacy_campaign_dialog.add_child(legacy_scroll)
 	var legacy_form := VBoxContainer.new()
-	legacy_form.custom_minimum_size = Vector2(550, 390)
-	_legacy_campaign_dialog.add_child(legacy_form)
+	legacy_form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	legacy_scroll.add_child(legacy_form)
 	legacy_form.add_child(_label("Название новой кампании", 15, Color("#d5e0e7")))
 	_legacy_campaign_name = LineEdit.new()
 	legacy_form.add_child(_legacy_campaign_name)
 	legacy_form.add_child(_label("Куда добавить карты", 15, Color("#d5e0e7")))
 	_legacy_campaign_destination = OptionButton.new()
+	_legacy_campaign_destination.fit_to_longest_item = false
 	legacy_form.add_child(_legacy_campaign_destination)
 	legacy_form.add_child(_label("Связанные карты (выберите участников)", 15, Color("#d5e0e7")))
 	_legacy_campaign_members = ItemList.new()
 	_legacy_campaign_members.select_mode = ItemList.SELECT_MULTI
-	_legacy_campaign_members.custom_minimum_size.y = 175
-	_legacy_campaign_members.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_legacy_campaign_members.custom_minimum_size.y = 130
+	_legacy_campaign_members.size_flags_vertical = Control.SIZE_FILL
 	_legacy_campaign_members.multi_selected.connect(_on_legacy_member_selected)
 	legacy_form.add_child(_legacy_campaign_members)
 	legacy_form.add_child(_label("Стартовая карта", 15, Color("#d5e0e7")))
 	_legacy_campaign_start = OptionButton.new()
+	_legacy_campaign_start.fit_to_longest_item = false
 	legacy_form.add_child(_legacy_campaign_start)
 	_legacy_campaign_destination.item_selected.connect(_on_legacy_destination_changed)
 	_campaign_remove_confirm = ConfirmationDialog.new()
@@ -1898,7 +1907,6 @@ func _restore_last_map() -> bool:
 		return false
 	_set_map(saved_map)
 	_set_status("Открыта последняя карта: " + saved_map.display_name)
-	_offer_legacy_campaign()
 	return true
 
 
@@ -2150,8 +2158,6 @@ func _load_from_path_confirmed(path: String) -> void:
 	if path == _maps_dir().path_join(loaded_map.map_id + ".json"):
 		_remember_last_map(loaded_map.map_id)
 	_set_status("Загружено: " + path)
-	if path == _maps_dir().path_join(loaded_map.map_id + ".json"):
-		_offer_legacy_campaign()
 
 
 func _open_campaign_manager() -> void:
@@ -2170,20 +2176,6 @@ func _open_campaign_manager() -> void:
 	_campaign_current_id = campaign.campaign_id
 	_refresh_campaign_manager()
 	_campaign_dialog.popup_centered_clamped(Vector2i(650, 630), 0.9)
-
-
-func _offer_legacy_campaign() -> void:
-	if standalone_game or is_play_mode or map_data == null:
-		return
-	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
-	if not maps.has(map_data.map_id):
-		return
-	if _campaign_library.campaign_for_map(map_data.map_id, maps) != null:
-		return
-	if not _campaign_library.last_error.is_empty():
-		_set_status(_campaign_library.last_error)
-		return
-	_open_legacy_campaign_dialog(maps)
 
 
 func _open_legacy_campaign_dialog(maps: Dictionary) -> void:
@@ -2218,7 +2210,9 @@ func _open_legacy_campaign_dialog(maps: Dictionary) -> void:
 		if owner == null:
 			_legacy_campaign_members.select(_legacy_campaign_members.item_count - 1, false)
 	_on_legacy_destination_changed(0)
-	_legacy_campaign_dialog.popup_centered_clamped(Vector2i(640, 610), 0.9)
+	var available: Vector2i = get_window().size
+	var dialog_size := Vector2i(mini(520, int(available.x * 0.82)), mini(460, int(available.y * 0.72)))
+	_legacy_campaign_dialog.popup_centered(dialog_size)
 
 
 func _on_legacy_destination_changed(_index: int) -> void:

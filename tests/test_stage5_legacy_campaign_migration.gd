@@ -85,9 +85,37 @@ func _run() -> void:
 	root.add_child(editor)
 	await process_frame
 	await process_frame
-	editor.call("_set_map", maps["ui_free"])
+	var dialog: ConfirmationDialog = editor.get("_legacy_campaign_dialog") as ConfirmationDialog
+	assert(not dialog.visible)
+	var settings_path := "user://editor_state.cfg"
+	var had_settings: bool = FileAccess.file_exists(settings_path)
+	var original_settings: PackedByteArray = FileAccess.get_file_as_bytes(settings_path) if had_settings else PackedByteArray()
+	editor.call("_load_from_path_confirmed", _maps_dir.path_join("ui_free.json"))
+	assert(not dialog.visible)
+	assert(editor.call("_restore_last_map"))
+	assert(not dialog.visible)
+	if had_settings:
+		var settings_file: FileAccess = FileAccess.open(settings_path, FileAccess.WRITE)
+		assert(settings_file != null)
+		settings_file.store_buffer(original_settings)
+		settings_file = null
+	else:
+		DirAccess.remove_absolute(settings_path)
 	editor.call("_open_campaign_manager")
-	assert((editor.get("_legacy_campaign_dialog") as ConfirmationDialog).visible)
+	assert(dialog.visible)
+	assert(not dialog.wrap_controls)
+	var form_scroll: ScrollContainer = null
+	for child in dialog.get_children():
+		if child is ScrollContainer:
+			form_scroll = child
+			break
+	assert(form_scroll != null)
+	assert(form_scroll.horizontal_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED)
+	assert(form_scroll.get_child_count() == 1)
+	assert(form_scroll.get_child(0) is VBoxContainer)
+	assert(dialog.size.y <= int(editor.get_window().size.y * 0.72) + 2)
+	assert(dialog.get_ok_button().visible)
+	assert(dialog.get_cancel_button().visible)
 	assert((editor.get("_legacy_campaign_start") as OptionButton).item_count == 1)
 	(editor.get("_legacy_campaign_dialog") as ConfirmationDialog).hide()
 	assert(library.campaign_for_map("ui_free", maps) == null)

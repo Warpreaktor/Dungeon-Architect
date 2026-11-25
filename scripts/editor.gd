@@ -383,11 +383,13 @@ func _build_interface() -> void:
 	_palette_panel.custom_minimum_size.x = PALETTE_WIDTH
 	workspace.add_child(_palette_panel)
 	var palette_scroll := ScrollContainer.new()
+	palette_scroll.name = "PaletteScroll"
 	palette_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	palette_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	palette_scroll.scroll_deadzone = 12
 	_palette_panel.add_child(palette_scroll)
 	var palette := VBoxContainer.new()
+	palette.name = "PaletteContent"
 	palette.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	palette.add_theme_constant_override("separation", 10)
 	palette_scroll.add_child(palette)
@@ -477,25 +479,26 @@ func _build_interface() -> void:
 	_game_dialogue.closed.connect(_on_game_dialogue_closed)
 	add_child(_game_dialogue)
 
-	palette.add_child(_label("ИНСТРУМЕНТЫ", 14, Color("#e8c58a")))
+	var tools_section := _palette_section(palette, "Tools", "ИНСТРУМЕНТЫ")
 	var control_tools := _tool_grid()
-	palette.add_child(control_tools)
+	control_tools.name = "ToolsGrid"
+	tools_section.add_child(control_tools)
 	for tool in TOOLS:
 		if str(tool["id"]) in ["hand", "erase"]:
 			_add_tool_button(control_tools, tool)
 
-	palette.add_child(HSeparator.new())
-	palette.add_child(_label("ОБЪЕКТЫ", 14, Color("#e8c58a")))
+	var map_section := _palette_section(palette, "MapObjects", "ОБЪЕКТЫ")
 	var map_tools := _tool_grid()
-	palette.add_child(map_tools)
+	map_tools.name = "MapObjectsGrid"
+	map_section.add_child(map_tools)
 	for tool in TOOLS:
 		if str(tool["id"]) not in ["hand", "erase"]:
 			_add_tool_button(map_tools, tool)
 
-	palette.add_child(HSeparator.new())
-	palette.add_child(_label("ЦВЕТНЫЕ ПОРТАЛЫ", 14, Color("#e8c58a")))
+	var portals_section := _palette_section(palette, "Portals", "ЦВЕТНЫЕ ПОРТАЛЫ")
 	var portals_grid := _tool_grid()
-	palette.add_child(portals_grid)
+	portals_grid.name = "PortalsGrid"
+	portals_section.add_child(portals_grid)
 	var portal_labels := {
 		"blue": "Синий", "cyan": "Голубой", "green": "Зелёный", "orange": "Оранжевый",
 		"pink": "Розовый", "purple": "Фиолетовый", "red": "Красный", "yellow": "Жёлтый"
@@ -508,28 +511,36 @@ func _build_interface() -> void:
 			"icon": ImageAsset.texture("res://assets/icons/portals/portal_%s.png" % color_id)
 		})
 
-	palette.add_child(HSeparator.new())
-	palette.add_child(_label("МОНСТРЫ", 14, Color("#e8c58a")))
-	var monster_tools := _tool_grid()
-	palette.add_child(monster_tools)
+	var monsters_section := _palette_section(palette, "Monsters", "МОНСТРЫ")
+	var common_monsters := _palette_tool_group(monsters_section, "CommonMonsters", "ОБЫЧНЫЕ")
+	var elite_monsters := _palette_tool_group(monsters_section, "EliteMonsters", "ЭЛИТА")
+	var bosses_section := _palette_section(palette, "Bosses", "БОССЫ")
+	var boss_monsters := _tool_grid()
+	boss_monsters.name = "BossesGrid"
+	bosses_section.add_child(boss_monsters)
 	for monster_id in MonsterCatalog.list_placeable_ids():
 		var monster: MonsterDefinition = MonsterCatalog.get_monster(str(monster_id))
-		_add_tool_button(monster_tools, {
+		var target_grid: GridContainer = common_monsters
+		if monster.rank == MonsterDefinition.Rank.BOSS:
+			target_grid = boss_monsters
+		elif monster.rank == MonsterDefinition.Rank.ELITE:
+			target_grid = elite_monsters
+		_add_tool_button(target_grid, {
 			"id": "monster:" + monster.monster_id,
 			"label": monster.display_name,
 			"hint": "Здоровье: %d · Сила: %d · Ловкость: %d" % [monster.max_health, monster.strength, monster.agility],
 			"icon": monster.icon
 		})
+	_palette_tool_group_visibility(monsters_section, common_monsters)
+	_palette_tool_group_visibility(monsters_section, elite_monsters)
+	(bosses_section.get_parent() as Control).visible = boss_monsters.get_child_count() > 0
 
-	palette.add_child(HSeparator.new())
-	palette.add_child(_label("ЛОВУШКИ", 14, Color("#e8c58a")))
+	var traps_section := _palette_section(palette, "Traps", "ЛОВУШКИ")
 	for placement in ["floor", "door"]:
 		var trap_ids: Array[String] = TrapCatalog.list_ids(placement)
 		if trap_ids.is_empty():
 			continue
-		palette.add_child(_label("НАПОЛЬНЫЕ" if placement == "floor" else "ДВЕРНЫЕ", 12, Color("#b9c9d8")))
-		var trap_tools := _tool_grid()
-		palette.add_child(trap_tools)
+		var trap_tools := _palette_tool_group(traps_section, "FloorTraps" if placement == "floor" else "DoorTraps", "НАПОЛЬНЫЕ" if placement == "floor" else "ДВЕРНЫЕ")
 		for trap_id in trap_ids:
 			var trap: TrapDefinition = TrapCatalog.get_trap(str(trap_id))
 			_add_tool_button(trap_tools, {
@@ -553,6 +564,64 @@ func _build_interface() -> void:
 	_log_open = bool(config.get_value("interface", "show_console", false))
 	_floating_console.set_open(_log_open)
 	_floating_console.set_game_controls_visible(is_play_mode or standalone_game)
+
+
+func _palette_section(parent: VBoxContainer, section_id: String, title: String, expanded: bool = true) -> VBoxContainer:
+	if parent.get_child_count() > 0:
+		parent.add_child(HSeparator.new())
+	var section := VBoxContainer.new()
+	section.name = "%sSection" % section_id
+	parent.add_child(section)
+	var header := Button.new()
+	header.name = "Header"
+	header.flat = true
+	header.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	header.custom_minimum_size.y = 34
+	header.focus_mode = Control.FOCUS_NONE
+	header.add_theme_font_size_override("font_size", 14)
+	header.add_theme_color_override("font_color", Color("#e8c58a"))
+	header.set_meta("section_title", title)
+	section.add_child(header)
+	var content := VBoxContainer.new()
+	content.name = "Content"
+	content.visible = expanded
+	content.add_theme_constant_override("separation", 8)
+	section.add_child(content)
+	header.pressed.connect(_toggle_palette_section.bind(header, content))
+	_refresh_palette_section_header(header, content)
+	return content
+
+
+func _palette_tool_group(parent: VBoxContainer, group_id: String, title: String) -> GridContainer:
+	var wrapper := VBoxContainer.new()
+	wrapper.name = "%sGroup" % group_id
+	wrapper.add_theme_constant_override("separation", 6)
+	parent.add_child(wrapper)
+	var label := _label(title, 12, Color("#b9c9d8"))
+	label.name = "Label"
+	wrapper.add_child(label)
+	var grid := _tool_grid()
+	grid.name = "Grid"
+	wrapper.add_child(grid)
+	return grid
+
+
+func _palette_tool_group_visibility(parent: VBoxContainer, grid: GridContainer) -> void:
+	if grid == null:
+		return
+	var group: Control = grid.get_parent() as Control
+	if group != null and group.get_parent() == parent:
+		group.visible = grid.get_child_count() > 0
+
+
+func _toggle_palette_section(header: Button, content: Control) -> void:
+	content.visible = not content.visible
+	_refresh_palette_section_header(header, content)
+
+
+func _refresh_palette_section_header(header: Button, content: Control) -> void:
+	var title: String = str(header.get_meta("section_title", ""))
+	header.text = ("▼ " if content.visible else "▶ ") + title
 
 
 func _tool_grid() -> GridContainer:

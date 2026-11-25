@@ -2,6 +2,7 @@ class_name EquipmentSlotControl
 extends PanelContainer
 
 signal selected(slot_id: String)
+signal drag_started
 signal transferred(from_kind: String, from_slot: Variant, to_kind: String, to_slot: Variant)
 
 const EMPTY_ICONS: Dictionary = {
@@ -147,6 +148,7 @@ func _get_drag_data(_pos: Vector2) -> Variant:
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	set_drag_preview(preview)
+	drag_started.emit()
 	return {"kind": "equipment", "slot": slot_id}
 
 

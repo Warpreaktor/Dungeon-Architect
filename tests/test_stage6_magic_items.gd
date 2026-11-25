@@ -101,7 +101,7 @@ func _test_equipment_battle_and_preview() -> void:
 	assert(magic_index >= 0)
 	view._show_item(magic_index)
 	assert(view._item_name.text.contains("волшебное"))
-	assert(view._item_description.text.contains("Изменение при экипировке"))
+	assert(view._item_comparison.text.contains("После замены"))
 	assert(view._item_description.text.contains("Броня:"))
 	view.queue_free()
 

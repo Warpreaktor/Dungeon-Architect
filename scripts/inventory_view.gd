@@ -9,14 +9,19 @@ signal equipment_changed
 @onready var _columns: Control = %Columns
 @onready var _bag: Control = %Bag
 @onready var _equipment_area: Control = %EquipmentArea
+@onready var _item_tooltip: PanelContainer = %ItemTooltip
 @onready var _detail_scroll: ScrollContainer = %DetailScroll
+@onready var _details: VBoxContainer = %Details
+@onready var _tooltip_close: Button = %TooltipClose
+@onready var _use_button: Button = %UseButton
+@onready var _item_comparison: Label = %ItemComparison
+@onready var _comparison_separator: HSeparator = %ComparisonSeparator
 @onready var _bag_grid: GridContainer = %BagGrid
 @onready var _gold_label: Label = %GoldLabel
 @onready var _item_icon: TextureRect = %ItemIcon
 @onready var _item_name: Label = %ItemName
 @onready var _item_description: RichTextLabel = %ItemDescription
 @onready var _item_properties: Label = %ItemProperties
-@onready var _compare_button: Button = %CompareButton
 @onready var _equip_target: OptionButton = %EquipTarget
 @onready var _equip_button: Button = %EquipButton
 @onready var _unequip_button: Button = %UnequipButton
@@ -37,7 +42,6 @@ var _selected_index: int = -1
 var _selected_equipped_slot: String = ""
 var _comparison_target: String = ""
 var _comparison_text: String = ""
-var _comparison_overlay: TouchInfoOverlay
 var _bag_cell_size: float = 52.0
 var _touch_index: int = -1
 var _touch_origin: Vector2
@@ -46,25 +50,23 @@ var _touch_source: Dictionary = {}
 var _touch_dragging: bool = false
 var _touch_target: Dictionary = {}
 var _touch_preview: TextureRect
-var _item_action_menu: PopupMenu
-var _popup_slot: int = -1
+var _tooltip_layout_pending: bool = false
 
 
 
 func _ready() -> void:
-	_item_action_menu = PopupMenu.new()
-	_item_action_menu.add_item("Использовать", 0)
-	_item_action_menu.id_pressed.connect(_on_item_action_pressed)
-	add_child(_item_action_menu)
+	_tooltip_close.pressed.connect(_hide_item_tooltip)
+	_details.minimum_size_changed.connect(_queue_tooltip_layout)
+	_item_tooltip.resized.connect(_reposition_item_tooltip)
+	_use_button.pressed.connect(_use_selected)
 	_close_button.pressed.connect(close_by_player)
 	_equip_button.pressed.connect(_equip_selected)
-	_compare_button.pressed.connect(_show_comparison)
-	_comparison_overlay = TouchInfoOverlay.new()
-	add_child(_comparison_overlay)
 	_unequip_button.pressed.connect(_unequip_selected)
 	_equip_target.item_selected.connect(_on_comparison_target_changed)
 	_mannequin.item_transferred.connect(_transfer_item)
 	_mannequin.slot_selected.connect(_select_equipped)
+	for slot: EquipmentSlotControl in _mannequin.slots.values():
+		slot.drag_started.connect(_hide_item_tooltip)
 	_columns.resized.connect(_layout_body)
 	get_viewport().size_changed.connect(_resize_card)
 	_resize_card()
@@ -75,7 +77,6 @@ func _ready() -> void:
 func open_for(session: GameSession) -> void:
 	if session == null or session.hero == null:
 		return
-	_comparison_overlay.hide_info()
 	_cancel_drag()
 	if _session != null:
 		_session.inventory_member = null
@@ -83,8 +84,7 @@ func open_for(session: GameSession) -> void:
 	_selected_member = session.hero
 	_session.inventory_member = _selected_member
 	_rebuild_hero_selector()
-	_item_action_menu.hide()
-	_popup_slot = -1
+	_hide_item_tooltip()
 	_reset_selection()
 	_use_feedback.text = ""
 	_resize_card()
@@ -127,8 +127,7 @@ func _select_member(member: HeroState) -> void:
 	if _session == null or not _session.party.has(member) or member.health <= 0:
 		return
 	_cancel_drag()
-	_item_action_menu.hide()
-	_popup_slot = -1
+	_hide_item_tooltip()
 	_selected_member = member
 	_session.inventory_member = member
 	_reset_selection()
@@ -161,8 +160,6 @@ func _ensure_bag_slots(count: int) -> void:
 
 
 func _refresh_contents() -> void:
-	_item_action_menu.hide()
-	_popup_slot = -1
 	_cancel_touch_drag()
 	_entries = _session.inventory_slot_ids()
 	_ensure_bag_slots(_entries.size())
@@ -230,8 +227,6 @@ func _first_occupied_slot() -> int:
 
 
 func _transfer_item(from_kind: String, from_slot: Variant, to_kind: String, to_slot: Variant) -> void:
-	_item_action_menu.hide()
-	_popup_slot = -1
 	if _session == null or not _session.transfer_inventory_item(from_kind, from_slot, to_kind, to_slot):
 		return
 	_reset_selection()
@@ -250,12 +245,13 @@ func _transfer_item(from_kind: String, from_slot: Variant, to_kind: String, to_s
 func _select_equipped(slot_id: String) -> void:
 	if _session == null:
 		return
-	_item_action_menu.hide()
-	_popup_slot = -1
+	_hide_item_tooltip()
 	_reset_selection()
 	if not _session.equipment_item_id(slot_id).is_empty():
 		_selected_equipped_slot = slot_id
 	_update_selection()
+	if not _selected_equipped_slot.is_empty():
+		_show_item_tooltip()
 
 
 func _clear_item_info() -> void:
@@ -265,44 +261,32 @@ func _clear_item_info() -> void:
 	_item_description.text = ""
 	_item_properties.text = ""
 	_comparison_text = ""
-	_compare_button.hide()
+	_item_comparison.text = ""
+	_item_comparison.hide()
+	_comparison_separator.hide()
 	_equip_target.hide()
 	_equip_button.hide()
 	_unequip_button.hide()
+	_use_button.hide()
+	_hide_item_tooltip()
 
 
 func _on_bag_slot_activated(index: int) -> void:
-	_item_action_menu.hide()
-	_popup_slot = -1
 	if _session == null or index < 0 or index >= _entries.size():
 		return
-	var item_id: String = _entries[index]
-	if item_id.is_empty():
+	if _entries[index].is_empty():
+		_hide_item_tooltip()
 		return
 	_show_item(index)
-	var item: ItemDefinition = ItemCatalog.get_item(item_id)
-	if item == null or item.category != ItemDefinition.Category.CONSUMABLE:
-		return
-	if index >= _bag_slots.size():
-		return
-	_popup_slot = index
-	var rect: Rect2 = _bag_slots[index].get_global_rect()
-	var menu_size := Vector2i(164, 44)
-	var viewport_rect: Rect2 = get_viewport().get_visible_rect()
-	var popup_position := Vector2i(
-		clampi(int(rect.end.x) + 4, 0, maxi(0, int(viewport_rect.size.x) - menu_size.x)),
-		clampi(int(rect.position.y), 0, maxi(0, int(viewport_rect.size.y) - menu_size.y))
-	)
-	_item_action_menu.popup(Rect2i(popup_position, menu_size))
+	_show_item_tooltip()
 
 
-func _on_item_action_pressed(action_id: int) -> void:
-	if action_id != 0 or _session == null or _popup_slot < 0 or _popup_slot >= _entries.size():
+func _use_selected() -> void:
+	if _session == null or _selected_index < 0 or _selected_index >= _entries.size():
 		return
-	var index: int = _popup_slot
+	var index: int = _selected_index
 	var item_id: String = _entries[index]
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
-	_popup_slot = -1
 	if item != null and item.category == ItemDefinition.Category.CONSUMABLE:
 		item_use_requested.emit(item_id, index)
 
@@ -333,6 +317,7 @@ func _show_item_definition(item_id: String, bag_index: int = -1, equipped_slot: 
 	_item_description.text = item.get_description(instance)
 	_detail_scroll.scroll_vertical = 0
 	_update_equipment_actions(item, instance, bag_index, equipped_slot)
+	_use_button.visible = bag_index >= 0 and item.category == ItemDefinition.Category.CONSUMABLE
 	_use_feedback.text = ""
 	var category := "Квестовый предмет"
 	match item.category:
@@ -379,7 +364,8 @@ func _show_item_definition(item_id: String, bag_index: int = -1, equipped_slot: 
 			details += "\nПрочность: %d / %d" % [durability, ItemMagicCatalog.effective_value(item, instance, "max_durability")]
 	if not equipped_slot.is_empty():
 		details += "\nНадето"
-	_item_properties.text = details.replace("\n", " · ")
+	_item_properties.text = details
+	_queue_tooltip_layout()
 
 
 func _comparison_slot(item: ItemDefinition) -> String:
@@ -399,7 +385,9 @@ func _comparison_slot(item: ItemDefinition) -> String:
 
 func _update_equipment_actions(item: ItemDefinition, instance: ItemInstance, bag_index: int, equipped_slot: String) -> void:
 	_comparison_text = ""
-	_compare_button.hide()
+	_item_comparison.text = ""
+	_item_comparison.hide()
+	_comparison_separator.hide()
 	_equip_target.hide()
 	_equip_button.hide()
 	_unequip_button.hide()
@@ -431,27 +419,24 @@ func _update_equipment_actions(item: ItemDefinition, instance: ItemInstance, bag
 	var before: Dictionary = CharacterStats.hero_values(_selected_member)
 	var after: Dictionary = CharacterStats.preview_equipment(_selected_member, compare_slot, item, instance)
 	var lines := PackedStringArray()
-	lines.append("Выбрано: %s" % ItemMagicCatalog.display_name(item, instance))
-	lines.append_array(DescriptionTemplate.equipment_properties(item, instance))
-	lines.append("")
 	lines.append("Надето (%s): %s" % [EquipmentSlotRules.LABELS[compare_slot], equipped_name])
 	if equipped_item != null:
 		lines.append_array(DescriptionTemplate.equipment_properties(equipped_item, equipped_instance))
+		var equipped_damage: int = ItemMagicCatalog.effective_value(equipped_item, equipped_instance, "weapon_damage")
+		if equipped_damage > 0:
+			lines.append("Урон оружия: %d (%s)" % [equipped_damage, "дальний" if equipped_item.weapon_kind == ItemDefinition.WeaponKind.RANGED else "ближний"])
+		var equipped_block: int = ItemMagicCatalog.effective_value(equipped_item, equipped_instance, "defense_bonus")
+		if equipped_block > 0:
+			lines.append("Блок: +%d" % equipped_block)
 	if not after.is_empty():
 		var differences: PackedStringArray = DescriptionTemplate.comparison_details(before, after)
 		lines.append("")
 		lines.append("После замены для %s:" % _selected_member.definition.display_name)
 		lines.append_array(differences if not differences.is_empty() else PackedStringArray(["Характеристики не изменятся"]))
 	_comparison_text = "\n".join(lines)
-	_compare_button.show()
-
-
-func _show_comparison() -> void:
-	if not _compare_button.visible or _comparison_text.is_empty():
-		return
-	_cancel_drag()
-	_item_action_menu.hide()
-	_comparison_overlay.show_info("Сравнение экипировки", _comparison_text)
+	_item_comparison.text = _comparison_text
+	_item_comparison.show()
+	_comparison_separator.show()
 
 
 func _on_comparison_target_changed(index: int) -> void:
@@ -481,8 +466,6 @@ func _unequip_selected() -> void:
 
 
 func show_use_result(item_id: String, message: String) -> void:
-	_item_action_menu.hide()
-	_popup_slot = -1
 	if _session == null:
 		return
 	_refresh_contents()
@@ -490,7 +473,10 @@ func show_use_result(item_id: String, message: String) -> void:
 		var index: int = _entries.find(item_id)
 		if index >= 0:
 			_show_item(index)
+		else:
+			_hide_item_tooltip()
 	_use_feedback.text = message
+	_queue_tooltip_layout()
 
 
 func show_equipment_result(item_id: String, message: String = "") -> void:
@@ -502,6 +488,7 @@ func show_equipment_result(item_id: String, message: String = "") -> void:
 		if index >= 0:
 			_show_item(index)
 	_use_feedback.text = message
+	_queue_tooltip_layout()
 
 
 func _resize_card() -> void:
@@ -510,7 +497,6 @@ func _resize_card() -> void:
 		minf(1190.0, maxf(1.0, viewport_size.x - 24.0)),
 		minf(760.0, maxf(1.0, viewport_size.y - 24.0))
 	)
-	_detail_scroll.custom_minimum_size.y = _card.custom_minimum_size.y * 0.16
 	_layout_body()
 
 
@@ -553,6 +539,79 @@ func _layout_body() -> void:
 	)
 	_bag_grid.size = grid_size
 	_bag_grid.position = (bag_size - grid_size) * 0.5
+	_queue_tooltip_layout()
+
+
+func _show_item_tooltip() -> void:
+	_item_tooltip.show()
+	_reposition_item_tooltip()
+	_queue_tooltip_layout()
+
+
+func _hide_item_tooltip() -> void:
+	_item_tooltip.hide()
+
+
+func _queue_tooltip_layout() -> void:
+	if not _item_tooltip.visible or _tooltip_layout_pending:
+		return
+	_tooltip_layout_pending = true
+	call_deferred("_layout_item_tooltip")
+
+
+func _layout_item_tooltip() -> void:
+	if not visible or not _item_tooltip.visible:
+		_tooltip_layout_pending = false
+		return
+	var bounds: Rect2 = get_viewport().get_visible_rect().grow(-8.0)
+	var width: float = minf(380.0, bounds.size.x)
+	_item_tooltip.size.x = width
+	_reposition_item_tooltip()
+	await get_tree().process_frame
+	_tooltip_layout_pending = false
+	if not visible or not _item_tooltip.visible:
+		return
+	bounds = get_viewport().get_visible_rect().grow(-8.0)
+	if not is_equal_approx(width, minf(380.0, bounds.size.x)):
+		_queue_tooltip_layout()
+		return
+	var chrome: float = _item_tooltip.get_combined_minimum_size().y - _detail_scroll.get_combined_minimum_size().y
+	var available_height: float = maxf(0.0, bounds.size.y * 0.8 - chrome)
+	var detail_height: float = minf(_details.get_combined_minimum_size().y, available_height)
+	_detail_scroll.custom_minimum_size.y = detail_height
+	_item_tooltip.size = Vector2(width, chrome + detail_height)
+	_reposition_item_tooltip()
+
+
+func _reposition_item_tooltip() -> void:
+	if not visible or not _item_tooltip.visible:
+		return
+	var source: Control
+	if _selected_index >= 0 and _selected_index < _bag_slots.size():
+		source = _bag_slots[_selected_index]
+	elif not _selected_equipped_slot.is_empty():
+		source = _mannequin.slots.get(_selected_equipped_slot) as Control
+	if source == null:
+		_hide_item_tooltip()
+		return
+	var bounds: Rect2 = get_viewport().get_visible_rect().grow(-8.0)
+	var extent: Vector2 = _item_tooltip.size
+	var anchor: Rect2 = source.get_global_rect()
+	var gap: float = 8.0
+	var candidates: Array[Vector2] = [
+		Vector2(anchor.end.x + gap, clampf(anchor.position.y, bounds.position.y, maxf(bounds.position.y, bounds.end.y - extent.y))),
+		Vector2(anchor.position.x - extent.x - gap, clampf(anchor.position.y, bounds.position.y, maxf(bounds.position.y, bounds.end.y - extent.y))),
+		Vector2(clampf(anchor.position.x, bounds.position.x, maxf(bounds.position.x, bounds.end.x - extent.x)), anchor.end.y + gap),
+		Vector2(clampf(anchor.position.x, bounds.position.x, maxf(bounds.position.x, bounds.end.x - extent.x)), anchor.position.y - extent.y - gap)
+	]
+	for candidate in candidates:
+		if bounds.encloses(Rect2(candidate, extent)):
+			_item_tooltip.position = candidate
+			return
+	_item_tooltip.position = Vector2(
+		clampf(candidates[0].x, bounds.position.x, maxf(bounds.position.x, bounds.end.x - extent.x)),
+		clampf(candidates[0].y, bounds.position.y, maxf(bounds.position.y, bounds.end.y - extent.y))
+	)
 
 
 func _source_at(point: Vector2) -> Dictionary:
@@ -577,10 +636,23 @@ func _target_at(point: Vector2) -> Dictionary:
 	return {}
 
 
+func _dismiss_tooltip_outside(point: Vector2) -> bool:
+	if not _item_tooltip.visible:
+		return false
+	if _item_tooltip.get_global_rect().has_point(point):
+		return true
+	_hide_item_tooltip()
+	return false
+
+
 func _input(event: InputEvent) -> void:
-	if not visible or _session == null or _comparison_overlay.is_open():
+	if not visible or _session == null:
 		return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		_dismiss_tooltip_outside(event.position)
 	if event is InputEventScreenTouch:
+		if event.pressed and _dismiss_tooltip_outside(event.position):
+			return
 		if event.pressed:
 			if _touch_index >= 0:
 				return
@@ -599,14 +671,18 @@ func _input(event: InputEvent) -> void:
 				var destination: Dictionary = _target_at(event.position)
 				if not destination.is_empty():
 					_transfer_item(str(_touch_source["kind"]), _touch_source["slot"], str(destination["kind"]), destination["slot"])
-			elif event.position.distance_to(_touch_origin) < 16.0 and str(_touch_source.get("kind", "")) == "bag":
+			elif event.position.distance_to(_touch_origin) < 16.0:
 				var destination: Dictionary = _target_at(event.position)
-				if str(destination.get("kind", "")) == "bag" and destination.get("slot") == _touch_source["slot"]:
-					_on_bag_slot_activated(int(_touch_source["slot"]))
+				if destination == _touch_source:
+					if destination["kind"] == "bag":
+						_on_bag_slot_activated(int(destination["slot"]))
+					else:
+						_select_equipped(str(destination["slot"]))
 			_cancel_touch_drag()
 	elif event is InputEventScreenDrag and event.index == _touch_index:
 		if not _touch_dragging and event.position.distance_to(_touch_origin) > 16.0 and Time.get_ticks_msec() - _touch_started_at >= 180:
 			_touch_dragging = true
+			_hide_item_tooltip()
 			_touch_preview = TextureRect.new()
 			var item_id: String = ""
 			if str(_touch_source["kind"]) == "bag":
@@ -670,17 +746,12 @@ func _cancel_drag() -> void:
 
 
 func close_by_player() -> void:
-	if _comparison_overlay.is_open():
-		_comparison_overlay.hide_info()
-		return
 	dismiss()
 	closed.emit()
 
 
 func dismiss() -> void:
-	_comparison_overlay.hide_info()
-	_item_action_menu.hide()
-	_popup_slot = -1
+	_hide_item_tooltip()
 	_cancel_drag()
 	hide()
 	set_process_input(false)

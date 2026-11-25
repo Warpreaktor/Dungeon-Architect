@@ -14,6 +14,8 @@ signal message_cell_tapped(cell: Vector2i)
 signal ground_loot_tapped(container_id: String)
 
 const TILE_SIZE := 48.0
+const FOG_SHADER: Shader = preload("res://shaders/map_fog.gdshader")
+const FOG_COLOR := Color("#05080c")
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
 const WALL_TEXTURE: Texture2D = preload("res://assets/stone_wall.png")
 const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.png")
@@ -23,6 +25,11 @@ var _local_portal_textures: Dictionary = {}
 var _monster_icons: Dictionary = {}
 var _trap_icons: Dictionary = {}
 var _door_trap_icons: Dictionary = {}
+var _fog_layer: ColorRect
+var _fog_material: ShaderMaterial
+var _fog_texture: ImageTexture
+var _fog_mask: PackedByteArray = PackedByteArray()
+var _fog_mask_size := Vector2i.ZERO
 
 const CHEST_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/chest.png")
 const STAIRS_DOWN_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/stairs_down.png")
@@ -91,6 +98,15 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_ALL
 	clip_contents = true
+	_fog_material = ShaderMaterial.new()
+	_fog_material.shader = FOG_SHADER
+	_fog_material.set_shader_parameter("fog_color", FOG_COLOR)
+	_fog_layer = ColorRect.new()
+	_fog_layer.name = "FogOfWar"
+	_fog_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fog_layer.material = _fog_material
+	_fog_layer.hide()
+	add_child(_fog_layer)
 	resized.connect(_on_canvas_resized)
 	_settings_tap_timer = Timer.new()
 	_settings_tap_timer.one_shot = true
@@ -114,6 +130,8 @@ func set_map(value: DungeonMap) -> void:
 	map_data = value
 	game_session = null
 	mode = "edit"
+	if _fog_layer != null:
+		_fog_layer.hide()
 	_hovered = Vector2i(-1, -1)
 	cancel_move_selection()
 	_reset_pointer_state()
@@ -160,6 +178,8 @@ func set_game_session(value: GameSession) -> void:
 	cancel_move_selection()
 	_reset_pointer_state()
 	game_session = value
+	if _fog_layer != null:
+		_fog_layer.hide()
 	if value != null:
 		map_data = value.map_data
 		_player_visual_cell = Vector2(value.player_pos)
@@ -276,15 +296,19 @@ func zoom_at(screen_point: Vector2, factor: float) -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color("#131a22"))
+	var fog_enabled: bool = mode == "play" and game_session != null and not game_session.debug_open_map
+	draw_rect(Rect2(Vector2.ZERO, size), FOG_COLOR if fog_enabled else Color("#131a22"))
 	if map_data == null:
+		_fog_layer.hide()
 		return
 	var min_x := clampi(floori(-camera_offset.x / (TILE_SIZE * zoom)) - 1, 0, map_data.width)
 	var min_y := clampi(floori(-camera_offset.y / (TILE_SIZE * zoom)) - 1, 0, map_data.height)
 	var max_x := clampi(ceili((size.x - camera_offset.x) / (TILE_SIZE * zoom)) + 1, 0, map_data.width)
 	var max_y := clampi(ceili((size.y - camera_offset.y) / (TILE_SIZE * zoom)) + 1, 0, map_data.height)
 	if min_x >= max_x or min_y >= max_y:
+		_fog_layer.hide()
 		return
+	_update_fog(Rect2i(min_x, min_y, max_x - min_x, max_y - min_y))
 
 	var stairs_up_cell := Vector2i(-1, -1)
 	if mode == "play" and game_session != null and game_session.has_stairs_up():
@@ -318,16 +342,44 @@ func _draw() -> void:
 		var hovered_rect := Rect2(Vector2(_hovered) * TILE_SIZE, Vector2.ONE * TILE_SIZE)
 		draw_rect(hovered_rect, Color(0.34, 0.80, 1.0, 0.22))
 		draw_rect(hovered_rect, Color("#82d3fd"), false, 2.0 / zoom)
-	draw_rect(Rect2(0, 0, map_data.width * TILE_SIZE, map_data.height * TILE_SIZE), Color("#9da5ab"), false, 2.0 / zoom)
+	if not fog_enabled:
+		draw_rect(Rect2(0, 0, map_data.width * TILE_SIZE, map_data.height * TILE_SIZE), Color("#9da5ab"), false, 2.0 / zoom)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _update_fog(cells: Rect2i) -> void:
+	if mode != "play" or game_session == null or game_session.debug_open_map or not cells.has_area():
+		_fog_layer.hide()
+		return
+	var bounds: Rect2i = cells.grow(1)
+	var mask := PackedByteArray()
+	mask.resize(bounds.size.x * bounds.size.y * 2)
+	var index: int = 0
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			mask[index] = 255 if game_session.is_revealed(x, y) else 0
+			mask[index + 1] = 255 if game_session.is_visible(x, y) else 0
+			index += 2
+	if _fog_texture == null or _fog_mask_size != bounds.size or _fog_mask != mask:
+		var image: Image = Image.create_from_data(bounds.size.x, bounds.size.y, false, Image.FORMAT_RG8, mask)
+		if _fog_texture == null or _fog_mask_size != bounds.size:
+			_fog_texture = ImageTexture.create_from_image(image)
+			_fog_material.set_shader_parameter("fog_mask", _fog_texture)
+			_fog_material.set_shader_parameter("mask_size", Vector2(bounds.size))
+		else:
+			_fog_texture.update(image)
+		_fog_mask = mask
+		_fog_mask_size = bounds.size
+	_fog_layer.position = camera_offset + Vector2(cells.position) * TILE_SIZE * zoom
+	_fog_layer.size = Vector2(cells.size) * TILE_SIZE * zoom
+	_fog_layer.show()
 
 
 func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 	var rect := Rect2(float(x) * TILE_SIZE, float(y) * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-	var can_see := mode != "play" or game_session == null or game_session.is_visible(x, y)
 	var has_seen := mode != "play" or game_session == null or game_session.is_revealed(x, y)
 	if not has_seen:
-		draw_rect(rect, Color("#05080c"))
+		draw_rect(rect, FOG_COLOR)
 		return
 	var is_wall := map_data.get_terrain(x, y) == "wall"
 	if is_wall:
@@ -383,8 +435,6 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 			draw_texture_rect(_stairs_up_texture, rect, false)
 	if has_hidden_entity:
 		_draw_hidden_marker(rect.position)
-	if mode == "play" and not can_see:
-		draw_rect(rect, Color(0.0, 0.0, 0.0, 0.55))
 
 
 func _draw_hidden_marker(origin: Vector2) -> void:

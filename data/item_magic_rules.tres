@@ -18,6 +18,7 @@ script = ExtResource("2_quality")
 quality_id = "sturdy"
 display_name = "Добротное"
 roll_weight = 23
+minimum_loot_stage = 1
 scaling_percent = 115
 
 
@@ -26,6 +27,7 @@ script = ExtResource("2_quality")
 quality_id = "masterwork"
 display_name = "Мастерское"
 roll_weight = 7
+minimum_loot_stage = 2
 scaling_percent = 135
 
 
@@ -45,6 +47,7 @@ tier = 1
 display_name = "волшебное"
 color = Color(0.4, 0.65, 0.96, 1)
 roll_weight = 19
+minimum_loot_stage = 1
 minimum_affixes = 1
 maximum_affixes = 1
 
@@ -55,6 +58,7 @@ tier = 2
 display_name = "редкое"
 color = Color(0.93, 0.76, 0.35, 1)
 roll_weight = 3
+minimum_loot_stage = 2
 minimum_affixes = 2
 maximum_affixes = 3
 
@@ -65,6 +69,7 @@ tier = 3
 display_name = "уникальное"
 color = Color(0.95, 0.52, 0.26, 1)
 roll_weight = 0
+minimum_loot_stage = 2
 minimum_affixes = 3
 maximum_affixes = 4
 

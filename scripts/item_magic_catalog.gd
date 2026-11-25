@@ -113,12 +113,12 @@ static func _draw(entries: Array, rng: RandomNumberGenerator) -> Resource:
 	return null
 
 
-static func roll(instance: ItemInstance, item: ItemDefinition, rng: RandomNumberGenerator) -> void:
+static func roll(instance: ItemInstance, item: ItemDefinition, rng: RandomNumberGenerator, loot_stage: int = -1) -> void:
 	if instance == null or item == null or rng == null or item.category != ItemDefinition.Category.EQUIPMENT:
 		return
 	var qualities: Array = []
 	for entry in RULES.qualities:
-		if entry != null and entry.roll_weight > 0 and entry.accepts(item):
+		if entry != null and entry.roll_weight > 0 and entry.accepts(item) and (loot_stage < 0 or loot_stage >= entry.minimum_loot_stage):
 			qualities.append(entry)
 	var selected_quality: ItemQualityDefinition = _draw(qualities, rng) as ItemQualityDefinition
 	instance.quality_id = selected_quality.quality_id if selected_quality != null else RULES.default_quality_id
@@ -128,7 +128,7 @@ static func roll(instance: ItemInstance, item: ItemDefinition, rng: RandomNumber
 			pool.append(entry)
 	var rarities: Array = []
 	for entry in RULES.rarities:
-		if entry != null and entry.roll_weight > 0 and entry.accepts(item) and (entry.minimum_affixes == 0 or pool.size() >= entry.minimum_affixes):
+		if entry != null and entry.roll_weight > 0 and entry.accepts(item) and (loot_stage < 0 or loot_stage >= entry.minimum_loot_stage) and (entry.minimum_affixes == 0 or pool.size() >= entry.minimum_affixes):
 			rarities.append(entry)
 	var selected_rarity: ItemRarityDefinition = _draw(rarities, rng) as ItemRarityDefinition
 	instance.rarity = selected_rarity.tier if selected_rarity != null else ItemInstance.Rarity.COMMON

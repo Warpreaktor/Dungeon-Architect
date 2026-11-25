@@ -4,7 +4,8 @@ extends Resource
 @export var quality_id: String = ""
 @export var display_name: String = ""
 @export_range(0, 10000, 1) var roll_weight: int = 0
-@export_range(1, 500, 1) var scaling_percent: int = 100
+@export var scaling_percent: int = 100
+@export_range(0, 20, 1) var minimum_loot_stage: int = 0
 @export var allowed_categories: PackedInt32Array = PackedInt32Array()
 @export var allowed_slots: PackedInt32Array = PackedInt32Array()
 

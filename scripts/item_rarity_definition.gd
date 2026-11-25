@@ -6,7 +6,8 @@ extends Resource
 @export var color: Color = Color.WHITE
 @export_range(0, 10000, 1) var roll_weight: int = 0
 @export_range(0, 10, 1) var minimum_affixes: int = 0
-@export_range(0, 10, 1) var maximum_affixes: int = 0
+@export var maximum_affixes: int = 0
+@export_range(0, 20, 1) var minimum_loot_stage: int = 0
 @export var allowed_categories: PackedInt32Array = PackedInt32Array()
 @export var allowed_slots: PackedInt32Array = PackedInt32Array()
 

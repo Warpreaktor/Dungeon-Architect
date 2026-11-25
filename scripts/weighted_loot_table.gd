@@ -3,6 +3,21 @@ extends Resource
 
 @export var weights: Dictionary = {}
 @export var quantity_ranges: Dictionary = {}
+@export var victory_milestones: PackedInt32Array = PackedInt32Array()
+@export var minimum_item_stage: Dictionary = {}
+
+
+func stage_for_victories(victories: int) -> int:
+	var stage: int = 0
+	for milestone in victory_milestones:
+		if victories < milestone:
+			break
+		stage += 1
+	return stage
+
+
+func allows(item_id: String, stage: int) -> bool:
+	return stage >= maxi(int(minimum_item_stage.get(item_id, 0)), 0)
 
 
 func draw_id(available_weights: Dictionary, rng: RandomNumberGenerator = null) -> String:

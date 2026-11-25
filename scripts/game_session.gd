@@ -21,6 +21,7 @@ var trap_random: RandomNumberGenerator = RandomNumberGenerator.new()
 var _party_damage_events: Array[Dictionary] = []
 var player_pos := Vector2i(-1, -1)
 var steps: int = 0
+var loot_victories: int = 0
 var keys: int = 0
 var potions: int = 0
 var carried_items: Dictionary = {} # Количество найденных предметов по ID, без интерфейса инвентаря.
@@ -185,7 +186,7 @@ func _create_item_instance(item_id: String, durability: int = -1, roll_magic: bo
 	var result: ItemInstance = ItemInstance.create("item_%d" % _next_item_instance_number, ItemCatalog.get_item(item_id), durability)
 	if result != null:
 		if roll_magic:
-			ItemMagicCatalog.roll(result, ItemCatalog.get_item(item_id), trap_random)
+			ItemMagicCatalog.roll(result, ItemCatalog.get_item(item_id), trap_random, ItemCatalog.LOOT_TABLE.stage_for_victories(loot_victories))
 			if _is_shield(item_id) and durability < 0:
 				result.durability = maxi(result.stat("max_durability"), result.stat("defense_bonus"))
 		_item_instances[result.instance_id] = result
@@ -904,6 +905,7 @@ func party_state_snapshot() -> Dictionary:
 		"bag_instance_ids": _bag_instance_ids.duplicate(),
 		"next_item_instance_number": _next_item_instance_number,
 		"steps": steps,
+		"loot_victories": loot_victories,
 		"random_seed": str(trap_random.seed),
 		"random_state": str(trap_random.state)
 	}
@@ -978,6 +980,9 @@ func restore_party_state(snapshot: Dictionary) -> bool:
 	var restored_steps: int = int(snapshot["steps"])
 	if restored_steps < 0 or float(snapshot["steps"]) != float(restored_steps):
 		return false
+	var restored_victories: Variant = snapshot.get("loot_victories", 0)
+	if not ProgressSnapshotCodec._is_integer(restored_victories) or int(restored_victories) < 0:
+		return false
 	var seed_text: String = str(snapshot.get("random_seed", ""))
 	var state_text: String = str(snapshot.get("random_state", ""))
 	if not seed_text.is_valid_int() or not state_text.is_valid_int():
@@ -1048,6 +1053,7 @@ func restore_party_state(snapshot: Dictionary) -> bool:
 	if not snapshot.has("item_instances"):
 		_ensure_item_instances()
 	steps = restored_steps
+	loot_victories = int(restored_victories)
 	keys = int(carried_items.get("key", 0))
 	potions = int(carried_items.get("potion", 0))
 	trap_random.seed = seed_text.to_int()
@@ -1360,6 +1366,7 @@ func win_pending_encounter() -> bool:
 			defeated = entity
 			break
 	removed_entities[defeated_id] = true
+	loot_victories += 1
 	encounter_monster_id = ""
 	encounter_target = Vector2i(-1, -1)
 	var rewards: Array[Dictionary] = []
@@ -1624,7 +1631,10 @@ func open_pending_chest() -> bool:
 func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: int, quantities: Dictionary = {}) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
 	if random_mode:
-		rewards.append(ItemCatalog.roll_loot(trap_random))
+		var reward: Dictionary = ItemCatalog.roll_loot(trap_random, ItemCatalog.LOOT_TABLE,
+			ItemCatalog.LOOT_TABLE.stage_for_victories(loot_victories))
+		if not reward.is_empty():
+			rewards.append(reward)
 	else:
 		for item_id in contents:
 			var item: ItemDefinition = ItemCatalog.get_item(item_id)
@@ -1632,7 +1642,10 @@ func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: i
 				continue
 			var fallback: int = gold_amount if item_id == "gold" else item.default_quantity
 			var quantity: int = clampi(int(quantities.get(item_id, fallback)), 1, 999999 if item_id == "gold" else 9999)
-			rewards.append({"item_id": item_id, "quantity": quantity})
+			var reward: Dictionary = {"item_id": item_id, "quantity": quantity}
+			if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
+				reward["roll_magic"] = true
+			rewards.append(reward)
 	return rewards
 
 

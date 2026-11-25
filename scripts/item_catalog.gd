@@ -31,11 +31,11 @@ static func quantity_for_entity(entity: Dictionary) -> int:
 	return maxi(1, int(properties.get("quantity", definition.default_quantity)))
 
 
-static func roll_loot(rng: RandomNumberGenerator = null, table: WeightedLootTable = LOOT_TABLE) -> Dictionary:
+static func roll_loot(rng: RandomNumberGenerator = null, table: WeightedLootTable = LOOT_TABLE, stage: int = 0) -> Dictionary:
 	var available: Dictionary = {}
 	for item_id in table.weights:
 		var item: ItemDefinition = get_item(str(item_id))
-		if item != null and item.category != ItemDefinition.Category.QUEST:
+		if item != null and item.category != ItemDefinition.Category.QUEST and table.allows(str(item_id), stage):
 			available[item_id] = table.weights[item_id]
 	var item_id: String = table.draw_id(available, rng)
 	if item_id.is_empty():

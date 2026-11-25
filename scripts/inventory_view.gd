@@ -2,7 +2,7 @@ class_name InventoryView
 extends CanvasLayer
 
 signal closed
-signal item_use_requested(item_id: String)
+signal item_use_requested(item_id: String, bag_index: int)
 signal equipment_changed
 
 @onready var _card: PanelContainer = %Card
@@ -173,7 +173,7 @@ func _refresh_contents() -> void:
 	for index in range(_entries.size()):
 		var item_id: String = _entries[index]
 		var definition: ItemDefinition = ItemCatalog.get_item(item_id) if not item_id.is_empty() else null
-		var quantity: int = int(_session.carried_items.get(item_id, 0)) if definition != null and definition.stackable else 1
+		var quantity: int = _session.inventory_slot_quantity(index)
 		_bag_slots[index].configure(index, definition, quantity, index == _selected_index, _bag_cell_size, _session)
 	_update_selection()
 
@@ -192,7 +192,8 @@ func _restore_selection() -> void:
 				return
 		_reset_selection()
 	elif not _selected_item_id.is_empty():
-		_selected_index = _entries.find(_selected_item_id)
+		if _selected_index < 0 or _selected_index >= _entries.size() or _entries[_selected_index] != _selected_item_id:
+			_selected_index = _entries.find(_selected_item_id)
 	if not _selected_equipped_slot.is_empty() and _session.equipment_item_id(_selected_equipped_slot).is_empty():
 		_selected_equipped_slot = ""
 	if _selected_equipped_slot.is_empty() and (_selected_index < 0 or _selected_index >= _entries.size() or _entries[_selected_index].is_empty()):
@@ -298,11 +299,12 @@ func _on_bag_slot_activated(index: int) -> void:
 func _on_item_action_pressed(action_id: int) -> void:
 	if action_id != 0 or _session == null or _popup_slot < 0 or _popup_slot >= _entries.size():
 		return
-	var item_id: String = _entries[_popup_slot]
+	var index: int = _popup_slot
+	var item_id: String = _entries[index]
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
 	_popup_slot = -1
 	if item != null and item.category == ItemDefinition.Category.CONSUMABLE:
-		item_use_requested.emit(item_id)
+		item_use_requested.emit(item_id, index)
 
 
 func _show_item(index: int) -> void:
@@ -352,9 +354,8 @@ func _show_item_definition(item_id: String, bag_index: int = -1, equipped_slot: 
 			details += " · Качество: " + quality.display_name
 		if rarity != null:
 			details += " · Редкость: " + rarity.display_name
-	var count: int = int(_session.carried_items.get(item_id, 0))
-	if item.stackable:
-		details += "  ·  количество: %d" % count
+	if item.stackable and bag_index >= 0:
+		details += "  ·  количество: %d / %d" % [_session.inventory_slot_quantity(bag_index), item.stack_limit()]
 	match item.consumable_effect:
 		ItemDefinition.ConsumableEffect.HEAL:
 			details += "\nВосстанавливает: до %d HP" % item.healing_amount

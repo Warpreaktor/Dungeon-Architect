@@ -15,6 +15,7 @@ enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 @export var category: Category = Category.QUEST
 @export_range(1, 9999, 1) var default_quantity: int = 1
 @export var stackable: bool = true
+@export_range(1, 9999, 1) var max_stack_size: int = 10
 @export var equipment_slot: int = EquipmentSlot.NONE
 @export var two_handed: bool = false
 ## Собственный урон оружия, без скрытой атаки персонажа.
@@ -35,6 +36,10 @@ enum ConsumableEffect { NONE, HEAL, ATTACK, RESIST, VISION }
 @export var consumable_effect: ConsumableEffect = ConsumableEffect.NONE
 @export_range(0, 9999, 1) var effect_value: int = 0
 @export_range(0, 9999, 1) var effect_duration_phases: int = 0
+
+
+func stack_limit() -> int:
+	return max_stack_size if stackable and category != Category.EQUIPMENT else 1
 
 
 func get_description(instance: ItemInstance = null) -> String:

@@ -2891,11 +2891,11 @@ func _on_inventory_closed() -> void:
 		_canvas.grab_focus()
 
 
-func _on_inventory_use_requested(item_id: String) -> void:
+func _on_inventory_use_requested(item_id: String, bag_index: int) -> void:
 	if not is_play_mode or game_session == null or not _inventory_view.visible:
 		return
 	var previous_vision: int = game_session.hero.vision_bonus if game_session.hero != null and game_session.hero.has_vision_effect() else 0
-	var result: Dictionary = game_session.use_item(item_id, game_session._inventory_equipment_member())
+	var result: Dictionary = game_session.use_item(item_id, game_session._inventory_equipment_member(), bag_index)
 	_inventory_view.show_use_result(item_id, str(result.get("message", "")))
 	if bool(result.get("used", false)):
 		_refresh_stats()

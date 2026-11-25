@@ -177,7 +177,7 @@ func _refresh_locations(preferred_id: String = "") -> void:
 		if item_id.is_empty():
 			continue
 		var instance_id: String = _session.inventory_instance_id(index)
-		var count: int = int(_session.carried_items.get(item_id, 0)) if (ItemCatalog.get_item(item_id) as ItemDefinition).stackable else 1
+		var count: int = _session.inventory_slot_quantity(index)
 		_add_location({"kind": "bag", "slot": index, "instance_id": instance_id, "item_id": item_id}, "Рюкзак %d: %s%s" % [index + 1, _item_name(item_id, instance_id), " × %d" % count if count > 1 else ""])
 	if _items.item_count > 0:
 		var index: int = 0
@@ -355,7 +355,7 @@ func _add_item() -> void:
 			return
 		for member in _session.party:
 			member._recalculate_equipment_stats()
-	_feedback.text = "Добавлено: %s" % item.display_name
+	_feedback.text = "Добавлено: %s ×%d" % [item.display_name, int(result["received"])]
 	loadout_changed.emit()
 	_refresh_locations(instance_id)
 

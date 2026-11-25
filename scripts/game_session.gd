@@ -93,6 +93,7 @@ static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_m
 	if spawn.x < 0 or spawn.y < 0:
 		return null
 	ItemCatalog.prepare()
+	LootProfileCatalog.prepare()
 	var session := GameSession.new()
 	session.map_data = map_ref
 	for hero_id in hero_ids:
@@ -197,12 +198,13 @@ func equipment_instance_id(slot_id: String, member: HeroState = null) -> String:
 	return str(selected.equipped_instance_ids.get(slot_id, "")) if selected != null else ""
 
 
-func _create_item_instance(item_id: String, durability: int = -1, roll_magic: bool = false) -> ItemInstance:
+func _create_item_instance(item_id: String, durability: int = -1, roll_magic: bool = false, loot_stage: int = -1, rarity_weights: Dictionary = {}) -> ItemInstance:
 	_next_item_instance_number += 1
 	var result: ItemInstance = ItemInstance.create("item_%d" % _next_item_instance_number, ItemCatalog.get_item(item_id), durability)
 	if result != null:
 		if roll_magic:
-			ItemMagicCatalog.roll(result, ItemCatalog.get_item(item_id), trap_random, ItemCatalog.LOOT_TABLE.stage_for_victories(loot_victories))
+			var stage: int = loot_stage if loot_stage >= 0 else ItemCatalog.LOOT_TABLE.stage_for_victories(loot_victories)
+			ItemMagicCatalog.roll(result, ItemCatalog.get_item(item_id), trap_random, stage, rarity_weights)
 			if _is_shield(item_id) and durability < 0:
 				result.durability = maxi(result.stat("max_durability"), result.stat("defense_bonus"))
 		_item_instances[result.instance_id] = result
@@ -1466,9 +1468,9 @@ func win_pending_encounter() -> bool:
 			DungeonMap.monster_loot_contents(defeated),
 			DungeonMap.monster_loot_is_random(defeated),
 			DungeonMap.monster_gold_amount(defeated),
-			DungeonMap.monster_item_quantities(defeated))
+			DungeonMap.monster_item_quantities(defeated), defeated)
 		for reward in rewards:
-			_receive_item(str(reward["item_id"]), int(reward["quantity"]), reward.get("durabilities", []), bool(reward.get("roll_magic", false)), target)
+			_receive_reward(reward, target)
 		if not rewards.is_empty():
 			_activate_message_at(target, "monster_defeated", defeated_id, rewards)
 	return move_by(target.x - player_pos.x, target.y - player_pos.y)
@@ -1718,13 +1720,25 @@ func open_pending_chest() -> bool:
 	return true
 
 
+func loot_depth() -> int:
+	var configured: Variant = map_data.metadata.get("loot_depth", null) if map_data != null else null
+	if typeof(configured) in [TYPE_INT, TYPE_FLOAT]:
+		return maxi(int(configured), 0)
+	return _stairs_history.size()
+
+
 ## Случайная награда разыгрывается в момент открытия и живёт только в GameSession.
-func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: int, quantities: Dictionary = {}) -> Array[Dictionary]:
+func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: int, quantities: Dictionary = {}, source: Dictionary = {}) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
 	if random_mode:
-		var reward: Dictionary = ItemCatalog.roll_loot(trap_random, ItemCatalog.LOOT_TABLE,
-			ItemCatalog.LOOT_TABLE.stage_for_victories(loot_victories))
+		var profile: LootProfile = LootProfileCatalog.for_source(source)
+		if profile != null:
+			return profile.roll(trap_random, loot_victories, loot_depth())
+		var stage: int = ItemCatalog.LOOT_TABLE.stage_for_progress(loot_victories, loot_depth())
+		var reward: Dictionary = ItemCatalog.roll_loot(trap_random, ItemCatalog.LOOT_TABLE, stage)
 		if not reward.is_empty():
+			if bool(reward.get("roll_magic", false)):
+				reward["loot_stage"] = stage
 			rewards.append(reward)
 	else:
 		for item_id in contents:
@@ -1746,15 +1760,20 @@ func _open_chest(chest: Dictionary) -> void:
 		DungeonMap.chest_contents(chest),
 		DungeonMap.chest_is_random(chest),
 		DungeonMap.chest_gold_amount(chest),
-		DungeonMap.chest_item_quantities(chest))
+		DungeonMap.chest_item_quantities(chest), chest)
 	var cell := Vector2i(int(chest["x"]), int(chest["y"]))
 	for reward in rewards:
-		_receive_item(str(reward["item_id"]), int(reward["quantity"]), [], bool(reward.get("roll_magic", false)), cell)
+		_receive_reward(reward, cell)
 	_activate_message_at(cell, "chest_open", str(chest["id"]), rewards)
 
 
+func _receive_reward(reward: Dictionary, cell: Vector2i) -> int:
+	return _receive_item(str(reward["item_id"]), int(reward["quantity"]), reward.get("durabilities", []),
+		bool(reward.get("roll_magic", false)), cell, int(reward.get("loot_stage", -1)), reward.get("rarity_weights", {}))
+
+
 ## Общая логика подбора. Описание предмета — Resource, состояние находок — GameSession.
-func _receive_item(item_id: String, quantity: int, durabilities: Array = [], roll_magic: bool = false, drop_cell: Vector2i = Vector2i(-1, -1)) -> int:
+func _receive_item(item_id: String, quantity: int, durabilities: Array = [], roll_magic: bool = false, drop_cell: Vector2i = Vector2i(-1, -1), loot_stage: int = -1, rarity_weights: Dictionary = {}) -> int:
 	if drop_cell.x < 0:
 		drop_cell = player_pos
 	if item_id == "key_yellow":
@@ -1799,7 +1818,7 @@ func _receive_item(item_id: String, quantity: int, durabilities: Array = [], rol
 		if location.is_empty():
 			var durability: int = int(durabilities[index]) if index < durabilities.size() else -1
 			if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
-				var overflow_instance: ItemInstance = _create_item_instance(item_id, durability, roll_magic)
+				var overflow_instance: ItemInstance = _create_item_instance(item_id, durability, roll_magic, loot_stage, rarity_weights)
 				if overflow_instance != null:
 					overflow_instances.append(overflow_instance.to_dict())
 					_item_instances.erase(overflow_instance.instance_id)
@@ -1815,7 +1834,7 @@ func _receive_item(item_id: String, quantity: int, durabilities: Array = [], rol
 		var created_instance: ItemInstance = null
 		if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
 			var current_durability: int = int(durabilities[index]) if index < durabilities.size() else -1
-			created_instance = _create_item_instance(item_id, current_durability, roll_magic)
+			created_instance = _create_item_instance(item_id, current_durability, roll_magic, loot_stage, rarity_weights)
 			if location.begins_with("bag:"):
 				_bag_instance_ids[int(location.trim_prefix("bag:"))] = created_instance.instance_id
 			elif location.begins_with("equipment:"):
@@ -2062,10 +2081,11 @@ func _claim_exit_reward(stairs: Dictionary) -> void:
 	if claimed_exit_rewards.has(entity_id):
 		return
 	claimed_exit_rewards[entity_id] = true
-	var rewards: Array[Dictionary] = _resolve_rewards(DungeonMap.chest_contents(stairs), false,
-		DungeonMap.chest_gold_amount(stairs), DungeonMap.chest_item_quantities(stairs))
+	var random_mode: bool = str(stairs.get("properties", {}).get("loot_mode", "")) == "random"
+	var rewards: Array[Dictionary] = _resolve_rewards(DungeonMap.chest_contents(stairs), random_mode,
+		DungeonMap.chest_gold_amount(stairs), DungeonMap.chest_item_quantities(stairs), stairs)
 	for reward in rewards:
-		_receive_item(str(reward["item_id"]), int(reward["quantity"]), [], bool(reward.get("roll_magic", false)))
+		_receive_reward(reward, player_pos)
 	if not rewards.is_empty():
 		_message_events.append({"text": "Награда за прохождение подземелья", "activation": "exit_reward", "loot": rewards})
 
@@ -2259,6 +2279,7 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, ca
 	if not saved_campaign_id.is_empty() and not session.set_campaign(campaigns[saved_campaign_id]):
 		return null
 	ItemCatalog.prepare()
+	LootProfileCatalog.prepare()
 	return session
 
 

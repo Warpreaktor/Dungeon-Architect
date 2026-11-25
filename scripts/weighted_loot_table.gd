@@ -4,6 +4,7 @@ extends Resource
 @export var weights: Dictionary = {}
 @export var quantity_ranges: Dictionary = {}
 @export var victory_milestones: PackedInt32Array = PackedInt32Array()
+@export var depth_milestones: PackedInt32Array = PackedInt32Array()
 @export var minimum_item_stage: Dictionary = {}
 
 
@@ -14,6 +15,15 @@ func stage_for_victories(victories: int) -> int:
 			break
 		stage += 1
 	return stage
+
+
+func stage_for_progress(victories: int, depth: int) -> int:
+	var depth_stage: int = 0
+	for milestone in depth_milestones:
+		if depth < milestone:
+			break
+		depth_stage += 1
+	return maxi(stage_for_victories(victories), depth_stage)
 
 
 func allows(item_id: String, stage: int) -> bool:

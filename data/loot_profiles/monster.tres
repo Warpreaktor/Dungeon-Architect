@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="LootProfile" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/loot_profile.gd" id="1_profile"]
+[ext_resource type="Script" path="res://scripts/loot_pool.gd" id="2_pool"]
+[ext_resource type="Resource" path="res://data/default_loot.tres" id="3_table"]
+
+[sub_resource type="Resource" id="Pool_0"]
+script = ExtResource("2_pool")
+table = ExtResource("3_table")
+
+[resource]
+script = ExtResource("1_profile")
+display_name = "Обычный противник"
+progression = ExtResource("3_table")
+pools = Array[ExtResource("2_pool")]([SubResource("Pool_0")])

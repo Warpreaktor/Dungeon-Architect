@@ -99,21 +99,28 @@ static func affix_lines(instance: ItemInstance) -> PackedStringArray:
 	return lines
 
 
-static func _draw(entries: Array, rng: RandomNumberGenerator) -> Resource:
+static func _weight(entry: Resource, rarity_weights: Dictionary) -> int:
+	if entry is ItemRarityDefinition:
+		var rarity_definition: ItemRarityDefinition = entry as ItemRarityDefinition
+		return maxi(int(rarity_weights.get(rarity_definition.tier, rarity_definition.roll_weight)), 0)
+	return maxi(int(entry.get("roll_weight")), 0)
+
+
+static func _draw(entries: Array, rng: RandomNumberGenerator, rarity_weights: Dictionary = {}) -> Resource:
 	var total: int = 0
 	for entry in entries:
-		total += maxi(int(entry.roll_weight), 0)
+		total += _weight(entry, rarity_weights)
 	if total <= 0:
 		return null
 	var roll: int = rng.randi_range(1, total)
 	for entry in entries:
-		roll -= maxi(int(entry.roll_weight), 0)
+		roll -= _weight(entry, rarity_weights)
 		if roll <= 0:
 			return entry
 	return null
 
 
-static func roll(instance: ItemInstance, item: ItemDefinition, rng: RandomNumberGenerator, loot_stage: int = -1) -> void:
+static func roll(instance: ItemInstance, item: ItemDefinition, rng: RandomNumberGenerator, loot_stage: int = -1, rarity_weights: Dictionary = {}) -> void:
 	if instance == null or item == null or rng == null or item.category != ItemDefinition.Category.EQUIPMENT:
 		return
 	var qualities: Array = []
@@ -130,7 +137,7 @@ static func roll(instance: ItemInstance, item: ItemDefinition, rng: RandomNumber
 	for entry in RULES.rarities:
 		if entry != null and entry.roll_weight > 0 and entry.accepts(item) and (loot_stage < 0 or loot_stage >= entry.minimum_loot_stage) and (entry.minimum_affixes == 0 or pool.size() >= entry.minimum_affixes):
 			rarities.append(entry)
-	var selected_rarity: ItemRarityDefinition = _draw(rarities, rng) as ItemRarityDefinition
+	var selected_rarity: ItemRarityDefinition = _draw(rarities, rng, rarity_weights) as ItemRarityDefinition
 	instance.rarity = selected_rarity.tier if selected_rarity != null else ItemInstance.Rarity.COMMON
 	instance.modifiers.clear()
 	instance.affix_ids.clear()

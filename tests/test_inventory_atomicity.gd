@@ -304,28 +304,26 @@ func _test_random_chest_overflow() -> void:
 	assert(session._receive_item("sword", 41) == 41)
 	assert(session._receive_item("shield", 1) == 1)
 	var rng := RandomNumberGenerator.new()
-	var seed_value: int = 1
-	var expected: Dictionary = {}
-	while seed_value <= 1000:
-		rng.seed = seed_value
-		expected = ItemCatalog.roll_loot(rng)
-		if not expected.is_empty() and ItemCatalog.get_item(str(expected["item_id"])).category == ItemDefinition.Category.CONSUMABLE:
-			break
-		seed_value += 1
-	assert(seed_value <= 1000)
-	session.trap_random.seed = seed_value
+	rng.seed = 891
+	session.trap_random.seed = 891
 	assert(session.map_data.place_entity("chest", 3, 2))
 	var chest: Dictionary = session.map_data.entities_at(3, 2)[0]
 	assert(DungeonMap.chest_is_random(chest))
+	var expected: Array[Dictionary] = LootProfileCatalog.for_source(chest).roll(rng, 0, 0)
+	var previous_gold: int = session.hero.gold
 	assert(session.move_by(1, 0))
 	var container: Dictionary = session.ground_container_at(session.player_pos)
-	assert(container["loot"][0]["item_id"] == expected["item_id"])
-	assert(container["loot"][0]["quantity"] == expected["quantity"])
+	assert(container["loot"].size() == 2)
+	assert(container["loot"][0]["item_id"] == expected[0]["item_id"])
+	assert(container["loot"][0]["quantity"] == expected[0]["quantity"])
+	assert(session.hero.gold - previous_gold == int(expected[1]["quantity"]))
+	assert(container["loot"][1]["item_id"] == expected[2]["item_id"])
+	assert(container["loot"][1]["quantity"] == expected[2]["quantity"])
 	assert(session.is_chest_open(chest))
 	assert(session.move_by(-1, 0) and session.move_by(1, 0))
-	assert(container["loot"].size() == 1)
+	assert(container["loot"].size() == 2)
 	assert(session._remove_carried_item("sword", 1))
-	assert(session.take_ground_loot(str(container["id"]), 0) == int(expected["quantity"]))
+	assert(session.take_ground_loot(str(container["id"]), 1) == int(expected[2]["quantity"]))
 
 
 func _test_stack_snapshots() -> void:

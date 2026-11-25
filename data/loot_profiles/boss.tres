@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="LootProfile" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/loot_profile.gd" id="1_profile"]
+[ext_resource type="Script" path="res://scripts/loot_pool.gd" id="2_pool"]
+[ext_resource type="Resource" path="res://data/default_loot.tres" id="3_table"]
+
+[sub_resource type="Resource" id="Pool_0"]
+script = ExtResource("2_pool")
+table = ExtResource("3_table")
+allowed_categories = PackedInt32Array(3)
+roll_count = Vector2i(2, 2)
+
+[sub_resource type="Resource" id="Pool_1"]
+script = ExtResource("2_pool")
+table = ExtResource("3_table")
+allowed_categories = PackedInt32Array(2)
+quantity_override = Vector2i(12, 25)
+
+[sub_resource type="Resource" id="Pool_2"]
+script = ExtResource("2_pool")
+table = ExtResource("3_table")
+allowed_categories = PackedInt32Array(1)
+roll_count = Vector2i(1, 2)
+quantity_override = Vector2i(1, 2)
+
+[resource]
+script = ExtResource("1_profile")
+display_name = "Босс"
+progression = ExtResource("3_table")
+pools = Array[ExtResource("2_pool")]([SubResource("Pool_0"), SubResource("Pool_1"), SubResource("Pool_2")])
+rarity_weights = {
+0: 35,
+1: 45,
+2: 20
+}

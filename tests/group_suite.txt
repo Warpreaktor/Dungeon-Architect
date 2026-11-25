@@ -7,6 +7,7 @@ test_party_battle_participants.gd
 test_party_combat_casualties.gd
 test_party_shared_inventory.gd
 test_inventory_atomicity.gd
+test_loot_profiles.gd
 test_ground_loot_containers.gd
 test_party_traps.gd
 test_regression_permadeath.gd

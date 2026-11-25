@@ -6,6 +6,7 @@ enum Rank { COMMON, ELITE, BOSS }
 ## Статические характеристики противника. Состояние здоровья хранится в CombatSession.
 @export var monster_id: String = ""
 @export var rank: Rank = Rank.COMMON
+@export var loot_profile_id: String = ""
 @export var display_name: String = ""
 @export var portrait: Texture2D
 @export var portrait_flip_h: bool = false

@@ -119,6 +119,7 @@ quantity_ranges = {
 "gold": Vector2i(3, 12)
 }
 victory_milestones = PackedInt32Array(1, 3)
+depth_milestones = PackedInt32Array(1, 2)
 minimum_item_stage = {
 "amulet_flint_shard": 1,
 "amulet_iron_tag": 1,

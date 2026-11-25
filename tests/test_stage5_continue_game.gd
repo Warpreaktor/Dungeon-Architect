@@ -26,20 +26,47 @@ func _run() -> void:
 	var menu: MainMenu = load("res://scenes/main_menu.tscn").instantiate() as MainMenu
 	menu._maps_directory = maps_dir
 	menu._save_store = store
+	menu._campaign_library = CampaignLibrary.new(_root_dir.path_join("campaigns"))
 	root.add_child(menu)
 	await process_frame
+	assert(menu._home.visible and not menu._play_actions.visible)
+	assert(menu._home.get_child_count() == 2)
+	assert(not menu._continue_game_button.is_visible_in_tree())
+	var editor_requests: Array[bool] = []
+	menu.editor_requested.connect(func() -> void: editor_requests.append(true))
+	(menu.get_node("%EditorButton") as Button).pressed.emit()
+	assert(editor_requests.size() == 1)
+	(menu.get_node("%PlayButton") as Button).pressed.emit()
+	assert(not menu._home.visible and menu._play_actions.visible)
 	assert(not menu._continue_game_button.visible)
+	(menu.get_node("%CampaignButton") as Button).pressed.emit()
+	assert(menu._library.visible and not menu._play_actions.visible)
+	assert(menu._library_mode == MainMenu.LIBRARY_CAMPAIGNS)
+	(menu.get_node("%BackButton") as Button).pressed.emit()
+	assert(menu._play_actions.visible and not menu._library.visible)
+	(menu.get_node("%PersonalMapsButton") as Button).pressed.emit()
+	assert(menu._library.visible and not menu._play_actions.visible)
+	assert(menu._library_mode == MainMenu.LIBRARY_PERSONAL)
+	assert(menu._map_list.item_count == 1)
+	menu._start_button.pressed.emit()
+	assert(menu._hero_selection.visible and not menu._library.visible)
+	menu._hero_selection.back_requested.emit()
+	assert(menu._library.visible and not menu._hero_selection.visible)
+	(menu.get_node("%BackButton") as Button).pressed.emit()
+	assert(menu._play_actions.visible and not menu._library.visible)
+	(menu.get_node("%PlayBackButton") as Button).pressed.emit()
+	assert(menu._home.visible and not menu._play_actions.visible)
 	var session: GameSession = GameSession.start_for_party(dungeon, ["petushan", "volcha"])
 	assert(session != null)
 	session.steps = 19
 	session.party[1].health -= 5
 	assert(session._receive_item("shield", 2, [4, 12]) == 2)
 	assert(store.save_game(session, maps))
-	menu._refresh_continue_action()
+	(menu.get_node("%PlayButton") as Button).pressed.emit()
 	assert(menu._continue_game_button.visible and not menu._continue_game_button.disabled)
 	var resumed: Array[GameSession] = []
 	menu.continue_game_requested.connect(func(game: GameSession) -> void: resumed.append(game))
-	menu._continue_saved_game()
+	menu._continue_game_button.pressed.emit()
 	assert(resumed.size() == 1)
 	assert(resumed[0] != session and resumed[0].steps == 19)
 	assert(resumed[0].party.size() == 2 and resumed[0].party[1].health == session.party[1].health)
@@ -106,7 +133,9 @@ func _run() -> void:
 	backup_menu._save_store = store
 	root.add_child(backup_menu)
 	await process_frame
-	assert(backup_menu._continue_game_button.visible)
+	assert(not backup_menu._continue_game_button.is_visible_in_tree())
+	(backup_menu.get_node("%PlayButton") as Button).pressed.emit()
+	assert(backup_menu._continue_game_button.is_visible_in_tree())
 	backup_menu.queue_free()
 	await process_frame
 	var broken_backup: FileAccess = FileAccess.open(saves_dir.path_join(ProgressSaveStore.BACKUP_FILE), FileAccess.WRITE)
@@ -118,7 +147,8 @@ func _run() -> void:
 	invalid_menu._save_store = store
 	root.add_child(invalid_menu)
 	await process_frame
-	assert(not invalid_menu._continue_game_button.visible)
+	(invalid_menu.get_node("%PlayButton") as Button).pressed.emit()
+	assert(not invalid_menu._continue_game_button.is_visible_in_tree())
 	invalid_menu.queue_free()
 	await process_frame
 	assert(FileAccess.get_file_as_string(maps_dir.path_join(dungeon.map_id + ".json")) == original_map)

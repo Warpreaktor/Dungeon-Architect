@@ -7,6 +7,7 @@ signal continue_game_requested(session: GameSession)
 
 @onready var _card: PanelContainer = %Card
 @onready var _home: VBoxContainer = %HomeActions
+@onready var _play_actions: VBoxContainer = %PlayActions
 @onready var _library: VBoxContainer = %Library
 @onready var _map_list: ItemList = %MapList
 @onready var _library_title: Label = %LibraryTitle
@@ -33,11 +34,13 @@ var _thumbnails: Array[Texture2D] = []
 
 
 func _ready() -> void:
-	%PlayButton.pressed.connect(func() -> void: _open_library(LIBRARY_CAMPAIGNS))
+	%PlayButton.pressed.connect(_open_play_menu)
+	%CampaignButton.pressed.connect(func() -> void: _open_library(LIBRARY_CAMPAIGNS))
+	%PlayBackButton.pressed.connect(_back_to_home)
 	%PersonalMapsButton.pressed.connect(func() -> void: _open_library(LIBRARY_PERSONAL))
 	_continue_game_button.pressed.connect(_continue_saved_game)
 	%EditorButton.pressed.connect(func() -> void: editor_requested.emit())
-	%BackButton.pressed.connect(_back_to_home)
+	%BackButton.pressed.connect(_open_play_menu)
 	_start_button.pressed.connect(_start_selected)
 	_map_list.item_selected.connect(_on_map_selected)
 	_map_list.item_activated.connect(_on_map_activated)
@@ -45,11 +48,7 @@ func _ready() -> void:
 	_hero_selection.back_requested.connect(_return_to_library)
 	get_viewport().size_changed.connect(_resize_layout)
 	_resize_layout()
-	_refresh_continue_action()
-	if _continue_game_button.visible:
-		_continue_game_button.grab_focus()
-	else:
-		%PlayButton.grab_focus()
+	%PlayButton.grab_focus()
 
 
 func _resize_layout() -> void:
@@ -67,6 +66,7 @@ func _open_library(mode: int = LIBRARY_CAMPAIGNS) -> void:
 	_no_maps.text = "Кампаний пока нет" if mode == LIBRARY_CAMPAIGNS else "Свободных карт пока нет"
 	_home_error.hide()
 	_home.visible = false
+	_play_actions.hide()
 	_library.visible = true
 	_hero_selection.visible = false
 	_error_message.visible = false
@@ -78,17 +78,25 @@ func _open_library(mode: int = LIBRARY_CAMPAIGNS) -> void:
 		_start_button.grab_focus()
 
 
-func _back_to_home() -> void:
-	_hero_selection.visible = false
+func _open_play_menu() -> void:
+	_home.hide()
+	_library.hide()
+	_hero_selection.hide()
 	_selected_game_map = null
 	_selected_campaign_id = ""
-	_library.visible = false
-	_home.visible = true
+	_home_error.hide()
 	_refresh_continue_action()
+	_play_actions.show()
 	if _continue_game_button.visible:
 		_continue_game_button.grab_focus()
 	else:
-		%PlayButton.grab_focus()
+		%CampaignButton.grab_focus()
+
+
+func _back_to_home() -> void:
+	_play_actions.hide()
+	_home.show()
+	%PlayButton.grab_focus()
 
 
 func _refresh_continue_action() -> void:
@@ -104,7 +112,10 @@ func _continue_saved_game() -> void:
 		_home_error.text = _save_store.last_error
 		_home_error.show()
 		_refresh_continue_action()
-		%PlayButton.grab_focus()
+		if _continue_game_button.visible:
+			_continue_game_button.grab_focus()
+		else:
+			%CampaignButton.grab_focus()
 		return
 	continue_game_requested.emit(session)
 

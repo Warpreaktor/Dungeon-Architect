@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bohu5etjtullk"
-path="res://.godot/imported/extra_05.png-aef72c92574fdab44fa0eebaad47eed2.ctex"
+uid="uid://sjm30wffwcgf"
+path="res://.godot/imported/wrong_opponent.png-25d719d2b3dcf906c1dd2d0211dbdb9b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/petushan/extra_05.png"
-dest_files=["res://.godot/imported/extra_05.png-aef72c92574fdab44fa0eebaad47eed2.ctex"]
+source_file="res://assets/abilities/petushan/wrong_opponent.png"
+dest_files=["res://.godot/imported/wrong_opponent.png-25d719d2b3dcf906c1dd2d0211dbdb9b.ctex"]
 
 [params]
 

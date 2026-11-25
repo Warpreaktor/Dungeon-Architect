@@ -16,6 +16,6 @@ strength = 8
 agility = 4
 perception = 5
 base_defense = 0
-personal_ability_ids = Array[String](["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib", "petushan_feathers_up"])
+personal_ability_ids = Array[String](["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib", "petushan_feathers_up", "petushan_rooster_whirlwind", "petushan_battle_cry", "petushan_chest_charge", "petushan_red_comb", "petushan_wrong_opponent", "petushan_last_crow"])
 max_energy = 18
 energy_restoration = 3

@@ -358,14 +358,19 @@ func remove_status(status_id: String) -> bool:
 
 
 func has_damaged_armor() -> bool:
-	return _equipment.has_damaged_shield(equipped_shield_id)
+	if _equipment.has_damaged_shield(equipped_shield_id):
+		return true
+	for status in statuses.values():
+		if bool(status.get("marks_damaged_armor", false)):
+			return true
+	return false
 
 
 ## Кровотечение обходит блок: в этот момент это не атака противника.
 ## Возвращаем фактические снимки HP для последовательного воспроизведения.
-func owner_phase_status_damage_events(actor_id: String) -> Array[Dictionary]:
+func owner_phase_status_damage_events(actor_id: String, clock: int = AbilityEffectDefinition.Clock.OWNER_PHASE) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
-	for entry in BattleStatusRules.ticking_entries(statuses, AbilityEffectDefinition.Clock.OWNER_PHASE):
+	for entry in BattleStatusRules.ticking_entries(statuses, clock):
 		var before: int = health
 		var amount: int = int(entry["damage"])
 		if _hero_snapshot != null:

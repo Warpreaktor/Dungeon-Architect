@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/abilities/petushan/red_comb.png" id="3_icon"]
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "petushan_red_comb"
+display_name = "Красный гребень"
+description = "Пассивно: ниже {passive_health_threshold_percent}% HP урон атак растёт по мере потери здоровья, до {passive_max_damage_bonus_percent}% бонуса. Не требует хода или Энергии."
+icon = ExtResource("3_icon")
+category = 3
+target = 0
+passive = true
+passive_health_threshold_percent = 50
+passive_max_damage_bonus_percent = 30

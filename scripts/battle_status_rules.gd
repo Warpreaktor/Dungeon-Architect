@@ -37,6 +37,7 @@ static func apply(statuses: Dictionary, effect: AbilityEffectDefinition, tick: i
 		"amount": effect.amount,
 		"modifier": effect.effective_status_modifier(),
 		"armor_penalty": effect.armor_penalty,
+		"marks_damaged_armor": effect.marks_damaged_armor,
 		"stat": effect.effective_status_stat(),
 		"clock": effect.effective_status_clock(),
 		"ticks": effect.duration_ticks,
@@ -45,6 +46,9 @@ static func apply(statuses: Dictionary, effect: AbilityEffectDefinition, tick: i
 		"tick_damage": effect.tick_damage,
 		"next_block_penalty": effect.next_block_penalty,
 		"counter_damage_multiplier": effect.counter_damage_multiplier,
+		"incoming_damage_reduction_percent": effect.incoming_damage_reduction_percent,
+		"counter_melee_only": effect.counter_melee_only,
+		"counter_requires_hit": effect.counter_requires_hit,
 		"counter_ability_id": effect.status_id,
 		"battle_only": effect.battle_only,
 		"max_health_reduction_percent": effect.max_health_reduction_percent,
@@ -115,7 +119,7 @@ static func describe(status: Dictionary) -> String:
 	var stacks: int = maxi(int(status.get("stacks", 1)), 1)
 	var damage: int = int(status.get("tick_damage", 0)) * stacks
 	if damage > 0:
-		parts.append("Урон за фазу: %d HP" % damage)
+		parts.append(("Урон за отдых: %d HP" if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.OWNER_REST else "Урон за фазу: %d HP") % damage)
 	var hp_reduction: int = int(status.get("max_health_reduction_percent", 0))
 	if hp_reduction > 0:
 		parts.append("Максимум HP: −%d%% за стек; стеков: %d" % [hp_reduction, stacks])
@@ -125,6 +129,9 @@ static func describe(status: Dictionary) -> String:
 	var armor_penalty: int = int(status.get("armor_penalty", 0)) * stacks
 	if armor_penalty > 0:
 		parts.append("Броня: −%d" % armor_penalty)
+	var reduction: int = int(status.get("incoming_damage_reduction_percent", 0))
+	if reduction > 0:
+		parts.append("Урон следующей входящей атаки: −%d%%" % reduction)
 	var counter: float = float(status.get("counter_damage_multiplier", 0.0))
 	if counter > 0.0:
 		parts.append("Контратака: ×%s" % DescriptionTemplate.number(counter))
@@ -140,7 +147,9 @@ static func describe(status: Dictionary) -> String:
 			AbilityEffectDefinition.Stat.ARMOR_PIERCE_PERCENT: label = "Пробитие брони и блока, %"
 			AbilityEffectDefinition.Stat.ARMOR: label = "Броня"
 		parts.append("%s: %+d" % [label, value])
-	if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK:
+	if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.OWNER_REST:
+		parts.append("Осталось отдыхов: %d" % int(status.get("ticks", 0)))
+	elif int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK:
 		parts.append("До следующей входящей ближней атаки")
 	elif int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.OUTGOING_ATTACK:
 		parts.append("До следующей собственной атаки")

@@ -24,6 +24,21 @@ static func known_ability_ids(participant: BattleParticipant) -> Array[String]:
 	return ids
 
 
+static func passive_damage_multiplier(participant: BattleParticipant) -> float:
+	if participant == null:
+		return 1.0
+	var bonus: float = 0.0
+	var seen: Dictionary = {}
+	for id in participant.personal_ability_ids + participant.learned_ability_ids:
+		if seen.has(id):
+			continue
+		seen[id] = true
+		var ability: AbilityDefinition = get_ability(id)
+		if ability != null and ability.passive:
+			bonus += ability.passive_damage_bonus(participant)
+	return 1.0 + bonus
+
+
 static func knows_ability(participant: BattleParticipant, ability_id: String) -> bool:
 	return ability_id in known_ability_ids(participant)
 

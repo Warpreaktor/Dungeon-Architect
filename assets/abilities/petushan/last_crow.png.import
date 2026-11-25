@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cv8nrjpkj4qcb"
-path="res://.godot/imported/extra_04.png-6aa1b7efc0418e7455d5666de44e3374.ctex"
+uid="uid://cqm78wl8dl0x4"
+path="res://.godot/imported/last_crow.png-789e115e055b58399e4977a1321520d9.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/petushan/extra_04.png"
-dest_files=["res://.godot/imported/extra_04.png-6aa1b7efc0418e7455d5666de44e3374.ctex"]
+source_file="res://assets/abilities/petushan/last_crow.png"
+dest_files=["res://.godot/imported/last_crow.png-789e115e055b58399e4977a1321520d9.ctex"]
 
 [params]
 

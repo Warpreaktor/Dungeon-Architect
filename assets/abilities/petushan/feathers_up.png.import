@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dk13lsuu0inpl"
-path="res://.godot/imported/extra_01.png-3268ebc50d24e9b11cacd8ad3423aaf2.ctex"
+path="res://.godot/imported/feathers_up.png-a431cd1b515635445e8a58c5f492b9ad.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/petushan/extra_01.png"
-dest_files=["res://.godot/imported/extra_01.png-3268ebc50d24e9b11cacd8ad3423aaf2.ctex"]
+source_file="res://assets/abilities/petushan/feathers_up.png"
+dest_files=["res://.godot/imported/feathers_up.png-a431cd1b515635445e8a58c5f492b9ad.ctex"]
 
 [params]
 

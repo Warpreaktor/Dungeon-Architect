@@ -2,27 +2,29 @@
 
 [ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
-[ext_resource type="Texture2D" path="res://assets/abilities/petushan/extra_01.png" id="3_icon"]
+[ext_resource type="Texture2D" path="res://assets/abilities/petushan/feathers_up.png" id="3_icon"]
 
-[sub_resource type="Resource" id="Stance"]
+[sub_resource type="Resource" id="Effect0"]
 script = ExtResource("2_effect")
 kind = 3
 recipient = 0
 status_id = "petushan_feathers_up"
 status_label = "Перья дыбом"
 duration_ticks = 1
-status_clock = 3
+status_clock = 2
 counter_damage_multiplier = 0.8
+incoming_damage_reduction_percent = 30
+counter_melee_only = true
+counter_requires_hit = true
 battle_only = true
 
 [resource]
 script = ExtResource("1_script")
 ability_id = "petushan_feathers_up"
 display_name = "Перья дыбом"
-description = "Петушан принимает оборонительную стойку. Все последующие атаки по нему вызывают контратаку с множителем ×{effect_0_counter_damage_multiplier} от базового урона."
+description = "До следующей входящей атаки снижает её урон на {effect_0_incoming_damage_reduction_percent}%. При попадании ближней атакой отвечает ударом ×{effect_0_counter_damage_multiplier}."
 icon = ExtResource("3_icon")
 category = 1
 target = 0
-effects = Array[Resource]([SubResource("Stance")])
-
+effects = Array[Resource]([SubResource("Effect0")])
 resource_costs = {"energy": 3}

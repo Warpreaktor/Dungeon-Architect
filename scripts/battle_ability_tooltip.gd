@@ -10,6 +10,8 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 	var description: String = ability.get_description().strip_edges()
 	if not description.is_empty():
 		lines.append(description)
+	if ability.passive:
+		return "\n".join(lines)
 	match ability.target:
 		AbilityDefinition.Target.SELF:
 			lines.append("Цель: на себя")
@@ -47,7 +49,7 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 				if effect.max_health_reduction_percent > 0:
 					lines.append("Максимум HP: −%d%% за стек; максимум стеков: %d; %s" % [effect.max_health_reduction_percent, effect.max_stacks, effect.status_duration_description()])
 				elif effect.tick_damage > 0:
-					lines.append("Кровотечение: −%d HP за отдых цели, %s" % [effect.tick_damage, effect.status_duration_description()])
+					lines.append("Кровотечение: −%d HP, %s" % [effect.tick_damage, effect.status_duration_description()])
 				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.ACCURACY:
 					lines.append("Меткость цели: %+d п.п. %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
 				elif effect.effective_status_stat() == AbilityEffectDefinition.Stat.DODGE_PERCENT:
@@ -62,6 +64,8 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 					lines.append("Ловкость: %+d %s" % [effect.effective_status_modifier(), effect.status_duration_description()])
 				else:
 					lines.append("Эффект «%s»: %d %s" % [effect.status_id, effect.effective_status_modifier(), effect.status_duration_description()])
+				if effect.incoming_damage_reduction_percent > 0:
+					lines.append("Снижение входящего урона: %d%%" % effect.incoming_damage_reduction_percent)
 				if effect.armor_penalty > 0:
 					lines.append("Броня: −%d %s" % [effect.armor_penalty, effect.status_duration_description()])
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:

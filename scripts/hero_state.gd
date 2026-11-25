@@ -57,7 +57,9 @@ func _init(hero_definition: HeroDefinition = null) -> void:
 	for ability_id in definition.personal_ability_ids:
 		if saved_action_slots.size() >= action_slot_capacity():
 			break
-		saved_action_slots.append(ability_id)
+		var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
+		if ability != null and not ability.passive:
+			saved_action_slots.append(ability_id)
 
 
 ## Ближний и дальний урон: собственная мощность оружия нужного типа +
@@ -100,6 +102,10 @@ func get_saved_action_slots() -> Array[String]:
 func save_action_slots(slots: Array[String]) -> bool:
 	if slots.size() != action_slot_capacity():
 		return false
+	for ability_id in slots:
+		var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
+		if ability != null and ability.passive:
+			return false
 	saved_action_slots = slots.duplicate()
 	return true
 

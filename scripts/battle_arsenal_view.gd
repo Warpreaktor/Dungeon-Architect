@@ -207,17 +207,17 @@ func _refresh() -> void:
 	var active: Array[String] = _hero.get_saved_action_slots()
 	var index: int = 0
 	for ability in AbilityCatalog.available_abilities(_actor):
-		if not AbilityCatalog.can_prepare(_actor, ability.ability_id):
+		if not ability.passive and not AbilityCatalog.can_prepare(_actor, ability.ability_id):
 			continue
 		var slot: BattleAbilitySlot = SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_skills_grid.add_child(slot)
 		var panel_width: float = _panel.custom_minimum_size.x
 		var side: float = 60.0 if panel_width < 440.0 else (88.0 if panel_width < 860.0 else 112.0)
 		slot.custom_minimum_size = Vector2(side, side)
-		slot.configure(index, ability, true, _actor)
+		slot.configure(index, ability, not ability.passive, _actor)
 		var selected: bool = active.has(ability.ability_id)
 		slot.set_current(selected)
-		slot.modulate = Color.WHITE if selected else Color(0.52, 0.54, 0.60)
+		slot.modulate = Color.WHITE if selected or ability.passive else Color(0.52, 0.54, 0.60)
 		slot.pressed.connect(_toggle_ability.bind(ability.ability_id))
 		slot.info_requested.connect(_show_details)
 		index += 1

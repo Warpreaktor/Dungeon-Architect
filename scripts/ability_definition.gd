@@ -24,6 +24,10 @@ const UNLIMITED_RANGE: int = -1
 ## Необязательные затраты для будущих способностей: {"mana": 4, "rage": 2}.
 ## Не расходуются при составлении алгоритма; только при выполнении.
 @export var resource_costs: Dictionary = {}
+@export var passive: bool = false
+@export_range(0, 100, 1) var passive_health_threshold_percent: int = 0
+@export_range(0, 1000, 1) var passive_max_damage_bonus_percent: int = 0
+@export_range(0, 100, 1) var heal_on_kill_percent: int = 0
 @export var affects_all_enemies: bool = false
 @export var requires_full_fury: bool = false
 @export var arms_fury_guard: bool = false
@@ -40,7 +44,7 @@ func validation_error() -> String:
 		return "Некорректный ID способности"
 	if display_name.strip_edges().is_empty():
 		return "Отсутствует название способности"
-	if effects.is_empty():
+	if effects.is_empty() and not passive:
 		return "Способность не содержит эффектов"
 	if damage_delivery < DamageDelivery.MELEE or damage_delivery > DamageDelivery.MAGIC:
 		return "Некорректный вид урона"
@@ -92,6 +96,8 @@ func resource_failure(participant: BattleParticipant) -> String:
 func unavailable_reason(participant: BattleParticipant, ignore_fury: bool = false) -> String:
 	if participant == null or not participant.is_alive():
 		return "Участник боя недоступен"
+	if passive:
+		return "Пассивная способность"
 	if requires_full_fury and not ignore_fury and not participant.is_fury_unleashed():
 		return "Требуется Срыв"
 	if int(participant.energy_cooldowns.get(ability_id, 0)) > 0:
@@ -107,6 +113,14 @@ func unavailable_reason(participant: BattleParticipant, ignore_fury: bool = fals
 		if not requirement.is_met(participant):
 			return requirement.failure_reason()
 	return resource_failure(participant)
+
+
+func passive_damage_bonus(participant: BattleParticipant) -> float:
+	if not passive or participant == null or passive_health_threshold_percent <= 0 or participant.max_health <= 0:
+		return 0.0
+	var health_percent: float = float(participant.health) * BattleMath.PERCENT_SCALE / float(participant.max_health)
+	var lost: float = clampf(1.0 - health_percent / float(passive_health_threshold_percent), 0.0, 1.0)
+	return lost * float(passive_max_damage_bonus_percent) / float(BattleMath.PERCENT_SCALE)
 
 
 func get_description() -> String:

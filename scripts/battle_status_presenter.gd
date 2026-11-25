@@ -7,6 +7,11 @@ signal info_requested(actor_id: String, status_id: String)
 const STATUS_ICONS: Dictionary = {
 	"bleeding": preload("res://assets/abilities/statuses/bleeding.png"),
 	"petushan_accuracy_down": preload("res://assets/abilities/statuses/accuracy_down.png"),
+	"petushan_feathers_up": preload("res://assets/abilities/petushan/feathers_up.png"),
+	"petushan_battle_cry": preload("res://assets/abilities/petushan/battle_cry.png"),
+	"petushan_battle_cry_weaken": preload("res://assets/abilities/petushan/battle_cry.png"),
+	"petushan_chest_charge": preload("res://assets/abilities/petushan/chest_charge.png"),
+	"petushan_wrong_opponent": preload("res://assets/abilities/petushan/wrong_opponent.png"),
 	"fallen_hero_infection": preload("res://assets/abilities/fallen_hero/rotten_bite.png"),
 	"rabbit_master_mark": preload("res://assets/abilities/statuses/rabbit_master_mark.png"),
 	"burolom_crack": preload("res://assets/abilities/burolom/notch.png"),

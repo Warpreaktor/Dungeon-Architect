@@ -13,10 +13,17 @@ const ICON_PATHS := {
 	"volcha_broken_rhythm": "res://assets/abilities/volcha/broken_rhythm.png",
 	"volcha_cut_tendons": "res://assets/abilities/volcha/cut_tendons.png",
 
-	# Петушан: стартовый набор.
+	# Петушан.
 	"petushan_peck_while_hot": "res://assets/abilities/petushan/peck_while_hot.png",
 	"petushan_not_in_brow_but_eye": "res://assets/abilities/petushan/not_in_brow_but_eye.png",
 	"petushan_spur_under_rib": "res://assets/abilities/petushan/spur_under_rib.png",
+	"petushan_feathers_up": "res://assets/abilities/petushan/feathers_up.png",
+	"petushan_rooster_whirlwind": "res://assets/abilities/petushan/rooster_whirlwind.png",
+	"petushan_battle_cry": "res://assets/abilities/petushan/battle_cry.png",
+	"petushan_chest_charge": "res://assets/abilities/petushan/chest_charge.png",
+	"petushan_red_comb": "res://assets/abilities/petushan/red_comb.png",
+	"petushan_wrong_opponent": "res://assets/abilities/petushan/wrong_opponent.png",
+	"petushan_last_crow": "res://assets/abilities/petushan/last_crow.png",
 
 	"volcha_predator_response": "res://assets/abilities/volcha/predator_response.png",
 	"volcha_find_weakness": "res://assets/abilities/volcha/find_weakness.png",

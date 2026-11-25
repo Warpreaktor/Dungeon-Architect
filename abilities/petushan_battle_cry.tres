@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/petushan/battle_cry.png" id="3_icon"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+kind = 3
+recipient = 0
+status_id = "petushan_battle_cry"
+status_label = "Боевой клич"
+status_stat = 4
+status_modifier = 3
+status_clock = 1
+duration_ticks = 2
+full_owner_turns = true
+battle_only = true
+
+[sub_resource type="Resource" id="Effect1"]
+script = ExtResource("2_effect")
+kind = 3
+recipient = 1
+status_id = "petushan_battle_cry_weaken"
+status_label = "Ошеломление кличем"
+armor_penalty = 2
+status_clock = 1
+duration_ticks = 2
+full_owner_turns = true
+battle_only = true
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "petushan_battle_cry"
+display_name = "КУКАРЕКУ, ТВАРЬ!"
+description = "Повышает урон собственных атак на {effect_0_status_modifier} {effect_0_status_duration}; снижает броню цели на {effect_1_armor_penalty} {effect_1_status_duration}."
+icon = ExtResource("3_icon")
+category = 2
+target = 1
+effects = Array[Resource]([SubResource("Effect0"), SubResource("Effect1")])
+resource_costs = {"energy": 4}

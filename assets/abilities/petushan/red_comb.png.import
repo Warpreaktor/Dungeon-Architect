@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dmd41x7v0dau0"
-path="res://.godot/imported/extra_03.png-8724647fc0734a90f3b03ae137520c57.ctex"
+uid="uid://bohu5etjtullk"
+path="res://.godot/imported/red_comb.png-00667857d3a23f9cce8c615614085348.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/petushan/extra_03.png"
-dest_files=["res://.godot/imported/extra_03.png-8724647fc0734a90f3b03ae137520c57.ctex"]
+source_file="res://assets/abilities/petushan/red_comb.png"
+dest_files=["res://.godot/imported/red_comb.png-00667857d3a23f9cce8c615614085348.ctex"]
 
 [params]
 

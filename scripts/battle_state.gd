@@ -118,17 +118,26 @@ func next_round_actor_id() -> String:
 func prepare_next_round() -> String:
 	if not round_combat_active or is_victory or is_defeat:
 		return ""
-	var actor_id: String = next_round_actor_id()
-	if actor_id.is_empty():
-		_open_round()
-		actor_id = next_round_actor_id()
-	if not actor_id.is_empty() and _prepared_turn_actor != actor_id:
-		_prepared_turn_event_start = events.size()
+	var event_start: int = events.size()
+	while not (is_victory or is_defeat):
+		var actor_id: String = next_round_actor_id()
+		if actor_id.is_empty():
+			_open_round()
+			actor_id = next_round_actor_id()
+		if actor_id.is_empty():
+			return ""
+		if _prepared_turn_actor == actor_id:
+			return actor_id
+		_prepared_turn_event_start = event_start
 		_prepared_turn_actor = actor_id
 		var actor: BattleParticipant = get_participant(actor_id)
 		events.append_array(EnergyAbilityResolver.at_turn_start(create_context(), actor))
 		update_outcome()
-	return actor_id
+		if actor.is_alive():
+			return actor_id
+		round_cursor = round_order.find(actor_id) + 1
+		_prepared_turn_actor = ""
+	return ""
 
 
 func _open_round() -> void:
@@ -234,7 +243,7 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 	actor.is_resting = false
 	_prepared_turn_actor = ""
 	if not (is_victory or is_defeat):
-		_advance_round_owner_clocks(actor_id, tick)
+		_advance_round_owner_clocks(actor_id, tick, is_rest)
 	var round_finished: bool = round_cursor >= round_order.size() or is_victory or is_defeat
 	if not round_finished:
 		round_finished = next_round_actor_id().is_empty()
@@ -247,11 +256,18 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 		"events": events.slice(start_event)}
 
 
-func _advance_round_owner_clocks(actor_id: String, tick: int) -> void:
+func _advance_round_owner_clocks(actor_id: String, tick: int, is_rest: bool = false) -> void:
 	var actor: BattleParticipant = get_participant(actor_id)
 	if actor == null or not actor.is_alive():
 		return
-	events.append_array(actor.owner_phase_status_damage_events(actor_id))
+	if is_rest:
+		actor.last_rest_tick = tick
+		events.append_array(actor.owner_phase_status_damage_events(actor_id, AbilityEffectDefinition.Clock.OWNER_REST))
+		for status_id in actor.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_REST, tick):
+			events.append({"type": "status_removed", "actor_id": actor_id,
+				"target_id": actor_id, "status_id": status_id, "removed": true})
+	if actor.is_alive():
+		events.append_array(actor.owner_phase_status_damage_events(actor_id))
 	var before_health: int = actor.health
 	var before_maximum: int = actor.max_health
 	for status_id in actor.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, tick):
@@ -758,7 +774,12 @@ func _complete_rest(actor_id: String, tick: int) -> void:
 	resting.completed_phases += 1
 	resting.last_rest_tick = tick
 	events.append({"type": "reload", "actor_id": actor_id, "tick": tick, "slot_index": -1, "target_id": actor_id})
-	events.append_array(resting.owner_phase_status_damage_events(actor_id))
+	events.append_array(resting.owner_phase_status_damage_events(actor_id, AbilityEffectDefinition.Clock.OWNER_REST))
+	for status_id in resting.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_REST, tick):
+		events.append({"type": "status_removed", "actor_id": actor_id,
+			"target_id": actor_id, "status_id": status_id, "removed": true})
+	if resting.is_alive():
+		events.append_array(resting.owner_phase_status_damage_events(actor_id))
 	var before_health: int = resting.health
 	var before_maximum: int = resting.max_health
 	for expired_id in resting.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, tick):

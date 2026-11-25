@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="AbilityDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_definition.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ability_effect_definition.gd" id="2_effect"]
+[ext_resource type="Texture2D" path="res://assets/abilities/petushan/last_crow.png" id="3_icon"]
+
+[sub_resource type="Resource" id="Effect0"]
+script = ExtResource("2_effect")
+damage_multiplier = 1.5
+target_health_below_percent = 30
+vs_low_health_multiplier = 2.0
+
+[resource]
+script = ExtResource("1_script")
+ability_id = "petushan_last_crow"
+display_name = "Последнее кукареку"
+description = "Удар ×{effect_0_damage_multiplier}; против цели с HP ниже {effect_0_target_health_below_percent}% — ×{effect_0_vs_low_health_multiplier}. При добивании восстанавливает {heal_on_kill_percent}% максимального здоровья."
+icon = ExtResource("3_icon")
+category = 0
+target = 1
+effects = Array[Resource]([SubResource("Effect0")])
+resource_costs = {"energy": 6}
+heal_on_kill_percent = 15

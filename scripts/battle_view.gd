@@ -528,7 +528,7 @@ func _refresh_chain_slots() -> void:
 		_sequence_slots.add_child(slot)
 		var can_use: bool = _round_mode and actor != null and actor.is_alive() and AbilityCatalog.unavailable_reason(actor, ability_id).is_empty()
 		slot.configure(index, ability, can_use if _round_mode else available.has(index), actor)
-		if _round_mode and not can_use:
+		if _round_mode and not can_use and (ability == null or not ability.passive):
 			slot.modulate = Color(0.48, 0.48, 0.48)
 		elif _manual_started and not available.has(index):
 			slot.modulate = Color(0.48, 0.48, 0.48)

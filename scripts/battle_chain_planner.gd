@@ -19,7 +19,7 @@ static func validate(chain: Array[String], participant: BattleParticipant, check
 		return "Участнику доступно только %d слота" % participant.action_slot_capacity
 	for action_id in chain:
 		var ability: AbilityDefinition = AbilityCatalog.get_ability(action_id)
-		if ability == null or not AbilityCatalog.knows_ability(participant, action_id):
+		if ability == null or ability.passive or not AbilityCatalog.knows_ability(participant, action_id):
 			return "Недоступный приём: %s" % action_id
 		if not ability.validation_error().is_empty():
 			return "Некорректный приём: %s" % action_id

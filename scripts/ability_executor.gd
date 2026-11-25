@@ -55,6 +55,8 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 	var resonance_triggered: bool = false
 	var stance_counter_used: bool = false
 	for effect in ability.effects:
+		if not actor.is_alive():
+			break
 		var recipient: BattleParticipant = actor if effect.recipient == AbilityEffectDefinition.Recipient.SELF else target
 		if recipient == null:
 			return _failure("Нет цели эффекта")
@@ -88,6 +90,8 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 						original_target = context.get_participant(living[context.rng.randi_range(0, living.size() - 1)] if context.rng != null else living[0])
 					recipient = original_target
 					var raw_damage: int = int(raw_by_target.get(original_target.participant_id, 0))
+					if effect.bonus_after_armor_damage_percent > 0 and bool(last_hit.get("armor_damaged", false)) and str(last_hit.get("target_id", "")) == original_target.participant_id:
+						raw_damage = floori(float(raw_damage) * (1.0 + float(effect.bonus_after_armor_damage_percent) / BattleMath.PERCENT_SCALE))
 					var protector_id: String = str(context.redirects.get(recipient.participant_id, ""))
 					var protector: BattleParticipant = context.get_participant(protector_id) if not protector_id.is_empty() else null
 					if protector != null and protector.is_alive():
@@ -101,7 +105,7 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					var saved_block: int = recipient.block_armor if protector != null and recipient == protector else 0
 					if protector != null and recipient == protector:
 						recipient.block_armor = 0
-					var incoming_stances: Dictionary = recipient.statuses.duplicate() if ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE else {}
+					var incoming_stances: Dictionary = recipient.statuses.duplicate()
 					last_hit = apply_damage(actor, recipient, raw_damage, ability_id, context.rng,
 						attack_pierce(actor, effect), accuracy_offset, ability.damage_delivery)
 					if protector != null and recipient == protector:
@@ -120,27 +124,8 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 						if recipient.remove_status(effect.target_status_id):
 							event_list.append({"type": "status_removed", "actor_id": actor_id,
 								"target_id": recipient.participant_id, "status_id": effect.target_status_id, "removed": true})
-					var counter_statuses: Dictionary = recipient.statuses.duplicate()
-					for status_id in incoming_stances:
-						var incoming: Dictionary = incoming_stances[status_id]
-						if int(incoming.get("clock", -1)) == AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK:
-							counter_statuses[status_id] = incoming
-							if not recipient.statuses.has(status_id):
-								event_list.append({"type": "status_removed", "actor_id": recipient.participant_id,
-									"target_id": recipient.participant_id, "status_id": status_id, "removed": true})
-					if not stance_counter_used and recipient.is_alive() and actor.is_alive() and recipient != actor:
-						for status in counter_statuses.values():
-							if int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK and ability.damage_delivery != AbilityDefinition.DamageDelivery.MELEE:
-								continue
-							var retaliation_multiplier: float = float(status.get("counter_damage_multiplier", 0.0))
-							if retaliation_multiplier > 0.0:
-								stance_counter_used = true
-								var retaliation: Dictionary = apply_damage(recipient, actor,
-									floori(recipient.melee_attack_value() * retaliation_multiplier),
-									str(status.get("counter_ability_id", "")), context.rng)
-								retaliation["type"] = "counter"
-								event_list.append(retaliation)
-								break
+					if resolve_stance_reaction(actor, recipient, incoming_stances, last_hit, ability.damage_delivery, context.rng, event_list, not stance_counter_used):
+						stance_counter_used = true
 					if protector != null and recipient == protector and protector.is_alive() and actor.is_alive() and context.counter_multiplier > 0.0:
 						var counter_damage: int = floori(protector.melee_attack_value() * context.counter_multiplier)
 						event_list.append(apply_damage(protector, actor, counter_damage, context.counter_ability_id, context.rng))
@@ -178,6 +163,12 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 					continue
 				if effect.requires_unblocked_hit and (last_hit.is_empty() or bool(last_hit.get("dodged", false)) or bool(last_hit.get("was_blocking", false))):
 					continue
+				if effect.interrupt_preparation:
+					recipient.block_armor = 0
+					recipient.block_attack_bonus_percent = 0
+					recipient.fury_guard_armed = false
+					event_list.append({"type": "block_consumed", "actor_id": actor_id,
+						"target_id": recipient.participant_id, "ability_id": ability_id, "armor": 0})
 				var before_health: int = recipient.health
 				var before_max_health: int = recipient.max_health
 				var previous_status: Dictionary = recipient.statuses.get(effect.status_id, {})
@@ -201,9 +192,10 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 				# Если цель уже отдыхала ранее в этом же такте, кровь тоже
 				# должна снять HP за эту фазу. Другой порядок покрыт BattleState.
 				if effect.tick_damage > 0 and recipient.last_rest_tick == context.current_tick:
-					var instant: Array[Dictionary] = recipient.owner_phase_status_damage_events(recipient.participant_id)
+					var clock: int = effect.effective_status_clock()
+					var instant: Array[Dictionary] = recipient.owner_phase_status_damage_events(recipient.participant_id, clock)
 					event_list.append_array(instant)
-					var expired: Array[String] = recipient.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, context.current_tick)
+					var expired: Array[String] = recipient.advance_status_clock(clock, context.current_tick)
 					for expired_id in expired:
 						event_list.append({"type": "status_removed", "actor_id": recipient.participant_id,
 							"target_id": recipient.participant_id, "status_id": expired_id, "removed": true})
@@ -272,7 +264,7 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 	total += actor.status_modifier(AbilityEffectDefinition.Stat.ATTACK_POWER)
 	if actor.is_fury_unleashed() and ability.damage_delivery != AbilityDefinition.DamageDelivery.MAGIC:
 		total *= 1.0 + actor.fury_rules.physical_bonus
-	return maxi(floori(total), 0)
+	return maxi(floori(total * AbilityCatalog.passive_damage_multiplier(actor)), 0)
 
 
 static func attack_pierce(actor: BattleParticipant, effect: AbilityEffectDefinition) -> float:
@@ -288,12 +280,18 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 	var melee_dodge: int = target.status_modifier(AbilityEffectDefinition.Stat.MELEE_DODGE_PERCENT) if delivery == AbilityDefinition.DamageDelivery.MELEE else 0
 	var dodge_percent: int = clampi(target.dodge_chance_against(actor) + melee_dodge - accuracy_offset_percent, 0, BattleMath.PERCENT_SCALE)
 	var dodged: bool = rng != null and dodge_percent > 0 and rng.randf() < float(dodge_percent) / float(BattleMath.PERCENT_SCALE)
+	var reduction: int = 0
+	for status in target.statuses.values():
+		var clock: int = int(status.get("clock", -1))
+		if clock == AbilityEffectDefinition.Clock.INCOMING_ATTACK or (clock == AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK and delivery == AbilityDefinition.DamageDelivery.MELEE):
+			reduction += int(status.get("incoming_damage_reduction_percent", 0))
+	var reduced_raw: int = floori(float(raw) * (1.0 - float(clampi(reduction, 0, 100)) / BattleMath.PERCENT_SCALE))
 	# Even an avoided attack spends 'next incoming attack' dodge bonuses.
 	target.advance_status_clock(AbilityEffectDefinition.Clock.INCOMING_ATTACK)
 	if delivery == AbilityDefinition.DamageDelivery.MELEE:
 		target.advance_status_clock(AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK)
 	var hp_before: int = target.health
-	var taken: int = 0 if dodged else target.receive_damage(raw, armor_pierce_fraction)
+	var taken: int = 0 if dodged else target.receive_damage(reduced_raw, armor_pierce_fraction)
 	var guard_triggered: bool = not dodged and target.fury_guard_armed
 	if guard_triggered:
 		target.fury_guard_armed = false
@@ -306,13 +304,51 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 		"dodge_after": target.dodge_percent(),
 		"effective_dodge_after": target.dodge_chance_against(actor),
 		"accuracy_after": target.accuracy_percent(),
-		"was_blocking": was_blocking,
+		"was_blocking": was_blocking, "armor_damaged": not dodged and target.last_shield_blocked > 0,
 		"blocked": 0 if dodged else maxi(raw - taken, 0), "hp_after": target.health,
 		"hp_max": target.max_health, "armor_after": target.effective_defense(),
 		"active_block_after": target.block_armor,
 		"shield_durability_after": shield_durability_after,
 		"shield_blocked": target.last_shield_blocked, "block_absorbed": target.last_block_absorbed,
 		"shield_broken": target.last_shield_broken}
+
+
+static func resolve_stance_reaction(actor: BattleParticipant, recipient: BattleParticipant,
+		before: Dictionary, hit: Dictionary, delivery: int, rng: RandomNumberGenerator,
+		events: Array[Dictionary], allow_counter: bool = true) -> bool:
+	var candidates: Dictionary = recipient.statuses.duplicate()
+	for status_id in before:
+		var status: Dictionary = before[status_id]
+		var clock: int = int(status.get("clock", -1))
+		var consumed: bool = clock == AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK and delivery == AbilityDefinition.DamageDelivery.MELEE
+		if clock == AbilityEffectDefinition.Clock.INCOMING_ATTACK:
+			consumed = float(status.get("counter_damage_multiplier", 0.0)) > 0.0 or int(status.get("incoming_damage_reduction_percent", 0)) > 0
+		if not consumed:
+			continue
+		candidates[status_id] = status
+		if not recipient.statuses.has(status_id):
+			events.append({"type": "status_removed", "actor_id": recipient.participant_id,
+				"target_id": recipient.participant_id, "status_id": status_id, "removed": true})
+	if not allow_counter or not recipient.is_alive() or not actor.is_alive() or recipient == actor:
+		return false
+	var selected: Dictionary = {}
+	var multiplier: float = 0.0
+	for status in candidates.values():
+		if (int(status.get("clock", -1)) == AbilityEffectDefinition.Clock.MELEE_INCOMING_ATTACK or bool(status.get("counter_melee_only", false))) and delivery != AbilityDefinition.DamageDelivery.MELEE:
+			continue
+		if bool(status.get("counter_requires_hit", false)) and bool(hit.get("dodged", false)):
+			continue
+		var candidate: float = float(status.get("counter_damage_multiplier", 0.0))
+		if candidate > multiplier:
+			selected = status
+			multiplier = candidate
+	if selected.is_empty():
+		return false
+	var raw: int = floori(recipient.melee_attack_value() * multiplier * AbilityCatalog.passive_damage_multiplier(recipient))
+	var counter: Dictionary = apply_damage(recipient, actor, raw, str(selected.get("counter_ability_id", "")), rng)
+	counter["type"] = "counter"
+	events.append(counter)
+	return true
 
 
 static func _attack_targets(context: BattleContext, actor: BattleParticipant, target: BattleParticipant,
@@ -345,6 +381,7 @@ static func _finish_action(context: BattleContext, actor: BattleParticipant, abi
 	var all_missed: bool = true
 	var all_blocked: bool = true
 	var dealt: int = 0
+	var killed: bool = false
 	for event in events:
 		if str(event.get("type", "")) not in ["attack", "counter"]:
 			continue
@@ -358,6 +395,7 @@ static func _finish_action(context: BattleContext, actor: BattleParticipant, abi
 			continue
 		outgoing_hits += 1
 		dealt += hp_damage
+		killed = killed or (hp_damage > 0 and int(event.get("hp_after", -1)) == 0)
 		var missed: bool = bool(event.get("dodged", false))
 		all_missed = all_missed and missed
 		if not missed:
@@ -384,6 +422,10 @@ static func _finish_action(context: BattleContext, actor: BattleParticipant, abi
 			actor.spend_fury(actor.fury())
 		else:
 			actor.spend_fury(ability.fury_spend_after_cast)
+	if killed and ability.heal_on_kill_percent > 0 and actor.is_alive():
+		var healed: int = actor.restore_health(ceili(float(actor.max_health) * float(ability.heal_on_kill_percent) / BattleMath.PERCENT_SCALE))
+		events.append({"type": "heal", "actor_id": actor.participant_id, "target_id": actor.participant_id,
+			"ability_id": ability.ability_id, "healed": healed, "hp_after": actor.health, "hp_max": actor.max_health})
 	if ability.damage_heal_ratio > 0.0 and dealt > 0 and actor.is_alive():
 		var amount: int = mini(floori(float(dealt) * ability.damage_heal_ratio), ability.damage_heal_cap)
 		var healed: int = actor.restore_health(amount)

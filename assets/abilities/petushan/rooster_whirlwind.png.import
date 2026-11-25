@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cqm78wl8dl0x4"
-path="res://.godot/imported/extra_07.png-14d7547819bd8e6de04ab50a7c3de3a2.ctex"
+uid="uid://df7smor2y37ck"
+path="res://.godot/imported/rooster_whirlwind.png-79e80380f590daf71d1699d5e4bcd657.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/petushan/extra_07.png"
-dest_files=["res://.godot/imported/extra_07.png-14d7547819bd8e6de04ab50a7c3de3a2.ctex"]
+source_file="res://assets/abilities/petushan/rooster_whirlwind.png"
+dest_files=["res://.godot/imported/rooster_whirlwind.png-79e80380f590daf71d1699d5e4bcd657.ctex"]
 
 [params]
 

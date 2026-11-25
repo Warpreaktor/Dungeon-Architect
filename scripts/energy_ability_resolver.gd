@@ -74,7 +74,10 @@ static func resolve_area(context: BattleContext, actor: BattleParticipant,
 	var result: Array[Dictionary] = []
 	var targets: Array[String] = context.target_ids(actor.participant_id, ability)
 	var resonance_triggered: Dictionary = {}
+	var counter_used: bool = false
 	for target_id in targets:
+		if not actor.is_alive():
+			break
 		var target: BattleParticipant = context.get_participant(target_id)
 		if target == null or not target.is_alive():
 			continue
@@ -83,6 +86,7 @@ static func resolve_area(context: BattleContext, actor: BattleParticipant,
 			match effect.kind:
 				AbilityEffectDefinition.Kind.DAMAGE:
 					var raw: int = AbilityExecutor.preview_damage(actor, ability, effect, target, -1, energy_before)
+					var stances: Dictionary = target.statuses.duplicate()
 					last_hit = AbilityExecutor.apply_damage(actor, target, raw, ability.ability_id,
 						context.rng, AbilityExecutor.attack_pierce(actor, effect), effect.accuracy_offset_percent, ability.damage_delivery)
 					result.append(last_hit)
@@ -91,6 +95,10 @@ static func resolve_area(context: BattleContext, actor: BattleParticipant,
 						if not bonus.is_empty():
 							resonance_triggered[target_id] = true
 							result.append(bonus)
+					if AbilityExecutor.resolve_stance_reaction(actor, target, stances, last_hit, ability.damage_delivery, context.rng, result, not counter_used):
+						counter_used = true
+					if not actor.is_alive():
+						break
 				AbilityEffectDefinition.Kind.APPLY_STATUS:
 					if not target.is_alive():
 						continue
@@ -130,6 +138,8 @@ static func at_turn_start(context: BattleContext, actor: BattleParticipant) -> A
 			"target_id": actor.participant_id, "amount": restored,
 			"remaining": actor.current_energy()})
 	for target_id in actor.energy_delayed_attacks.keys():
+		if not actor.is_alive():
+			break
 		var attack: Dictionary = actor.energy_delayed_attacks[target_id]
 		attack["turns"] = int(attack.get("turns", 0)) - 1
 		if int(attack["turns"]) > 0:
@@ -139,6 +149,7 @@ static func at_turn_start(context: BattleContext, actor: BattleParticipant) -> A
 		var target: BattleParticipant = context.get_participant(str(target_id))
 		if target == null or not target.is_alive():
 			continue
+		var stances: Dictionary = target.statuses.duplicate()
 		var hit: Dictionary = AbilityExecutor.apply_damage(actor, target, int(attack.get("damage", 0)),
 			str(attack.get("ability_id", "")), context.rng, 0.0, 0, AbilityDefinition.DamageDelivery.MAGIC)
 		result.append(hit)
@@ -147,6 +158,7 @@ static func at_turn_start(context: BattleContext, actor: BattleParticipant) -> A
 				target.gain_fury(target.fury_rules.gain_on_health_damage)
 			if bool(hit.get("fury_guard_triggered", false)):
 				target.gain_fury(target.fury_rules.gain_on_guard_hit)
+		AbilityExecutor.resolve_stance_reaction(actor, target, stances, hit, AbilityDefinition.DamageDelivery.MAGIC, context.rng, result)
 	return result
 
 

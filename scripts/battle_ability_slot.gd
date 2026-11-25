@@ -74,7 +74,7 @@ func _show_info() -> void:
 
 func configure(index: int, ability: AbilityDefinition, editable: bool, actor: BattleParticipant = null) -> void:
 	slot_index = index
-	_slot_number.text = "%02d" % (index + 1)
+	_slot_number.text = "П" if ability != null and ability.passive else "%02d" % (index + 1)
 	_slot_name.text = ability.display_name if ability != null else "Добавить"
 	_slot_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_slot_icon.texture = visual_icon(ability)

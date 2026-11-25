@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://df7smor2y37ck"
-path="res://.godot/imported/extra_02.png-82465af01868b36de3e4e42d30d87317.ctex"
+uid="uid://cv8nrjpkj4qcb"
+path="res://.godot/imported/chest_charge.png-92d9a3a984870625e7573f73e1df0b9e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/petushan/extra_02.png"
-dest_files=["res://.godot/imported/extra_02.png-82465af01868b36de3e4e42d30d87317.ctex"]
+source_file="res://assets/abilities/petushan/chest_charge.png"
+dest_files=["res://.godot/imported/chest_charge.png-92d9a3a984870625e7573f73e1df0b9e.ctex"]
 
 [params]
 

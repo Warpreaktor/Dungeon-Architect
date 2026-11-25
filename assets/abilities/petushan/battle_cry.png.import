@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://sjm30wffwcgf"
-path="res://.godot/imported/extra_06.png-e201a93561ed09154149cda27f41aade.ctex"
+uid="uid://dmd41x7v0dau0"
+path="res://.godot/imported/battle_cry.png-3fac75a22def3233642cf5d7298076a2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/abilities/petushan/extra_06.png"
-dest_files=["res://.godot/imported/extra_06.png-e201a93561ed09154149cda27f41aade.ctex"]
+source_file="res://assets/abilities/petushan/battle_cry.png"
+dest_files=["res://.godot/imported/battle_cry.png-3fac75a22def3233642cf5d7298076a2.ctex"]
 
 [params]
 

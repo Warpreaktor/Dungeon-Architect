@@ -29,6 +29,9 @@ func _verify() -> void:
 	var combat := CombatSession.new(MonsterCatalog.get_monster("skeleton"), party[0], null, 7742, party)
 	view.begin(combat, party[0])
 	await process_frame
+	assert(view._turn_frame_overlays.has("hero"))
+	assert((view._turn_frame_overlays["hero"] as Control).visible)
+	assert(view._turn_frame_overlays.has("enemy"))
 	view._equalize_hero_cards()
 	assert(view._hero_party.alignment == BoxContainer.ALIGNMENT_CENTER)
 	assert((view.get_node("OuterMargin/Main/Battlefield/HeroSide/HeroParty/HeroCard") as Control).custom_minimum_size.x <= 202.0)

@@ -84,6 +84,7 @@ var _selected_manual_slot: int = -2
 var _target_outlines: Dictionary = {}
 var _support_hero_view: BattleSupportEnemyView
 var _extra_hero_views: Dictionary = {}
+var _turn_frame_overlays: Dictionary = {}
 var _extra_hero_hp: Dictionary = {}
 var _extra_hero_max: Dictionary = {}
 var _hero_energy_label: Label
@@ -183,6 +184,12 @@ func _ready() -> void:
 	_bind_target_portrait(_hero_portrait, "hero")
 	_bind_target_portrait(_enemy_portrait, "enemy")
 	_bind_target_portrait(_support_enemy_view.portrait_node(), BattleState.SUPPORT_ENEMY_ID)
+	_register_turn_frame("hero", _hero_portrait)
+	_register_turn_frame("enemy", _enemy_portrait)
+	_register_turn_frame(BattleState.SUPPORT_ENEMY_ID, _support_enemy_view.portrait_node())
+	for actor_id in _extra_hero_views.keys():
+		var extra_view: BattleSupportEnemyView = _extra_hero_views[actor_id] as BattleSupportEnemyView
+		_register_turn_frame(actor_id, extra_view.portrait_node())
 	_enemy_health_meter.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
 	_hero_health_meter.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
 	_enemy_party.resized.connect(_equalize_enemy_cards)
@@ -266,6 +273,40 @@ func _equalize_hero_cards() -> void:
 		card.custom_minimum_size.x = width
 
 
+
+
+func _register_turn_frame(actor_id: String, portrait: TextureRect) -> void:
+	if portrait == null or actor_id.is_empty():
+		return
+	var frame := Panel.new()
+	frame.name = "TurnFrame"
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.visible = false
+	frame.z_index = 1
+	frame.anchor_right = 1.0
+	frame.anchor_bottom = 1.0
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(1.0, 1.0, 1.0, 0.0)
+	style.border_color = Color(0.98, 0.82, 0.47, 0.98)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(12)
+	style.shadow_color = Color(0.72, 0.52, 0.16, 0.45)
+	style.shadow_size = 8
+	frame.add_theme_stylebox_override("panel", style)
+	portrait.add_child(frame)
+	_turn_frame_overlays[actor_id] = frame
+
+
+func _refresh_active_turn_frame() -> void:
+	for frame in _turn_frame_overlays.values():
+		(frame as Control).visible = false
+	var actor_id: String = _round_next_actor()
+	if actor_id.is_empty():
+		return
+	var frame: Control = _turn_frame_overlays.get(actor_id) as Control
+	if frame != null:
+		frame.visible = true
+
 func _build_round_controls() -> void:
 	var actions: HBoxContainer = $OuterMargin/Main/BottomPanel/ActionsMargin/ActionsColumn/Actions
 	_round_turn_label = Label.new()
@@ -316,6 +357,7 @@ func _refresh_round_controls() -> void:
 		else:
 			_round_turn_label.text += " · " + _enemy_name_for_id(actor_id)
 	_refresh_target_outlines()
+	_refresh_active_turn_frame()
 
 
 func _execute_round_turn(target_id: String = "", ability_id: String = "") -> void:
@@ -1321,9 +1363,11 @@ func _after_phase_playback() -> void:
 				hero_actor._hero_snapshot.last_shield_broken = ""
 	if _combat.is_victory:
 		combat_log_line.emit("Бой окончен: победа %s" % _hero_name.text)
+		_refresh_active_turn_frame()
 		_show_victory()
 	elif _combat.is_defeat:
 		combat_log_line.emit("Бой окончен: поражение %s" % _hero_name.text)
+		_refresh_active_turn_frame()
 		_show_defeat()
 	else:
 		_result_text.text = ""
@@ -1368,8 +1412,10 @@ func _after_round_playback() -> void:
 			source.last_shield_broken = ""
 	_round_event_cursor = state.events.size()
 	if _combat.is_victory:
+		_refresh_active_turn_frame()
 		_show_victory()
 	elif _combat.is_defeat:
+		_refresh_active_turn_frame()
 		_show_defeat()
 	else:
 		_refresh_enemy_slots()

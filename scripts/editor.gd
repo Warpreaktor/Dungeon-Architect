@@ -68,16 +68,16 @@ const TOOLS := [
 	{"id": "erase", "label": "Ластик", "hint": "Удалить верхний объект или стену"}
 ]
 const TOOL_ICONS := {
-	"hand": preload("res://assets/icons/hand.png"),
-	"floor": preload("res://assets/icons/floor.png"),
-	"wall": preload("res://assets/icons/wall.png"),
-	"door": preload("res://assets/icons/door.png"),
-	"chest": preload("res://assets/icons/chest.png"),
-	"stairs_down": preload("res://assets/icons/stairs_down.png"),
-	"trigger": preload("res://assets/icons/trigger.png"),
-	"message": preload("res://assets/icons/message.png"),
-	"player_spawn": preload("res://assets/icons/player_spawn.png"),
-	"erase": preload("res://assets/icons/erase.png")
+	"hand": preload("res://assets/icons/commands/hand.png"),
+	"floor": preload("res://assets/icons/map_objects/floor.png"),
+	"wall": preload("res://assets/icons/map_objects/wall.png"),
+	"door": preload("res://assets/icons/map_objects/door.png"),
+	"chest": DungeonCanvas.CHEST_TEXTURE,
+	"stairs_down": preload("res://assets/icons/map_objects/stairs_down.png"),
+	"trigger": preload("res://assets/icons/map_objects/trigger.png"),
+	"message": preload("res://assets/icons/map_objects/message.png"),
+	"player_spawn": preload("res://assets/icons/map_objects/player_spawn.png"),
+	"erase": preload("res://assets/icons/commands/erase.png")
 }
 
 var map_data: DungeonMap

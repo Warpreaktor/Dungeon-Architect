@@ -5,7 +5,7 @@ func _initialize() -> void:
 	_test_two_heroes_and_shared_inventory()
 	_test_fallen_hero_and_defeat()
 	_test_corrupt_snapshot_is_rejected()
-	_test_stairs_use_palette_art()
+	_test_map_objects_use_palette_art()
 	print("Stage 5 party snapshot: heroes, bag, shield instances, statuses, casualties, RNG and stairs OK")
 	quit()
 
@@ -158,5 +158,9 @@ func _test_corrupt_snapshot_is_rejected() -> void:
 	assert(JSON.stringify(source.party_state_snapshot()) == original)
 
 
-func _test_stairs_use_palette_art() -> void:
-	assert(DungeonCanvas.STAIRS_DOWN_TEXTURE == load("res://assets/icons/stairs_down.png"))
+func _test_map_objects_use_palette_art() -> void:
+	assert(DungeonCanvas.STAIRS_DOWN_TEXTURE == load("res://assets/icons/map_objects/stairs_down.png"))
+	assert(DungeonCanvas.CHEST_TEXTURE == load("res://assets/icons/map_objects/chest.png"))
+	var editor_script: Script = load("res://scripts/editor.gd")
+	var palette: Dictionary = editor_script.get_script_constant_map()["TOOL_ICONS"]
+	assert(palette["chest"] == DungeonCanvas.CHEST_TEXTURE)

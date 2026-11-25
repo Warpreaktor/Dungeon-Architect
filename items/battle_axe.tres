@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="ItemDefinition" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/item_definition.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assets/icons/battle_axe.png" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/weapons/battle_axe.png" id="2_icon"]
 
 [ext_resource type="Texture2D" path="res://assets/abilities/monster_weapons/battle_axe.png" id="9_attack_icon"]
 

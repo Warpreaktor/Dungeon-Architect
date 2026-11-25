@@ -18,11 +18,11 @@ const HIT_COLOR: Color = Color(1.0, 0.25, 0.25, 1.0)
 const STATUS_TEXTURES: Dictionary = {
 	"bleeding": preload("res://assets/abilities/statuses/bleeding.png"),
 	"fallen_hero_infection": preload("res://assets/abilities/fallen_hero/rotten_bite.png"),
-	"strength": preload("res://assets/icons/potion_strength_small.png"),
-	"vitality": preload("res://assets/icons/potion_vitality_small.png"),
-	"vision": preload("res://assets/icons/potion_vision_small.png")
+	"strength": preload("res://assets/icons/potions/potion_strength_small.png"),
+	"vitality": preload("res://assets/icons/potions/potion_vitality_small.png"),
+	"vision": preload("res://assets/icons/potions/potion_vision_small.png")
 }
-const DEFAULT_STATUS_ICON: Texture2D = preload("res://assets/icons/trigger.png")
+const DEFAULT_STATUS_ICON: Texture2D = preload("res://assets/icons/map_objects/trigger.png")
 const HEALTH_BACKGROUND_COLOR: Color = Color("#263039")
 const HEALTH_FILL_COLOR: Color = Color("#d45062")
 const HEALTH_EDGE_COLOR: Color = Color("#70808f")

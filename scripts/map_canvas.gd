@@ -18,13 +18,14 @@ const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
 const WALL_TEXTURE: Texture2D = preload("res://assets/stone_wall.png")
 const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.png")
 var _portal_texture: Texture2D = ImageAsset.texture("res://assets/icons/portals/portal_gateway.png")
-var _stairs_up_texture: Texture2D = ImageAsset.texture("res://assets/icons/stairs_up.png")
+var _stairs_up_texture: Texture2D = ImageAsset.texture("res://assets/icons/map_objects/stairs_up.png")
 var _local_portal_textures: Dictionary = {}
 var _monster_icons: Dictionary = {}
 var _trap_icons: Dictionary = {}
 var _door_trap_icons: Dictionary = {}
 
-const STAIRS_DOWN_TEXTURE: Texture2D = preload("res://assets/icons/stairs_down.png")
+const CHEST_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/chest.png")
+const STAIRS_DOWN_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/stairs_down.png")
 const DOUBLE_TAP_MS := 400
 const TAP_MOVE_LIMIT := 16.0
 const PLAY_START_ZOOM := 4.0
@@ -456,14 +457,7 @@ func _draw_trap(origin: Vector2, entity: Dictionary, disarmed: bool) -> void:
 
 
 func _draw_open_chest(origin: Vector2) -> void:
-	# Крышка откинута, внутри видна пустая тёмная полость.
-	draw_rect(Rect2(origin + Vector2(8, 8), Vector2(32, 13)), Color("#382817"))
-	draw_rect(Rect2(origin + Vector2(10, 10), Vector2(28, 9)), Color("#bd8b48"))
-	draw_rect(Rect2(origin + Vector2(12, 13), Vector2(24, 6)), Color("#211715"))
-	draw_rect(Rect2(origin + Vector2(8, 21), Vector2(32, 20)), Color("#382817"))
-	draw_rect(Rect2(origin + Vector2(10, 23), Vector2(28, 16)), Color("#a76a2d"))
-	draw_rect(Rect2(origin + Vector2(12, 23), Vector2(24, 9)), Color("#171014"))
-	draw_rect(Rect2(origin + Vector2(21, 29), Vector2(6, 10)), Color("#ffe2a0"))
+	draw_texture_rect(CHEST_TEXTURE, Rect2(origin, Vector2.ONE * TILE_SIZE), false, Color(0.48, 0.48, 0.48, 0.8))
 
 
 func _draw_entity(kind: String, origin: Vector2) -> void:
@@ -478,10 +472,7 @@ func _draw_entity(kind: String, origin: Vector2) -> void:
 			_draw_entity("chest", origin)
 			draw_circle(origin + Vector2(37, 12), 5, Color("#e8c58a"))
 		"chest":
-			draw_rect(Rect2(origin + Vector2(8, 17), Vector2(32, 23)), Color("#382817"))
-			draw_rect(Rect2(origin + Vector2(10, 19), Vector2(28, 19)), Color("#a76a2d"))
-			draw_rect(Rect2(origin + Vector2(10, 14), Vector2(28, 9)), Color("#d8a45b"))
-			draw_rect(Rect2(origin + Vector2(21, 16), Vector2(6, 16)), Color("#ffe2a0"))
+			draw_texture_rect(CHEST_TEXTURE, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		"portal":
 			if _portal_texture != null:
 				draw_texture_rect(_portal_texture, Rect2(origin, Vector2.ONE * TILE_SIZE), false)

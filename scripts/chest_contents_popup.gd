@@ -16,10 +16,10 @@ signal monster_configuration_changed(entity_id: String, party: Array[String], co
 
 const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Броня", "Перчатки", "Сапоги", "Пояса", "Амулеты", "Кольца", "Прочее"]
 const CATEGORY_ICONS := {
-	"Ключи": preload("res://assets/icons/key.png"),
+	"Ключи": preload("res://assets/icons/keys/key.png"),
 	"Зелья": preload("res://assets/icons/stats/24x24/potion.png"),
-	"Оружие": preload("res://assets/icons/sword.png"),
-	"Щиты": preload("res://assets/icons/shield.png"),
+	"Оружие": preload("res://assets/icons/weapons/sword.png"),
+	"Щиты": preload("res://assets/icons/shields/shield.png"),
 	"Шлемы": preload("res://assets/icons/helmets/helmet_leather.png"),
 	"Броня": preload("res://assets/icons/armors/armor_leather_vest.png"),
 	"Перчатки": preload("res://assets/icons/gloves/gloves_cloth_wraps.png"),
@@ -27,7 +27,7 @@ const CATEGORY_ICONS := {
 	"Пояса": preload("res://assets/icons/belts/belt_rope.png"),
 	"Амулеты": preload("res://assets/icons/amulets/amulet_knotted_cord.png"),
 	"Кольца": preload("res://assets/icons/rings/ring_copper_wire.png"),
-	"Прочее": preload("res://assets/icons/gold.png"),
+	"Прочее": preload("res://assets/icons/currency/gold.png"),
 }
 const AMOUNT_WIDTH := 94.0
 

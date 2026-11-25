@@ -80,7 +80,7 @@ func _test_stairs_return_to_previous_map() -> void:
 	assert(not session.is_completed)
 	assert(JSON.stringify(first.to_dict()) == original_first)
 	assert(JSON.stringify(lower.to_dict()) == original_lower)
-	assert(ImageAsset.texture("res://assets/icons/stairs_up.png") != null)
+	assert(ImageAsset.texture("res://assets/icons/map_objects/stairs_up.png") != null)
 	assert(ImageAsset.texture("res://assets/icons/portals/portal_gateway.png") != null)
 
 

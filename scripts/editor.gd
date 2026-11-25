@@ -82,7 +82,7 @@ const TOOL_ICONS := {
 var map_data: DungeonMap
 var standalone_game: bool = false
 var _startup_game_map: DungeonMap
-var _startup_hero_id: String = HeroCatalog.DEFAULT_HERO_ID
+var _startup_party_ids: Array[String] = [HeroCatalog.DEFAULT_HERO_ID]
 var _startup_game_session: GameSession
 var _startup_campaign: CampaignDefinition
 var _progress_save_store: ProgressSaveStore = ProgressSaveStore.new()
@@ -216,10 +216,10 @@ var _import_dialog: FileDialog
 
 
 ## Вызывается главным меню до добавления сцены в дерево.
-func configure_for_game(data: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID, campaign: CampaignDefinition = null) -> void:
+func configure_for_game(data: DungeonMap, hero_ids: Array[String], campaign: CampaignDefinition = null) -> void:
 	standalone_game = true
 	_startup_game_map = data
-	_startup_hero_id = hero_id
+	_startup_party_ids = hero_ids.duplicate()
 	_startup_campaign = campaign
 
 
@@ -1162,11 +1162,11 @@ func _on_settings_option_selected(id: int) -> void:
 		SETTINGS_TEST_HERO:
 			_settings_tabs.current_tab = 1
 			_test_hero_panel.select_party(_test_party_ids)
-			_settings_dialog.popup_centered_clamped(Vector2i(490, 360))
+			_settings_dialog.popup_centered_clamped(Vector2i(490, 440))
 
 
 func _on_test_party_selected(hero_ids: Array[String]) -> void:
-	if hero_ids.is_empty() or hero_ids.size() > 3:
+	if hero_ids.is_empty() or hero_ids.size() > GameSession.MAX_PARTY_SIZE:
 		return
 	for hero_id in hero_ids:
 		if not HeroCatalog.has(hero_id):
@@ -1197,7 +1197,7 @@ func _load_test_party_selection() -> void:
 			var hero_id: String = str(entry)
 			if HeroCatalog.has(hero_id) and not valid_ids.has(hero_id):
 				valid_ids.append(hero_id)
-			if valid_ids.size() >= 3:
+			if valid_ids.size() >= GameSession.MAX_PARTY_SIZE:
 				break
 	if valid_ids.is_empty():
 		var legacy_id: String = str(config.get_value("editor", "test_hero_id", HeroCatalog.DEFAULT_HERO_ID))
@@ -2667,7 +2667,7 @@ func _start_play_mode() -> void:
 	_pending_next_map = null
 	var session: GameSession
 	if standalone_game:
-		session = _startup_game_session if _startup_game_session != null else GameSession.start_for(map_data, _startup_hero_id, false)
+		session = _startup_game_session if _startup_game_session != null else GameSession.start_for_party(map_data, _startup_party_ids, false)
 	else:
 		var test_map: DungeonMap = DungeonMap.from_dict(map_data.to_dict().duplicate(true))
 		session = GameSession.start_for_party(test_map, _test_party_ids, false)

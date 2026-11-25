@@ -11,6 +11,7 @@ const HERO_SELECTOR_HEIGHT: int = 44
 var selector: OptionButton
 var second_selector: OptionButton
 var third_selector: OptionButton
+var fourth_selector: OptionButton
 
 
 func _init() -> void:
@@ -40,6 +41,11 @@ func _init() -> void:
 	properties.add_child(third_label)
 	third_selector = _make_selector("TestThirdHeroSelect", true)
 	properties.add_child(third_selector)
+	var fourth_label := Label.new()
+	fourth_label.text = "Четвёртый герой"
+	properties.add_child(fourth_label)
+	fourth_selector = _make_selector("TestFourthHeroSelect", true)
+	properties.add_child(fourth_selector)
 
 
 func _make_selector(node_name: String, optional: bool = false) -> OptionButton:
@@ -47,7 +53,7 @@ func _make_selector(node_name: String, optional: bool = false) -> OptionButton:
 	control.name = node_name
 	control.custom_minimum_size.y = HERO_SELECTOR_HEIGHT
 	if optional:
-		control.add_item("Без второго героя")
+		control.add_item("Без героя")
 		control.set_item_metadata(0, "")
 	for hero_id in HeroCatalog.list_ids():
 		var definition: HeroDefinition = HeroCatalog.get_hero(hero_id)
@@ -66,6 +72,8 @@ func select_party(hero_ids: Array[String]) -> void:
 	_select_id(second_selector, second_id)
 	var third_id: String = hero_ids[2] if hero_ids.size() > 2 else ""
 	_select_id(third_selector, third_id)
+	var fourth_id: String = hero_ids[3] if hero_ids.size() > 3 else ""
+	_select_id(fourth_selector, fourth_id)
 	_refresh_second_selector()
 
 
@@ -84,7 +92,7 @@ func _select_id(control: OptionButton, hero_id: String) -> void:
 
 func selected_party() -> Array[String]:
 	var heroes: Array[String] = []
-	for control in [selector, second_selector, third_selector]:
+	for control in [selector, second_selector, third_selector, fourth_selector]:
 		var hero_id: String = str(control.get_selected_metadata())
 		if HeroCatalog.has(hero_id) and not heroes.has(hero_id):
 			heroes.append(hero_id)
@@ -93,7 +101,7 @@ func selected_party() -> Array[String]:
 
 func _refresh_second_selector() -> void:
 	var chosen: Array[String] = []
-	for control in [selector, second_selector, third_selector]:
+	for control in [selector, second_selector, third_selector, fourth_selector]:
 		var current_id: String = str(control.get_selected_metadata())
 		if chosen.has(current_id) and not current_id.is_empty():
 			_select_id(control, "")

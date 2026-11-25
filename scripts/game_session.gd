@@ -64,9 +64,11 @@ static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT
 static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_map: bool = false) -> GameSession:
 	if hero_ids.is_empty() or hero_ids.size() > MAX_PARTY_SIZE:
 		return null
+	var unique_ids: Dictionary = {}
 	for hero_id in hero_ids:
-		if not HeroCatalog.has(hero_id):
+		if not HeroCatalog.has(hero_id) or unique_ids.has(hero_id):
 			return null
+		unique_ids[hero_id] = true
 	if map_ref == null:
 		return null
 	var spawn := map_ref.find_entity_position("player_spawn")

@@ -832,8 +832,10 @@ func _clear_impact_layer() -> void:
 	_impact_portraits.clear()
 	_impact_shields.clear()
 	_hero_portrait.modulate.a = 1.0
-	if _support_hero_view.visible:
-		_support_hero_view.portrait_node().modulate.a = 1.0
+	for hero_view in _extra_hero_views.values():
+		var extra_view: BattleSupportEnemyView = hero_view as BattleSupportEnemyView
+		if extra_view.visible:
+			extra_view.portrait_node().modulate.a = 1.0
 	_enemy_portrait.modulate.a = 1.0
 	if _support_enemy_view != null:
 		_support_enemy_view.portrait_node().modulate.a = 1.0

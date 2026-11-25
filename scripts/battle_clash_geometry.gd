@@ -6,15 +6,18 @@ static func fit_formation_scale(available_height: float, portrait_sizes: Diction
 	if available_height <= 0.0:
 		return requested_scale
 	var highest_column: float = 0.0
-	for pair in [["hero", "hero_2"], ["enemy", "enemy_support"]]:
+	for column in [["hero", "hero_2", "hero_3", "hero_4"], ["enemy", "enemy_support"]]:
 		var total_height: float = 0.0
+		var largest_height: float = 0.0
 		var count: int = 0
-		for actor_id in pair:
+		for actor_id in column:
 			if portrait_sizes.has(actor_id):
-				total_height += (portrait_sizes[actor_id] as Vector2).y
+				var height: float = (portrait_sizes[actor_id] as Vector2).y
+				total_height += height
+				largest_height = maxf(largest_height, height)
 				count += 1
 		if count > 1:
-			total_height += total_height / count * maxf(vertical_gap_fraction, 0.0)
+			total_height += largest_height * maxf(vertical_gap_fraction, 0.0) * float(count - 1)
 		highest_column = maxf(highest_column, total_height)
 	return minf(requested_scale, available_height / maxf(highest_column, 1.0))
 
@@ -26,26 +29,25 @@ static func formation_positions(center: Vector2, portrait_sizes: Dictionary, sca
 	var hero_size: Vector2 = portrait_sizes["hero"]
 	var enemy_size: Vector2 = portrait_sizes["enemy"]
 	var gap: float = maxf(hero_size.x, enemy_size.x) * horizontal_gap_fraction
-	var hero_extra: float = hero_size.x * (scale - 1.0) * 0.5
-	var enemy_extra: float = enemy_size.x * (scale - 1.0) * 0.5
-	positions["hero"] = Vector2(center.x - gap * 0.5 - hero_size.x - hero_extra, center.y - hero_size.y * 0.5)
-	positions["enemy"] = Vector2(center.x + gap * 0.5 + enemy_extra, center.y - enemy_size.y * 0.5)
-	if portrait_sizes.has("hero_2"):
-		var support_hero_size: Vector2 = portrait_sizes["hero_2"]
-		var hero_gap: float = maxf(hero_size.y, support_hero_size.y) * scale * vertical_gap_fraction
-		positions["hero"].y -= (support_hero_size.y * scale + hero_gap) * 0.5
-		positions["hero_2"] = Vector2(
-			center.x - gap * 0.5 - support_hero_size.x - support_hero_size.x * (scale - 1.0) * 0.5,
-			center.y + (hero_size.y * scale + hero_gap) * 0.5 - support_hero_size.y * 0.5)
-	if portrait_sizes.has("enemy_support"):
-		var support_size: Vector2 = portrait_sizes["enemy_support"]
-		var visual_gap: float = maxf(enemy_size.y, support_size.y) * scale * vertical_gap_fraction
-		var top_idle: Vector2 = positions["enemy"]
-		positions["enemy"] = top_idle + Vector2(0.0, -(support_size.y * scale + visual_gap) * 0.5)
-		positions["enemy_support"] = Vector2(
-			center.x + gap * 0.5 + support_size.x * (scale - 1.0) * 0.5,
-			center.y + (enemy_size.y * scale + visual_gap) * 0.5 - support_size.y * 0.5
-		)
+	for column in [["hero", "hero_2", "hero_3", "hero_4"], ["enemy", "enemy_support"]]:
+		var actor_ids: Array[String] = []
+		var total_height: float = 0.0
+		var largest_height: float = 0.0
+		for actor_id in column:
+			if not portrait_sizes.has(actor_id):
+				continue
+			actor_ids.append(actor_id)
+			var height: float = (portrait_sizes[actor_id] as Vector2).y
+			total_height += height * scale
+			largest_height = maxf(largest_height, height)
+		var row_gap: float = largest_height * scale * maxf(vertical_gap_fraction, 0.0)
+		total_height += row_gap * float(maxi(actor_ids.size() - 1, 0))
+		var top: float = center.y - total_height * 0.5
+		for actor_id in actor_ids:
+			var size: Vector2 = portrait_sizes[actor_id]
+			var x: float = center.x + gap * 0.5 + size.x * (scale - 1.0) * 0.5 if actor_id.begins_with("enemy") else center.x - gap * 0.5 - size.x - size.x * (scale - 1.0) * 0.5
+			positions[actor_id] = Vector2(x, top + size.y * (scale - 1.0) * 0.5)
+			top += size.y * scale + row_gap
 	return positions
 
 

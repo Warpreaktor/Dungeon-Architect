@@ -162,8 +162,10 @@ func _test_party_save_and_editor() -> void:
 	assert(card != null)
 	assert((card.get_node("CardContent/Name") as Label).text == "Буролом")
 	var chosen: Array[String] = []
-	picker.character_chosen.connect(func(id: String) -> void: chosen.append(id))
-	card.pressed.emit()
+	picker.party_chosen.connect(func(ids: Array[String]) -> void: chosen.assign(ids))
+	card.button_pressed = true
+	assert(picker.selected_party() == ["burolom"])
+	picker.get_node("StartPartyButton").pressed.emit()
 	assert(chosen == ["burolom"])
 	picker.queue_free()
 	var panel := EditorTestHeroPanel.new()

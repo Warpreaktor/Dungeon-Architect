@@ -2,7 +2,7 @@ class_name MainMenu
 extends Control
 
 signal editor_requested
-signal game_requested(data: DungeonMap, hero_id: String, campaign: CampaignDefinition)
+signal game_requested(data: DungeonMap, hero_ids: Array[String], campaign: CampaignDefinition)
 signal continue_game_requested(session: GameSession)
 
 @onready var _card: PanelContainer = %Card
@@ -41,7 +41,7 @@ func _ready() -> void:
 	_start_button.pressed.connect(_start_selected)
 	_map_list.item_selected.connect(_on_map_selected)
 	_map_list.item_activated.connect(_on_map_activated)
-	_hero_selection.character_chosen.connect(_launch_selected_character)
+	_hero_selection.party_chosen.connect(_launch_selected_party)
 	_hero_selection.back_requested.connect(_return_to_library)
 	get_viewport().size_changed.connect(_resize_layout)
 	_resize_layout()
@@ -211,6 +211,7 @@ func _start_selected() -> void:
 	_selected_campaign_id = selected_campaign_id
 	_library.visible = false
 	_hero_selection.visible = true
+	_hero_selection.reset_selection()
 	_hero_selection.focus_first()
 
 func _return_to_library() -> void:
@@ -219,7 +220,14 @@ func _return_to_library() -> void:
 	_start_button.grab_focus()
 
 
-func _launch_selected_character(hero_id: String) -> void:
+func _launch_selected_party(hero_ids: Array[String]) -> void:
+	if hero_ids.is_empty() or hero_ids.size() > GameSession.MAX_PARTY_SIZE:
+		return
+	var unique_ids: Dictionary = {}
+	for hero_id in hero_ids:
+		if not HeroCatalog.has(hero_id) or unique_ids.has(hero_id):
+			return
+		unique_ids[hero_id] = true
 	if _selected_game_map == null:
 		return
 	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
@@ -230,7 +238,7 @@ func _launch_selected_character(hero_id: String) -> void:
 	if _selected_campaign_id.is_empty():
 		for dungeon in unassigned_maps(_maps_by_id, campaigns):
 			if dungeon.map_id == _selected_game_map.map_id and dungeon.find_entity_position("player_spawn") != Vector2i(-1, -1):
-				game_requested.emit(dungeon, hero_id, null)
+				game_requested.emit(dungeon, hero_ids.duplicate(), null)
 				return
 		_show_changed_selection("Карта больше не доступна в разделе «Свои карты». Выбери её заново.")
 		return
@@ -242,7 +250,7 @@ func _launch_selected_character(hero_id: String) -> void:
 	if starting_map == null or starting_map.find_entity_position("player_spawn") == Vector2i(-1, -1):
 		_show_changed_selection("Стартовая карта кампании недоступна.")
 		return
-	game_requested.emit(starting_map, hero_id, campaign)
+	game_requested.emit(starting_map, hero_ids.duplicate(), campaign)
 
 
 func _show_changed_selection(message: String) -> void:

@@ -7,7 +7,7 @@
 script = ExtResource("1_script")
 trap_id = "door_crossbow"
 display_name = "Самострел"
-description = "Скрытый дверной арбалет наносит {direct_damage} HP урона случайному живому герою при открытии двери.{after_trigger}"
+description = "Скрытый дверной арбалет наносит {direct_damage} HP урона открывающему дверь герою при открытии двери.{after_trigger}"
 icon = ExtResource("2_icon")
 placement = "door"
 trigger_message = "Стоило тебе открыть дверь, как скрытый арбалет выпустил болт прямо в тебя!"

@@ -142,3 +142,40 @@ layout_mode = 2
 custom_minimum_size = Vector2(160, 47)
 text = "Продолжить"
 theme_override_styles/normal = SubResource("StyleBoxFlat_button")
+
+
+[node name="ChoiceActions" type="VBoxContainer" parent="Center/Card/Margins/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TrapActor" type="OptionButton" parent="Center/Card/Margins/Content/ChoiceActions"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 44)
+
+[node name="DecisionRow" type="HBoxContainer" parent="Center/Card/Margins/Content/ChoiceActions"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DisarmButton" type="Button" parent="Center/Card/Margins/Content/ChoiceActions/DecisionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 44)
+text = "Да"
+theme_override_styles/normal = SubResource("StyleBoxFlat_button")
+
+[node name="CancelButton" type="Button" parent="Center/Card/Margins/Content/ChoiceActions/DecisionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 44)
+text = "Нет"
+
+[node name="AvoidButton" type="Button" parent="Center/Card/Margins/Content/ChoiceActions"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 44)
+text = "Проскочить"

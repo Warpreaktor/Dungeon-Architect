@@ -4,6 +4,7 @@ extends CanvasLayer
 ## Одна игровая сцена для авторских реплик и наград из сундуков.
 ## Не изменяет состояние героя, карту или содержимое сундука.
 signal closed
+signal choice_selected(choice: String, actor_index: int)
 
 @onready var _card: PanelContainer = %Card
 @onready var _eyebrow: Label = %Eyebrow
@@ -14,10 +15,18 @@ signal closed
 @onready var _loot_scroll: ScrollContainer = %LootScroll
 @onready var _loot_rows: VBoxContainer = %LootRows
 @onready var _continue_button: Button = %ContinueButton
+@onready var _choices: VBoxContainer = %ChoiceActions
+@onready var _actor_select: OptionButton = %TrapActor
+@onready var _disarm_button: Button = %DisarmButton
+@onready var _cancel_button: Button = %CancelButton
+@onready var _avoid_button: Button = %AvoidButton
 
 
 func _ready() -> void:
 	_continue_button.pressed.connect(dismiss_by_player)
+	_disarm_button.pressed.connect(_choose.bind("disarm"))
+	_cancel_button.pressed.connect(_choose.bind("cancel"))
+	_avoid_button.pressed.connect(_choose.bind("avoid"))
 	get_viewport().size_changed.connect(_resize_card)
 	_resize_card()
 	hide()
@@ -29,9 +38,25 @@ func show_dialog(message: String) -> void:
 
 func show_event(event: Dictionary) -> void:
 	var story := str(event.get("text", "")).strip_edges()
+	var result_text: String = str(event.get("result_text", "")).strip_edges()
+	if not result_text.is_empty():
+		story = result_text if story.is_empty() else "%s\n\n%s" % [result_text, story]
+	var choices: Dictionary = event.get("choices", {})
+	_choices.visible = not choices.is_empty()
+	(_continue_button.get_parent() as Control).visible = choices.is_empty()
+	_actor_select.clear()
+	if _choices.visible:
+		for actor in event.get("actors", []):
+			_actor_select.add_item(str(actor))
+		if _actor_select.item_count > 0:
+			_actor_select.select(clampi(int(event.get("selected_actor", 0)), 0, _actor_select.item_count - 1))
+		_actor_select.visible = _actor_select.item_count > 1
+		_disarm_button.text = str(choices.get("disarm", ""))
+		_cancel_button.text = str(choices.get("cancel", ""))
+		_avoid_button.text = str(choices.get("avoid", ""))
 	_text.text = story
 	_text.visible = not story.is_empty()
-	_eyebrow.text = "ПОСЛАНИЕ" if not story.is_empty() else "СОКРОВИЩА"
+	_eyebrow.text = "ЛОВУШКА" if str(event.get("icon_type", "")) == "trap" else ("ПОСЛАНИЕ" if not story.is_empty() else "СОКРОВИЩА")
 	var event_icon: Texture2D = _resolve_event_icon(event)
 	_icon.texture = event_icon
 	_icon_holder.visible = event_icon != null
@@ -70,7 +95,10 @@ func show_event(event: Dictionary) -> void:
 	show()
 	if _text.visible:
 		_text.scroll_to_line(0)
-	_continue_button.grab_focus()
+	if _choices.visible:
+		_cancel_button.grab_focus()
+	else:
+		_continue_button.grab_focus()
 
 
 
@@ -91,16 +119,40 @@ func _resolve_event_icon(event: Dictionary) -> Texture2D:
 
 func _resize_card() -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
+	var compact: bool = _choices.visible and viewport_size.y < 450.0
+	var content: VBoxContainer = _choices.get_parent() as VBoxContainer
+	var margins: MarginContainer = content.get_parent() as MarginContainer
+	content.add_theme_constant_override("separation", 8 if compact else 16)
+	margins.add_theme_constant_override("margin_top", 12 if compact else 23)
+	margins.add_theme_constant_override("margin_bottom", 12 if compact else 23)
+	_icon.custom_minimum_size = Vector2(32, 32) if compact else Vector2(48, 48)
 	_card.custom_minimum_size.x = minf(620.0, maxf(260.0, viewport_size.x - 32.0))
 	# Если авторский текст и добыча показаны одновременно, оба блока остаются
 	# внутри игрового окна на невысоком экране планшета.
-	_text.custom_minimum_size.y = minf(168.0, maxf(75.0, viewport_size.y * 0.24))
+	_text.custom_minimum_size.y = minf(72.0, maxf(44.0, viewport_size.y * 0.12)) if _choices.visible else minf(168.0, maxf(75.0, viewport_size.y * 0.24))
 	if _loot_section.visible:
 		var ideal_height := minf(186.0, float(_loot_rows.get_child_count()) * 40.0)
 		_loot_scroll.custom_minimum_size.y = minf(ideal_height, maxf(60.0, viewport_size.y * 0.22))
 
 
+func has_choices() -> bool:
+	return visible and _choices.visible
+
+
+func _choose(choice: String) -> void:
+	if not has_choices():
+		return
+	var selected: int = _actor_select.selected
+	hide()
+	choice_selected.emit(choice, selected)
+
+
 func dismiss_by_player() -> void:
+	if has_choices():
+		_choose("cancel")
+		return
+	if not visible:
+		return
 	hide()
 	closed.emit()
 

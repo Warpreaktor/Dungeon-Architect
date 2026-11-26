@@ -60,7 +60,9 @@ func _test_threshold_and_equipment() -> void:
 	assert(equal.revealed_traps.is_empty())
 	assert(equal.move_by(-1, 0))
 	assert(equal.move_by(1, 0))
-	assert(equal.move_by(1, 0))
+	assert(not equal.move_by(1, 0))
+	assert(equal.has_pending_trap_choice())
+	assert(equal.resolve_pending_trap_choice("avoid"))
 	assert(not equal.last_move_detected_trap and equal.is_trap_disarmed(entity))
 
 	var equipped: GameSession = GameSession.start_for(map_ref, "petushan")
@@ -126,7 +128,9 @@ func _test_vision_and_visible_traps() -> void:
 	var visible: Dictionary = visible_map.entities_at(3, 2)[0]
 	var aware: GameSession = GameSession.start_for(visible_map, "burolom")
 	assert(not aware.is_entity_hidden_from_hero(visible))
-	assert(aware.move_by(1, 0))
+	assert(not aware.move_by(1, 0))
+	assert(aware.has_pending_trap_choice())
+	assert(aware.resolve_pending_trap_choice("avoid"))
 	assert(not aware.last_move_detected_trap and aware.is_trap_disarmed(visible))
 
 
@@ -153,7 +157,10 @@ func _test_door() -> void:
 	assert(session.carried_items.get("key", 0) == 1)
 	assert(not session.is_entity_removed(door))
 	assert(not session.move_by(1, 0))
-	assert(not session.last_move_detected_trap and session.has_pending_door_trap())
+	assert(not session.last_move_detected_trap and session.has_pending_trap_choice())
+	assert(session.take_message_events()[0]["activation"] == "trap_choice")
+	assert(not session.resolve_pending_trap_choice("avoid"))
+	assert(session.has_pending_door_trap())
 	assert(session.take_message_events().size() == 1)
 	assert(session.resolve_pending_door_trap())
 	assert(session.is_trap_disarmed(door) and session.is_entity_removed(door))
@@ -172,7 +179,8 @@ func _test_discovery_precedes_chest() -> void:
 	_assert_stopped(session, entity)
 	assert(not session.is_chest_open(chest))
 	assert(session.hero.gold == gold)
-	assert(session.move_by(1, 0))
+	assert(not session.move_by(1, 0))
+	assert(session.resolve_pending_trap_choice("avoid"))
 	assert(session.is_chest_open(chest))
 	assert(session.hero.gold == gold + 10)
 
@@ -200,7 +208,8 @@ func _test_save_and_return() -> void:
 	assert(restored.is_trap_revealed(entity) and not restored.is_trap_disarmed(entity))
 	assert(restored.is_trap_known_by(entity, restored.party[1]))
 	assert(not restored.is_trap_known_by(entity, restored.party[0]))
-	assert(restored.move_by(1, 0))
+	assert(not restored.move_by(1, 0))
+	assert(restored.resolve_pending_trap_choice("avoid"))
 	assert(not restored.last_move_detected_trap)
 	for member in snapshot["party"]["active_heroes"]:
 		member.erase("known_traps_by_map")
@@ -244,6 +253,10 @@ func _test_held_movement() -> void:
 	editor.call("_on_dpad_up", Vector2i.DOWN)
 	editor.call("_on_dpad_down", Vector2i.DOWN)
 	editor.call("_on_dpad_up", Vector2i.DOWN)
+	var dialogue: GameDialogueView = editor.get("_game_dialogue") as GameDialogueView
+	assert(dialogue.has_choices() and session.has_pending_trap_choice())
+	assert(session.player_pos == Vector2i(2, 2))
+	dialogue._avoid_button.pressed.emit()
 	assert(session.player_pos == Vector2i(2, 3) and session.steps == 1)
 	await create_timer(0.6).timeout
 	editor.queue_free()

@@ -21,6 +21,7 @@ func _run() -> void:
 	var session: GameSession = editor.get("game_session") as GameSession
 	assert(session != null)
 	session._receive_item("key", 1)
+	session.hero.agility = 0
 	var original_hp: int = session.hero.health
 	editor.call("_try_move_player", 1, 0)
 	var dialogue: GameDialogueView = editor.get("_game_dialogue") as GameDialogueView
@@ -41,6 +42,7 @@ func _run() -> void:
 	assert(dialogue.visible)
 	assert(editor.get("_active_game_message")["activation"] == "door_open")
 	assert(editor.get("_active_game_message")["text"] == "Дверь открыта!")
+	assert(str(editor.get("_active_game_message")["result_text"]).contains("HP"))
 	dialogue.dismiss_by_player()
 	assert(not dialogue.visible)
 	editor.queue_free()

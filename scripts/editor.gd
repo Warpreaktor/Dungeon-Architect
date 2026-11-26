@@ -477,6 +477,7 @@ func _build_interface() -> void:
 
 	_game_dialogue = GAME_DIALOGUE_SCENE.instantiate() as GameDialogueView
 	_game_dialogue.closed.connect(_on_game_dialogue_closed)
+	_game_dialogue.choice_selected.connect(_on_trap_choice_selected)
 	add_child(_game_dialogue)
 
 	var tools_section := _palette_section(palette, "Tools", "ИНСТРУМЕНТЫ")
@@ -1059,6 +1060,8 @@ func _build_dpad(host: Control) -> void:
 
 ## Движение начинается на нажатии и повторяется после завершения анимации.
 func _on_dpad_down(direction: Vector2i) -> void:
+	if not _movement_input_allowed():
+		return
 	_held_dpad_direction = direction
 	_blocked_hold_direction = Vector2i.ZERO
 	_advance_held_move()
@@ -2997,7 +3000,28 @@ func _show_next_game_message() -> void:
 		return
 	var event: Dictionary = _pending_game_messages.pop_front()
 	_active_game_message = event
+	if str(event.get("activation", "")) in ["trap_choice", "door_trap", "trap_result"]:
+		_clear_held_movement()
 	_game_dialogue.show_event(event)
+
+
+func _on_trap_choice_selected(choice: String, actor_index: int) -> void:
+	_active_game_message = {}
+	if not is_play_mode or game_session == null or not game_session.has_pending_trap_choice():
+		return
+	_clear_held_movement()
+	var moving_session: GameSession = game_session
+	var previous_pos: Vector2i = moving_session.player_pos
+	var moved: bool = moving_session.resolve_pending_trap_choice(choice, actor_index, true)
+	if choice == "cancel":
+		_canvas.grab_focus()
+		_show_next_game_message()
+		return
+	if moving_session.has_pending_door_trap() or moving_session.has_pending_trap_choice():
+		_collect_game_messages()
+		return
+	_canvas.grab_focus()
+	_complete_player_move(moving_session, previous_pos, moved)
 
 
 func _on_game_dialogue_closed() -> void:
@@ -3058,7 +3082,7 @@ func _try_move_player(dx: int, dy: int) -> void:
 		if not _game_dialogue.visible:
 			_start_combat()
 		return
-	if game_session.has_pending_door_trap():
+	if game_session.has_pending_door_trap() or game_session.has_pending_trap_choice():
 		_collect_game_messages()
 		return
 	_complete_player_move(moving_session, previous_pos, moved)
@@ -3089,6 +3113,9 @@ func _complete_player_move(moving_session: GameSession, previous_pos: Vector2i, 
 	_refresh_map_overlays()
 	_refresh_stats()
 	_flash_party_damage()
+	var trap_result: String = game_session.take_trap_result_message()
+	if not trap_result.is_empty():
+		_game_notice.show_message(trap_result)
 	var casualties: Array[HeroState] = game_session.take_casualty_events()
 	if not casualties.is_empty():
 		_show_defeat_view(casualties)
@@ -3222,6 +3249,9 @@ func _finish_combat() -> void:
 	_refresh_map_overlays()
 	_refresh_stats()
 	_flash_party_damage()
+	var trap_result: String = game_session.take_trap_result_message()
+	if not trap_result.is_empty():
+		_game_notice.show_message(trap_result)
 	var casualties: Array[HeroState] = game_session.take_casualty_events()
 	if not casualties.is_empty():
 		_show_defeat_view(casualties)
@@ -3460,7 +3490,12 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 			if _game_dialogue.visible:
-				if event.keycode in [KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER]:
+				if _game_dialogue.has_choices():
+					if event.keycode == KEY_ESCAPE:
+						_game_dialogue.dismiss_by_player()
+					elif event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_TAB]:
+						return
+				elif event.keycode in [KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER]:
 					_game_dialogue.dismiss_by_player()
 				get_viewport().set_input_as_handled()
 				return

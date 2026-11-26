@@ -39,6 +39,13 @@ var last_move_detected_trap: bool = false
 var pending_chest_id: String = "" # Ожидает завершения анимации шага до открытия сундука.
 var pending_door_trap_id: String = ""
 var pending_door_trap_cell := Vector2i(-1, -1)
+var _pending_door_opener: HeroState
+var _pending_door_accepted: Array[String] = []
+var _pending_trap_choice: Dictionary = {}
+var _pending_trap_actors: Array[HeroState] = []
+var _pending_trap_accepted: Array[String] = []
+var _pending_trap_opener: HeroState
+var _trap_result_messages: Array[String] = []
 var activated_triggers: Dictionary = {} # ID сработавших триггеров; обнуляется с новой сессией.
 var shown_messages: Dictionary = {} # Авторские сообщения показываются один раз за прохождение.
 var _message_events: Array[Dictionary] = []
@@ -861,14 +868,19 @@ func _record_party_damage(member: HeroState, damage: int, source: String) -> voi
 	_party_damage_events.append({"hero_index": index, "member": member, "damage": damage, "source": source})
 
 
-func _random_living_party_member() -> HeroState:
+func _living_party_members() -> Array[HeroState]:
 	var living: Array[HeroState] = []
-	for member in party_members():
+	for member in party:
 		if member != null and member.health > 0:
 			living.append(member)
-	if living.is_empty():
-		return null
-	return living[trap_random.randi_range(0, living.size() - 1)]
+	return living
+
+
+func _door_opener(requested: HeroState = null) -> HeroState:
+	var living: Array[HeroState] = _living_party_members()
+	if requested != null and living.has(requested):
+		return requested
+	return living[0] if not living.is_empty() else null
 
 
 func _capture_floor_state() -> Dictionary:
@@ -1198,7 +1210,7 @@ func _valid_snapshot_inventory(counts: Dictionary, bag: Array, members: Array[He
 
 
 func enter_map(next_map: DungeonMap) -> bool:
-	if is_party_defeated() or next_map == null or next_map.map_id.is_empty() or not is_map_in_campaign(next_map.map_id):
+	if has_pending_trap_choice() or has_pending_door_trap() or is_party_defeated() or next_map == null or next_map.map_id.is_empty() or not is_map_in_campaign(next_map.map_id):
 		return false
 	var source_exit: Dictionary = current_exit()
 	var source_id: String = map_data.map_id if map_data != null else ""
@@ -1251,6 +1263,10 @@ func enter_map(next_map: DungeonMap) -> bool:
 	pending_chest_id = ""
 	pending_door_trap_id = ""
 	pending_door_trap_cell = Vector2i(-1, -1)
+	_pending_door_opener = null
+	_pending_door_accepted.clear()
+	_clear_trap_choice()
+	_trap_result_messages.clear()
 	activated_triggers = saved.get("triggers", {}).duplicate(true)
 	shown_messages = saved.get("messages", {}).duplicate(true)
 	encounter_monster_id = ""
@@ -1594,27 +1610,45 @@ func _append_event_message(message: String) -> void:
 		last_event_message += "  " + clean
 
 
-func _activate_trap(trap: TrapDefinition, trap_key: String) -> void:
-	var target: HeroState = _random_living_party_member()
-	if target == null:
-		return
+func _append_trap_result(message: String) -> void:
+	_trap_result_messages.append(message)
+	_append_event_message(message)
+
+
+func take_trap_result_message() -> String:
+	var result: String = "\n".join(_trap_result_messages)
+	_trap_result_messages.clear()
+	return result
+
+
+func _activate_trap(trap: TrapDefinition, trap_key: String, opener: HeroState = null) -> void:
 	revealed_traps[trap_key] = true
-	var parts: Array[String] = []
-	if trap.direct_damage > 0:
-		var health_before: int = target.health
-		target.take_damage(trap.direct_damage)
-		var damage: int = health_before - target.health
-		if damage > 0:
-			_record_party_damage(target, damage, trap.trap_id)
-			parts.append("-%d HP" % damage)
-	if target.health > 0 and trap.applies_overworld_status():
-		if target.apply_overworld_status(trap.overworld_status_id, trap.overworld_status_label,
-			trap.overworld_status_damage, trap.overworld_status_ticks, trap.overworld_status_interval_steps):
-			parts.append("%s %d на %d фазы" % [
-				trap.overworld_status_label, trap.overworld_status_damage, trap.overworld_status_ticks
-			])
-	if not parts.is_empty():
-		_append_event_message("%s: ловушка «%s», %s." % [
+	var targets: Array[HeroState] = _living_party_members()
+	if trap.can_attach_to("door"):
+		targets.clear()
+		if opener != null and opener.health > 0 and party.has(opener):
+			targets.append(opener)
+	for target in targets:
+		if trap.check(target, trap_random):
+			_append_trap_result("%s: избежал ловушки «%s»." % [target.definition.display_name, trap.display_name])
+			continue
+		var parts: Array[String] = []
+		if trap.direct_damage > 0:
+			var health_before: int = target.health
+			target.take_damage(trap.direct_damage)
+			var damage: int = health_before - target.health
+			if damage > 0:
+				_record_party_damage(target, damage, trap.trap_id)
+				parts.append("-%d HP" % damage)
+		if target.health > 0 and trap.applies_overworld_status():
+			if target.apply_overworld_status(trap.overworld_status_id, trap.overworld_status_label,
+				trap.overworld_status_damage, trap.overworld_status_ticks, trap.overworld_status_interval_steps):
+				parts.append("%s %d на %d фазы" % [
+					trap.overworld_status_label, trap.overworld_status_damage, trap.overworld_status_ticks
+				])
+		if parts.is_empty():
+			parts.append("без повреждений")
+		_append_trap_result("%s: ловушка «%s», %s." % [
 			target.definition.display_name, trap.display_name, " и ".join(parts)
 		])
 	if trap.disarm_on_trigger:
@@ -1630,6 +1664,95 @@ func _activate_traps_at(cell: Vector2i) -> void:
 			_activate_trap(trap, str(entity.get("id", "")))
 
 
+func has_pending_trap_choice() -> bool:
+	return not _pending_trap_choice.is_empty()
+
+
+func _clear_trap_choice() -> void:
+	_pending_trap_choice.clear()
+	_pending_trap_actors.clear()
+	_pending_trap_accepted.clear()
+	_pending_trap_opener = null
+
+
+func _request_trap_choice(entity: Dictionary, trap: TrapDefinition, cell: Vector2i, accepted: Array[String], opener: HeroState) -> void:
+	_pending_trap_choice = {"entity_id": str(entity["id"]), "kind": str(entity["type"]), "cell": cell}
+	_pending_trap_accepted = accepted.duplicate()
+	_pending_trap_opener = opener
+	_pending_trap_actors = _living_party_members()
+	var actors: Array[String] = []
+	for member in _pending_trap_actors:
+		actors.append("%d. %s" % [party.find(member) + 1, member.definition.display_name])
+	var selected: int = _pending_trap_actors.find(opener)
+	_message_events.append({
+		"activation": "trap_choice", "entity_id": entity["id"],
+		"text": "%s. Обезвредить ловушку?" % trap.display_name,
+		"icon_type": "trap", "icon_id": trap.trap_id,
+		"choices": {"disarm": "Да", "cancel": "Нет", "avoid": "Проскочить (%s)" % trap.avoidance_stat_label()},
+		"actors": actors, "selected_actor": maxi(selected, 0)
+	})
+
+
+func _discard_trap_message(activation: String, entity_id: String) -> void:
+	for index in range(_message_events.size() - 1, -1, -1):
+		var event: Dictionary = _message_events[index]
+		if event.get("activation", "") == activation and event.get("entity_id", "") == entity_id:
+			_message_events.remove_at(index)
+
+
+func resolve_pending_trap_choice(choice: String, actor_index: int = -1, defer_chest_open: bool = false) -> bool:
+	if not has_pending_trap_choice() or choice not in ["disarm", "cancel", "avoid"]:
+		return false
+	var pending: Dictionary = _pending_trap_choice.duplicate()
+	var accepted: Array[String] = _pending_trap_accepted.duplicate()
+	var opener: HeroState = _pending_trap_opener
+	var actor: HeroState = _door_opener(opener)
+	if actor_index >= 0:
+		if actor_index >= _pending_trap_actors.size():
+			return false
+		actor = _pending_trap_actors[actor_index]
+	_clear_trap_choice()
+	_discard_trap_message("trap_choice", str(pending["entity_id"]))
+	if choice == "cancel" or actor == null or actor.health <= 0 or not party.has(actor):
+		return false
+	var cell: Vector2i = pending["cell"]
+	var kind: String = pending["kind"]
+	var entity: Dictionary = _find_active_entity(cell, kind)
+	if entity.is_empty() or entity.get("id") != pending["entity_id"] or is_trap_disarmed(entity) or not can_enter(cell):
+		return false
+	var door: Dictionary = _find_active_entity(cell, "door")
+	if not door.is_empty() and int(carried_items.get(LockCatalog.required_key(door), 0)) <= 0:
+		return false
+	var trap: TrapDefinition = TrapCatalog.from_door(entity) if kind == "door" else TrapCatalog.from_entity(entity)
+	if trap == null:
+		return false
+	var entity_id: String = str(entity["id"])
+	last_event_message = ""
+	_trap_result_messages.clear()
+	_party_damage_events.clear()
+	if choice == "disarm":
+		if trap.check(actor, trap_random, true):
+			disarmed_traps[entity_id] = true
+			revealed_traps[entity_id] = true
+			_append_trap_result("%s: ловушка «%s» обезврежена." % [actor.definition.display_name, trap.display_name])
+			return false
+		_append_trap_result("%s: не удалось обезвредить ловушку «%s»." % [actor.definition.display_name, trap.display_name])
+		if kind == "trap":
+			_activate_trap(trap, entity_id)
+			record_casualties()
+			_refresh_visibility()
+			return false
+	if kind == "door":
+		opener = actor
+	accepted.append(entity_id)
+	var prefix: String = last_event_message
+	var delta: Vector2i = cell - player_pos
+	var moved: bool = _move_by(delta.x, delta.y, defer_chest_open, accepted, opener)
+	if not prefix.is_empty():
+		_append_trap_result(prefix)
+	return moved
+
+
 func has_pending_door_trap() -> bool:
 	return not pending_door_trap_id.is_empty()
 
@@ -1639,25 +1762,42 @@ func resolve_pending_door_trap() -> bool:
 		return false
 	var door_id: String = pending_door_trap_id
 	var cell: Vector2i = pending_door_trap_cell
+	var opener: HeroState = _pending_door_opener
+	var accepted: Array[String] = _pending_door_accepted.duplicate()
 	pending_door_trap_id = ""
 	pending_door_trap_cell = Vector2i(-1, -1)
+	_pending_door_opener = null
+	_pending_door_accepted.clear()
+	_discard_trap_message("door_trap", door_id)
 	var door: Dictionary = _find_active_entity(cell, "door")
-	if door.is_empty() or str(door.get("id", "")) != door_id or not can_enter(cell):
+	if door.is_empty() or str(door.get("id", "")) != door_id or not can_enter(cell) or int(carried_items.get(LockCatalog.required_key(door), 0)) <= 0:
 		return false
 	var trap: TrapDefinition = TrapCatalog.from_door(door)
 	if trap != null and not is_trap_disarmed(door):
-		_activate_trap(trap, door_id)
+		if opener == null or opener.health <= 0 or not party.has(opener):
+			return false
+		_activate_trap(trap, door_id, opener)
 		record_casualties()
 		if is_party_defeated():
 			return false
 	var trap_damage: Array[Dictionary] = _party_damage_events.duplicate(true)
 	var trap_message: String = last_event_message
+	var outcome: String = take_trap_result_message()
 	var delta: Vector2i = cell - player_pos
-	var moved: bool = move_by(delta.x, delta.y, true)
+	var moved: bool = _move_by(delta.x, delta.y, true, accepted, opener, door_id)
 	trap_damage.append_array(_party_damage_events)
 	_party_damage_events = trap_damage
 	if not trap_message.is_empty():
 		_append_event_message(trap_message)
+	if not outcome.is_empty():
+		var combined: bool = false
+		for event in _message_events:
+			if str(event.get("activation", "")) == "door_open":
+				event["result_text"] = outcome
+				combined = true
+				break
+		if not combined and trap != null:
+			_message_events.append({"activation": "trap_result", "text": outcome, "icon_type": "trap", "icon_id": trap.trap_id})
 	return moved
 
 
@@ -1665,13 +1805,19 @@ func can_enter(cell: Vector2i) -> bool:
 	return contains(cell.x, cell.y) and map_data.get_terrain(cell.x, cell.y) != "wall"
 
 
-func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
+func move_by(dx: int, dy: int, defer_chest_open: bool = false, opener: HeroState = null) -> bool:
+	var accepted: Array[String] = []
+	return _move_by(dx, dy, defer_chest_open, accepted, opener)
+
+
+func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String], opener: HeroState, resolved_door_id: String = "") -> bool:
+	if is_party_defeated() or has_pending_encounter() or is_completed or not pending_chest_id.is_empty() or has_pending_door_trap() or has_pending_trap_choice():
+		return false
 	last_move_detected_trap = false
 	last_event_message = ""
+	_trap_result_messages.clear()
 	_trigger_events.clear()
 	_party_damage_events.clear()
-	if is_party_defeated() or has_pending_encounter() or is_completed or not pending_chest_id.is_empty() or has_pending_door_trap():
-		return false
 	var target := player_pos + Vector2i(dx, dy)
 	if not can_enter(target):
 		return false
@@ -1694,7 +1840,7 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 			last_event_message = "Дверь заперта. Нужен %s ключ." % LockCatalog.label(required_key).to_lower()
 			return false
 		door_trap = TrapCatalog.from_door(door)
-		if door_trap != null and _discover_trap(door, door_trap, door_trap.hidden_by_default):
+		if door_trap != null and resolved_door_id != str(door["id"]) and _discover_trap(door, door_trap, door_trap.hidden_by_default):
 			last_move_detected_trap = true
 	var arrival: Vector2i = target
 	var local_portal: Dictionary = _find_active_entity(target, "portal_local")
@@ -1702,13 +1848,23 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 		var paired: Vector2i = map_data.local_portal_destination(str(local_portal["id"]))
 		if DungeonMap.valid_arrival_cell(map_data, paired):
 			arrival = paired
-	if arrival == target and _discover_floor_traps(target):
+	if arrival == target and resolved_door_id.is_empty() and _discover_floor_traps(target):
 		last_move_detected_trap = true
 	if last_move_detected_trap:
 		return false
 
+	if arrival == target and resolved_door_id.is_empty():
+		var floor_trap: Dictionary = _find_active_entity(target, "trap")
+		if not floor_trap.is_empty() and not is_trap_disarmed(floor_trap) and not is_entity_hidden_from_hero(floor_trap) and not accepted.has(str(floor_trap["id"])):
+			_request_trap_choice(floor_trap, TrapCatalog.from_entity(floor_trap), target, accepted, opener)
+			return false
 	if not door.is_empty():
-		if door_trap != null and not is_trap_disarmed(door):
+		if door_trap != null and not is_trap_disarmed(door) and resolved_door_id != str(door["id"]):
+			if is_door_trap_visible(door) and not accepted.has(str(door["id"])):
+				_request_trap_choice(door, door_trap, target, accepted, opener)
+				return false
+			_pending_door_opener = _door_opener(opener)
+			_pending_door_accepted = accepted.duplicate()
 			pending_door_trap_id = str(door["id"])
 			pending_door_trap_cell = target
 			_message_events.append({
@@ -2199,7 +2355,7 @@ func _claim_exit_reward(stairs: Dictionary) -> void:
 
 
 func progress_snapshot() -> Dictionary:
-	if is_editor_test or map_data == null or is_party_defeated() or has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_door_trap() or is_completed:
+	if is_editor_test or map_data == null or is_party_defeated() or has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_door_trap() or has_pending_trap_choice() or is_completed:
 		return {}
 	var party_data: Dictionary = party_state_snapshot()
 	if party_data.is_empty():

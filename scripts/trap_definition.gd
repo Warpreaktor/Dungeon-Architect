@@ -14,6 +14,8 @@ extends Resource
 @export_range(0, 999, 1) var avoidance_difficulty: int = 0
 @export_range(0, 999, 1) var disarm_difficulty: int = 0
 @export_enum("agility", "strength", "perception") var avoidance_stat: String = "agility"
+@export_enum("agility", "strength", "perception") var disarm_stat: String = "agility"
+@export_range(2, 100, 1) var check_die_sides: int = 10
 @export_range(0, 9999, 1) var direct_damage: int = 0
 @export var overworld_status_id: String = ""
 @export var overworld_status_label: String = ""
@@ -37,3 +39,15 @@ func get_description() -> String:
 	values["status_duration_phases"] = DescriptionTemplate.phases(overworld_status_ticks)
 	values["after_trigger"] = " Ловушка разряжается." if disarm_on_trigger else ""
 	return DescriptionTemplate.render(description, values)
+
+
+func avoidance_stat_label() -> String:
+	return str(CharacterStats.COMPARISON_LABELS.get(avoidance_stat, avoidance_stat))
+
+
+func check(member: HeroState, rng: RandomNumberGenerator, disarming: bool = false, bonus: int = 0) -> bool:
+	var stat: String = disarm_stat if disarming else avoidance_stat
+	var difficulty: int = disarm_difficulty if disarming else avoidance_difficulty
+	var effective: int = int(CharacterStats.hero_values(member).get(stat, 0))
+	var roll: int = rng.randi_range(1, check_die_sides)
+	return (not disarming or roll > 1) and roll + effective + bonus >= difficulty

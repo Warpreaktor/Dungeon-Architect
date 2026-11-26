@@ -4,7 +4,7 @@ extends SceneTree
 func _initialize() -> void:
 	_test_plain_door_and_missing_key()
 	_test_two_door_traps_and_floor_return()
-	_test_random_living_target_and_reproducibility()
+	_test_opener_target_and_reproducibility()
 	_test_json_preserves_trap_configuration()
 	print("Door trap regressions: doors, party, keys, floors and JSON OK")
 	quit()
@@ -32,6 +32,7 @@ func _test_plain_door_and_missing_key() -> void:
 	assert(map.attach_door_trap(str(trapped["id"]), "door_crossbow"))
 	assert(map.set_door_lock(str(trapped["id"]), "key_red"))
 	var session: GameSession = GameSession.start_for(map)
+	session.hero.agility = 0
 	var hp_before: int = session.hero.health
 	assert(not session.move_by(1, 0))
 	assert(not session.has_pending_door_trap())
@@ -47,6 +48,7 @@ func _test_plain_door_and_missing_key() -> void:
 	assert(int(session.carried_items.get("key", 0)) == 1)
 	assert(session.take_message_events().size() == 1)
 	assert(session.resolve_pending_door_trap())
+	assert(session.take_message_events()[0]["activation"] == "trap_result")
 	assert(int(session.carried_items.get("key", 0)) == 0)
 	assert(session.is_trap_disarmed(trapped))
 	assert(session.hero.health == hp_before - TrapCatalog.get_trap("door_crossbow").direct_damage)
@@ -72,6 +74,7 @@ func _test_two_door_traps_and_floor_return() -> void:
 	assert(not session.move_by(1, 0))
 	assert(session.take_message_events().size() == 1)
 	assert(session.resolve_pending_door_trap())
+	assert(session.take_message_events()[0]["activation"] == "trap_result")
 	assert(session.is_trap_disarmed(first))
 	assert(not session.is_trap_disarmed(second))
 	assert(session.move_by(1, 0))
@@ -100,7 +103,7 @@ func _test_two_door_traps_and_floor_return() -> void:
 	assert(JSON.stringify(map.to_dict()) == original_json)
 
 
-func _test_random_living_target_and_reproducibility() -> void:
+func _test_opener_target_and_reproducibility() -> void:
 	var victims: Array[int] = []
 	for trial in range(2):
 		var map: DungeonMap = _map_with_doors()
@@ -111,6 +114,7 @@ func _test_random_living_target_and_reproducibility() -> void:
 		session._receive_item("key", 1)
 		session.trap_random.seed = 12345
 		var members: Array[HeroState] = session.party_members()
+		members[0].agility = 0
 		var hp: Array[int] = [members[0].health, members[1].health]
 		assert(not session.move_by(1, 0))
 		assert(session.take_message_events().size() == 1)
@@ -122,7 +126,7 @@ func _test_random_living_target_and_reproducibility() -> void:
 			if damage != 0:
 				assert(hit_index == -1)
 				hit_index = i
-		assert(hit_index >= 0)
+		assert(hit_index == 0)
 		victims.append(hit_index)
 	assert(victims[0] == victims[1])
 
@@ -136,6 +140,7 @@ func _test_random_living_target_and_reproducibility() -> void:
 	session.record_casualties()
 	assert(session.party_members().size() == 1)
 	var survivor: HeroState = session.party_members()[0]
+	survivor.agility = 0
 	var initial_hp: int = survivor.health
 	session._receive_item("key", 1)
 	assert(not session.move_by(1, 0))

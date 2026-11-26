@@ -43,12 +43,17 @@ func _initialize() -> void:
 	session.hero.advance_phase_effects()
 	assert(session.is_entity_hidden_from_hero(restored_trap))
 	var max_hp: int = session.hero.max_health
+	for seed_value in range(100):
+		session.trap_random.seed = seed_value
+		if session.trap_random.randi_range(1, trap.check_die_sides) + session.hero.effective_agility() < trap.avoidance_difficulty:
+			session.trap_random.seed = seed_value
+			break
 	assert(session.move_by(1, 0))
 	assert(session.player_pos == Vector2i(2, 2))
 	assert(session.hero.health == max_hp - 2)
 	assert(session.is_trap_disarmed(restored_trap))
 	assert(session.hero.active_effects_summary().contains("Кровотечение"))
-	assert(session.last_event_message.contains("Ловушка"))
+	assert(session.last_event_message.to_lower().contains("ловушка"))
 
 	assert(session.move_by(-1, 0))
 	assert(session.move_by(1, 0))

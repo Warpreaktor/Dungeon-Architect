@@ -32,6 +32,7 @@ func _test_trigger_order_and_damage() -> void:
 	session._receive_item("key", 1)
 	session.trap_random.seed = 207
 	var members: Array[HeroState] = session.party_members()
+	members[0].agility = 0
 	var initial: Array[int] = [members[0].health, members[1].health]
 	assert(not session.move_by(1, 0))
 	assert(session.has_pending_door_trap())
@@ -61,7 +62,7 @@ func _test_trigger_order_and_damage() -> void:
 		assert(damage == 0 or damage == trap_damage)
 		if damage == trap_damage:
 			hit_count += 1
-	assert(hit_count == 1)
+	assert(hit_count == 1 and members[0].health == initial[0] - trap_damage)
 	var hits: Array[Dictionary] = session.take_party_damage_events()
 	assert(hits.size() == 1 and int(hits[0]["damage"]) == trap_damage)
 	assert(session.take_party_damage_events().is_empty())
@@ -69,6 +70,7 @@ func _test_trigger_order_and_damage() -> void:
 	assert(messages.size() == 1)
 	assert(messages[0]["activation"] == "door_open")
 	assert(messages[0]["text"] == "Послание за дверью")
+	assert(str(messages[0]["result_text"]).contains(members[0].definition.display_name))
 	assert(session.move_by(-1, 0))
 	assert(session.move_by(1, 0))
 	assert(session.take_message_events().is_empty())
@@ -102,6 +104,7 @@ func _test_last_hero_death() -> void:
 	var door: Dictionary = map.entities_at(2, 2)[0]
 	var session := GameSession.start_for(map)
 	session._receive_item("key", 1)
+	session.hero.agility = 0
 	session.hero.health = TrapCatalog.get_trap("door_crossbow").direct_damage - 1
 	assert(not session.move_by(1, 0))
 	assert(session.take_message_events().size() == 1)
@@ -130,10 +133,9 @@ func _test_survivor_continues() -> void:
 	session._receive_item("key", 1)
 	var members: Array[HeroState] = session.party_members()
 	session.trap_random.seed = 45
-	var probe := RandomNumberGenerator.new()
-	probe.seed = 45
-	var victim: HeroState = members[probe.randi_range(0, members.size() - 1)]
-	var survivor: HeroState = members[0] if members[1] == victim else members[1]
+	var victim: HeroState = members[0]
+	victim.agility = 0
+	var survivor: HeroState = members[1]
 	victim.health = TrapCatalog.get_trap("door_crossbow").direct_damage - 1
 	assert(not session.move_by(1, 0))
 	assert(session.take_message_events().size() == 1)

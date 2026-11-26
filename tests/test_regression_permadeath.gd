@@ -48,7 +48,15 @@ func _test_trap_death_and_continuation() -> void:
 	for member in session.party_members():
 		member.perception = TrapCatalog.get_trap("spikes").detection_difficulty - 1
 		member.health = 1
-	session.trap_random.seed = 12
+	var trap: TrapDefinition = TrapCatalog.get_trap("spikes")
+	var members: Array[HeroState] = session.party_members()
+	members[0].agility = 0
+	members[1].agility = trap.avoidance_difficulty
+	for seed_value in range(100):
+		session.trap_random.seed = seed_value
+		if session.trap_random.randi_range(1, trap.check_die_sides) < trap.avoidance_difficulty:
+			session.trap_random.seed = seed_value
+			break
 	assert(session.move_by(1, 0))
 	var casualties: Array[HeroState] = session.take_casualty_events()
 	assert(casualties.size() == 1)

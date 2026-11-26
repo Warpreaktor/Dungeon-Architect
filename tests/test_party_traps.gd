@@ -16,44 +16,45 @@ func _initialize() -> void:
 	assert(not play.add_party_member("volcha"))
 	assert(not play.add_party_member("missing_hero"))
 
-	play.trap_random.seed = 1345
+	var trap: TrapDefinition = TrapCatalog.from_entity(trap_entity)
 	var members: Array[HeroState] = play.party_members()
 	var starting_health: Array[int] = []
-	for member in members:
-		member.perception = TrapCatalog.get_trap("spikes").detection_difficulty - 1
+	for i in range(members.size()):
+		var member: HeroState = members[i]
+		member.perception = trap.detection_difficulty - 1
+		member.agility = 0 if i % 2 == 0 else trap.avoidance_difficulty
 		starting_health.append(member.health)
+	var probe := RandomNumberGenerator.new()
+	var expected_hits: Array[int] = []
+	for seed_value in range(100):
+		probe.seed = seed_value
+		expected_hits.clear()
+		for i in range(members.size()):
+			if probe.randi_range(1, trap.check_die_sides) + members[i].effective_agility() < trap.avoidance_difficulty:
+				expected_hits.append(i)
+		if expected_hits == [0, 2]:
+			play.trap_random.seed = seed_value
+			break
+	assert(expected_hits == [0, 2])
 	assert(play.move_by(1, 0))
 	assert(play.is_trap_disarmed(trap_entity))
-	var wounded_index: int = -1
+	assert(play.trap_random.state == probe.state)
 	for i in range(members.size()):
-		var missing: int = starting_health[i] - members[i].health
-		if missing > 0:
-			assert(wounded_index == -1)
-			assert(missing == 2)
-			assert(members[i].overworld_statuses.has("bleeding"))
-			wounded_index = i
-		else:
-			assert(members[i].overworld_statuses.is_empty())
-	assert(wounded_index != -1)
+		assert(members[i].health == starting_health[i] - (trap.direct_damage if expected_hits.has(i) else 0))
+		assert(members[i].overworld_statuses.has("bleeding") == expected_hits.has(i))
 	var hit_events: Array[Dictionary] = play.take_party_damage_events()
-	assert(hit_events.size() == 1)
-	assert(int(hit_events[0]["hero_index"]) == wounded_index)
+	assert(hit_events.size() == expected_hits.size())
+	for i in range(hit_events.size()):
+		assert(int(hit_events[i]["hero_index"]) == expected_hits[i])
 	assert(play.take_party_damage_events().is_empty())
-
-	for i in range(3):
-		assert(play.move_by(-1 if i % 2 == 0 else 1, 0))
-		assert(members[wounded_index].health == starting_health[wounded_index] - 2)
-	assert(play.move_by(1, 0))
-	assert(members[wounded_index].health == starting_health[wounded_index] - 4)
-	assert(play.take_party_damage_events()[0]["hero_index"] == wounded_index)
-	for i in range(3):
-		assert(play.move_by(-1 if i % 2 == 0 else 1, 0))
-	assert(play.move_by(1, 0))
-	assert(members[wounded_index].health == starting_health[wounded_index] - 6)
-	assert(not members[wounded_index].overworld_statuses.has("bleeding"))
-	for i in range(members.size()):
-		if i != wounded_index:
-			assert(members[i].health == starting_health[i])
+	for tick in range(1, trap.overworld_status_ticks + 1):
+		for step in range(trap.overworld_status_interval_steps):
+			assert(play.move_by(-1 if step % 2 == 0 else 1, 0))
+		for i in range(members.size()):
+			var damage: int = trap.direct_damage + tick * trap.overworld_status_damage if expected_hits.has(i) else 0
+			assert(members[i].health == starting_health[i] - damage)
+	for member in members:
+		assert(not member.overworld_statuses.has("bleeding"))
 
 	var follow_up := GameSession.start_for(dungeon)
 	assert(follow_up.add_party_member("petushan"))

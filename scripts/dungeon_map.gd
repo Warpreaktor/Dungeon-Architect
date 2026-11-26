@@ -21,7 +21,7 @@ const NAME_SECRETS := [
 ]
 const PORTAL_COLORS := ["blue", "cyan", "green", "orange", "pink", "purple", "red", "yellow"]
 const ENTITY_TYPES := ["door", "chest", "monster", "trap", "stairs_down", "portal", "portal_local", "key", "potion", "gold", "trigger", "player_spawn", "message"]
-static var CHEST_REWARDS: Array = LockCatalog.LOCK_IDS + ["potion", "gold"] + ItemCatalog.consumable_ids() + ItemCatalog.equipment_ids() + ItemCatalog.LEGACY_UNLISTED_EQUIPMENT_IDS
+static var CHEST_REWARDS: Array = ItemCatalog.list_ids() + ItemCatalog.LEGACY_UNLISTED_EQUIPMENT_IDS
 
 var map_id: String = ""
 var display_name: String = "Безымянное подземелье"
@@ -298,7 +298,30 @@ static func chest_is_random(chest: Dictionary) -> bool:
 	var properties: Dictionary = chest.get("properties", {})
 	if properties.has("loot_mode"):
 		return str(properties["loot_mode"]) == "random"
-	return chest_contents(chest).is_empty()
+	if str(chest.get("type", "")) == "stairs_down":
+		return false
+	var raw: Variant = properties.get("contents", [])
+	if raw is Array and not raw.is_empty():
+		return false
+	return str(properties.get("reward", "")).is_empty()
+
+
+func set_loot_profile(entity_id: String, profile_id: String) -> bool:
+	if not profile_id.is_empty() and LootProfileCatalog.get_profile(profile_id) == null:
+		return false
+	for entity in _entities:
+		if str(entity.get("id", "")) != entity_id or str(entity.get("type", "")) not in ["chest", "monster", "stairs_down"]:
+			continue
+		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		if str(properties.get("loot_profile_id", "")) == profile_id:
+			return false
+		if profile_id.is_empty():
+			properties.erase("loot_profile_id")
+		else:
+			properties["loot_profile_id"] = profile_id
+		entity["properties"] = properties
+		return true
+	return false
 
 
 func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amount: int = 5, random_mode: bool = false, hidden: bool = false, quantities: Dictionary = {}) -> bool:
@@ -390,7 +413,8 @@ static func monster_loot_is_random(monster: Dictionary) -> bool:
 	var properties: Dictionary = monster.get("properties", {})
 	if properties.has("loot_mode"):
 		return str(properties["loot_mode"]) == "random"
-	return monster_loot_contents(monster).is_empty()
+	var raw: Variant = properties.get("loot_contents", [])
+	return not (raw is Array and not raw.is_empty())
 
 
 func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: int = 5, random_mode: bool = false, hidden: bool = false, quantities: Dictionary = {}) -> bool:

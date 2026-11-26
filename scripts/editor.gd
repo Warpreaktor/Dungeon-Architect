@@ -3189,11 +3189,14 @@ func _on_battle_shield_broken(_item_id: String, member: HeroState) -> void:
 
 
 func _finish_combat() -> void:
-	if not _combat_active or game_session == null:
+	if not _combat_active or game_session == null or _battle_view == null:
+		return
+	var battle: BattleState = _battle_view.current_battle_state()
+	if battle == null or not battle.is_victory:
 		return
 	# Победа двигает игровую позицию, а визуальное перемещение надо запускать отдельно.
 	var previous_pos: Vector2i = game_session.player_pos
-	var moved: bool = game_session.win_pending_encounter()
+	var moved: bool = game_session.win_pending_encounter(battle)
 	if _battle_view != null:
 		_battle_view.queue_free()
 		_battle_view = null

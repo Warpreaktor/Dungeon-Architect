@@ -57,7 +57,7 @@ var _visible_bounds := Rect2i()
 var _debug_visibility_applied: bool = false
 var ground_loot_containers: Array[Dictionary]:
 	get:
-		return _ground_loot_containers.duplicate()
+		return _ground_loot_containers.duplicate(true)
 var _ground_loot_counter: int = 0
 var claimed_exit_rewards: Dictionary = {}
 var _floor_states: Dictionary = {} # Состояние посещённых карт только в памяти этого прохождения.
@@ -542,10 +542,10 @@ func _clear_member_equipment(member: HeroState) -> void:
 func _append_ground_loot(cell: Vector2i, entries: Array[Dictionary]) -> void:
 	if entries.is_empty():
 		return
-	var container: Dictionary = ground_container_at(cell)
+	var container: Dictionary = _ground_container_at(cell)
 	if not container.is_empty():
 		var contents: Array = container["loot"]
-		contents.append_array(entries)
+		contents.append_array(entries.duplicate(true))
 		return
 	_ground_loot_counter += 1
 	_add_ground_container({
@@ -574,13 +574,18 @@ func _remove_ground_container(container: Dictionary) -> void:
 		_ground_by_cell.erase(cell)
 
 
-func ground_container_at(cell: Vector2i) -> Dictionary:
+func _ground_container_at(cell: Vector2i) -> Dictionary:
 	var entries: Array = _ground_by_cell.get(cell, [])
 	return entries.front() if not entries.is_empty() else {}
 
 
+func ground_container_at(cell: Vector2i) -> Dictionary:
+	return _ground_container_at(cell).duplicate(true)
+
+
 func ground_container_by_id(container_id: String) -> Dictionary:
-	return _ground_by_id.get(container_id, {})
+	var container: Dictionary = _ground_by_id.get(container_id, {})
+	return container.duplicate(true)
 
 
 func _shield_durability_for_drop(member: HeroState, item_id: String) -> int:
@@ -742,7 +747,7 @@ func _ground_loot_take_count(entry: Dictionary) -> int:
 
 
 func can_take_ground_loot(container_id: String, entry_index: int) -> bool:
-	var container: Dictionary = ground_container_by_id(container_id)
+	var container: Dictionary = _ground_by_id.get(container_id, {})
 	if container.is_empty() or is_party_defeated():
 		return false
 	var cell := Vector2i(int(container["x"]), int(container["y"]))
@@ -755,7 +760,7 @@ func can_take_ground_loot(container_id: String, entry_index: int) -> bool:
 func take_ground_loot(container_id: String, entry_index: int) -> int:
 	if not can_take_ground_loot(container_id, entry_index):
 		return 0
-	var container: Dictionary = ground_container_by_id(container_id)
+	var container: Dictionary = _ground_by_id.get(container_id, {})
 	var loot: Array = container["loot"]
 	var entry: Dictionary = loot[entry_index]
 	var item_id: String = str(entry["item_id"])
@@ -1413,7 +1418,7 @@ func is_trap_revealed(entity: Dictionary) -> bool:
 
 func entities_at(x: int, y: int) -> Array:
 	var result: Array = map_data.entities_at(x, y)
-	var container: Dictionary = ground_container_at(Vector2i(x, y))
+	var container: Dictionary = _ground_container_at(Vector2i(x, y))
 	if not container.is_empty():
 		result.append({"type": "ground_loot", "id": container["id"], "x": x, "y": y})
 	return result
@@ -1451,8 +1456,8 @@ func pending_monster_definition() -> MonsterDefinition:
 
 ## Победа снимает монстра только в сессии, затем повторяет вход в клетку
 ## через обычные правила дверей, сундуков и находок.
-func win_pending_encounter() -> bool:
-	if not has_pending_encounter():
+func win_pending_encounter(battle: BattleState = null) -> bool:
+	if not has_pending_encounter() or (battle != null and not battle.is_victory):
 		return false
 	record_casualties()
 	if is_party_defeated():
@@ -1464,21 +1469,16 @@ func win_pending_encounter() -> bool:
 		if str(entity.get("id", "")) == defeated_id and str(entity.get("type", "")) == "monster":
 			defeated = entity
 			break
-	removed_entities[defeated_id] = true
-	loot_victories += 1
 	encounter_monster_id = ""
 	encounter_target = Vector2i(-1, -1)
-	var rewards: Array[Dictionary] = []
-	if not defeated.is_empty():
-		rewards = _resolve_rewards(
-			DungeonMap.monster_loot_contents(defeated),
-			DungeonMap.monster_loot_is_random(defeated),
-			DungeonMap.monster_gold_amount(defeated),
-			DungeonMap.monster_item_quantities(defeated), defeated)
-		for reward in rewards:
-			_receive_reward(reward, target)
-		if not rewards.is_empty():
-			_activate_message_at(target, "monster_defeated", defeated_id, rewards)
+	if defeated.is_empty() or is_entity_removed(defeated):
+		return false
+	removed_entities[defeated_id] = true
+	loot_victories += 1
+	var rewards: Array[Dictionary] = _resolve_source_rewards(defeated)
+	for reward in rewards:
+		_receive_reward(reward, target)
+	_activate_message_at(target, "monster_defeated", defeated_id, rewards)
 	return move_by(target.x - player_pos.x, target.y - player_pos.y)
 
 
@@ -1658,7 +1658,7 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 
 	# Проверка сундука после двери: нельзя получить добычу через замок.
 	var chest := _find_active_entity(target, "chest")
-	if not chest.is_empty() and not is_chest_open(chest) and (DungeonMap.chest_is_random(chest) or not DungeonMap.chest_contents(chest).is_empty()):
+	if not chest.is_empty() and not is_chest_open(chest):
 		if defer_chest_open:
 			pending_chest_id = str(chest["id"])
 		else:
@@ -1723,7 +1723,7 @@ func open_pending_chest() -> bool:
 	if chest.is_empty() or str(chest.get("id", "")) != chest_id or is_chest_open(chest):
 		return false
 	_open_chest(chest)
-	return true
+	return is_chest_open(chest)
 
 
 func loot_depth() -> int:
@@ -1733,7 +1733,17 @@ func loot_depth() -> int:
 	return _stairs_history.size()
 
 
-## Случайная награда разыгрывается в момент открытия и живёт только в GameSession.
+func _resolve_source_rewards(source: Dictionary) -> Array[Dictionary]:
+	match str(source.get("type", "")):
+		"monster":
+			return _resolve_rewards(DungeonMap.monster_loot_contents(source), DungeonMap.monster_loot_is_random(source),
+				DungeonMap.monster_gold_amount(source), DungeonMap.monster_item_quantities(source), source)
+		"chest", "stairs_down":
+			return _resolve_rewards(DungeonMap.chest_contents(source), DungeonMap.chest_is_random(source),
+				DungeonMap.chest_gold_amount(source), DungeonMap.chest_item_quantities(source), source)
+	return []
+
+
 func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: int, quantities: Dictionary = {}, source: Dictionary = {}) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
 	if random_mode:
@@ -1788,14 +1798,10 @@ func _materialize_reward(reward: Dictionary, rng: RandomNumberGenerator) -> Dict
 
 
 func _open_chest(chest: Dictionary) -> void:
-	if hero == null or is_party_defeated() or is_chest_open(chest):
+	if hero == null or is_party_defeated() or is_chest_open(chest) or is_entity_removed(chest):
 		return
 	opened_chests[str(chest["id"])] = true
-	var rewards: Array[Dictionary] = _resolve_rewards(
-		DungeonMap.chest_contents(chest),
-		DungeonMap.chest_is_random(chest),
-		DungeonMap.chest_gold_amount(chest),
-		DungeonMap.chest_item_quantities(chest), chest)
+	var rewards: Array[Dictionary] = _resolve_source_rewards(chest)
 	var cell := Vector2i(int(chest["x"]), int(chest["y"]))
 	for reward in rewards:
 		_receive_reward(reward, cell)
@@ -2125,9 +2131,7 @@ func _claim_exit_reward(stairs: Dictionary) -> void:
 	if claimed_exit_rewards.has(entity_id):
 		return
 	claimed_exit_rewards[entity_id] = true
-	var random_mode: bool = str(stairs.get("properties", {}).get("loot_mode", "")) == "random"
-	var rewards: Array[Dictionary] = _resolve_rewards(DungeonMap.chest_contents(stairs), random_mode,
-		DungeonMap.chest_gold_amount(stairs), DungeonMap.chest_item_quantities(stairs), stairs)
+	var rewards: Array[Dictionary] = _resolve_source_rewards(stairs)
 	for reward in rewards:
 		_receive_reward(reward, player_pos)
 	if not rewards.is_empty():

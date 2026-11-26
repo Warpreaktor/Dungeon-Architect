@@ -84,10 +84,12 @@ func _build_item_rows() -> void:
 				amulets.append(item_id)
 			ItemDefinition.EquipmentSlot.RING:
 				rings.append(item_id)
-	var potions: Array[String] = ["potion"]
-	for kind in ["health", "strength", "vitality", "vision"]:
-		for grade in ["small", "medium", "large"]:
-			potions.append("potion_%s_%s" % [kind, grade])
+	var potions: Array[String] = ItemCatalog.consumable_ids()
+	var other: Array[String] = []
+	for item_id in ItemCatalog.list_ids():
+		var item: ItemDefinition = ItemCatalog.get_item(item_id)
+		if item != null and item_id not in LockCatalog.LOCK_IDS and item.category not in [ItemDefinition.Category.CONSUMABLE, ItemDefinition.Category.EQUIPMENT]:
+			other.append(item_id)
 	var groups: Array[Dictionary] = [
 		{"title": "Ключи", "items": LockCatalog.LOCK_IDS},
 		{"title": "Зелья", "items": potions},
@@ -100,7 +102,7 @@ func _build_item_rows() -> void:
 		{"title": "Пояса", "items": belts},
 		{"title": "Амулеты", "items": amulets},
 		{"title": "Кольца", "items": rings},
-		{"title": "Прочее", "items": ["gold"]}
+		{"title": "Прочее", "items": other}
 	]
 	for group in groups:
 		var category: String = str(group["title"])

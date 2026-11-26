@@ -1649,7 +1649,8 @@ func _confirm_campaign_creation() -> void:
 	if not _valid_exit_destination(destination):
 		_cancel_campaign_creation()
 		return
-	_save_internal()
+	_flush_pending_map_edits()
+	_persist_current_map()
 	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
 	if is_dirty or not maps.has(map_data.map_id):
 		_set_status("Сначала необходимо сохранить текущую карту.")
@@ -2147,7 +2148,7 @@ func _persist_current_map(manual: bool = false) -> void:
 		_remember_last_map(map_data.map_id)
 		if manual:
 			_set_status("Сохранено: " + path)
-		_show_save_feedback()
+			_show_save_feedback()
 	else:
 		_show_save_error()
 

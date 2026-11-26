@@ -40,6 +40,14 @@ func _assert_saved(editor: Node, path: String, dungeon: DungeonMap) -> void:
 	assert(JSON.parse_string(FileAccess.get_file_as_string(path)) == JSON.parse_string(JSON.stringify(dungeon.to_dict())))
 
 
+func _assert_silent_save(editor: Node, normal_icon: Texture2D, normal_text: String) -> void:
+	var button: Button = editor.get("_save_button")
+	var timer: Timer = editor.get("_save_feedback_timer")
+	assert(timer.is_stopped())
+	assert(button.icon == normal_icon and button.text == normal_text)
+	assert(button.self_modulate == Color.WHITE)
+
+
 func _run() -> void:
 	var storage = preload("res://tests/editor_test_storage.gd").new()
 	var editor: Node = load("res://scenes/editor.tscn").instantiate()
@@ -50,6 +58,10 @@ func _run() -> void:
 	assert(dungeon.place_entity("player_spawn", 1, 1))
 	editor.call("_set_map", dungeon)
 	await process_frame
+	var button: Button = editor.get("_save_button")
+	var feedback_timer: Timer = editor.get("_save_feedback_timer")
+	var normal_icon: Texture2D = button.icon
+	var normal_text: String = button.text
 	var canvas: DungeonCanvas = editor.get("_canvas")
 	canvas.camera_offset = Vector2.ZERO
 	canvas.zoom = 1.0
@@ -62,6 +74,7 @@ func _run() -> void:
 	assert(not FileAccess.file_exists(path) and editor.get("_undo_stack").is_empty())
 	_touch(canvas, Vector2i(4, 2), false)
 	_assert_saved(editor, path, dungeon)
+	_assert_silent_save(editor, normal_icon, normal_text)
 	assert(editor.get("_undo_stack").size() == 1)
 	for x in range(2, 5):
 		assert(dungeon.get_terrain(x, 2) == "wall")
@@ -71,29 +84,36 @@ func _run() -> void:
 	assert(FileAccess.get_file_as_string(path) == painted)
 	editor.call("_undo_edit")
 	_assert_saved(editor, path, dungeon)
+	_assert_silent_save(editor, normal_icon, normal_text)
 	for x in range(2, 5):
 		assert(dungeon.get_terrain(x, 2) == "floor")
 	assert(editor.get("_redo_stack").size() == 1)
 	editor.call("_save_internal")
+	assert(not feedback_timer.is_stopped() and button.icon != normal_icon)
 	assert(editor.get("_redo_stack").size() == 1)
 	editor.call("_redo_edit")
 	_assert_saved(editor, path, dungeon)
+	_assert_silent_save(editor, normal_icon, normal_text)
 	assert(FileAccess.get_file_as_string(path) == painted)
 	# An aborted write must leave the previous JSON readable.
 	assert(DirAccess.make_dir_absolute(path + ".tmp") == OK)
 	_click(canvas, Vector2i(5, 2))
 	assert(editor.get("is_dirty") and editor.get("_undo_stack").size() == 2)
+	assert(feedback_timer.is_stopped() and button.self_modulate != Color.WHITE)
 	assert(FileAccess.get_file_as_string(path) == painted)
 	assert(DirAccess.remove_absolute(path + ".tmp") == OK)
-	editor.call("_save_internal")
+	editor.call("_autosave_map")
 	_assert_saved(editor, path, dungeon)
+	_assert_silent_save(editor, normal_icon, normal_text)
 	assert(editor.get("_undo_stack").size() == 2)
 	editor.call("_undo_edit")
 	_assert_saved(editor, path, dungeon)
+	_assert_silent_save(editor, normal_icon, normal_text)
 	assert(FileAccess.get_file_as_string(path) == painted)
 	# A new edit after Undo invalidates Redo, but saving alone does not.
 	editor.call("_on_message_saved", Vector2i(3, 3), "Авторское сообщение")
 	_assert_saved(editor, path, dungeon)
+	_assert_silent_save(editor, normal_icon, normal_text)
 	assert(editor.get("_redo_stack").is_empty())
 	assert(dungeon.message_at(3, 3).get("properties", {}).get("text", "") == "Авторское сообщение")
 	var before_name: String = FileAccess.get_file_as_string(path)
@@ -103,6 +123,7 @@ func _run() -> void:
 	var timer: Timer = editor.get("_name_autosave_timer")
 	await timer.timeout
 	_assert_saved(editor, path, dungeon)
+	_assert_silent_save(editor, normal_icon, normal_text)
 	assert(dungeon.display_name == "Новое имя")
 	var before_test: String = FileAccess.get_file_as_string(path)
 	editor.call("_start_play_mode")
@@ -113,12 +134,14 @@ func _run() -> void:
 	assert(FileAccess.get_file_as_string(path) == before_test)
 	editor.call("_stop_play_mode", false)
 	_assert_saved(editor, path, dungeon)
+	_assert_silent_save(editor, normal_icon, normal_text)
 	editor.call("_load_from_path", path)
 	assert(not (editor.get("_unsaved_dialog") as ConfirmationDialog).visible)
 	assert(editor.get("_undo_stack").is_empty() and editor.get("_redo_stack").is_empty())
 	editor.call("_create_new_map", 8, 8)
 	var created: DungeonMap = editor.get("map_data")
 	_assert_saved(editor, storage.directory.path_join(created.map_id + ".json"), created)
+	_assert_silent_save(editor, normal_icon, normal_text)
 	assert(FileAccess.get_file_as_string(path) == before_test)
 	editor.queue_free()
 	await process_frame

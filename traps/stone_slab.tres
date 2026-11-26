@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="TrapDefinition" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/trap_definition.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assets/icons/traps/stone_slab.svg" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/icons/traps/stone_slab.png" id="2_icon"]
 
 [resource]
 script = ExtResource("1_script")
@@ -12,6 +12,7 @@ icon = ExtResource("2_icon")
 placement = "floor"
 placement_constraint = "narrow_passage"
 trigger_message = "Под ногами раздался глухой щелчок. С потолка посыпалась каменная пыль, и огромная плита начала стремительно опускаться!"
+hidden_entry_reaction = "directional_escape"
 hidden_by_default = true
 detection_difficulty = 8
 avoidance_difficulty = 15

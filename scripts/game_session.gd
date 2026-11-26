@@ -1731,8 +1731,95 @@ func _discard_trap_message(activation: String, entity_id: String) -> void:
 			_message_events.remove_at(index)
 
 
+func _escape_cell_available(cell: Vector2i) -> bool:
+	return can_enter(cell) and _find_active_entity(cell, "door").is_empty() and _find_active_entity(cell, "monster").is_empty()
+
+
+func _request_trap_reaction(entity: Dictionary, trap: TrapDefinition, cell: Vector2i, opened_door_id: String) -> void:
+	var direction: Vector2i = cell - player_pos
+	var forward: Vector2i = cell + direction
+	var forward_available: bool = _escape_cell_available(forward)
+	_pending_trap_choice = {
+		"entity_id": str(entity["id"]), "kind": "reaction", "cell": cell,
+		"origin": player_pos, "forward": forward, "forward_available": forward_available,
+		"opened_door_id": opened_door_id
+	}
+	revealed_traps[str(entity["id"])] = true
+	var stat_label: String = trap.avoidance_stat_label()
+	_message_events.append({
+		"activation": "trap_reaction", "entity_id": entity["id"],
+		"title": "%s!" % trap.display_name, "text": trap.trigger_message,
+		"prompt": "Куда броситься?", "icon_type": "trap", "icon_id": trap.trap_id,
+		"choices": {"back": "Назад (%s)" % stat_label, "forward": "Вперёд (%s)" % stat_label},
+		"disabled_choices": [] if forward_available else ["forward"], "select_actor": false
+	})
+
+
+func _resolve_trap_reaction(choice: String, defer_chest_open: bool) -> bool:
+	if choice not in ["back", "forward"]:
+		return false
+	var pending: Dictionary = _pending_trap_choice.duplicate()
+	var cell: Vector2i = pending["cell"]
+	var origin: Vector2i = pending["origin"]
+	var forward: Vector2i = pending["forward"]
+	if choice == "forward" and (not pending["forward_available"] or not _escape_cell_available(forward)):
+		return false
+	var entity: Dictionary = _find_active_entity(cell, "trap")
+	if entity.is_empty() or entity["id"] != pending["entity_id"] or is_trap_disarmed(entity):
+		return false
+	var trap: TrapDefinition = TrapCatalog.from_entity(entity)
+	if trap == null or player_pos != origin:
+		return false
+	_clear_trap_choice()
+	_discard_trap_message("trap_reaction", str(entity["id"]))
+	last_event_message = ""
+	_trap_result_messages.clear()
+	_party_damage_events.clear()
+	player_pos = cell
+	_activate_trap(trap, str(entity["id"]))
+	record_casualties()
+	if is_party_defeated():
+		steps += 1
+		_refresh_visibility()
+		return true
+	if choice == "back":
+		player_pos = origin
+		_advance_movement_effects()
+		record_casualties()
+	else:
+		var damage: Array[Dictionary] = _party_damage_events.duplicate(true)
+		var outcome: Array[String] = _trap_result_messages.duplicate()
+		var event_message: String = last_event_message
+		var delta: Vector2i = forward - cell
+		var accepted: Array[String] = []
+		var moved: bool = _move_by(delta.x, delta.y, defer_chest_open, accepted, null)
+		if not moved:
+			_advance_movement_effects()
+			record_casualties()
+			if is_party_defeated() and has_pending_trap_choice():
+				var pending_id: String = str(_pending_trap_choice["entity_id"])
+				_discard_trap_message("trap_choice", pending_id)
+				_discard_trap_message("trap_reaction", pending_id)
+				_clear_trap_choice()
+		damage.append_array(_party_damage_events)
+		_party_damage_events = damage
+		outcome.append_array(_trap_result_messages)
+		_trap_result_messages = outcome
+		if not event_message.is_empty():
+			_append_event_message(event_message)
+	var opened_door_id: String = str(pending.get("opened_door_id", ""))
+	if not opened_door_id.is_empty() and not is_party_defeated():
+		_activate_message_at(cell, "door_open", opened_door_id)
+	_refresh_visibility()
+	return player_pos != origin
+
+
 func resolve_pending_trap_choice(choice: String, actor_index: int = -1, defer_chest_open: bool = false) -> bool:
-	if not has_pending_trap_choice() or choice not in ["disarm", "cancel", "avoid"]:
+	if not has_pending_trap_choice():
+		return false
+	if _pending_trap_choice.get("kind") == "reaction":
+		return _resolve_trap_reaction(choice, defer_chest_open)
+	if choice not in ["disarm", "cancel", "avoid"]:
 		return false
 	if choice == "disarm" and failed_trap_disarms.has(str(_pending_trap_choice["entity_id"])):
 		return false
@@ -1915,6 +2002,14 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 		removed_entities[opened_door_id] = true
 		last_event_message = "Ключ использован. Дверь открыта!"
 
+	if arrival == target and absi(dx) + absi(dy) == 1:
+		var hidden_trap: Dictionary = _find_active_entity(target, "trap")
+		if not hidden_trap.is_empty() and not is_trap_disarmed(hidden_trap) and not accepted.has(str(hidden_trap["id"])) and is_entity_hidden_from_hero(hidden_trap):
+			var hidden_definition: TrapDefinition = TrapCatalog.from_entity(hidden_trap)
+			if hidden_definition != null and hidden_definition.hidden_entry_reaction == "directional_escape":
+				_request_trap_reaction(hidden_trap, hidden_definition, target, opened_door_id)
+				return false
+
 	# Проверка сундука после двери: нельзя получить добычу через замок.
 	var chest := _find_active_entity(target, "chest")
 	if not chest.is_empty() and not is_chest_open(chest):
@@ -1925,17 +2020,7 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 
 	player_pos = arrival
 	target = arrival
-	steps += 1
-	for member in party_members():
-		if member == null or member.health <= 0:
-			continue
-		member.advance_effects()
-		for status_event in member.advance_overworld_statuses():
-			var label: String = str(status_event.get("label", ""))
-			var amount: int = int(status_event.get("damage", 0))
-			if amount > 0:
-				_record_party_damage(member, amount, str(status_event.get("status_id", "")))
-				_append_event_message("%s: %s, -%d HP" % [member.definition.display_name, label, amount])
+	_advance_movement_effects()
 	if not is_party_defeated():
 		_activate_traps_at(target)
 	record_casualties()
@@ -1964,6 +2049,20 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 		if not portal.is_empty() and not DungeonMap.exit_target_id(portal).is_empty():
 			is_completed = true
 	return true
+
+
+func _advance_movement_effects() -> void:
+	steps += 1
+	for member in party_members():
+		if member == null or member.health <= 0:
+			continue
+		member.advance_effects()
+		for status_event in member.advance_overworld_statuses():
+			var label: String = str(status_event.get("label", ""))
+			var amount: int = int(status_event.get("damage", 0))
+			if amount > 0:
+				_record_party_damage(member, amount, str(status_event.get("status_id", "")))
+				_append_event_message("%s: %s, -%d HP" % [member.definition.display_name, label, amount])
 
 
 ## Завершает открытие сундука только после визуального прибытия героя.

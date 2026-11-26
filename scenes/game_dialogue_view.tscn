@@ -198,3 +198,27 @@ unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(0, 44)
 text = "Проскочить"
+
+
+[node name="ReactionActions" type="VBoxContainer" parent="Center/Card/Margins/Content/ChoiceActions"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ReactionPrompt" type="Label" parent="Center/Card/Margins/Content/ChoiceActions/ReactionActions"]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.89, 0.69, 0.39, 1)
+theme_override_font_sizes/font_size = 18
+
+[node name="BackButton" type="Button" parent="Center/Card/Margins/Content/ChoiceActions/ReactionActions"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 44)
+
+[node name="ForwardButton" type="Button" parent="Center/Card/Margins/Content/ChoiceActions/ReactionActions"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 44)

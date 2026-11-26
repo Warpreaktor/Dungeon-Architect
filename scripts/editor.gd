@@ -3039,7 +3039,7 @@ func _show_next_game_message() -> void:
 		return
 	var event: Dictionary = _pending_game_messages.pop_front()
 	_active_game_message = event
-	if str(event.get("activation", "")) in ["trap_choice", "door_trap", "trap_result"]:
+	if str(event.get("activation", "")) in ["trap_choice", "trap_reaction", "door_trap", "trap_result"]:
 		_clear_held_movement()
 	_game_dialogue.show_event(event)
 
@@ -3052,6 +3052,10 @@ func _on_trap_choice_selected(choice: String, actor_index: int) -> void:
 	var moving_session: GameSession = game_session
 	var previous_pos: Vector2i = moving_session.player_pos
 	var moved: bool = moving_session.resolve_pending_trap_choice(choice, actor_index, true)
+	if choice in ["back", "forward"]:
+		_canvas.grab_focus()
+		_complete_player_move(moving_session, previous_pos, moved, true)
+		return
 	if choice == "cancel":
 		_canvas.grab_focus()
 		_show_next_game_message()

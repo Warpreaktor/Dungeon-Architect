@@ -22,12 +22,17 @@ signal choice_selected(choice: String, actor_index: int)
 @onready var _disarm_button: Button = %DisarmButton
 @onready var _cancel_button: Button = %CancelButton
 @onready var _avoid_button: Button = %AvoidButton
+@onready var _reaction_actions: VBoxContainer = %ReactionActions
+@onready var _reaction_prompt: Label = %ReactionPrompt
+@onready var _back_button: Button = %BackButton
+@onready var _forward_button: Button = %ForwardButton
 
 const ACTOR_CARD_SIZE := Vector2(88, 108)
 const COMPACT_ACTOR_CARD_SIZE := Vector2(72, 92)
 const ACTOR_PORTRAIT_SIZE := Vector2(64, 64)
 const COMPACT_ACTOR_PORTRAIT_SIZE := Vector2(52, 52)
 
+var _available_choices: Dictionary = {}
 var _selected_actor_index: int = 0
 var _actor_entries: Array[Dictionary] = []
 var _actor_buttons: Array[Button] = []
@@ -38,6 +43,8 @@ func _ready() -> void:
 	_disarm_button.pressed.connect(_choose.bind("disarm"))
 	_cancel_button.pressed.connect(_choose.bind("cancel"))
 	_avoid_button.pressed.connect(_choose.bind("avoid"))
+	_back_button.pressed.connect(_choose.bind("back"))
+	_forward_button.pressed.connect(_choose.bind("forward"))
 	get_viewport().size_changed.connect(_resize_card)
 	_resize_card()
 	hide()
@@ -53,6 +60,17 @@ func show_event(event: Dictionary) -> void:
 	if not result_text.is_empty():
 		story = result_text if story.is_empty() else "%s\n\n%s" % [result_text, story]
 	var choices: Dictionary = event.get("choices", {})
+	_available_choices = choices.duplicate()
+	for disabled_choice in event.get("disabled_choices", []):
+		_available_choices.erase(disabled_choice)
+	_reaction_actions.visible = choices.has("back") or choices.has("forward")
+	_reaction_prompt.text = str(event.get("prompt", ""))
+	_back_button.visible = choices.has("back")
+	_back_button.text = str(choices.get("back", ""))
+	_back_button.disabled = not _available_choices.has("back")
+	_forward_button.visible = choices.has("forward")
+	_forward_button.text = str(choices.get("forward", ""))
+	_forward_button.disabled = not _available_choices.has("forward")
 	_choices.visible = not choices.is_empty()
 	(_continue_button.get_parent() as Control).visible = choices.is_empty()
 	if _choices.visible:
@@ -69,6 +87,7 @@ func show_event(event: Dictionary) -> void:
 	_text.text = story
 	_text.visible = not story.is_empty()
 	_eyebrow.text = "ЛОВУШКА" if str(event.get("icon_type", "")) == "trap" else ("ПОСЛАНИЕ" if not story.is_empty() else "СОКРОВИЩА")
+	_eyebrow.text = str(event.get("title", _eyebrow.text))
 	var event_icon: Texture2D = _resolve_event_icon(event)
 	_icon.texture = event_icon
 	_icon_holder.visible = event_icon != null
@@ -107,7 +126,9 @@ func show_event(event: Dictionary) -> void:
 	show()
 	if _text.visible:
 		_text.scroll_to_line(0)
-	if _choices.visible:
+	if _reaction_actions.visible:
+		_back_button.grab_focus()
+	elif _choices.visible:
 		_cancel_button.grab_focus()
 	else:
 		_continue_button.grab_focus()
@@ -143,6 +164,8 @@ func _resize_card() -> void:
 	# Если авторский текст и добыча показаны одновременно, оба блока остаются
 	# внутри игрового окна на невысоком экране планшета.
 	_text.custom_minimum_size.y = minf(72.0, maxf(44.0, viewport_size.y * 0.12)) if _choices.visible else minf(168.0, maxf(75.0, viewport_size.y * 0.24))
+	if _reaction_actions.visible:
+		_text.custom_minimum_size.y = minf(152.0, maxf(80.0, viewport_size.y * 0.24))
 	if _loot_section.visible:
 		var ideal_height := minf(186.0, float(_loot_rows.get_child_count()) * 40.0)
 		_loot_scroll.custom_minimum_size.y = minf(ideal_height, maxf(60.0, viewport_size.y * 0.22))
@@ -160,7 +183,7 @@ func has_choices() -> bool:
 
 
 func _choose(choice: String) -> void:
-	if not has_choices() or (choice == "disarm" and not _disarm_button.visible):
+	if not has_choices() or not _available_choices.has(choice):
 		return
 	hide()
 	choice_selected.emit(choice, _selected_actor_index)

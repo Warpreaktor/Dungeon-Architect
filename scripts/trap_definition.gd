@@ -10,6 +10,7 @@ extends Resource
 @export_enum("floor", "door") var placement: String = "floor"
 @export_enum("any", "narrow_passage") var placement_constraint: String = "any"
 @export_multiline var trigger_message: String = ""
+@export_enum("immediate", "directional_escape") var hidden_entry_reaction: String = "immediate"
 @export var hidden_by_default: bool = true
 @export_range(0, 999, 1) var detection_difficulty: int = 0
 @export_range(0, 999, 1) var avoidance_difficulty: int = 0

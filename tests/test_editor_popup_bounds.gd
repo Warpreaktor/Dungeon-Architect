@@ -11,22 +11,25 @@ func _run() -> void:
 	var monster_popup: ChestContentsPopup = load("res://scenes/chest_contents_popup.tscn").instantiate()
 	root.add_child(monster_popup)
 	await process_frame
-	var monster_ids: Array[String] = [MonsterCatalog.DEFAULT_MONSTER_ID]
+	var monster_ids: Array[String] = ["skeleton", "hunter", "lobar", "skeleton"]
 	var loot: Array[String] = []
 	monster_popup.configure("monster", loot, 0, true, false, false, {}, monster_ids)
-	var selector: OptionButton = monster_popup.get_node("ContentMargin/Content/MonsterParty/SecondaryMonster")
-	assert(selector.get_theme_constant("icon_max_width") == 32)
-	assert(selector.get_popup().get_theme_constant("icon_max_width") == 32)
-	assert(selector.item_count > 1)
-	selector.select(1)
-	await process_frame
-	assert(selector.get_combined_minimum_size().y <= 70)
+	assert(monster_popup._monster_slot_buttons.size() == 4)
+	for index in range(1, 4):
+		var selector: MenuButton = monster_popup._monster_slot_buttons[index] as MenuButton
+		assert(selector.get_theme_constant("icon_max_width") == 44)
+		assert(selector.get_popup().get_theme_constant("icon_max_width") == 32)
+		assert(selector.get_popup().item_count > 1)
+		assert(selector.get_combined_minimum_size().y <= 70)
 	monster_popup.popup_centered_clamped(Vector2i(470, 630), 0.9)
 	await process_frame
 	var loot_scroll: ScrollContainer = monster_popup.get_node("ContentMargin/Content/LootScroll")
 	assert(loot_scroll.custom_minimum_size.y == 0)
 	assert((loot_scroll.size_flags_vertical & Control.SIZE_EXPAND) != 0)
 	assert(monster_popup.size.y <= root.size.y)
+	var slots: HBoxContainer = monster_popup._monster_slots
+	for button in monster_popup._monster_slot_buttons:
+		assert(button.position.x + button.size.x <= slots.size.x + 1.0)
 	var buttons: HBoxContainer = monster_popup.get_node("ContentMargin/Content/Buttons")
 	assert(buttons.position.y + buttons.size.y <= monster_popup.size.y)
 	monster_popup.hide()

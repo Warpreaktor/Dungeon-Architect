@@ -1813,7 +1813,7 @@ func _on_monster_tapped(monster_entity_id: String) -> void:
 
 
 func _on_monster_configuration_changed(monster_entity_id: String, party: Array[String], contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary) -> void:
-	if is_play_mode:
+	if is_play_mode or not DungeonMap.valid_monster_party(party):
 		return
 	var before := _canvas.capture_edit_state()
 	var changed: bool = map_data.set_monster_party(monster_entity_id, party)

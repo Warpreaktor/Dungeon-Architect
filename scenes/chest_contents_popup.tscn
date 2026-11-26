@@ -56,15 +56,10 @@ theme_override_constants/separation = 6
 layout_mode = 2
 text = "Состав группы"
 
-[node name="PrimaryMonster" type="Label" parent="ContentMargin/Content/MonsterParty"]
+[node name="MonsterSlots" type="HBoxContainer" parent="ContentMargin/Content/MonsterParty"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "1. Основной монстр"
-
-[node name="SecondaryMonster" type="OptionButton" parent="ContentMargin/Content/MonsterParty"]
-unique_name_in_owner = true
-layout_mode = 2
-custom_minimum_size = Vector2(0, 44)
+theme_override_constants/separation = 6
 
 [node name="PartySeparator" type="HSeparator" parent="ContentMargin/Content/MonsterParty"]
 layout_mode = 2

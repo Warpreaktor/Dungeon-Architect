@@ -11,8 +11,7 @@ signal monster_configuration_changed(entity_id: String, party: Array[String], co
 @onready var _rows: VBoxContainer = %LootRows
 @onready var _scroll: ScrollContainer = %LootScroll
 @onready var _monster_party: VBoxContainer = %MonsterParty
-@onready var _primary_monster: Label = %PrimaryMonster
-@onready var _secondary_monster: OptionButton = %SecondaryMonster
+@onready var _monster_slots: HBoxContainer = %MonsterSlots
 
 const CATEGORY_NAMES := ["Ключи", "Зелья", "Оружие", "Щиты", "Шлемы", "Броня", "Перчатки", "Сапоги", "Пояса", "Амулеты", "Кольца", "Прочее"]
 const CATEGORY_ICONS := {
@@ -33,7 +32,8 @@ const AMOUNT_WIDTH := 94.0
 
 var _entity_id: String = ""
 var _editing_monster: bool = false
-var _primary_monster_id: String = ""
+var _monster_slot_ids: Array[String] = []
+var _monster_slot_buttons: Array[Button] = []
 var _item_checks: Dictionary = {} # id -> CheckBox
 var _item_amounts: Dictionary = {} # id -> SpinBox
 var _unlisted_quantities: Dictionary = {}
@@ -48,9 +48,88 @@ func _ready() -> void:
 	%KeyboardDoneButton.pressed.connect(_finish_amount)
 	%KeyboardDoneButton.visible = false
 	_random_check.toggled.connect(_refresh_enabled)
-	_secondary_monster.add_theme_constant_override("icon_max_width", 32)
-	_secondary_monster.get_popup().add_theme_constant_override("icon_max_width", 32)
+	_build_monster_slots()
 	_build_item_rows()
+
+
+func _build_monster_slots() -> void:
+	for index in range(DungeonMap.MAX_MONSTERS_PER_ENCOUNTER):
+		var button: Button
+		if index == 0:
+			button = Button.new()
+			button.disabled = true
+			button.add_theme_color_override("icon_disabled_color", Color.WHITE)
+		else:
+			var menu := MenuButton.new()
+			var choices: PopupMenu = menu.get_popup()
+			choices.add_theme_constant_override("icon_max_width", 32)
+			choices.add_item("Очистить", 0)
+			choices.set_item_metadata(0, "")
+			for monster_id in MonsterCatalog.list_placeable_ids():
+				var monster: MonsterDefinition = MonsterCatalog.get_monster(monster_id)
+				if MonsterCatalog.is_exclusive_encounter(monster):
+					continue
+				var item_index: int = choices.item_count
+				choices.add_icon_item(monster.icon, monster.display_name, item_index)
+				choices.set_item_metadata(item_index, monster_id)
+			choices.id_pressed.connect(_on_monster_slot_choice.bind(index))
+			button = menu
+		button.name = "MonsterSlot%d" % (index + 1)
+		button.custom_minimum_size = Vector2(48, 56)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.expand_icon = true
+		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		button.add_theme_constant_override("icon_max_width", 44)
+		_monster_slots.add_child(button)
+		_monster_slot_buttons.append(button)
+
+
+func _configure_monster_slots(monster_ids: Array[String]) -> void:
+	var definitions: Array[MonsterDefinition] = []
+	for monster_id in monster_ids:
+		definitions.append(MonsterCatalog.get_monster(monster_id))
+	var normalized: Array[MonsterDefinition] = MonsterCatalog.normalize_legacy_encounter(definitions)
+	_monster_slot_ids.clear()
+	for index in range(DungeonMap.MAX_MONSTERS_PER_ENCOUNTER):
+		_monster_slot_ids.append(normalized[index].monster_id if index < normalized.size() else "")
+	_refresh_monster_slots()
+
+
+func _refresh_monster_slots() -> void:
+	var exclusive: bool = MonsterCatalog.is_exclusive_encounter(MonsterCatalog.get_monster(_monster_slot_ids[0]))
+	for index in range(_monster_slot_buttons.size()):
+		var button: Button = _monster_slot_buttons[index]
+		var monster_id: String = _monster_slot_ids[index]
+		var monster: MonsterDefinition = MonsterCatalog.get_monster(monster_id) if not monster_id.is_empty() else null
+		button.disabled = index == 0 or exclusive
+		button.icon = monster.icon if monster != null else null
+		button.text = ("×" if exclusive else "+") if monster == null else ""
+		button.tooltip_text = monster.display_name if monster != null else ""
+
+
+func _on_monster_slot_choice(item_id: int, slot_index: int) -> void:
+	if not _editing_monster or slot_index <= 0 or slot_index >= _monster_slot_buttons.size():
+		return
+	var button: MenuButton = _monster_slot_buttons[slot_index] as MenuButton
+	if button.disabled:
+		return
+	var choices: PopupMenu = button.get_popup()
+	var item_index: int = choices.get_item_index(item_id)
+	if item_index < 0:
+		return
+	var monster_id: String = str(choices.get_item_metadata(item_index))
+	if not monster_id.is_empty() and (not MonsterCatalog.has(monster_id) or MonsterCatalog.is_bond_companion(monster_id) or MonsterCatalog.is_exclusive_encounter(MonsterCatalog.get_monster(monster_id))):
+		return
+	_monster_slot_ids[slot_index] = monster_id
+	_refresh_monster_slots()
+
+
+func _selected_monster_party() -> Array[String]:
+	var party: Array[String] = []
+	for monster_id in _monster_slot_ids:
+		if not monster_id.is_empty():
+			party.append(monster_id)
+	return party
 
 
 func _build_item_rows() -> void:
@@ -186,22 +265,7 @@ func configure(entity_id: String, contents: Array[String], gold_amount: int = 5,
 	_title.text = "Настройки монстров" if is_monster else "Содержимое сундука"
 	_monster_party.visible = is_monster
 	if is_monster:
-		_primary_monster_id = monster_ids[0] if not monster_ids.is_empty() else MonsterCatalog.DEFAULT_MONSTER_ID
-		var main_definition: MonsterDefinition = MonsterCatalog.get_monster(_primary_monster_id)
-		_primary_monster.text = "1. %s" % main_definition.display_name
-		_secondary_monster.clear()
-		_secondary_monster.add_item("Нет второго монстра")
-		_secondary_monster.set_item_metadata(0, "")
-		var selected_id: String = monster_ids[1] if monster_ids.size() > 1 else ""
-		var selection_index: int = 0
-		for monster_id in MonsterCatalog.list_placeable_ids():
-			var monster: MonsterDefinition = MonsterCatalog.get_monster(monster_id)
-			var index: int = _secondary_monster.item_count
-			_secondary_monster.add_icon_item(monster.icon, monster.display_name)
-			_secondary_monster.set_item_metadata(index, monster_id)
-			if monster_id == selected_id:
-				selection_index = index
-		_secondary_monster.select(selection_index)
+		_configure_monster_slots(monster_ids)
 	_unlisted_quantities.clear()
 	for item_id in contents:
 		if not _item_checks.has(item_id) and ItemCatalog.has(item_id):
@@ -273,10 +337,9 @@ func _save() -> void:
 			quantities[item_id] = _unlisted_quantities[item_id]
 	var gold_amount: int = int(quantities.get("gold", 5))
 	if _editing_monster:
-		var party: Array[String] = [_primary_monster_id]
-		var secondary_id: String = str(_secondary_monster.get_selected_metadata())
-		if not secondary_id.is_empty():
-			party.append(secondary_id)
+		var party: Array[String] = _selected_monster_party()
+		if not DungeonMap.valid_monster_party(party):
+			return
 		monster_configuration_changed.emit(_entity_id, party, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities)
 	else:
 		contents_changed.emit(_entity_id, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities)

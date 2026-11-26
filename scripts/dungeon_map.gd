@@ -5,7 +5,7 @@ extends RefCounted
 ## Поверхность и сущности хранятся раздельно; у клетки может быть несколько сущностей.
 
 const FORMAT_VERSION := 1
-const MAX_MONSTERS_PER_ENCOUNTER: int = 2
+const MAX_MONSTERS_PER_ENCOUNTER: int = MonsterCatalog.MAX_ENCOUNTER_PARTICIPANTS
 const MAX_SIZE := 256
 # Пары слов образуют названия без грамматических несоответствий.
 const NAME_PLACES := [

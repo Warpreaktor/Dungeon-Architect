@@ -3,6 +3,12 @@ extends RefCounted
 
 const SUPPORT_ENEMY_ID: String = "enemy_support"
 
+class EnemyRuntime:
+	var definition: MonsterDefinition
+	var initial_chain: Array[String] = []
+	var profile_id: String = ""
+	var intermission_usage: Dictionary = {}
+
 ## Независимое от сцены состояние боя. Не управляет камерой и кнопками.
 ## Фазы управляются BattleFlow, участники адресуются только через ID.
 var participants: Dictionary = {}
@@ -11,19 +17,54 @@ var hero_id: String = "hero"
 var party_hero_ids: Array[String] = []
 var enemy_id: String = "enemy"
 var support_enemy_id: String = SUPPORT_ENEMY_ID
-var enemy_definition: MonsterDefinition
-var current_enemy_profile_id: String = ""
-var initial_enemy_chain: Array[String] = []
+var _enemy_runtime: Dictionary = {}
+var enemy_definition: MonsterDefinition:
+	get:
+		return _runtime_for(enemy_id).definition
+	set(value):
+		_runtime_for(enemy_id).definition = value
+var current_enemy_profile_id: String:
+	get:
+		return _runtime_for(enemy_id).profile_id
+	set(value):
+		_runtime_for(enemy_id).profile_id = value
+var initial_enemy_chain: Array[String]:
+	get:
+		return _runtime_for(enemy_id).initial_chain
+	set(value):
+		_runtime_for(enemy_id).initial_chain = value
+var enemy_intermission_usage: Dictionary:
+	get:
+		return _runtime_for(enemy_id).intermission_usage
+	set(value):
+		_runtime_for(enemy_id).intermission_usage = value
+var support_enemy_definition: MonsterDefinition:
+	get:
+		return _runtime_for(support_enemy_id).definition
+	set(value):
+		_runtime_for(support_enemy_id).definition = value
+var support_initial_chain: Array[String]:
+	get:
+		return _runtime_for(support_enemy_id).initial_chain
+	set(value):
+		_runtime_for(support_enemy_id).initial_chain = value
+var support_profile_id: String:
+	get:
+		return _runtime_for(support_enemy_id).profile_id
+	set(value):
+		_runtime_for(support_enemy_id).profile_id = value
+var support_intermission_usage: Dictionary:
+	get:
+		return _runtime_for(support_enemy_id).intermission_usage
+	set(value):
+		_runtime_for(support_enemy_id).intermission_usage = value
 var locked_hero_arsenal: Array[String] = []
 var manual_combat_active: bool = false
 var manual_used_slots: Array[int] = []
 var _manual_phase_start: int = 0
-var enemy_intermission_usage: Dictionary = {}
-var support_enemy_definition: MonsterDefinition
-var support_initial_chain: Array[String] = []
-var support_profile_id: String = ""
-var support_intermission_usage: Dictionary = {}
 var battle_bond: BattleBondDefinition
+var bond_guardian_id: String = ""
+var bond_commander_id: String = ""
 var bond_mounted: bool = false
 var bond_marked_target_id: String = ""
 var intercept_targets: Dictionary = {}
@@ -62,12 +103,7 @@ static func begin_for_party(monster: MonsterDefinition, heroes: Array[HeroState]
 		state.rng.randomize()
 	else:
 		state.rng.seed = rng_seed
-	state.enemy_definition = monster
-	var enemy: BattleParticipant = BattleParticipant.from_monster(monster, state.enemy_id)
-	state.participants[state.enemy_id] = enemy
-	if enemy != null:
-		enemy.action_chain = MonsterCardDraw.draw(monster, enemy, state.rng)
-		state.initial_enemy_chain = enemy.action_chain.duplicate()
+	state._register_enemy(monster, state.enemy_id)
 	for index in range(heroes.size()):
 		var member: HeroState = heroes[index]
 		if member == null:
@@ -78,6 +114,70 @@ static func begin_for_party(monster: MonsterDefinition, heroes: Array[HeroState]
 		state.participants[participant_id] = fighter
 		state.party_hero_ids.append(participant_id)
 	return state
+
+
+static func begin_for_encounter(monsters: Array[MonsterDefinition], heroes: Array[HeroState], rng_seed: int = -1) -> BattleState:
+	if not MonsterCatalog.valid_encounter(monsters):
+		return null
+	var primary: MonsterDefinition = monsters[0]
+	var bond: BattleBondDefinition = primary.battle_bond
+	var guardian: MonsterDefinition = MonsterCatalog.get_monster(bond.companion_monster_id) if bond != null else primary
+	var state: BattleState = begin_for_party(guardian, heroes, rng_seed)
+	if bond != null:
+		state._register_enemy(primary, state.support_enemy_id)
+		state.configure_bond(bond, state.enemy_id, state.support_enemy_id)
+	else:
+		for index in range(1, monsters.size()):
+			state.add_enemy(monsters[index])
+	return state
+
+
+func _runtime_for(actor_id: String) -> EnemyRuntime:
+	if not _enemy_runtime.has(actor_id):
+		_enemy_runtime[actor_id] = EnemyRuntime.new()
+	return _enemy_runtime[actor_id] as EnemyRuntime
+
+
+func enemy_definition_for(actor_id: String) -> MonsterDefinition:
+	return _runtime_for(actor_id).definition if _enemy_runtime.has(actor_id) else null
+
+
+func _register_enemy(definition: MonsterDefinition, actor_id: String) -> BattleParticipant:
+	if definition == null or participants.has(actor_id):
+		return null
+	var actor: BattleParticipant = BattleParticipant.from_monster(definition, actor_id)
+	actor.action_chain = MonsterCardDraw.draw(definition, actor, rng)
+	participants[actor_id] = actor
+	var runtime: EnemyRuntime = _runtime_for(actor_id)
+	runtime.definition = definition
+	runtime.initial_chain = actor.action_chain.duplicate()
+	return actor
+
+
+func add_enemy(definition: MonsterDefinition) -> BattleParticipant:
+	if round_combat_active or manual_combat_active or flow.stage != BattleFlow.Stage.PREPARATION or is_victory or is_defeat:
+		return null
+	var ids: Array[String] = enemy_ids()
+	var definitions: Array[MonsterDefinition] = []
+	for actor_id in ids:
+		definitions.append(enemy_definition_for(actor_id))
+	definitions.append(definition)
+	if not MonsterCatalog.valid_encounter(definitions):
+		return null
+	for index in range(MonsterCatalog.MAX_ENCOUNTER_PARTICIPANTS):
+		var actor_id: String = enemy_id if index == 0 else (support_enemy_id if index == 1 else "enemy_%d" % (index + 1))
+		if not participants.has(actor_id):
+			return _register_enemy(definition, actor_id)
+	return null
+
+
+func visible_enemy_ids() -> Array[String]:
+	var result: Array[String] = []
+	for actor_id in enemy_ids():
+		var actor: BattleParticipant = get_participant(actor_id)
+		if actor.is_alive() and actor.is_targetable:
+			result.append(actor_id)
+	return result
 
 
 func start_round_combat() -> Dictionary:
@@ -280,23 +380,21 @@ func _advance_round_owner_clocks(actor_id: String, tick: int, is_rest: bool = fa
 
 func _prepare_round_enemy(actor_id: String) -> void:
 	var actor: BattleParticipant = get_participant(actor_id)
-	var definition: MonsterDefinition = enemy_definition if actor_id == enemy_id else support_enemy_definition
+	var runtime: EnemyRuntime = _runtime_for(actor_id)
+	var definition: MonsterDefinition = runtime.definition
 	if actor == null or definition == null or not actor.is_alive() or definition.ai_profiles.is_empty():
 		return
-	var previous_id: String = current_enemy_profile_id if actor_id == enemy_id else support_profile_id
+	var previous_id: String = runtime.profile_id
 	var profile: MonsterTacticProfile = MonsterAiPlanner.choose_profile(definition, actor, previous_id, rng)
 	var profile_id: String = profile.profile_id if profile != null else ""
 	if profile_id == previous_id and (profile == null or not definition.reconsider_tactics_each_phase):
 		return
-	var base_chain: Array[String] = initial_enemy_chain if actor_id == enemy_id else support_initial_chain
+	var base_chain: Array[String] = runtime.initial_chain
 	var planned: Array[String] = base_chain.duplicate() if profile == null else MonsterAiPlanner.planned_chain(profile, actor, rng)
 	planned = MonsterWeaponStrike.replace_default_card(definition, actor, planned)
 	if planned.is_empty():
 		return
-	if actor_id == enemy_id:
-		current_enemy_profile_id = profile_id
-	else:
-		support_profile_id = profile_id
+	runtime.profile_id = profile_id
 	if planned == actor.action_chain:
 		return
 	actor.action_chain = planned
@@ -332,23 +430,26 @@ func living_hero_ids() -> Array[String]:
 
 
 func add_support_enemy(definition: MonsterDefinition) -> BattleParticipant:
-	if definition == null:
-		return null
 	var existing: BattleParticipant = get_participant(support_enemy_id)
 	if existing != null:
-		return existing
-	var participant: BattleParticipant = BattleParticipant.from_monster(definition, support_enemy_id)
-	participant.action_chain = MonsterCardDraw.draw(definition, participant, rng)
-	participants[support_enemy_id] = participant
-	support_enemy_definition = definition
-	support_initial_chain = participant.action_chain.duplicate()
-	return participant
+		return existing if enemy_definition_for(support_enemy_id) == definition else null
+	if enemy_ids().size() != 1:
+		return null
+	return add_enemy(definition)
 
 
-func configure_bond(bond: BattleBondDefinition) -> void:
+func configure_bond(bond: BattleBondDefinition, guardian_id: String = "enemy", commander_id: String = SUPPORT_ENEMY_ID) -> void:
+	if bond == null or guardian_id == commander_id or enemy_ids().size() != 2:
+		return
+	var guardian: BattleParticipant = get_participant(guardian_id)
+	var commander_definition: MonsterDefinition = enemy_definition_for(commander_id)
+	if guardian == null or guardian.definition_id != bond.companion_monster_id or commander_definition == null or commander_definition.battle_bond != bond:
+		return
 	battle_bond = bond
+	bond_guardian_id = guardian_id if bond != null else ""
+	bond_commander_id = commander_id if bond != null else ""
 	bond_mounted = bond != null
-	var commander: BattleParticipant = get_participant(support_enemy_id)
+	var commander: BattleParticipant = get_participant(bond_commander_id)
 	if commander != null and bond_mounted:
 		commander.is_targetable = false
 
@@ -370,7 +471,7 @@ func _bond_swap_cards(actor: BattleParticipant, from_ids: Array, to_ids: Array) 
 func _bond_change_form(mounted: bool) -> void:
 	if battle_bond == null or bond_mounted == mounted:
 		return
-	var commander: BattleParticipant = get_participant(support_enemy_id)
+	var commander: BattleParticipant = get_participant(bond_commander_id)
 	if commander == null or not commander.is_alive():
 		return
 	if mounted:
@@ -393,7 +494,7 @@ func _bond_clear_mark() -> void:
 	var marked: BattleParticipant = get_participant(bond_marked_target_id)
 	if marked != null:
 		marked.statuses.erase(battle_bond.marked_status_id)
-		events.append({"type": "status_removed", "actor_id": support_enemy_id,
+		events.append({"type": "status_removed", "actor_id": bond_commander_id,
 			"target_id": bond_marked_target_id, "status_id": battle_bond.marked_status_id,
 			"removed": true})
 	bond_marked_target_id = ""
@@ -402,11 +503,11 @@ func _bond_clear_mark() -> void:
 func _bond_after_action(actor_id: String, target_id: String, ability_id: String) -> void:
 	if battle_bond == null:
 		return
-	var guardian: BattleParticipant = get_enemy()
-	var commander: BattleParticipant = get_participant(support_enemy_id)
+	var guardian: BattleParticipant = get_participant(bond_guardian_id)
+	var commander: BattleParticipant = get_participant(bond_commander_id)
 	if guardian == null or commander == null:
 		return
-	if actor_id == support_enemy_id:
+	if actor_id == bond_commander_id:
 		if ability_id == battle_bond.command_ability_id:
 			if bond_marked_target_id != target_id:
 				_bond_clear_mark()
@@ -426,19 +527,20 @@ func _bond_after_action(actor_id: String, target_id: String, ability_id: String)
 			_bond_change_form(false)
 		elif ability_id == battle_bond.rejoin_ability_id and guardian.is_alive():
 			_bond_change_form(true)
-	elif actor_id == enemy_id and ability_id == battle_bond.protect_ability_id and commander.is_alive():
-		intercept_targets[support_enemy_id] = enemy_id
-		events.append({"type": "bond_protected", "actor_id": actor_id, "target_id": support_enemy_id})
+	elif actor_id == bond_guardian_id and ability_id == battle_bond.protect_ability_id and commander.is_alive():
+		intercept_targets[bond_commander_id] = bond_guardian_id
+		events.append({"type": "bond_protected", "actor_id": actor_id, "target_id": bond_commander_id})
 
 
 func _bond_update_life() -> void:
 	if battle_bond == null:
 		return
-	var guardian: BattleParticipant = get_enemy()
-	var commander: BattleParticipant = get_participant(support_enemy_id)
+	var guardian: BattleParticipant = get_participant(bond_guardian_id)
+	var commander: BattleParticipant = get_participant(bond_commander_id)
 	if commander == null or guardian == null:
 		return
 	if not commander.is_alive():
+		bond_mounted = false
 		_bond_clear_mark()
 		intercept_targets.clear()
 	elif not guardian.is_alive():
@@ -452,14 +554,16 @@ func _bond_update_life() -> void:
 
 func enemy_ids() -> Array[String]:
 	var ids: Array[String] = []
-	for id in [enemy_id, support_enemy_id]:
-		if get_participant(id) != null:
-			ids.append(id)
+	for id in participants:
+		var actor: BattleParticipant = get_participant(str(id))
+		if actor != null and actor.team_id == "enemies":
+			ids.append(str(id))
 	return ids
 
 
 func _reconfigure_enemy_for_phase() -> void:
-	_reconfigure_enemy_for_actor(enemy_id)
+	for actor_id in enemy_ids():
+		_reconfigure_enemy_for_actor(actor_id)
 
 
 func _reconfigure_enemy_for_actor(actor_id: String) -> void:
@@ -468,11 +572,12 @@ func _reconfigure_enemy_for_actor(actor_id: String) -> void:
 	var actor: BattleParticipant = get_participant(actor_id)
 	if actor == null or not actor.is_alive() or actor.action_cursor != 0:
 		return
-	var definition: MonsterDefinition = enemy_definition if actor_id == enemy_id else support_enemy_definition
+	var runtime: EnemyRuntime = _runtime_for(actor_id)
+	var definition: MonsterDefinition = runtime.definition
 	if definition == null:
 		return
-	var active_profile: String = current_enemy_profile_id if actor_id == enemy_id else support_profile_id
-	var initial_chain: Array[String] = initial_enemy_chain if actor_id == enemy_id else support_initial_chain
+	var active_profile: String = runtime.profile_id
+	var initial_chain: Array[String] = runtime.initial_chain
 	var profile: MonsterTacticProfile = MonsterAiPlanner.choose_profile(definition, actor, active_profile, rng)
 	var profile_id: String = profile.profile_id if profile != null else ""
 	if profile_id == active_profile and (profile == null or not definition.reconsider_tactics_each_phase):
@@ -481,10 +586,7 @@ func _reconfigure_enemy_for_actor(actor_id: String) -> void:
 	planned = MonsterWeaponStrike.replace_default_card(definition, actor, planned)
 	if planned.is_empty():
 		return
-	if actor_id == enemy_id:
-		current_enemy_profile_id = profile_id
-	else:
-		support_profile_id = profile_id
+	runtime.profile_id = profile_id
 	if planned == actor.action_chain:
 		return
 	actor.action_chain = planned
@@ -501,11 +603,12 @@ func _run_enemy_intermission() -> void:
 func _run_enemy_intermission_for(actor_id: String) -> void:
 	if flow.stage != BattleFlow.Stage.BETWEEN_PHASES:
 		return
-	var definition: MonsterDefinition = enemy_definition if actor_id == enemy_id else support_enemy_definition
+	var runtime: EnemyRuntime = _runtime_for(actor_id)
+	var definition: MonsterDefinition = runtime.definition
 	var actor: BattleParticipant = get_participant(actor_id)
 	if definition == null or actor == null or not actor.is_alive():
 		return
-	var usage: Dictionary = enemy_intermission_usage if actor_id == enemy_id else support_intermission_usage
+	var usage: Dictionary = runtime.intermission_usage
 	for _action_index in range(definition.max_intermission_actions):
 		var action: MonsterIntermissionAction = MonsterAiPlanner.choose_intermission(definition, actor, usage, rng)
 		if action == null:
@@ -530,7 +633,7 @@ func create_context() -> BattleContext:
 	return BattleContext.new(participants, rng, round_turn_count if round_combat_active else flow.completed_ticks + 1, positions,
 		intercept_targets, battle_bond.counter_multiplier if battle_bond != null else 0.0,
 		battle_bond.protect_ability_id if battle_bond != null else "",
-		enemy_id if battle_bond != null else "", bond_marked_target_id,
+		bond_guardian_id if battle_bond != null else "", bond_marked_target_id,
 		battle_bond.marked_accuracy_bonus if battle_bond != null else 0)
 
 
@@ -541,10 +644,10 @@ func execute_ability(actor_id: String, target_id: String, ability_id: String) ->
 		var problem: String = AbilityCatalog.round_hero_unavailable_reason(get_participant(actor_id), ability_id)
 		if not problem.is_empty():
 			return {"success": false, "reason": problem, "events": []}
-	if battle_bond != null and actor_id == support_enemy_id:
+	if battle_bond != null and actor_id == bond_commander_id:
 		if ability_id == battle_bond.split_ability_id and not bond_mounted:
 			return {"success": false, "reason": "Уже отделён", "events": []}
-		if ability_id == battle_bond.rejoin_ability_id and (bond_mounted or not get_enemy().is_alive()):
+		if ability_id == battle_bond.rejoin_ability_id and (bond_mounted or not get_participant(bond_guardian_id).is_alive()):
 			return {"success": false, "reason": "Нельзя соединиться", "events": []}
 	var outcome: Dictionary = _commit_action(AbilityExecutor.execute(create_context(), actor_id, target_id, ability_id))
 	if bool(outcome.get("success", false)):
@@ -827,18 +930,14 @@ func default_chain(participant_id: String) -> Array[String]:
 
 func update_outcome() -> void:
 	_bond_update_life()
-	var enemy: BattleParticipant = get_enemy()
-	var hero: BattleParticipant = get_hero()
+	var ids: Array[String] = enemy_ids()
 	var any_living_enemy: bool = false
-	for actor_id in enemy_ids():
-		var actor: BattleParticipant = get_participant(actor_id)
-		if actor != null and actor.is_alive():
+	for actor_id in ids:
+		if get_participant(actor_id).is_alive():
 			any_living_enemy = true
-	var support: BattleParticipant = get_participant(support_enemy_id)
-	if support != null and enemy != null and not enemy.is_alive():
-		support.is_targetable = true
+			break
 	is_defeat = not hero_ids().is_empty() and living_hero_ids().is_empty()
-	is_victory = enemy != null and not any_living_enemy and not is_defeat
+	is_victory = not ids.is_empty() and not any_living_enemy and not is_defeat
 
 
 ## Завершение фазы обрабатывает временные эффекты, но не сбрасывает бонус блока.
@@ -864,7 +963,8 @@ func perform_basic_attack(_legacy_attack_damage: int = 0) -> int:
 			break
 	if attack_id.is_empty():
 		return 0
-	var result: Dictionary = execute_ability(hero_id, enemy_id, attack_id)
+	var target_id: String = create_context().default_target_id(hero_id, AbilityCatalog.get_ability(attack_id))
+	var result: Dictionary = execute_ability(hero_id, target_id, attack_id)
 	if not bool(result.get("success", false)):
 		return 0
 	var damage: int = 0
@@ -897,8 +997,8 @@ func perform_guard() -> Dictionary:
 
 func _counterattack() -> void:
 	var hero: BattleParticipant = get_hero()
-	var enemy: BattleParticipant = get_enemy()
-	if hero == null or enemy == null or not hero.is_alive() or not enemy.is_alive():
+	var enemy: BattleParticipant = create_context().opponent_for(hero_id)
+	if hero == null or enemy == null or not hero.is_alive():
 		return
 	var ability: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
 	if ability == null or ability.effects.is_empty():

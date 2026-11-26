@@ -294,7 +294,9 @@ func _test_encounter_rewards() -> void:
 	assert(dungeon.place_entity("monster", 4, 2, {"monster_id": "skeleton"}))
 	assert(dungeon.place_entity("monster", 5, 2, {"monster_id": "skeleton"}))
 	var random: Dictionary = dungeon.entities_at(3, 2)[0]
-	assert(dungeon.set_monster_party(str(random["id"]), ["skeleton", "kadavr"]))
+	assert(not dungeon.set_monster_party(str(random["id"]), ["skeleton", "kadavr"]))
+	assert(dungeon.set_monster_party(str(random["id"]), ["skeleton", "hunter"]))
+	assert(dungeon.set_loot_profile(str(random["id"]), "boss"))
 	assert(LootProfileCatalog.for_source(random) == LootProfileCatalog.get_profile("boss"))
 	var fixed: Dictionary = dungeon.entities_at(4, 2)[0]
 	assert(dungeon.set_monster_party(str(fixed["id"]), ["skeleton", "hunter"]))

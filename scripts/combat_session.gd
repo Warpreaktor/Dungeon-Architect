@@ -3,8 +3,12 @@ extends RefCounted
 
 ## Совместимый фасад существующего боя. Расчёт теперь выполняет BattleState;
 ## Объединяет данные боевого ядра с постоянным состоянием героя.
-var enemy_definition: MonsterDefinition
-var support_enemy_definition: MonsterDefinition
+var enemy_definition: MonsterDefinition:
+	get:
+		return battle_state.enemy_definition
+var support_enemy_definition: MonsterDefinition:
+	get:
+		return battle_state.support_enemy_definition
 var hero: HeroState
 var hero_sources: Dictionary = {}
 var battle_state: BattleState
@@ -37,25 +41,33 @@ var last_blocked_damage: int:
 		return battle_state.last_blocked_damage
 
 
-func _init(monster: MonsterDefinition = null, participant: HeroState = null, secondary: MonsterDefinition = null, rng_seed: int = -1, party_members: Array[HeroState] = []) -> void:
-	var selected: MonsterDefinition = monster if monster != null else MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID)
-	var bond: BattleBondDefinition = selected.battle_bond
-	if bond != null and (not MonsterCatalog.has(bond.companion_monster_id)
-			or (secondary != null and secondary.monster_id != bond.companion_monster_id)):
-		bond = null
-	enemy_definition = MonsterCatalog.get_monster(bond.companion_monster_id) if bond != null else selected
-	support_enemy_definition = selected if bond != null else secondary
+static func for_encounter(monsters: Array[MonsterDefinition], participant: HeroState = null, rng_seed: int = -1, party_members: Array[HeroState] = []) -> CombatSession:
+	if not MonsterCatalog.valid_encounter(monsters):
+		return null
+	return CombatSession.new(null, participant, null, rng_seed, party_members, monsters)
+
+
+func _init(monster: MonsterDefinition = null, participant: HeroState = null, secondary: MonsterDefinition = null, rng_seed: int = -1, party_members: Array[HeroState] = [], encounter: Array[MonsterDefinition] = []) -> void:
+	var monsters: Array[MonsterDefinition] = encounter.duplicate()
+	if monsters.is_empty():
+		var selected: MonsterDefinition = monster if monster != null else MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID)
+		monsters.append(selected)
+		if secondary != null:
+			monsters.append(secondary)
+		monsters = MonsterCatalog.normalize_legacy_encounter(monsters)
+	if not MonsterCatalog.valid_encounter(monsters):
+		monsters.assign([MonsterCatalog.get_monster(MonsterCatalog.DEFAULT_MONSTER_ID)])
 	hero = participant if participant != null else HeroState.new()
 	var combat_party: Array[HeroState] = party_members.duplicate()
 	if combat_party.is_empty():
 		combat_party.append(hero)
-	battle_state = BattleState.begin_for_party(enemy_definition, combat_party, rng_seed)
-	for index in range(battle_state.party_hero_ids.size()):
-		hero_sources[battle_state.party_hero_ids[index]] = combat_party[index]
-	if support_enemy_definition != null:
-		battle_state.add_support_enemy(support_enemy_definition)
-	if bond != null:
-		battle_state.configure_bond(bond)
+	battle_state = BattleState.begin_for_encounter(monsters, combat_party, rng_seed)
+	for index in range(combat_party.size()):
+		var member: HeroState = combat_party[index]
+		if member == null:
+			continue
+		var participant_id: String = battle_state.hero_id if index == 0 else "hero_%d" % (index + 1)
+		hero_sources[participant_id] = member
 
 
 func hero_attack(_legacy_attack_damage: int = 0) -> int:

@@ -23,7 +23,7 @@ func _initialize() -> void:
 		assert(encounter.get_enemy().max_health == definition.max_health)
 		assert(encounter.get_enemy().health == definition.max_health)
 		var support: BattleParticipant = encounter.add_support_enemy(definition)
-		assert(support.max_health == definition.max_health and support.health == definition.max_health)
+		assert(support == null and encounter.enemy_ids().size() == 1)
 	party[2].health = 0
 	party[3].health = 0
 	var survivors: BattleState = BattleState.begin_for_party(definition, party, 53)

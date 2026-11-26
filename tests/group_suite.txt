@@ -1,4 +1,5 @@
 test_round_group_compositions.gd
+test_four_enemy_core.gd
 test_manual_hero_turn_selection.gd
 test_round_target_tap.gd
 test_party_round_scheduler.gd

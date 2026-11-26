@@ -149,6 +149,8 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		var monster_id: String = str(options.get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
 		if not MonsterCatalog.has(monster_id):
 			monster_id = MonsterCatalog.DEFAULT_MONSTER_ID
+		if MonsterCatalog.is_bond_companion(monster_id):
+			return false
 		properties = {"monster_id": monster_id, "loot_contents": [], "loot_mode": "random"}
 	elif kind == "trap":
 		var trap_id: String = str(options.get("trap_id", TrapCatalog.DEFAULT_TRAP_ID))
@@ -412,25 +414,35 @@ func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amou
 static func monster_party_ids(monster: Dictionary) -> Array[String]:
 	var properties: Dictionary = monster.get("properties", {})
 	var primary: String = MonsterCatalog.resolve_id(str(properties.get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID)))
-	var party: Array[String] = [primary]
+	var definitions: Array[MonsterDefinition] = [MonsterCatalog.get_monster(primary)]
 	var raw: Variant = properties.get("monster_ids", [])
 	if raw is Array:
 		for item in raw:
 			var member_id: String = str(item)
-			if not MonsterCatalog.has(member_id):
-				continue
-			if party.size() >= MAX_MONSTERS_PER_ENCOUNTER:
-				break
-			party.append(member_id)
+			if MonsterCatalog.has(member_id):
+				definitions.append(MonsterCatalog.get_monster(member_id))
+	var party: Array[String] = []
+	for definition in MonsterCatalog.normalize_legacy_encounter(definitions):
+		if party.size() >= MAX_MONSTERS_PER_ENCOUNTER:
+			break
+		party.append(definition.monster_id)
 	return party
 
 
-func set_monster_party(entity_id: String, party: Array[String]) -> bool:
+static func valid_monster_party(party: Array[String]) -> bool:
 	if party.is_empty() or party.size() > MAX_MONSTERS_PER_ENCOUNTER:
 		return false
+	var definitions: Array[MonsterDefinition] = []
 	for member_id in party:
 		if not MonsterCatalog.has(member_id):
 			return false
+		definitions.append(MonsterCatalog.get_monster(member_id))
+	return MonsterCatalog.valid_encounter(definitions)
+
+
+func set_monster_party(entity_id: String, party: Array[String]) -> bool:
+	if not valid_monster_party(party):
+		return false
 	for entity in _entities:
 		if str(entity.get("id", "")) != entity_id or str(entity.get("type", "")) != "monster":
 			continue
@@ -506,13 +518,9 @@ func set_monster_type(entity_id: String, monster_id: String) -> bool:
 	for entity in _entities:
 		if str(entity.get("id", "")) != entity_id or str(entity.get("type", "")) != "monster":
 			continue
-		var old_type: String = str(entity.get("properties", {}).get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
-		if old_type == monster_id:
-			return false
-		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
-		properties["monster_id"] = monster_id
-		entity["properties"] = properties
-		return true
+		var party: Array[String] = monster_party_ids(entity)
+		party[0] = monster_id
+		return set_monster_party(entity_id, party)
 	return false
 
 
@@ -844,6 +852,15 @@ static func from_dict(value: Variant) -> DungeonMap:
 			TrapCatalog.remove_legacy_overrides(properties)
 		elif kind == "door" and properties.get("trap") is Dictionary:
 			TrapCatalog.remove_legacy_overrides(properties["trap"])
+		elif kind == "monster":
+			var party: Array[String] = monster_party_ids({"properties": properties})
+			var primary: MonsterDefinition = MonsterCatalog.get_monster(party[0])
+			if MonsterCatalog.is_exclusive_encounter(primary):
+				var raw_party: Variant = properties.get("monster_ids", [])
+				var original_id: String = MonsterCatalog.resolve_id(str(properties.get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID)))
+				if original_id != primary.monster_id or (raw_party is Array and not raw_party.is_empty()):
+					properties["monster_id"] = primary.monster_id
+					properties.erase("monster_ids")
 		result._append_entity({"id": entity_id, "type": kind, "x": x, "y": y, "properties": properties})
 	var raw_metadata: Variant = value.get("metadata", {"theme": "stone_dungeon"})
 	if typeof(raw_metadata) == TYPE_DICTIONARY:

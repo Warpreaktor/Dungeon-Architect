@@ -16,14 +16,13 @@ func _fighter(id: String, team: String, agility: int) -> BattleParticipant:
 func _battle(hero_count: int, enemy_count: int, seed: int) -> BattleState:
 	var state := BattleState.new()
 	state.rng.seed = seed
-	state.participants["hero"] = _fighter("hero", "heroes", 10)
-	state.party_hero_ids.append("hero")
-	if hero_count == 2:
-		state.participants["hero_2"] = _fighter("hero_2", "heroes", 9)
-		state.party_hero_ids.append("hero_2")
-	state.participants["enemy"] = _fighter("enemy", "enemies", 8)
-	if enemy_count == 2:
-		state.participants["enemy_support"] = _fighter("enemy_support", "enemies", 7)
+	for index in range(hero_count):
+		var id: String = "hero" if index == 0 else "hero_%d" % (index + 1)
+		state.participants[id] = _fighter(id, "heroes", 12 - index)
+		state.party_hero_ids.append(id)
+	for index in range(enemy_count):
+		var id: String = "enemy" if index == 0 else ("enemy_support" if index == 1 else "enemy_%d" % (index + 1))
+		state.participants[id] = _fighter(id, "enemies", 8 - index)
 	return state
 
 
@@ -41,7 +40,7 @@ func _exercise(hero_count: int, enemy_count: int) -> void:
 			var actor_id: String = first.prepare_next_round()
 			assert(actor_id == replay.prepare_next_round())
 			assert(not actor_id.is_empty() and not seen.has(actor_id))
-			var ability: String = "guard" if actor_id in first.hero_ids() else ""
+			var ability: String = "rest" if actor_id in first.hero_ids() else ""
 			var turn: Dictionary = first.run_round_turn(actor_id if not ability.is_empty() else "", ability)
 			var repeat_turn: Dictionary = replay.run_round_turn(actor_id if not ability.is_empty() else "", ability)
 			assert(turn == repeat_turn)
@@ -62,8 +61,8 @@ func _exercise(hero_count: int, enemy_count: int) -> void:
 
 
 func _initialize() -> void:
-	for hero_count in [1, 2]:
-		for enemy_count in [1, 2]:
+	for hero_count in range(1, 5):
+		for enemy_count in range(1, 5):
 			_exercise(hero_count, enemy_count)
-	print("Group compositions 1x1, 1x2, 2x1, 2x2: OK")
+	print("Group compositions 1–4 heroes against 1–4 enemies: OK")
 	quit()

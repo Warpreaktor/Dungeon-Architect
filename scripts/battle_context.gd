@@ -106,6 +106,8 @@ func choose_target_id(source_id: String, ability: AbilityDefinition) -> String:
 	var candidates: Array[String] = target_ids(source_id, ability)
 	if candidates.is_empty():
 		return ""
+	if source_id == focused_attacker_id and candidates.has(focused_target_id):
+		return focused_target_id
 	if candidates.size() == 1 or rng == null:
 		return candidates[0]
 	return candidates[rng.randi_range(0, candidates.size() - 1)]

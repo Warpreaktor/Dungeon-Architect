@@ -2,6 +2,7 @@ class_name MonsterCatalog
 extends RefCounted
 
 ## Ресурсы монстров определяют характеристики и иконки, сущности карты хранят ID.
+const MAX_ENCOUNTER_PARTICIPANTS: int = 4
 const DEFAULT_MONSTER_ID := "rabbit_symbiont"
 const DEFINITIONS := {
 	"rabbit_symbiont": preload("res://monsters/rabbit_symbiont.tres"),
@@ -30,17 +31,9 @@ static func list_ids() -> Array[String]:
 
 
 static func list_placeable_ids() -> Array[String]:
-	var reserved: Dictionary = {}
-	for monster_id in DEFINITIONS:
-		var monster: MonsterDefinition = DEFINITIONS[monster_id] as MonsterDefinition
-		if monster == null or monster.battle_bond == null:
-			continue
-		var companion_id: String = monster.battle_bond.companion_monster_id
-		if not companion_id.is_empty():
-			reserved[companion_id] = true
 	var ids: Array[String] = []
 	for monster_id in list_ids():
-		if not reserved.has(monster_id):
+		if not is_bond_companion(monster_id):
 			ids.append(monster_id)
 	return ids
 
@@ -61,3 +54,51 @@ static func get_monster(monster_id: String) -> MonsterDefinition:
 static func from_entity(entity: Dictionary) -> MonsterDefinition:
 	var properties: Dictionary = entity.get("properties", {})
 	return get_monster(str(properties.get("monster_id", DEFAULT_MONSTER_ID)))
+
+
+static func valid_encounter(monsters: Array[MonsterDefinition]) -> bool:
+	if monsters.is_empty() or monsters.size() > MAX_ENCOUNTER_PARTICIPANTS:
+		return false
+	for monster in monsters:
+		if monster == null or is_bond_companion(monster.monster_id):
+			return false
+		if is_exclusive_encounter(monster):
+			if monsters.size() != 1:
+				return false
+			if monster.battle_bond != null:
+				var companion_id: String = monster.battle_bond.companion_monster_id
+				if companion_id == monster.monster_id or not has(companion_id):
+					return false
+	return true
+
+
+static func is_bond_companion(monster_id: String) -> bool:
+	return bond_owner(monster_id) != null
+
+
+static func bond_owner(monster_id: String) -> MonsterDefinition:
+	for definition in DEFINITIONS.values():
+		var monster: MonsterDefinition = definition as MonsterDefinition
+		if monster != null and monster.battle_bond != null and monster.battle_bond.companion_monster_id == monster_id:
+			return monster
+	return null
+
+
+static func is_exclusive_encounter(monster: MonsterDefinition) -> bool:
+	return monster != null and (monster.rank == MonsterDefinition.Rank.BOSS or monster.battle_bond != null)
+
+
+static func normalize_legacy_encounter(monsters: Array[MonsterDefinition]) -> Array[MonsterDefinition]:
+	var normal: Array[MonsterDefinition] = []
+	for definition in monsters:
+		if definition == null:
+			continue
+		var owner: MonsterDefinition = bond_owner(definition.monster_id)
+		var monster: MonsterDefinition = owner if owner != null else definition
+		if is_exclusive_encounter(monster):
+			return [monster]
+		if normal.size() < MAX_ENCOUNTER_PARTICIPANTS:
+			normal.append(monster)
+	if normal.is_empty():
+		normal.append(get_monster(DEFAULT_MONSTER_ID))
+	return normal

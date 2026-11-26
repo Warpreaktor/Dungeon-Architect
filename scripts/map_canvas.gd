@@ -419,7 +419,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 			if icon != null:
 				draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		elif kind == "trap":
-			_draw_trap(origin, entity, mode == "play" and game_session != null and game_session.is_trap_disarmed(entity))
+			_draw_trap(origin, entity, game_session.is_trap_disarmed(entity) if mode == "play" and game_session != null else TrapCatalog.initial_state(entity) != "armed")
 			if mode == "play" and game_session != null and not game_session.is_trap_disarmed(entity):
 				visible_floor_trap = entity
 		elif kind == "portal_local":
@@ -468,7 +468,8 @@ func _draw_door_trap_marker(origin: Vector2, door: Dictionary) -> void:
 		return
 	var rect := Rect2(origin + Vector2(1, 1), Vector2(22, 22))
 	draw_rect(rect.grow(1), Color("#111b28"))
-	draw_texture_rect(icon, rect, false)
+	var inactive: bool = game_session.is_trap_disarmed(door) if mode == "play" and game_session != null else TrapCatalog.initial_state(door) != "armed"
+	draw_texture_rect(icon, rect, false, Color(0.58, 0.63, 0.70, 0.72) if inactive else Color.WHITE)
 
 
 func _draw_player(origin: Vector2) -> void:
@@ -678,7 +679,6 @@ func _hand_tap(point: Vector2, is_double: bool) -> void:
 		_select_at(cell)
 
 
-## Контекстные свойства для сундуков, монстров, триггеров и посланий.
 ## В режиме «Рука» выбираем верхний на клетке редактируемый объект.
 func _configurable_at(cell: Vector2i) -> Dictionary:
 	if map_data == null or not map_data.contains(cell.x, cell.y):
@@ -693,13 +693,22 @@ func _configurable_at(cell: Vector2i) -> Dictionary:
 			continue
 		if kind == "player_spawn" and developer_interaction_enabled and selected_tool == "hand":
 			return entity
-		if kind in ["chest", "trigger", "message", "monster", "door", "stairs_down", "portal"] and (selected_tool == "hand" or kind == selected_tool or (kind == "monster" and selected_tool.begins_with("monster:"))):
+		if kind in ["chest", "trigger", "message", "monster", "door", "stairs_down", "portal", "trap"] and (selected_tool == "hand" or kind == _settings_tool_kind()):
 			return entity
 	return message_entity
 
 
 func _selected_tool_has_properties() -> bool:
-	return selected_tool in ["chest", "trigger", "door", "stairs_down", "portal"] or selected_tool.begins_with("monster:")
+	return _settings_tool_kind() in ["chest", "trigger", "door", "stairs_down", "portal", "monster", "trap"]
+
+
+func _settings_tool_kind() -> String:
+	if selected_tool.begins_with("monster:"):
+		return "monster"
+	if selected_tool.begins_with("trap:"):
+		var definition: TrapDefinition = TrapCatalog.get_trap(selected_tool.trim_prefix("trap:"))
+		return "trap" if definition.can_attach_to("floor") else ""
+	return selected_tool
 
 
 func _cancel_pending_settings_tap() -> void:
@@ -839,7 +848,7 @@ func _gui_input(event: InputEvent) -> void:
 				else:
 					finish_edit_stroke()
 					if _selected_tool_has_properties() and not _settings_tool_pressed_id.is_empty() and event.position.distance_to(_mouse_down) < TAP_MOVE_LIMIT:
-						configurable_entity_tapped.emit("monster" if selected_tool.begins_with("monster:") else selected_tool, _settings_tool_pressed_id)
+						configurable_entity_tapped.emit(_settings_tool_kind(), _settings_tool_pressed_id)
 					_settings_tool_pressed_id = ""
 				accept_event()
 			elif mode == "play":
@@ -902,7 +911,7 @@ func _gui_input(event: InputEvent) -> void:
 			if mode == "edit" and selected_tool == "message" and tap_valid and _touch_positions.is_empty():
 				_request_message_at(event.position)
 			if mode == "edit" and _selected_tool_has_properties() and tap_valid and not _settings_tool_pressed_id.is_empty() and _touch_positions.is_empty():
-				configurable_entity_tapped.emit("monster" if selected_tool.begins_with("monster:") else selected_tool, _settings_tool_pressed_id)
+				configurable_entity_tapped.emit(_settings_tool_kind(), _settings_tool_pressed_id)
 			if _touch_positions.is_empty():
 				_settings_tool_pressed_id = ""
 				finish_edit_stroke()

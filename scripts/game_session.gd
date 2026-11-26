@@ -33,8 +33,9 @@ var _next_item_instance_number: int = 0
 var is_completed: bool = false # Выход достигнут в текущем прохождении.
 var removed_entities: Dictionary = {} # ID объектов, исчезнувших только в этом прохождении.
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
-var disarmed_traps: Dictionary = {} # ID разряженных ловушек только в этом прохождении.
+var disarmed_traps: Dictionary = {} # Неактивные механизмы текущего этажа.
 var revealed_traps: Dictionary = {}
+var discharged_traps: Dictionary = {}
 var last_move_detected_trap: bool = false
 var pending_chest_id: String = "" # Ожидает завершения анимации шага до открытия сундука.
 var pending_door_trap_id: String = ""
@@ -898,6 +899,7 @@ func _capture_floor_state() -> Dictionary:
 		"chests": opened_chests.duplicate(true),
 		"traps": disarmed_traps.duplicate(true),
 		"revealed_traps": revealed_traps.duplicate(true),
+		"discharged_traps": discharged_traps.duplicate(true),
 		"triggers": activated_triggers.duplicate(true),
 		"messages": shown_messages.duplicate(true),
 		"revealed": visited_cells.duplicate(true)
@@ -1259,6 +1261,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	opened_chests = saved.get("chests", {}).duplicate(true)
 	disarmed_traps = saved.get("traps", {}).duplicate(true)
 	revealed_traps = saved.get("revealed_traps", {}).duplicate(true)
+	discharged_traps = saved.get("discharged_traps", {}).duplicate(true)
 	last_move_detected_trap = false
 	pending_chest_id = ""
 	pending_door_trap_id = ""
@@ -1426,8 +1429,15 @@ func is_entity_hidden_from_hero(entity: Dictionary) -> bool:
 	return DungeonMap.is_entity_hidden(entity) and (hero == null or not hero.has_vision_effect())
 
 
+func trap_state(entity: Dictionary) -> String:
+	var entity_id: String = str(entity.get("id", ""))
+	if disarmed_traps.has(entity_id):
+		return "discharged" if discharged_traps.has(entity_id) else "disarmed"
+	return TrapCatalog.initial_state(entity)
+
+
 func is_trap_disarmed(entity: Dictionary) -> bool:
-	return disarmed_traps.has(str(entity.get("id", "")))
+	return trap_state(entity) != "armed"
 
 
 func is_trap_known_by(entity: Dictionary, member: HeroState) -> bool:
@@ -1653,6 +1663,7 @@ func _activate_trap(trap: TrapDefinition, trap_key: String, opener: HeroState = 
 		])
 	if trap.disarm_on_trigger:
 		disarmed_traps[trap_key] = true
+		discharged_traps[trap_key] = true
 
 
 func _activate_traps_at(cell: Vector2i) -> void:
@@ -1733,6 +1744,7 @@ func resolve_pending_trap_choice(choice: String, actor_index: int = -1, defer_ch
 	if choice == "disarm":
 		if trap.check(actor, trap_random, true):
 			disarmed_traps[entity_id] = true
+			discharged_traps.erase(entity_id)
 			revealed_traps[entity_id] = true
 			_append_trap_result("%s: ловушка «%s» обезврежена." % [actor.definition.display_name, trap.display_name])
 			return false
@@ -1856,8 +1868,10 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 	if arrival == target and resolved_door_id.is_empty():
 		var floor_trap: Dictionary = _find_active_entity(target, "trap")
 		if not floor_trap.is_empty() and not is_trap_disarmed(floor_trap) and not is_entity_hidden_from_hero(floor_trap) and not accepted.has(str(floor_trap["id"])):
-			_request_trap_choice(floor_trap, TrapCatalog.from_entity(floor_trap), target, accepted, opener)
-			return false
+			var definition: TrapDefinition = TrapCatalog.from_entity(floor_trap)
+			if definition != null:
+				_request_trap_choice(floor_trap, definition, target, accepted, opener)
+				return false
 	if not door.is_empty():
 		if door_trap != null and not is_trap_disarmed(door) and resolved_door_id != str(door["id"]):
 			if is_door_trap_visible(door) and not accepted.has(str(door["id"])):
@@ -2535,6 +2549,7 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, ca
 	session.opened_chests = current["chests"].duplicate(true)
 	session.disarmed_traps = current["traps"].duplicate(true)
 	session.revealed_traps = current["revealed_traps"].duplicate(true)
+	session.discharged_traps = current["discharged_traps"].duplicate(true)
 	session.activated_triggers = current["triggers"].duplicate(true)
 	session.shown_messages = current["messages"].duplicate(true)
 	session._init_masks()

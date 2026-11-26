@@ -1,7 +1,7 @@
 class_name TrapDefinition
 extends Resource
 
-## Ресурс одной ловушки. Карта хранит только ID, а поведение читается из каталога.
+## Определение типа ловушки.
 
 @export var trap_id: String = ""
 @export var display_name: String = ""

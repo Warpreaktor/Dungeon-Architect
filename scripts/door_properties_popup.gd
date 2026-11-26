@@ -1,7 +1,7 @@
 class_name DoorPropertiesPopup
 extends PopupPanel
 
-signal configuration_changed(door_id: String, lock_id: String, trap_message: String, remove_trap: bool)
+signal configuration_changed(door_id: String, lock_id: String, trap_message: String, remove_trap: bool, settings: Dictionary)
 
 var _door_id: String = ""
 var _trap_id: String = ""
@@ -10,6 +10,7 @@ var _selector: OptionButton
 var _trap_title: Label
 var _trap_message: TextEdit
 var _remove_button: Button
+var _trap_fields: TrapConfigurationFields
 
 
 func _ready() -> void:
@@ -58,6 +59,9 @@ func _ready() -> void:
 	_trap_message.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	fields.add_child(_trap_message)
 
+	_trap_fields = TrapConfigurationFields.new()
+	fields.add_child(_trap_fields)
+
 	_remove_button = Button.new()
 	_remove_button.text = "Снять ловушку"
 	_remove_button.custom_minimum_size.y = 44
@@ -79,7 +83,7 @@ func _ready() -> void:
 	actions.add_child(save)
 
 
-func configure(door_id: String, lock_id: String, trap_id: String = "", trap_message: String = "") -> void:
+func configure(door_id: String, lock_id: String, trap_id: String = "", trap_message: String = "", settings: Dictionary = {}) -> void:
 	_door_id = door_id
 	_trap_id = trap_id
 	_remove_trap = false
@@ -89,6 +93,7 @@ func configure(door_id: String, lock_id: String, trap_id: String = "", trap_mess
 			break
 	_trap_message.text = trap_message
 	_trap_message.placeholder_text = TrapCatalog.get_trap(trap_id).trigger_message if not trap_id.is_empty() else ""
+	_trap_fields.configure(TrapCatalog.get_trap(trap_id) if not trap_id.is_empty() else null, settings)
 	_refresh_trap_fields()
 
 
@@ -106,8 +111,9 @@ func _refresh_trap_fields() -> void:
 		_trap_title.text = "%s · сообщение" % TrapCatalog.get_trap(_trap_id).display_name
 	_trap_message.visible = not _trap_id.is_empty() and not _remove_trap
 	_remove_button.visible = not _trap_id.is_empty() and not _remove_trap
+	_trap_fields.visible = _remove_button.visible
 
 
 func _save() -> void:
-	configuration_changed.emit(_door_id, str(_selector.get_selected_metadata()), _trap_message.text, _remove_trap)
+	configuration_changed.emit(_door_id, str(_selector.get_selected_metadata()), _trap_message.text, _remove_trap, _trap_fields.values())
 	hide()

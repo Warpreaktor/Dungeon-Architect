@@ -5,7 +5,7 @@ const FORMAT_VERSION: int = 3
 const PREVIOUS_FORMAT_VERSION: int = 2
 const LEGACY_FORMAT_VERSION: int = 1
 const FLOOR_FLAGS := [
-	"exit_rewards", "removed", "chests", "traps", "revealed_traps", "triggers", "messages"
+	"exit_rewards", "removed", "chests", "traps", "revealed_traps", "discharged_traps", "triggers", "messages"
 ]
 
 
@@ -97,13 +97,16 @@ static func decode_floor(data: Variant, map_ref: DungeonMap) -> Dictionary:
 		"revealed": raw_revealed.duplicate(true)
 	}
 	for field in FLOOR_FLAGS:
-		var flags: Variant = data.get(field)
+		var flags: Variant = data.get(field, {} if field in ["revealed_traps", "discharged_traps"] else null)
 		if not (flags is Dictionary):
 			return {}
 		for entity_id in flags:
 			if typeof(entity_id) != TYPE_STRING or str(entity_id).is_empty() or typeof(flags[entity_id]) != TYPE_BOOL:
 				return {}
 		restored[field] = flags.duplicate(true)
+	for entity_id in restored["discharged_traps"]:
+		if not restored["traps"].has(entity_id):
+			return {}
 	return restored
 
 

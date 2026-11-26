@@ -45,6 +45,20 @@ func _run() -> void:
 	door_popup.hide()
 	door_popup.queue_free()
 
+	var trap_popup := TrapPropertiesPopup.new()
+	root.add_child(trap_popup)
+	await process_frame
+	trap_popup.configure({"id": "trap", "type": "trap", "properties": {"trap_id": "spikes"}})
+	trap_popup.popup_centered_clamped(Vector2i(480, 660), 0.9)
+	await process_frame
+	assert(trap_popup.size.y <= root.size.y)
+	var trap_content: VBoxContainer = trap_popup.get_child(0).get_child(0)
+	assert(trap_content.get_child(0) is ScrollContainer)
+	var trap_actions: HBoxContainer = trap_content.get_child(1)
+	assert(trap_actions.position.y + trap_actions.size.y <= trap_popup.size.y)
+	trap_popup.hide()
+	trap_popup.queue_free()
+
 	var message_popup: MessageEditorPopup = load("res://scenes/message_editor_popup.tscn").instantiate()
 	root.add_child(message_popup)
 	await process_frame

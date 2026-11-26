@@ -149,6 +149,7 @@ var _touch_info: TouchInfoOverlay
 var _chest_popup: ChestContentsPopup
 var _monster_loot_popup: ChestContentsPopup
 var _door_popup: DoorPropertiesPopup
+var _trap_popup: TrapPropertiesPopup
 var _trigger_popup: TriggerPropertiesPopup
 var _message_popup: MessageEditorPopup
 var _game_dialogue: GameDialogueView
@@ -660,6 +661,10 @@ func _create_dialogs() -> void:
 	_door_popup = DOOR_PROPERTIES_SCENE.instantiate() as DoorPropertiesPopup
 	_door_popup.configuration_changed.connect(_on_door_configuration_changed)
 	add_child(_door_popup)
+	_trap_popup = TrapPropertiesPopup.new()
+	_trap_popup.name = "TrapPropertiesPopup"
+	_trap_popup.configuration_changed.connect(_on_trap_configuration_changed)
+	add_child(_trap_popup)
 	_trigger_popup = TRIGGER_PROPERTIES_SCENE.instantiate() as TriggerPropertiesPopup
 	_trigger_popup.event_id_changed.connect(_on_trigger_event_id_changed)
 	add_child(_trigger_popup)
@@ -1447,6 +1452,8 @@ func _on_configurable_entity_tapped(kind: String, entity_id: String) -> void:
 			_open_developer_inventory()
 		"door":
 			_on_door_tapped(entity_id)
+		"trap":
+			_on_trap_tapped(entity_id)
 		"stairs_down", "portal":
 			_on_exit_tapped(entity_id)
 		"chest":
@@ -1706,13 +1713,15 @@ func _on_door_tapped(door_id: String) -> void:
 	_canvas.finish_edit_stroke()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == door_id and str(entity.get("type", "")) == "door":
-			var attachment: Dictionary = entity.get("properties", {}).get("trap", {})
-			_door_popup.configure(door_id, LockCatalog.required_key(entity), DungeonMap.door_trap_id(entity), str(attachment.get("message", "")))
-			_door_popup.popup_centered_clamped(Vector2i(510, 460), 0.9)
+			var attachment: Variant = entity.get("properties", {}).get("trap", {})
+			if not attachment is Dictionary:
+				attachment = {}
+			_door_popup.configure(door_id, LockCatalog.required_key(entity), DungeonMap.door_trap_id(entity), str(attachment.get("message", "")), TrapCatalog.settings(entity))
+			_door_popup.popup_centered_clamped(Vector2i(510, 700), 0.9)
 			return
 
 
-func _on_door_configuration_changed(door_id: String, lock_id: String, trap_message: String, remove_trap: bool) -> void:
+func _on_door_configuration_changed(door_id: String, lock_id: String, trap_message: String, remove_trap: bool, settings: Dictionary = {}) -> void:
 	if is_play_mode:
 		return
 	var before := _canvas.capture_edit_state()
@@ -1721,7 +1730,30 @@ func _on_door_configuration_changed(door_id: String, lock_id: String, trap_messa
 		changed = map_data.remove_door_trap(door_id) or changed
 	else:
 		changed = map_data.set_door_trap_message(door_id, trap_message) or changed
+		if not settings.is_empty():
+			changed = map_data.set_trap_configuration(door_id, settings) or changed
 	if changed:
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
+		_on_canvas_edited()
+		_canvas.queue_redraw()
+
+
+func _on_trap_tapped(entity_id: String) -> void:
+	if is_play_mode or map_data == null:
+		return
+	_canvas.finish_edit_stroke()
+	for entity in map_data.entities:
+		if str(entity.get("id", "")) == entity_id and str(entity.get("type", "")) == "trap" and TrapCatalog.from_entity(entity) != null:
+			_trap_popup.configure(entity)
+			_trap_popup.popup_centered_clamped(Vector2i(480, 660), 0.9)
+			return
+
+
+func _on_trap_configuration_changed(entity_id: String, settings: Dictionary) -> void:
+	if is_play_mode or map_data == null:
+		return
+	var before: Dictionary = _canvas.capture_edit_state()
+	if map_data.set_trap_configuration(entity_id, settings):
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
 		_canvas.queue_redraw()

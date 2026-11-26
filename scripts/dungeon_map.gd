@@ -132,7 +132,8 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		var trap_definition: TrapDefinition = TrapCatalog.get_trap(trap_id)
 		if not trap_definition.can_attach_to("floor"):
 			return false
-		properties = {"trap_id": trap_id, "hidden": bool(options.get("hidden", trap_definition.hidden_by_default))}
+		properties = {"trap_id": trap_id}
+		properties.merge(TrapCatalog.settings_overrides(trap_definition, options), true)
 	elif kind == "trigger":
 		properties = {"event_id": ""}
 	elif kind == "message":
@@ -151,7 +152,9 @@ static func is_entity_hidden(entity: Dictionary) -> bool:
 	var kind := str(entity.get("type", ""))
 	if kind not in ["monster", "chest", "trap"]:
 		return false
-	return bool(entity.get("properties", {}).get("hidden", kind == "trap"))
+	if kind == "trap":
+		return bool(TrapCatalog.settings(entity).get("hidden", true))
+	return bool(entity.get("properties", {}).get("hidden", false))
 
 
 static func trap_id(entity: Dictionary) -> String:
@@ -191,6 +194,35 @@ func attach_door_trap(door_id: String, trap_id: String) -> bool:
 		var updated: Dictionary = properties.duplicate(true)
 		updated["trap"] = {"trap_id": trap_id}
 		entity["properties"] = updated
+		return true
+	return false
+
+
+func set_trap_configuration(entity_id: String, settings: Dictionary) -> bool:
+	for entity in _entities:
+		if str(entity.get("id", "")) != entity_id:
+			continue
+		var kind: String = str(entity.get("type", ""))
+		if kind not in ["door", "trap"]:
+			return false
+		var door: bool = kind == "door"
+		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		var definition: TrapDefinition = TrapCatalog.from_door(entity) if door else TrapCatalog.from_entity(entity)
+		if definition == null:
+			return false
+		var base: TrapDefinition = TrapCatalog.get_trap(definition.trap_id)
+		var target: Dictionary = properties["trap"] if door else properties
+		var values: Dictionary = TrapCatalog.settings(entity)
+		values.merge(settings, true)
+		values = TrapCatalog.normalize_settings(base, values)
+		if values == TrapCatalog.settings(entity):
+			return false
+		for field in TrapCatalog.OVERRIDE_FIELDS:
+			target.erase(field)
+		target.merge(TrapCatalog.settings_overrides(base, values), true)
+		if door:
+			properties["trap"] = target
+		entity["properties"] = properties
 		return true
 	return false
 

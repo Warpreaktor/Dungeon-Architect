@@ -15,11 +15,22 @@ signal choice_selected(choice: String, actor_index: int)
 @onready var _loot_scroll: ScrollContainer = %LootScroll
 @onready var _loot_rows: VBoxContainer = %LootRows
 @onready var _continue_button: Button = %ContinueButton
+@onready var _choice_prompt: Label = %ChoicePrompt
 @onready var _choices: VBoxContainer = %ChoiceActions
-@onready var _actor_select: OptionButton = %TrapActor
+@onready var _actor_portraits: HFlowContainer = %ActorPortraits
+@onready var _actor_caption: Label = %ActorCaption
 @onready var _disarm_button: Button = %DisarmButton
 @onready var _cancel_button: Button = %CancelButton
 @onready var _avoid_button: Button = %AvoidButton
+
+const ACTOR_CARD_SIZE := Vector2(88, 108)
+const COMPACT_ACTOR_CARD_SIZE := Vector2(72, 92)
+const ACTOR_PORTRAIT_SIZE := Vector2(64, 64)
+const COMPACT_ACTOR_PORTRAIT_SIZE := Vector2(52, 52)
+
+var _selected_actor_index: int = 0
+var _actor_entries: Array[Dictionary] = []
+var _actor_buttons: Array[Button] = []
 
 
 func _ready() -> void:
@@ -44,7 +55,6 @@ func show_event(event: Dictionary) -> void:
 	var choices: Dictionary = event.get("choices", {})
 	_choices.visible = not choices.is_empty()
 	(_continue_button.get_parent() as Control).visible = choices.is_empty()
-	_actor_select.clear()
 	if _choices.visible:
 		for actor in event.get("actors", []):
 			_actor_select.add_item(str(actor))
@@ -54,8 +64,8 @@ func show_event(event: Dictionary) -> void:
 		_disarm_button.visible = choices.has("disarm")
 		_cancel_button.visible = choices.has("cancel")
 		_avoid_button.visible = choices.has("avoid")
-		_disarm_button.text = str(choices.get("disarm", ""))
-		_cancel_button.text = str(choices.get("cancel", ""))
+		_disarm_button.text = _label_for_choice("disarm", choices)
+		_cancel_button.text = _label_for_choice("cancel", choices)
 		_avoid_button.text = str(choices.get("avoid", ""))
 	_text.text = story
 	_text.visible = not story.is_empty()
@@ -123,19 +133,27 @@ func _resolve_event_icon(event: Dictionary) -> Texture2D:
 func _resize_card() -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
 	var compact: bool = _choices.visible and viewport_size.y < 450.0
+	var narrow: bool = viewport_size.x < 560.0
 	var content: VBoxContainer = _choices.get_parent() as VBoxContainer
 	var margins: MarginContainer = content.get_parent() as MarginContainer
 	content.add_theme_constant_override("separation", 8 if compact else 16)
 	margins.add_theme_constant_override("margin_top", 12 if compact else 23)
 	margins.add_theme_constant_override("margin_bottom", 12 if compact else 23)
 	_icon.custom_minimum_size = Vector2(32, 32) if compact else Vector2(48, 48)
-	_card.custom_minimum_size.x = minf(620.0, maxf(260.0, viewport_size.x - 32.0))
+	_card.custom_minimum_size.x = minf(680.0, maxf(280.0, viewport_size.x - 32.0))
 	# Если авторский текст и добыча показаны одновременно, оба блока остаются
 	# внутри игрового окна на невысоком экране планшета.
 	_text.custom_minimum_size.y = minf(72.0, maxf(44.0, viewport_size.y * 0.12)) if _choices.visible else minf(168.0, maxf(75.0, viewport_size.y * 0.24))
 	if _loot_section.visible:
 		var ideal_height := minf(186.0, float(_loot_rows.get_child_count()) * 40.0)
 		_loot_scroll.custom_minimum_size.y = minf(ideal_height, maxf(60.0, viewport_size.y * 0.22))
+	if _choice_prompt != null:
+		_choice_prompt.visible = _actor_entries.size() > 0 and (_actor_buttons.size() > 1 or _disarm_button.visible)
+	if _actor_caption != null:
+		_actor_caption.visible = _actor_entries.size() > 0
+	var size: Vector2 = COMPACT_ACTOR_CARD_SIZE if compact or narrow else ACTOR_CARD_SIZE
+	var portrait_size: Vector2 = COMPACT_ACTOR_PORTRAIT_SIZE if compact or narrow else ACTOR_PORTRAIT_SIZE
+	_refresh_actor_choice_sizes(size, portrait_size)
 
 
 func has_choices() -> bool:
@@ -145,7 +163,6 @@ func has_choices() -> bool:
 func _choose(choice: String) -> void:
 	if not has_choices() or (choice == "disarm" and not _disarm_button.visible):
 		return
-	var selected: int = _actor_select.selected
 	hide()
 	choice_selected.emit(choice, selected)
 

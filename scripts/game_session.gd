@@ -1702,9 +1702,13 @@ func _request_trap_choice(entity: Dictionary, trap: TrapDefinition, cell: Vector
 	_pending_trap_accepted = accepted.duplicate()
 	_pending_trap_opener = opener
 	_pending_trap_actors = _living_party_members()
-	var actors: Array[String] = []
+	var actors: Array[Dictionary] = []
 	for member in _pending_trap_actors:
-		actors.append("%d. %s" % [party.find(member) + 1, member.definition.display_name])
+		actors.append({
+			"name": member.definition.display_name,
+			"portrait": member.definition.portrait,
+			"summary": "%d/%d HP" % [member.health, member.effective_max_health()]
+		})
 	var selected: int = _pending_trap_actors.find(opener)
 	var can_disarm: bool = can_disarm_trap(entity)
 	var choices: Dictionary = {"cancel": "Нет" if can_disarm else "Отмена", "avoid": "Проскочить (%s)" % trap.avoidance_stat_label()}

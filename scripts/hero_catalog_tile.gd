@@ -7,6 +7,7 @@ const GOLD := Color(0.94, 0.76, 0.43)
 const INK := Color(0.07, 0.11, 0.16)
 var hero: HeroDefinition
 var portrait: TextureRect
+var _content: BoxContainer
 var _caption: Label
 var _badge: Label
 var _focused: bool = false
@@ -14,7 +15,9 @@ var _party_position: int = -1
 
 
 func _ready() -> void:
-	var content := VBoxContainer.new()
+	var content := BoxContainer.new()
+	content.vertical = true
+	_content = content
 	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(content)
 	content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -77,7 +80,29 @@ func set_selection(focused: bool, party_position: int) -> void:
 	_badge.text = "✓ %d" % party_position if party_position > 0 else ""
 
 
+func configure_flight() -> void:
+	custom_minimum_size = Vector2.ZERO
+	resized.connect(_adapt_flight)
+	_adapt_flight()
+	var style := get_theme_stylebox("normal").duplicate() as StyleBoxFlat
+	style.shadow_color = Color(0.0, 0.0, 0.0, 0.65)
+	style.shadow_size = 9
+	style.shadow_offset = Vector2(0, 6)
+	add_theme_stylebox_override("normal", style)
+	add_theme_stylebox_override("hover", style)
+	add_theme_stylebox_override("pressed", style)
+
+
+func _adapt_flight() -> void:
+	var horizontal: bool = size.x > size.y * 1.15
+	_content.vertical = not horizontal
+	portrait.size_flags_horizontal = Control.SIZE_EXPAND_FILL if not horizontal else Control.SIZE_FILL
+	portrait.custom_minimum_size.x = 0.0 if not horizontal else clampf(size.y - 8.0, 0.0, 48.0)
+	_caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if horizontal else HORIZONTAL_ALIGNMENT_CENTER
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ENTER:
-		add_requested.emit(hero.hero_id)
 		accept_event()
+		add_requested.emit(hero.hero_id)

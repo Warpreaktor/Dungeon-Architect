@@ -45,6 +45,12 @@ func _point(picker: HeroSelection, id: String) -> Vector2:
 	return (picker._catalog.tiles[id] as HeroCatalogTile).get_global_rect().get_center()
 
 
+func _wait_flight(picker: HeroSelection) -> void:
+	await create_timer(0.35).timeout
+	await _settle()
+	assert(picker._drag_layer.card == null and picker._transfer_id.is_empty())
+
+
 func _test_gestures(picker: HeroSelection, definitions: Array[HeroDefinition]) -> void:
 	var small: Array[HeroDefinition] = []
 	for index in range(GameSession.MAX_PARTY_SIZE):
@@ -60,22 +66,32 @@ func _test_gestures(picker: HeroSelection, definitions: Array[HeroDefinition]) -
 	_mouse(picker, point, true, true)
 	_mouse(picker, point, false)
 	assert(picker.selected_party() == [first])
-	_mouse(picker, point, true, true)
-	_mouse(picker, point, false)
+	assert(not picker._catalog.tiles[first].visible)
+	assert(picker._drag_layer.card != null and picker._party_bar._contents[0].modulate.a == 0.0)
+	picker._catalog.hero_add_requested.emit(first)
 	assert(picker.selected_party() == [first])
+	await _wait_flight(picker)
+	assert(picker._party_bar._contents[0].modulate.a == 1.0)
+
 	var second: String = small[1].hero_id
 	point = _point(picker, second)
 	var target: Vector2 = picker._party_bar.target_rect(1).get_center()
 	_mouse(picker, point, true)
 	_drag(picker, target, false)
-	assert(picker._gesture == HeroSelection.Gesture.DRAG and picker._drag_portrait != null)
+	assert(picker._gesture == HeroSelection.Gesture.DRAG and picker._drag_layer.card != null)
+	assert(not picker._catalog.tiles[second].visible and picker.selected_party() == [first])
+	assert(picker._party_bar._highlights[1].visible)
+	var flying_card: Control = picker._drag_layer.card
 	_mouse(picker, target, false)
-	assert(picker.selected_party() == [first, second] and picker._drag_portrait == null)
+	assert(picker.selected_party() == [first, second] and picker._drag_layer.card == flying_card)
+	assert(picker._party_bar._contents[1].modulate.a == 0.0)
+	await _wait_flight(picker)
+	assert(picker._party_bar._contents[1].modulate.a == 1.0)
+
 	var third: String = small[2].hero_id
 	point = _point(picker, third)
 	target = picker._party_bar.target_rect(2).get_center()
 	_touch(picker, point, true)
-	# Emulated mouse input must not produce a second addition.
 	var emulated := InputEventMouseButton.new()
 	emulated.device = InputEvent.DEVICE_ID_EMULATION
 	emulated.button_index = MOUSE_BUTTON_LEFT
@@ -88,22 +104,62 @@ func _test_gestures(picker: HeroSelection, definitions: Array[HeroDefinition]) -
 	emulated.pressed = false
 	emulated.position = target
 	picker._input(emulated)
-	assert(picker.selected_party() == [first, second] and picker._drag_portrait == null)
+	assert(picker.selected_party() == [first, second] and picker._gesture == HeroSelection.Gesture.NONE)
+	assert(picker._catalog.tiles[third].visible and picker._catalog.tiles[third].modulate.a == 0.0)
+	await _wait_flight(picker)
+	assert(picker._catalog.tiles[third].modulate.a == 1.0)
+	point = _point(picker, third)
 	_touch(picker, point, true)
 	_drag(picker, target, true)
 	_touch(picker, target, false)
 	assert(picker.selected_party() == [first, second, third])
+	await _wait_flight(picker)
+
 	var fourth: String = small[3].hero_id
 	point = _point(picker, fourth)
 	_touch(picker, point, true)
 	_drag(picker, Vector2(2, 2), true)
 	_touch(picker, Vector2(2, 2), false)
 	assert(picker.selected_party() == [first, second, third])
+	await _wait_flight(picker)
+	point = _point(picker, fourth)
 	_touch(picker, point, true)
 	_drag(picker, picker._party_bar.target_rect(3).get_center(), true)
 	_touch(picker, picker._party_bar.target_rect(3).get_center(), false)
 	assert(picker.selected_party() == [first, second, third, fourth])
 	assert(not picker._party_bar.accepts_drop(target))
+	await _wait_flight(picker)
+
+	point = picker._party_bar.target_rect(1).get_center()
+	target = picker._party_bar.target_rect(0).get_center()
+	_mouse(picker, point, true)
+	_drag(picker, target, false)
+	assert(picker._party_bar._contents[1].modulate.a == 0.0)
+	_mouse(picker, target, false)
+	assert(picker.selected_party() == [second, first, third, fourth])
+	await _wait_flight(picker)
+	point = picker._party_bar.target_rect(0).get_center()
+	target = picker._catalog.scroll.get_global_rect().get_center()
+	_touch(picker, point, true)
+	_drag(picker, target, true)
+	_touch(picker, target, false, true)
+	assert(picker.selected_party() == [second, first, third, fourth])
+	await _wait_flight(picker)
+	assert(picker._party_bar._contents[0].modulate.a == 1.0)
+	_mouse(picker, point, true)
+	_drag(picker, target, false)
+	_mouse(picker, target, false)
+	assert(picker.selected_party() == [first, third, fourth])
+	assert(picker._catalog.tiles[second].visible and picker._catalog.tiles[second].modulate.a == 0.0)
+	await _wait_flight(picker)
+	assert(picker._catalog.tiles[second].modulate.a == 1.0)
+	picker._party_bar._remove_buttons[0].pressed.emit()
+	assert(picker.selected_party() == [third, fourth])
+	assert(picker._catalog.tiles[first].visible and picker._catalog.tiles[first].modulate.a == 0.0)
+	picker.hide()
+	assert(picker._drag_layer.card == null and picker._catalog.tiles[first].modulate.a == 1.0)
+	picker.show()
+
 	picker.set_heroes(definitions)
 	root.size = Vector2i(900, 540)
 	await _settle()
@@ -178,6 +234,8 @@ func _verify() -> void:
 		original.append(id)
 		assert(picker.selected_party() == original)
 		assert(picker._party_bar.portraits[index].texture == definitions[index].portrait)
+		assert(not picker._catalog.tiles[id].visible)
+		await _wait_flight(picker)
 	assert(not picker._start_button.disabled)
 	var extra: HeroDefinition = definitions[GameSession.MAX_PARTY_SIZE]
 	picker._catalog.tiles[extra.hero_id].pressed.emit()
@@ -214,7 +272,7 @@ func _verify() -> void:
 			picker._show_catalog()
 			await _settle()
 			assert(picker._catalog.visible and not picker._preview.visible)
-			picker._catalog.tiles[extra.hero_id].pressed.emit()
+			picker._catalog.tiles[definitions[GameSession.MAX_PARTY_SIZE + 1].hero_id].pressed.emit()
 			await _settle()
 			assert(not picker._catalog.visible and picker._preview.visible)
 		else:
@@ -224,7 +282,7 @@ func _verify() -> void:
 	assert(picker.selected_party().is_empty() and picker._start_button.disabled)
 	assert(picker._catalog.search.text.is_empty())
 	picker.hide()
-	assert(picker._flights.is_empty())
+	assert(picker._drag_layer.card == null and picker._transfer_id.is_empty())
 	picker.queue_free()
 	await process_frame
 	print("Hero selection: adaptive catalog, 25 heroes, search, preview and ordered party OK")

@@ -14,16 +14,11 @@ var _names: Array[Label] = []
 var _ids: Array[String] = []
 var _contents: Array[HBoxContainer] = []
 var _compact: bool = false
-var _highlighted_drop: int = -1
-var _drop_style: StyleBoxFlat
+var _transfer_id := ""
+var _highlights: Array[Panel] = []
 
 
 func _ready() -> void:
-	_drop_style = StyleBoxFlat.new()
-	_drop_style.bg_color = Color(0.16, 0.27, 0.24)
-	_drop_style.border_color = Color(0.63, 0.86, 0.66)
-	_drop_style.set_border_width_all(2)
-	_drop_style.set_corner_radius_all(6)
 	for index in range(GameSession.MAX_PARTY_SIZE):
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(0, 66)
@@ -65,6 +60,18 @@ func _ready() -> void:
 		remove.offset_bottom = 30
 		remove.tooltip_text = "Убрать из отряда"
 		_remove_buttons.append(remove)
+		var highlight := Panel.new()
+		highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.94, 0.76, 0.43, 0.13)
+		style.border_color = Color(0.94, 0.76, 0.43)
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(6)
+		highlight.add_theme_stylebox_override("panel", style)
+		button.add_child(highlight)
+		highlight.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		highlight.hide()
+		_highlights.append(highlight)
 
 
 func refresh(ids: Array[String], heroes: Dictionary) -> void:
@@ -79,6 +86,7 @@ func refresh(ids: Array[String], heroes: Dictionary) -> void:
 		_buttons[index].tooltip_text = hero.display_name if hero != null else ""
 		_buttons[index].disabled = hero == null
 		_remove_buttons[index].visible = hero != null
+	_apply_transfer()
 
 
 func adapt(compact: bool) -> void:
@@ -101,30 +109,52 @@ func _remove(index: int) -> void:
 
 
 func target_rect(index: int) -> Rect2:
-	var rect: Rect2 = _buttons[index].get_global_rect().grow(-4.0)
-	if not _compact:
-		rect.size.x = 48.0
-	return rect
+	if index < 0 or index >= _buttons.size():
+		return Rect2()
+	return _buttons[index].get_global_rect()
+
+
+func slot_at(point: Vector2) -> int:
+	if not is_visible_in_tree():
+		return -1
+	for index in range(_buttons.size()):
+		if target_rect(index).has_point(point):
+			return index
+	return -1
+
+
+func member_at(point: Vector2) -> String:
+	var index: int = slot_at(point)
+	if index < 0 or index >= _ids.size() or _ids[index] == _transfer_id:
+		return ""
+	if _remove_buttons[index].is_visible_in_tree() and _remove_buttons[index].get_global_rect().has_point(point):
+		return ""
+	return _ids[index]
+
+
+func set_transfer(hero_id: String) -> void:
+	_transfer_id = hero_id
+	_apply_transfer()
+
+
+func _apply_transfer() -> void:
+	for index in range(_buttons.size()):
+		var hidden: bool = index < _ids.size() and _ids[index] == _transfer_id
+		_contents[index].modulate.a = 0.0 if hidden else 1.0
+		_buttons[index].disabled = hidden or index >= _ids.size()
+		_remove_buttons[index].visible = index < _ids.size() and not hidden
+
+
+func highlight_slot(index: int) -> void:
+	for slot in range(_highlights.size()):
+		_highlights[slot].visible = slot == index
+
+
+func focus_member(hero_id: String) -> void:
+	var index: int = _ids.find(hero_id)
+	if index >= 0:
+		_buttons[index].grab_focus()
 
 
 func accepts_drop(point: Vector2) -> bool:
-	for index in range(_ids.size(), _buttons.size()):
-		if _buttons[index].is_visible_in_tree() and _buttons[index].get_global_rect().has_point(point):
-			return true
-	return false
-
-
-func highlight_drop(point: Vector2) -> void:
-	var target: int = _ids.size() if accepts_drop(point) else -1
-	if target == _highlighted_drop:
-		return
-	clear_drop_highlight()
-	if target >= 0:
-		_highlighted_drop = target
-		_buttons[target].add_theme_stylebox_override("disabled", _drop_style)
-
-
-func clear_drop_highlight() -> void:
-	if _highlighted_drop >= 0:
-		_buttons[_highlighted_drop].remove_theme_stylebox_override("disabled")
-		_highlighted_drop = -1
+	return slot_at(point) >= _ids.size()

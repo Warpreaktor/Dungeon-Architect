@@ -33,6 +33,7 @@ func set_heroes(heroes: Array[HeroDefinition]) -> void:
 		grid.add_child(tile)
 		tile.configure(hero)
 		tile.pressed.connect(_emit_focus.bind(hero.hero_id))
+		tile.add_requested.connect(hero_add_requested.emit)
 		tiles[hero.hero_id] = tile
 	reset_filter()
 

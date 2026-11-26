@@ -9,6 +9,7 @@ signal move_selection_changed(description: String)
 signal move_failed
 signal placement_rejected(message: String)
 signal player_step_finished
+signal trap_playback_finished
 signal edit_action_committed(before: Dictionary, after: Dictionary)
 signal configurable_entity_tapped(kind: String, entity_id: String)
 signal message_cell_tapped(cell: Vector2i)
@@ -58,6 +59,11 @@ var _player_visual_cell := Vector2.ZERO
 var _player_step_tween: Tween
 var _player_flash_tween: Tween
 var _player_flash_color: Color = Color.WHITE
+var _trap_playback: Tween
+var _collapse_cell := Vector2i.ZERO
+var _collapse_progress: float = -1.0
+var _collapse_axis := Vector2i.ZERO
+var _trap_playback_destination := Vector2i.ZERO
 
 var _hovered := Vector2i(-1, -1)
 var _painting: bool = false
@@ -118,12 +124,16 @@ func _ready() -> void:
 
 func _on_canvas_resized() -> void:
 	if mode == "play" and game_session != null:
-		center_on_cell(game_session.player_pos)
+		if _trap_playback != null:
+			_update_player_visual_cell(_player_visual_cell)
+		else:
+			center_on_cell(game_session.player_pos)
 	else:
 		queue_redraw()
 
 
 func set_map(value: DungeonMap) -> void:
+	var interrupted: bool = _cancel_trap_playback()
 	_cancel_player_step()
 	_cancel_player_flash()
 	reachability_result.clear()
@@ -138,6 +148,8 @@ func set_map(value: DungeonMap) -> void:
 	_reset_pointer_state()
 	call_deferred("_fit_after_layout")
 	queue_redraw()
+	if interrupted:
+		trap_playback_finished.emit()
 
 
 func set_selected_tool(kind: String) -> void:
@@ -173,6 +185,7 @@ func _reset_pointer_state() -> void:
 
 
 func set_game_session(value: GameSession) -> void:
+	var interrupted: bool = _cancel_trap_playback()
 	_cancel_player_step()
 	_cancel_player_flash()
 	reachability_result.clear()
@@ -188,6 +201,8 @@ func set_game_session(value: GameSession) -> void:
 	else:
 		mode = "edit"
 	queue_redraw()
+	if interrupted:
+		trap_playback_finished.emit()
 
 
 # Дожидаемся размеров контейнера: при первой загрузке прежний deferred fit
@@ -202,7 +217,7 @@ func _fit_after_layout() -> void:
 ## Только отображение шага анимируется: игровая позиция уже обновлена в GameSession.
 ## Во время Tween новые команды перемещения не принимаются редактором.
 func is_player_moving() -> bool:
-	return _player_step_tween != null and _player_step_tween.is_running()
+	return (_player_step_tween != null and _player_step_tween.is_running()) or _trap_playback != null
 
 
 func animate_player_step(from_cell: Vector2i, to_cell: Vector2i) -> void:
@@ -240,6 +255,70 @@ func _cancel_player_step() -> void:
 	if _player_step_tween != null:
 		_player_step_tween.kill()
 		_player_step_tween = null
+
+
+func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool:
+	if mode != "play" or game_session == null or _trap_playback != null:
+		return false
+	var collapses: Array[Vector2i] = []
+	for event in events:
+		if event.get("effect") == "falling_slab" and event.get("cell") is Vector2i:
+			collapses.append(event["cell"])
+	if collapses.is_empty():
+		return false
+	_cancel_player_step()
+	_trap_playback_destination = destination
+	_trap_playback = create_tween()
+	var visual_cell: Vector2 = _player_visual_cell
+	for cell in collapses:
+		if visual_cell != Vector2(cell):
+			_trap_playback.tween_method(_update_player_visual_cell, visual_cell, Vector2(cell), PLAYER_STEP_SECONDS * 0.65)
+		_trap_playback.tween_callback(_begin_collapse.bind(cell))
+		_trap_playback.tween_method(_update_collapse, 0.0, 1.0, 0.65)
+		_trap_playback.tween_callback(_clear_collapse)
+		visual_cell = Vector2(cell)
+	if visual_cell != Vector2(destination):
+		_trap_playback.tween_method(_update_player_visual_cell, visual_cell, Vector2(destination), PLAYER_STEP_SECONDS * 0.65)
+	_trap_playback.finished.connect(_finish_trap_playback)
+	return true
+
+
+func _begin_collapse(cell: Vector2i) -> void:
+	_collapse_cell = cell
+	_collapse_axis = map_data.narrow_passage_axis(cell)
+	_update_collapse(0.0)
+
+
+func _update_collapse(progress: float) -> void:
+	_collapse_progress = progress
+	queue_redraw()
+
+
+func _clear_collapse() -> void:
+	_collapse_progress = -1.0
+	queue_redraw()
+
+
+func skip_trap_playback() -> void:
+	if _trap_playback != null:
+		_trap_playback.kill()
+		_finish_trap_playback()
+
+
+func _finish_trap_playback() -> void:
+	_trap_playback = null
+	_clear_collapse()
+	_update_player_visual_cell(Vector2(_trap_playback_destination))
+	trap_playback_finished.emit()
+
+
+func _cancel_trap_playback() -> bool:
+	var interrupted: bool = _trap_playback != null
+	if interrupted:
+		_trap_playback.kill()
+		_trap_playback = null
+	_clear_collapse()
+	return interrupted
 
 
 func flash_player_damage() -> void:
@@ -326,6 +405,9 @@ func _draw() -> void:
 				if str(entity.get("type", "")) == "trap" and game_session.is_trap_revealed(entity):
 					_draw_triggered_trap_marker(_player_visual_cell * TILE_SIZE, entity)
 
+	if _collapse_progress >= 0.0:
+		_draw_collapse()
+
 	if show_grid:
 		var grid_color := Color(0.82, 0.84, 0.91, 0.20)
 		for x in range(min_x, max_x + 1):
@@ -346,6 +428,37 @@ func _draw() -> void:
 	if not fog_enabled:
 		draw_rect(Rect2(0, 0, map_data.width * TILE_SIZE, map_data.height * TILE_SIZE), Color("#9da5ab"), false, 2.0 / zoom)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_collapse() -> void:
+	var center: Vector2 = (Vector2(_collapse_cell) + Vector2.ONE * 0.5) * TILE_SIZE
+	var angle: float = PI * 0.5 if _collapse_axis == Vector2i.RIGHT else 0.0
+	draw_set_transform(camera_offset + center * zoom, angle, Vector2.ONE * zoom)
+	var progress: float = _collapse_progress
+	var fall: float = clampf(progress / 0.42, 0.0, 1.0)
+	var impact: float = clampf((progress - 0.42) / 0.58, 0.0, 1.0)
+	var opacity: float = 1.0 - smoothstep(0.55, 1.0, progress)
+	var height: float = lerpf(-28.0, 0.0, fall * fall)
+	var fall_offset: Vector2 = Vector2(0.0, height).rotated(-angle)
+	var shadow := Rect2(-21.0, -12.0, 42.0, 24.0)
+	draw_rect(shadow, Color(0.03, 0.04, 0.06, lerpf(0.18, 0.65, fall) * opacity))
+	var top := PackedVector2Array([Vector2(-22, -14), Vector2(15, -14), Vector2(22, -8), Vector2(-16, -8)])
+	var face := PackedVector2Array([Vector2(-22, -14), Vector2(-16, -8), Vector2(22, -8), Vector2(22, 12), Vector2(-16, 12), Vector2(-22, 6)])
+	for index in face.size():
+		face[index] = face[index] + fall_offset
+	for index in top.size():
+		top[index] = top[index] + fall_offset
+	draw_colored_polygon(face, Color(0.32, 0.36, 0.43, opacity))
+	draw_colored_polygon(top, Color(0.76, 0.79, 0.83, opacity))
+	draw_polyline(PackedVector2Array([Vector2(-5, -8) + fall_offset, Vector2(-10, 1) + fall_offset, Vector2(0, 5) + fall_offset, Vector2(-3, 12) + fall_offset]), Color(0.13, 0.17, 0.23, opacity), 2.0, true)
+	if progress >= 0.42:
+		for index in range(12):
+			var direction := Vector2.from_angle(TAU * float(index) / 12.0)
+			var dust_pos: Vector2 = direction * lerpf(8.0, 30.0, impact)
+			draw_circle(dust_pos, lerpf(2.0, 5.5, impact), Color(0.69, 0.64, 0.54, (1.0 - impact) * 0.64))
+		var ring_alpha: float = (1.0 - impact) * 0.75
+		draw_arc(Vector2.ZERO, lerpf(12.0, 29.0, impact), 0.0, TAU, 32, Color(1.0, 0.84, 0.61, ring_alpha), 1.5, true)
+	draw_set_transform(camera_offset, 0.0, Vector2.ONE * zoom)
 
 
 func _update_fog(cells: Rect2i) -> void:
@@ -818,6 +931,9 @@ func _request_ground_loot_at(point: Vector2) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	if _trap_playback != null:
+		accept_event()
+		return
 	if event is InputEventMouseButton:
 		# На Android тач-событие дополнительно эмулирует мышь.
 		if event.device == InputEvent.DEVICE_ID_EMULATION:

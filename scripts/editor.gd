@@ -106,6 +106,7 @@ var game_session: GameSession
 var is_dirty: bool = false
 var selected_tool: String = "hand"
 var is_play_mode: bool = false
+var _trap_playback_active: bool = false
 var _editor_camera_offset := Vector2.ZERO
 var _editor_camera_zoom: float = 1.0
 const HISTORY_LIMIT := 40
@@ -1107,7 +1108,7 @@ func _clear_held_movement() -> void:
 
 
 func _movement_input_allowed() -> bool:
-	return is_play_mode and game_session != null and not _combat_active and _victory_view == null and not _game_dialogue.visible and not _inventory_view.visible and not _game_system_menu.visible and not _map_screen.visible
+	return not _trap_playback_active and is_play_mode and game_session != null and not _combat_active and _victory_view == null and not _game_dialogue.visible and not _inventory_view.visible and not _game_system_menu.visible and not _map_screen.visible
 
 
 func _advance_held_move() -> void:
@@ -2688,6 +2689,8 @@ func _show_import() -> void:
 
 
 func _request_return_to_menu() -> void:
+	if _trap_playback_active:
+		return
 	if standalone_game:
 		_stop_play_mode()
 	else:
@@ -2701,6 +2704,8 @@ func _emit_menu_requested() -> void:
 
 
 func _open_game_system_menu() -> void:
+	if _trap_playback_active:
+		return
 	if not is_play_mode or game_session == null or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	_game_command_bar.visible = false
@@ -2721,7 +2726,7 @@ func _close_game_system_menu() -> void:
 
 
 func _can_save_progress() -> bool:
-	if not standalone_game or not is_play_mode or game_session == null:
+	if _trap_playback_active or not standalone_game or not is_play_mode or game_session == null:
 		return false
 	if _combat_active or _victory_view != null or game_session.is_party_defeated():
 		return false
@@ -2747,6 +2752,8 @@ func _leave_from_game_system_menu() -> void:
 
 
 func _toggle_map_screen() -> void:
+	if _trap_playback_active:
+		return
 	if _map_screen.visible:
 		_map_screen.dismiss_by_player()
 		return
@@ -2787,6 +2794,8 @@ func _set_test_open_map(enabled: bool) -> void:
 
 
 func _toggle_play_mode() -> void:
+	if _trap_playback_active:
+		return
 	if is_play_mode:
 		_stop_play_mode()
 	else:
@@ -2887,6 +2896,7 @@ func _center_game_camera_after_layout() -> void:
 
 
 func _stop_play_mode(return_to_menu: bool = true) -> void:
+	_trap_playback_active = false
 	_clear_held_movement()
 	_pending_next_map = null
 	_remove_victory_view()
@@ -2941,6 +2951,8 @@ func _update_mode_ui() -> void:
 
 
 func _open_character(member: HeroState) -> void:
+	if _trap_playback_active:
+		return
 	if _arsenal_view.visible:
 		return
 	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
@@ -2958,6 +2970,8 @@ func _on_arsenal_closed() -> void:
 
 
 func _toggle_inventory() -> void:
+	if _trap_playback_active:
+		return
 	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	if _inventory_view.visible:
@@ -2969,6 +2983,8 @@ func _toggle_inventory() -> void:
 
 
 func _open_ground_loot(container_id: String) -> void:
+	if _trap_playback_active:
+		return
 	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	var container: Dictionary = game_session.ground_container_by_id(container_id)
@@ -3108,6 +3124,8 @@ func _log_trigger_events() -> void:
 
 
 func _try_move_player(dx: int, dy: int) -> void:
+	if _trap_playback_active:
+		return
 	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
 	if _canvas.is_player_moving():
@@ -3132,7 +3150,18 @@ func _try_move_player(dx: int, dy: int) -> void:
 
 
 func _complete_player_move(moving_session: GameSession, previous_pos: Vector2i, moved: bool, wait_until_arrival: bool = false) -> void:
-	if moved:
+	var visuals: Array[Dictionary] = moving_session.take_trap_visual_events()
+	var played_effect: bool = _canvas.play_trap_visuals(visuals, moving_session.player_pos) if not visuals.is_empty() else false
+	if played_effect:
+		_trap_playback_active = true
+		_clear_held_movement()
+		await _canvas.trap_playback_finished
+		if not _trap_playback_active or not is_play_mode or game_session != moving_session:
+			return
+		_trap_playback_active = false
+		if not moving_session.pending_chest_id.is_empty() and not moving_session.is_party_defeated():
+			moving_session.open_pending_chest()
+	elif moved:
 		if (game_session.hero == null or not game_session.hero.has_vision_effect()) and _canvas.zoom < DungeonCanvas.PLAY_MIN_ZOOM:
 			_canvas.zoom = DungeonCanvas.PLAY_MIN_ZOOM
 		_canvas.animate_player_step(previous_pos, moving_session.player_pos)
@@ -3279,15 +3308,18 @@ func _finish_combat() -> void:
 		_battle_view = null
 	_combat_active = false
 	_canvas.zoom = _pre_combat_zoom
-	if moved:
-		_canvas.animate_player_step(previous_pos, game_session.player_pos)
-	else:
-		_canvas.center_on_cell(game_session.player_pos)
 	_game_command_bar.visible = true
 	_dpad.visible = true
 	_mini_map.visible = _minimap_enabled
 	_hero_hud.visible = true
 	_canvas.grab_focus()
+	if game_session.has_trap_visual_events():
+		_complete_player_move(game_session, previous_pos, moved, true)
+		return
+	if moved:
+		_canvas.animate_player_step(previous_pos, game_session.player_pos)
+	else:
+		_canvas.center_on_cell(game_session.player_pos)
 	_canvas.queue_redraw()
 	_refresh_map_overlays()
 	_refresh_stats()
@@ -3489,6 +3521,14 @@ func _abort_combat() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if _trap_playback_active:
+		var skip: bool = event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]
+		skip = skip or (event is InputEventScreenTouch and event.pressed)
+		skip = skip or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.device != InputEvent.DEVICE_ID_EMULATION)
+		if skip:
+			_canvas.skip_trap_playback()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and is_play_mode:
 		var direction := _direction_for_key(event.keycode)
 		if direction != Vector2i.ZERO:

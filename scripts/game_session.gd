@@ -48,6 +48,7 @@ var _pending_trap_actors: Array[HeroState] = []
 var _pending_trap_accepted: Array[String] = []
 var _pending_trap_opener: HeroState
 var _trap_result_messages: Array[String] = []
+var _trap_visual_events: Array[Dictionary] = []
 var activated_triggers: Dictionary = {} # ID сработавших триггеров; обнуляется с новой сессией.
 var shown_messages: Dictionary = {} # Авторские сообщения показываются один раз за прохождение.
 var _message_events: Array[Dictionary] = []
@@ -1273,6 +1274,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	_pending_door_accepted.clear()
 	_clear_trap_choice()
 	_trap_result_messages.clear()
+	_trap_visual_events.clear()
 	activated_triggers = saved.get("triggers", {}).duplicate(true)
 	shown_messages = saved.get("messages", {}).duplicate(true)
 	encounter_monster_id = ""
@@ -1638,8 +1640,20 @@ func take_trap_result_message() -> String:
 	return result
 
 
+func has_trap_visual_events() -> bool:
+	return not _trap_visual_events.is_empty()
+
+
+func take_trap_visual_events() -> Array[Dictionary]:
+	var result: Array[Dictionary] = _trap_visual_events.duplicate(true)
+	_trap_visual_events.clear()
+	return result
+
+
 func _activate_trap(trap: TrapDefinition, trap_key: String, opener: HeroState = null) -> void:
 	revealed_traps[trap_key] = true
+	if trap.trigger_visual != "none" and trap.can_attach_to("floor"):
+		_trap_visual_events.append({"effect": trap.trigger_visual, "cell": player_pos})
 	var targets: Array[HeroState] = _living_party_members()
 	if trap.can_attach_to("door"):
 		targets.clear()

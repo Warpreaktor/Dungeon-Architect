@@ -13,6 +13,7 @@ placement = "floor"
 placement_constraint = "narrow_passage"
 trigger_message = "Под ногами раздался глухой щелчок. С потолка посыпалась каменная пыль, и огромная плита начала стремительно опускаться!"
 hidden_entry_reaction = "directional_escape"
+trigger_visual = "falling_slab"
 hidden_by_default = true
 detection_difficulty = 8
 avoidance_difficulty = 15

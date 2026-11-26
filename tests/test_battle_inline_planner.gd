@@ -14,7 +14,7 @@ func _verify() -> void:
 	var view := scene.instantiate() as BattleView
 	root.add_child(view)
 	view.begin(CombatSession.new(monster, hero), hero)
-	assert(view._manual_started)
+	assert(view._round_mode and view._combat.battle_state.round_combat_active)
 	assert(not view.has_node("%PunchButton"))
 	assert(view._sequence_slots.get_child_count() == hero.action_slot_capacity() + 1)
 	assert(view._hero_chain == initial)

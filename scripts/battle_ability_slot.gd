@@ -86,6 +86,10 @@ func configure(index: int, ability: AbilityDefinition, editable: bool, actor: Ba
 	_info_button.visible = not tooltip_text.is_empty()
 
 
+func set_slot_number_visible(value: bool) -> void:
+	_slot_number.visible = value
+
+
 func _notify_selection() -> void:
 	slot_selected.emit(slot_index)
 

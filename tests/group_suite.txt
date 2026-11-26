@@ -47,3 +47,5 @@ test_trap_detection.gd
 
 test_trap_interactions.gd
 test_trap_configuration.gd
+
+test_prepared_round_arsenal.gd

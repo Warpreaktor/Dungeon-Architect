@@ -58,8 +58,7 @@ func _init(hero_definition: HeroDefinition = null) -> void:
 	for ability_id in definition.personal_ability_ids:
 		if saved_action_slots.size() >= action_slot_capacity():
 			break
-		var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
-		if ability != null and not ability.passive:
+		if can_select_action(ability_id) and not saved_action_slots.has(ability_id):
 			saved_action_slots.append(ability_id)
 
 
@@ -93,20 +92,28 @@ func action_slot_capacity() -> int:
 	return clampi(definition.base_action_slots + bonus_action_slots, 1, BattleChainPlanner.MAX_ACTIONS)
 
 
+func can_select_action(ability_id: String) -> bool:
+	return AbilityCatalog.uses_hero_action_slot(ability_id) and (ability_id in definition.personal_ability_ids or ability_id in learned_ability_ids)
+
+
 func get_saved_action_slots() -> Array[String]:
 	var result: Array[String] = []
 	for index in range(action_slot_capacity()):
-		result.append(saved_action_slots[index] if index < saved_action_slots.size() else "")
+		var id: String = saved_action_slots[index] if index < saved_action_slots.size() else ""
+		result.append(id if can_select_action(id) and not result.has(id) else "")
 	return result
 
 
 func save_action_slots(slots: Array[String]) -> bool:
 	if slots.size() != action_slot_capacity():
 		return false
+	var seen: Array[String] = []
 	for ability_id in slots:
-		var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
-		if ability != null and ability.passive:
+		if ability_id.is_empty():
+			continue
+		if not can_select_action(ability_id) or seen.has(ability_id):
 			return false
+		seen.append(ability_id)
 	saved_action_slots = slots.duplicate()
 	return true
 
@@ -401,7 +408,7 @@ func copy_for_battle() -> HeroState:
 	copy.defense = defense
 	copy.gold = gold
 	copy.learned_ability_ids = learned_ability_ids.duplicate()
-	copy.saved_action_slots = saved_action_slots.duplicate()
+	copy.saved_action_slots = get_saved_action_slots()
 	copy.bonus_action_slots = bonus_action_slots
 	copy.equipped_weapon_id = equipped_weapon_id
 	copy.equipped_shield_id = equipped_shield_id
@@ -469,7 +476,7 @@ func to_snapshot() -> Dictionary:
 		"base_defense": base_defense,
 		"gold": gold,
 		"learned_ability_ids": learned_ability_ids.duplicate(),
-		"saved_action_slots": saved_action_slots.duplicate(),
+		"saved_action_slots": get_saved_action_slots(),
 		"bonus_action_slots": bonus_action_slots,
 		"equipped_weapon_id": equipped_weapon_id,
 		"equipped_shield_id": equipped_shield_id,
@@ -549,12 +556,9 @@ static func from_snapshot(data: Dictionary) -> HeroState:
 	for action_id_raw in data["saved_action_slots"]:
 		if typeof(action_id_raw) != TYPE_STRING:
 			return null
-		if not str(action_id_raw).is_empty() and AbilityCatalog.get_ability(str(action_id_raw)) == null:
-			return null
 		prepared.append(str(action_id_raw))
-	if prepared.size() > result.action_slot_capacity():
-		return null
 	result.saved_action_slots = prepared
+	result.saved_action_slots = result.get_saved_action_slots()
 	result.equipped_weapon_id = str(data.get("equipped_weapon_id", ""))
 	result.equipped_shield_id = str(data.get("equipped_shield_id", ""))
 	for slot_id in ["main_hand", "off_hand"]:

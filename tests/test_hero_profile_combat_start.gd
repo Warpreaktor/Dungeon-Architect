@@ -24,8 +24,8 @@ func _verify() -> void:
 		var view := (load("res://scenes/battle_view.tscn") as PackedScene).instantiate() as BattleView
 		root.add_child(view)
 		view.begin(combat, hero)
-		assert(view._manual_started)
-		assert(combat.battle_state.manual_combat_active)
+		assert(view._round_mode)
+		assert(combat.battle_state.round_combat_active)
 		assert(not view.has_node("%PunchButton"))
 		assert(view._hero_chain == hero.get_saved_action_slots())
 		view.queue_free()
@@ -35,8 +35,9 @@ func _verify() -> void:
 			var empty_view := (load("res://scenes/battle_view.tscn") as PackedScene).instantiate() as BattleView
 			root.add_child(empty_view)
 			empty_view.begin(empty_battle, hero)
-			assert(empty_view._manual_started)
+			assert(empty_view._round_mode and empty_battle.battle_state.round_combat_active)
 			assert(empty_view._hero_chain.is_empty())
-			assert(empty_battle.battle_state.manual_available_slots().is_empty())
+			assert(empty_view._sequence_slots.get_child_count() == 1)
+			assert(not (empty_view._sequence_slots.get_child(0) as BattleAbilitySlot).disabled)
 			empty_view.queue_free()
 	quit()

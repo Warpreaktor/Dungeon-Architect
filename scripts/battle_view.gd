@@ -326,7 +326,7 @@ func _select_hero_view(actor_id: String) -> void:
 	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
 	if actor == null or not actor.is_alive():
 		return
-	_hero_chain = AbilityCatalog.known_ability_ids(actor)
+	_hero_chain = AbilityCatalog.round_hero_ability_ids(actor)
 	_selected_round_ability_id = ""
 	_hero_chain_title.text = _hero_name_for_id(actor_id).to_upper()
 	_refresh_chain_slots()
@@ -518,6 +518,10 @@ func _refresh_chain_slots() -> void:
 		_sequence_slots.remove_child(child)
 		child.queue_free()
 	var actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
+	if _round_mode:
+		_hero_chain = AbilityCatalog.round_hero_ability_ids(actor)
+		if _selected_round_ability_id != "rest" and not _hero_chain.has(_selected_round_ability_id):
+			_selected_round_ability_id = ""
 	var available: Array[int] = []
 	if _manual_started:
 		available = _combat.battle_state.manual_available_slots()
@@ -526,8 +530,10 @@ func _refresh_chain_slots() -> void:
 		var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
 		var slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_sequence_slots.add_child(slot)
-		var can_use: bool = _round_mode and actor != null and actor.is_alive() and AbilityCatalog.unavailable_reason(actor, ability_id).is_empty()
+		var can_use: bool = _round_mode and actor != null and actor.is_alive() and AbilityCatalog.round_hero_unavailable_reason(actor, ability_id).is_empty()
 		slot.configure(index, ability, can_use if _round_mode else available.has(index), actor)
+		if _round_mode and not AbilityCatalog.uses_hero_action_slot(ability_id):
+			slot.set_slot_number_visible(false)
 		if _round_mode and not can_use and (ability == null or not ability.passive):
 			slot.modulate = Color(0.48, 0.48, 0.48)
 		elif _manual_started and not available.has(index):
@@ -538,6 +544,8 @@ func _refresh_chain_slots() -> void:
 	var rest_slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
 	_sequence_slots.add_child(rest_slot)
 	rest_slot.configure_recharge(_hero_chain.size())
+	if _round_mode:
+		rest_slot.set_slot_number_visible(false)
 	rest_slot.disabled = not _round_mode and not _manual_started
 	rest_slot.slot_selected.connect(_on_slot_pressed.bind(rest_slot))
 	rest_slot.info_requested.connect(_touch_info.show_text)
@@ -728,9 +736,11 @@ func _on_slot_selected(_index: int) -> void:
 	if _round_mode:
 		if _is_playing_back or _round_next_actor() != _selected_hero_id:
 			return
+		if _index < 0 or _index > _hero_chain.size():
+			return
 		var ability_id: String = "rest" if _index == _hero_chain.size() else _hero_chain[_index]
 		var actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
-		if ability_id != "rest" and not AbilityCatalog.unavailable_reason(actor, ability_id).is_empty():
+		if ability_id != "rest" and not AbilityCatalog.round_hero_unavailable_reason(actor, ability_id).is_empty():
 			return
 		if ability_id == "rest":
 			_execute_round_turn("", "rest")

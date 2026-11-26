@@ -89,10 +89,6 @@ func start_round_combat() -> Dictionary:
 			continue
 		if actor.action_chain.is_empty():
 			return {"success": false, "reason": "Нет приёмов противника"}
-	for actor_id in hero_ids():
-		var actor: BattleParticipant = get_participant(actor_id)
-		if actor != null and actor.is_alive() and AbilityCatalog.known_ability_ids(actor).is_empty():
-			return {"success": false, "reason": "У героя нет доступных приёмов"}
 	round_combat_active = true
 	round_number = 0
 	round_cursor = 0
@@ -181,13 +177,13 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 			return {"success": false, "reason": "Выберите приём", "events": []}
 		is_rest = ability_id == "rest"
 		if not is_rest:
-			var problem: String = AbilityCatalog.unavailable_reason(actor, ability_id)
+			var problem: String = AbilityCatalog.round_hero_unavailable_reason(actor, ability_id)
 			if not problem.is_empty():
 				return {"success": false, "reason": problem, "events": []}
 			var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
 			if not create_context().target_ids(actor_id, ability).has(selected_target_id):
 				return {"success": false, "reason": "Выберите допустимую цель", "events": []}
-			slot_index = AbilityCatalog.known_ability_ids(actor).find(ability_id)
+			slot_index = AbilityCatalog.round_hero_ability_ids(actor).find(ability_id)
 	else:
 		if actor.action_chain.is_empty():
 			return {"success": false, "reason": "Нет приёмов противника", "events": []}
@@ -541,6 +537,10 @@ func create_context() -> BattleContext:
 func execute_ability(actor_id: String, target_id: String, ability_id: String) -> Dictionary:
 	if is_victory or is_defeat:
 		return {"success": false, "reason": "Бой уже завершён", "events": []}
+	if round_combat_active and actor_id in hero_ids():
+		var problem: String = AbilityCatalog.round_hero_unavailable_reason(get_participant(actor_id), ability_id)
+		if not problem.is_empty():
+			return {"success": false, "reason": problem, "events": []}
 	if battle_bond != null and actor_id == support_enemy_id:
 		if ability_id == battle_bond.split_ability_id and not bond_mounted:
 			return {"success": false, "reason": "Уже отделён", "events": []}
@@ -555,6 +555,9 @@ func execute_ability(actor_id: String, target_id: String, ability_id: String) ->
 func execute_definition(actor_id: String, target_id: String, ability: AbilityDefinition) -> Dictionary:
 	if is_victory or is_defeat:
 		return {"success": false, "reason": "Бой уже завершён", "events": []}
+	if round_combat_active and actor_id in hero_ids():
+		if ability == null or not AbilityCatalog.round_hero_ability_ids(get_participant(actor_id)).has(ability.ability_id):
+			return {"success": false, "reason": "Приём не подготовлен к бою", "events": []}
 	return _commit_action(AbilityExecutor.execute_definition(create_context(), actor_id, target_id, ability))
 
 
@@ -576,6 +579,8 @@ static func same_arsenal(first: Array[String], second: Array[String]) -> bool:
 
 
 func configure_hero_chain(actions: Array[String]) -> Dictionary:
+	if round_combat_active:
+		return {"success": false, "reason": "Арсенал зафиксирован на весь бой"}
 	if not (flow.stage in [BattleFlow.Stage.PREPARATION, BattleFlow.Stage.BETWEEN_PHASES]):
 		return {"success": false, "reason": "Сейчас нельзя изменить тактику"}
 	if get_hero() != null and actions.size() > get_hero().action_slot_capacity:

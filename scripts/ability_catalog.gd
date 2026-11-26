@@ -24,6 +24,34 @@ static func known_ability_ids(participant: BattleParticipant) -> Array[String]:
 	return ids
 
 
+static func uses_hero_action_slot(ability_id: String) -> bool:
+	if ability_id.is_empty() or ability_id == "rest" or COMMON_EQUIPMENT_ABILITIES.has(ability_id):
+		return false
+	var ability: AbilityDefinition = get_ability(ability_id)
+	return ability != null and not ability.passive and ability.validation_error().is_empty()
+
+
+static func round_hero_ability_ids(participant: BattleParticipant) -> Array[String]:
+	var ids: Array[String] = []
+	if participant == null:
+		return ids
+	var known: Array[String] = known_ability_ids(participant)
+	for index in range(mini(participant.action_slot_capacity, participant.action_chain.size())):
+		var id: String = participant.action_chain[index]
+		if id in known and uses_hero_action_slot(id) and not ids.has(id):
+			ids.append(id)
+	for id in COMMON_EQUIPMENT_ABILITIES:
+		if id in known:
+			ids.append(id)
+	return ids
+
+
+static func round_hero_unavailable_reason(participant: BattleParticipant, ability_id: String) -> String:
+	if not round_hero_ability_ids(participant).has(ability_id):
+		return "Приём не подготовлен к бою"
+	return unavailable_reason(participant, ability_id)
+
+
 static func passive_damage_multiplier(participant: BattleParticipant) -> float:
 	if participant == null:
 		return 1.0

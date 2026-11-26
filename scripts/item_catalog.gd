@@ -77,7 +77,9 @@ static func quantity_for_entity(entity: Dictionary) -> int:
 	return maxi(1, int(properties.get("quantity", definition.default_quantity)))
 
 
-static func roll_loot(rng: RandomNumberGenerator = null, table: WeightedLootTable = LOOT_TABLE, stage: int = 0) -> Dictionary:
+static func roll_loot(rng: RandomNumberGenerator, table: WeightedLootTable = LOOT_TABLE, stage: int = 0) -> Dictionary:
+	if rng == null:
+		return {}
 	var available: Dictionary = _prepared_loot_weights(stage) if table == LOOT_TABLE else _available_loot_weights(table, stage)
 	var item_id: String = table.draw_id(available, rng)
 	if item_id.is_empty():

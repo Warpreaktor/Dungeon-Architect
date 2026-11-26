@@ -75,11 +75,11 @@ func _init() -> void:
 	_bag_instance_ids.fill("")
 
 
-static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID, open_map: bool = false) -> GameSession:
-	return start_for_party(map_ref, [hero_id], open_map)
+static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT_HERO_ID, open_map: bool = false, rng: RandomNumberGenerator = null) -> GameSession:
+	return start_for_party(map_ref, [hero_id], open_map, rng)
 
 
-static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_map: bool = false) -> GameSession:
+static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_map: bool = false, rng: RandomNumberGenerator = null) -> GameSession:
 	if hero_ids.is_empty() or hero_ids.size() > MAX_PARTY_SIZE:
 		return null
 	var unique_ids: Dictionary = {}
@@ -103,7 +103,10 @@ static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_m
 		if not member.equipped_weapon_id.is_empty():
 			session.carried_items[member.equipped_weapon_id] = int(session.carried_items.get(member.equipped_weapon_id, 0)) + 1
 	session.hero = session.party[0]
-	session.trap_random.randomize()
+	if rng == null:
+		session.trap_random.randomize()
+	else:
+		session.trap_random = rng
 	session.player_pos = spawn
 	session.debug_open_map = open_map
 	session._init_masks()
@@ -198,15 +201,14 @@ func equipment_instance_id(slot_id: String, member: HeroState = null) -> String:
 	return str(selected.equipped_instance_ids.get(slot_id, "")) if selected != null else ""
 
 
-func _create_item_instance(item_id: String, durability: int = -1, roll_magic: bool = false, loot_stage: int = -1, rarity_weights: Dictionary = {}) -> ItemInstance:
+func _allocate_item_instance(item: ItemDefinition, durability: int = -1) -> ItemInstance:
 	_next_item_instance_number += 1
-	var result: ItemInstance = ItemInstance.create("item_%d" % _next_item_instance_number, ItemCatalog.get_item(item_id), durability)
+	return ItemInstance.create("item_%d" % _next_item_instance_number, item, durability)
+
+
+func _create_item_instance(item_id: String, durability: int = -1) -> ItemInstance:
+	var result: ItemInstance = _allocate_item_instance(ItemCatalog.get_item(item_id), durability)
 	if result != null:
-		if roll_magic:
-			var stage: int = loot_stage if loot_stage >= 0 else ItemCatalog.LOOT_TABLE.stage_for_victories(loot_victories)
-			ItemMagicCatalog.roll(result, ItemCatalog.get_item(item_id), trap_random, stage, rarity_weights)
-			if _is_shield(item_id) and durability < 0:
-				result.durability = maxi(result.stat("max_durability"), result.stat("defense_bonus"))
 		_item_instances[result.instance_id] = result
 	return result
 
@@ -771,18 +773,22 @@ func take_ground_loot(container_id: String, entry_index: int) -> int:
 		var free: int = bag.find("")
 		if free < 0:
 			return 0
-		bag[free] = item_id
-		_bag_quantities[free] = 1
+		var restored: ItemInstance = null
 		if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
-			var saved_instances: Array = entry.get("instances", [])
-			var restored: ItemInstance = ItemInstance.from_dict(saved_instances.pop_front()) if not saved_instances.is_empty() else null
 			if entry.has("instances"):
-				entry["instances"] = saved_instances
-			if restored != null and restored.item_id == item_id and not _item_instances.has(restored.instance_id):
+				var saved_instances: Array = entry["instances"]
+				if saved_instances.is_empty():
+					return 0
+				restored = ItemInstance.from_dict(saved_instances.front())
+				if restored == null or restored.item_id != item_id or _item_instances.has(restored.instance_id):
+					return 0
+				saved_instances.pop_front()
 				_item_instances[restored.instance_id] = restored
 			else:
 				restored = _create_item_instance(item_id)
 			_bag_instance_ids[free] = restored.instance_id
+		bag[free] = item_id
+		_bag_quantities[free] = 1
 		if _is_shield(item_id):
 			var durabilities: Array = entry.get("durabilities", [])
 			var shield_instance: ItemInstance = item_instance(_bag_instance_ids[free])
@@ -1733,13 +1739,14 @@ func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: i
 	if random_mode:
 		var profile: LootProfile = LootProfileCatalog.for_source(source)
 		if profile != null:
-			return profile.roll(trap_random, loot_victories, loot_depth())
-		var stage: int = ItemCatalog.LOOT_TABLE.stage_for_progress(loot_victories, loot_depth())
-		var reward: Dictionary = ItemCatalog.roll_loot(trap_random, ItemCatalog.LOOT_TABLE, stage)
-		if not reward.is_empty():
-			if bool(reward.get("roll_magic", false)):
-				reward["loot_stage"] = stage
-			rewards.append(reward)
+			rewards = profile.roll(trap_random, loot_victories, loot_depth())
+		else:
+			var stage: int = ItemCatalog.LOOT_TABLE.stage_for_progress(loot_victories, loot_depth())
+			var reward: Dictionary = ItemCatalog.roll_loot(trap_random, ItemCatalog.LOOT_TABLE, stage)
+			if not reward.is_empty():
+				if bool(reward.get("roll_magic", false)):
+					reward["loot_stage"] = stage
+				rewards.append(reward)
 	else:
 		for item_id in contents:
 			var item: ItemDefinition = ItemCatalog.get_item(item_id)
@@ -1751,10 +1758,38 @@ func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: i
 			if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
 				reward["roll_magic"] = true
 			rewards.append(reward)
+	for index in range(rewards.size()):
+		rewards[index] = _materialize_reward(rewards[index], trap_random)
 	return rewards
 
 
+func _materialize_reward(reward: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
+	var item_id: String = str(reward["item_id"])
+	var item: ItemDefinition = ItemCatalog.get_item(item_id)
+	var quantity: int = int(reward["quantity"])
+	var resolved: Dictionary = {"item_id": item_id, "quantity": quantity}
+	if item == null or item.category != ItemDefinition.Category.EQUIPMENT or item.stackable:
+		return resolved
+	var instances: Array[Dictionary] = []
+	var durabilities: Array = reward.get("durabilities", [])
+	var stage: int = int(reward.get("loot_stage", -1))
+	if stage < 0:
+		stage = ItemCatalog.LOOT_TABLE.stage_for_victories(loot_victories)
+	for index in range(quantity):
+		var durability: int = int(durabilities[index]) if index < durabilities.size() else -1
+		var instance: ItemInstance = _allocate_item_instance(item, durability)
+		if bool(reward.get("roll_magic", false)):
+			ItemMagicCatalog.roll(instance, item, rng, stage, reward.get("rarity_weights", {}))
+			if _is_shield(item_id) and durability < 0:
+				instance.durability = maxi(instance.stat("max_durability"), instance.stat("defense_bonus"))
+		instances.append(instance.to_dict())
+	resolved["instances"] = instances
+	return resolved
+
+
 func _open_chest(chest: Dictionary) -> void:
+	if hero == null or is_party_defeated() or is_chest_open(chest):
+		return
 	opened_chests[str(chest["id"])] = true
 	var rewards: Array[Dictionary] = _resolve_rewards(
 		DungeonMap.chest_contents(chest),
@@ -1767,20 +1802,37 @@ func _open_chest(chest: Dictionary) -> void:
 	_activate_message_at(cell, "chest_open", str(chest["id"]), rewards)
 
 
-func _receive_reward(reward: Dictionary, cell: Vector2i) -> int:
-	return _receive_item(str(reward["item_id"]), int(reward["quantity"]), reward.get("durabilities", []),
-		bool(reward.get("roll_magic", false)), cell, int(reward.get("loot_stage", -1)), reward.get("rarity_weights", {}))
-
-
-## Общая логика подбора. Описание предмета — Resource, состояние находок — GameSession.
 func _receive_item(item_id: String, quantity: int, durabilities: Array = [], roll_magic: bool = false, drop_cell: Vector2i = Vector2i(-1, -1), loot_stage: int = -1, rarity_weights: Dictionary = {}) -> int:
+	if quantity <= 0 or hero == null or ItemCatalog.get_item(item_id) == null:
+		return 0
+	var reward: Dictionary = _materialize_reward({"item_id": item_id, "quantity": quantity,
+		"durabilities": durabilities, "roll_magic": roll_magic, "loot_stage": loot_stage,
+		"rarity_weights": rarity_weights}, trap_random)
+	return _receive_reward(reward, drop_cell)
+
+
+func _receive_reward(reward: Dictionary, drop_cell: Vector2i) -> int:
 	if drop_cell.x < 0:
 		drop_cell = player_pos
+	var item_id: String = str(reward["item_id"])
 	if item_id == "key_yellow":
 		item_id = "key"
+	var quantity: int = int(reward["quantity"])
 	var item: ItemDefinition = ItemCatalog.get_item(item_id)
 	if item == null or quantity <= 0 or hero == null:
 		return 0
+	var instances: Array[ItemInstance] = []
+	if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
+		var records: Array = reward.get("instances", [])
+		if records.size() != quantity:
+			return 0
+		var seen: Dictionary = {}
+		for record in records:
+			var instance: ItemInstance = ItemInstance.from_dict(record)
+			if instance == null or instance.item_id != item_id or seen.has(instance.instance_id) or _item_instances.has(instance.instance_id):
+				return 0
+			seen[instance.instance_id] = true
+			instances.append(instance)
 	if item.category == ItemDefinition.Category.CURRENCY:
 		hero.gold += quantity
 		return quantity
@@ -1815,32 +1867,24 @@ func _receive_item(item_id: String, quantity: int, durabilities: Array = [], rol
 				location = "bag:%d" % free
 				bag[free] = item_id
 				_bag_quantities[free] = 1
+		var instance: ItemInstance = instances[index] if not instances.is_empty() else null
 		if location.is_empty():
-			var durability: int = int(durabilities[index]) if index < durabilities.size() else -1
-			if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
-				var overflow_instance: ItemInstance = _create_item_instance(item_id, durability, roll_magic, loot_stage, rarity_weights)
-				if overflow_instance != null:
-					overflow_instances.append(overflow_instance.to_dict())
-					_item_instances.erase(overflow_instance.instance_id)
+			if instance != null:
+				overflow_instances.append(instance.to_dict())
 			if is_shield:
-				var overflow_shield_durability: int = int(durabilities[index]) if index < durabilities.size() else _new_shield_durability(item_id)
-				if not overflow_instances.is_empty():
-					overflow_shield_durability = int(overflow_instances.back()["durability"])
-				overflow_durabilities.append(overflow_shield_durability)
+				overflow_durabilities.append(instance.durability if instance != null else _new_shield_durability(item_id))
 			continue
 		if location.begins_with("equipment:"):
 			equipped[location.trim_prefix("equipment:")] = item_id
 			equipment_changed = true
-		var created_instance: ItemInstance = null
-		if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
-			var current_durability: int = int(durabilities[index]) if index < durabilities.size() else -1
-			created_instance = _create_item_instance(item_id, current_durability, roll_magic, loot_stage, rarity_weights)
+		if instance != null:
+			_item_instances[instance.instance_id] = instance
 			if location.begins_with("bag:"):
-				_bag_instance_ids[int(location.trim_prefix("bag:"))] = created_instance.instance_id
+				_bag_instance_ids[int(location.trim_prefix("bag:"))] = instance.instance_id
 			elif location.begins_with("equipment:"):
-				hero.equipped_instance_ids[location.trim_prefix("equipment:")] = created_instance.instance_id
+				hero.equipped_instance_ids[location.trim_prefix("equipment:")] = instance.instance_id
 		if is_shield:
-			shield_layout[location] = int(durabilities[index]) if index < durabilities.size() else (created_instance.durability if created_instance != null else _new_shield_durability(item_id))
+			shield_layout[location] = instance.durability if instance != null else _new_shield_durability(item_id)
 		received += 1
 	if received > 0:
 		carried_items[item_id] = int(carried_items.get(item_id, 0)) + received

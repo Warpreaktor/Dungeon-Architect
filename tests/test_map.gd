@@ -715,8 +715,10 @@ func _initialize() -> void:
 	assert(potion_session.carried_items.get("potion", 0) == 0)
 
 	# Случайная добыча не содержит квестовых предметов.
+	var loot_rng := RandomNumberGenerator.new()
+	loot_rng.seed = 611
 	for i in range(100):
-		var reward: Dictionary = ItemCatalog.roll_loot()
+		var reward: Dictionary = ItemCatalog.roll_loot(loot_rng)
 		var reward_item: ItemDefinition = ItemCatalog.get_item(str(reward.get("item_id", "")))
 		assert(reward_item != null and reward_item.category != ItemDefinition.Category.QUEST)
 

@@ -30,13 +30,13 @@ func allows(item_id: String, stage: int) -> bool:
 	return stage >= maxi(int(minimum_item_stage.get(item_id, 0)), 0)
 
 
-func draw_id(available_weights: Dictionary, rng: RandomNumberGenerator = null) -> String:
+func draw_id(available_weights: Dictionary, rng: RandomNumberGenerator) -> String:
 	var total: int = 0
 	for weight in available_weights.values():
 		total += maxi(int(weight), 0)
-	if total <= 0:
+	if total <= 0 or rng == null:
 		return ""
-	var roll: int = rng.randi_range(0, total - 1) if rng != null else randi_range(0, total - 1)
+	var roll: int = rng.randi_range(0, total - 1)
 	for item_id in available_weights:
 		roll -= maxi(int(available_weights[item_id]), 0)
 		if roll < 0:
@@ -44,10 +44,10 @@ func draw_id(available_weights: Dictionary, rng: RandomNumberGenerator = null) -
 	return ""
 
 
-func quantity(item_id: String, default_quantity: int, rng: RandomNumberGenerator = null) -> int:
+func quantity(item_id: String, default_quantity: int, rng: RandomNumberGenerator) -> int:
 	if not quantity_ranges.has(item_id):
 		return default_quantity
 	var bounds: Vector2i = quantity_ranges[item_id]
 	var minimum: int = mini(bounds.x, bounds.y)
 	var maximum: int = maxi(bounds.x, bounds.y)
-	return rng.randi_range(minimum, maximum) if rng != null else randi_range(minimum, maximum)
+	return rng.randi_range(minimum, maximum) if rng != null else default_quantity

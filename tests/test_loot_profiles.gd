@@ -7,6 +7,8 @@ func _initialize() -> void:
 	_test_depth_and_rarity()
 	_test_profile_chest_and_persistence()
 	_test_special_reward()
+	_test_resolved_reward_replay()
+	_test_reward_overflow_revisit()
 	print("Loot profiles: sources, depth, rarity, fixed rewards and persistence OK")
 	quit()
 
@@ -126,3 +128,104 @@ func _test_special_reward() -> void:
 	assert(session.take_message_events()[0]["loot"].size() == 2)
 	assert(session.enter_map(second))
 	assert(session.loot_depth() == 1)
+
+
+func _seeded_session(dungeon: DungeonMap, seed_value: int) -> GameSession:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	return GameSession.start_for(dungeon, "volcha", false, rng)
+
+
+func _test_resolved_reward_replay() -> void:
+	var dungeon := DungeonMap.create_blank(8, 8)
+	assert(dungeon.place_entity("player_spawn", 2, 2))
+	assert(dungeon.place_entity("chest", 3, 2))
+	assert(dungeon.place_entity("monster", 4, 2, {"monster_id": "kadavr"}))
+	assert(dungeon.place_entity("stairs_down", 5, 2))
+	var stairs: Dictionary = dungeon.entities_at(5, 2)[0]
+	stairs["properties"]["loot_mode"] = "random"
+	dungeon.metadata["loot_depth"] = 2
+	for seed_value in range(611, 627):
+		var first: GameSession = _seeded_session(dungeon, seed_value)
+		var replay: GameSession = _seeded_session(dungeon, seed_value)
+		assert(first.move_by(1, 0, true) and replay.move_by(1, 0, true))
+		assert(first.take_message_events().is_empty())
+		assert(first.trap_random.state == replay.trap_random.state)
+		assert(first.open_pending_chest() and replay.open_pending_chest())
+		var chest_events: Array[Dictionary] = first.take_message_events()
+		assert(chest_events == replay.take_message_events())
+		assert(chest_events[0]["loot"][0]["instances"].size() == 1)
+		var snapshot: Dictionary = JSON.parse_string(JSON.stringify(first.progress_snapshot()))
+		var restored: GameSession = GameSession.from_progress_snapshot(snapshot, {dungeon.map_id: dungeon})
+		assert(restored != null and first.trap_random.state == restored.trap_random.state)
+		for session in [first, replay, restored]:
+			var before: int = session.trap_random.state
+			assert(not session.open_pending_chest())
+			assert(session.move_by(-1, 0) and session.move_by(1, 0))
+			assert(session.take_message_events().is_empty())
+			assert(session.trap_random.state == before)
+			assert(not session.move_by(1, 0) and session.has_pending_encounter())
+			assert(session.win_pending_encounter())
+			assert(not session.win_pending_encounter())
+		var victory: Array[Dictionary] = first.take_message_events()
+		assert(victory == replay.take_message_events() and victory == restored.take_message_events())
+		assert(victory[0]["loot"][0]["instances"].size() == 1)
+		for session in [first, replay, restored]:
+			assert(session.move_by(1, 0))
+		var exit_events: Array[Dictionary] = first.take_message_events()
+		assert(exit_events == replay.take_message_events() and exit_events == restored.take_message_events())
+		assert(first.trap_random.state == replay.trap_random.state and first.trap_random.state == restored.trap_random.state)
+		assert(JSON.stringify(first.carried_items) == JSON.stringify(replay.carried_items))
+		assert(JSON.parse_string(JSON.stringify(first.carried_items)) == JSON.parse_string(JSON.stringify(restored.carried_items)))
+		assert(first.hero.gold == replay.hero.gold and first.hero.gold == restored.hero.gold)
+		var state_after_exit: int = first.trap_random.state
+		first._claim_exit_reward(stairs)
+		assert(first.take_message_events().is_empty() and first.trap_random.state == state_after_exit)
+
+
+func _test_reward_overflow_revisit() -> void:
+	var dungeon := DungeonMap.create_blank(8, 8)
+	var second := DungeonMap.create_blank(8, 8)
+	assert(dungeon.place_entity("player_spawn", 2, 2))
+	assert(second.place_entity("player_spawn", 2, 2))
+	assert(dungeon.place_entity("chest", 3, 2))
+	var chest: Dictionary = dungeon.entities_at(3, 2)[0]
+	assert(dungeon.set_chest_contents(str(chest["id"]), ["ring_copper_wire"], 5, false, false, {"ring_copper_wire": 2}))
+	var first: GameSession = _seeded_session(dungeon, 611)
+	var full: GameSession = _seeded_session(dungeon, 611)
+	first.loot_victories = 3
+	full.loot_victories = 3
+	var potion_id: String = "potion_health_small"
+	var capacity: int = ItemCatalog.get_item(potion_id).stack_limit() * GameSession.INVENTORY_SLOT_COUNT
+	assert(full._receive_item(potion_id, capacity) == capacity)
+	assert(not full.inventory_slot_ids().has(""))
+	assert(first.move_by(1, 0) and full.move_by(1, 0))
+	var events: Array[Dictionary] = first.take_message_events()
+	assert(events == full.take_message_events())
+	var records: Array = events[0]["loot"][0]["instances"]
+	assert(records.size() == 2 and records[0]["instance_id"] != records[1]["instance_id"])
+	for record in records:
+		assert(first.item_instance(str(record["instance_id"])).to_dict() == record)
+	var container: Dictionary = full.ground_container_at(Vector2i(3, 2))
+	assert(container["loot"][0]["instances"] == records)
+	assert(first.trap_random.state == full.trap_random.state)
+	var rng_state: int = full.trap_random.state
+	full._open_chest(chest)
+	assert(full.trap_random.state == rng_state and full.take_message_events().is_empty())
+	assert(full.enter_map(second))
+	var snapshot: Dictionary = JSON.parse_string(JSON.stringify(full.progress_snapshot()))
+	var restored: GameSession = GameSession.from_progress_snapshot(snapshot, {dungeon.map_id: dungeon, second.map_id: second})
+	assert(restored != null and restored.enter_map(dungeon))
+	assert(restored.move_by(1, 0) and restored.take_message_events().is_empty())
+	var restored_container: Dictionary = restored.ground_container_at(Vector2i(3, 2))
+	assert(restored_container["loot"][0]["instances"] == JSON.parse_string(JSON.stringify(records)))
+	assert(restored._remove_carried_item(potion_id, ItemCatalog.get_item(potion_id).stack_limit()))
+	assert(restored.take_ground_loot(str(restored_container["id"]), 0) == 1)
+	assert(JSON.parse_string(JSON.stringify(restored.item_instance(str(records[0]["instance_id"])).to_dict())) == JSON.parse_string(JSON.stringify(records[0])))
+	assert(restored_container["loot"][0]["instances"] == JSON.parse_string(JSON.stringify([records[1]])))
+	assert(restored.trap_random.state == rng_state)
+	assert(restored._remove_carried_item(potion_id, ItemCatalog.get_item(potion_id).stack_limit()))
+	assert(restored.take_ground_loot(str(restored_container["id"]), 0) == 1)
+	assert(JSON.parse_string(JSON.stringify(restored.item_instance(str(records[1]["instance_id"])).to_dict())) == JSON.parse_string(JSON.stringify(records[1])))
+	assert(restored.ground_container_at(Vector2i(3, 2)).is_empty())
+	assert(restored.trap_random.state == rng_state)

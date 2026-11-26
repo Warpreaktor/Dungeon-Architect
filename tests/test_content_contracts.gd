@@ -71,7 +71,7 @@ func _check_loot() -> void:
 		assert(item.category != ItemDefinition.Category.QUEST)
 		assert(int(first.get("quantity", 0)) > 0)
 	var empty_table := WeightedLootTable.new()
-	assert(empty_table.draw_id({}).is_empty())
+	assert(empty_table.draw_id({}, left).is_empty())
 	assert(ItemCatalog.roll_loot(null, empty_table).is_empty())
 
 

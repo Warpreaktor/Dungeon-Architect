@@ -137,8 +137,8 @@ func _build_stat_rows() -> void:
 		var value := Label.new()
 		value.name = str(entry["id"])
 		value.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		value.theme_override_font_sizes.font_size = 14
-		value.theme_override_colors.font_color = Color(0.91, 0.94, 0.97, 1.0)
+		value.add_theme_font_size_override("font_size", 14)
+		value.add_theme_color_override("font_color", Color(0.91, 0.94, 0.97, 1.0))
 		value.text = "-"
 		line.add_child(value)
 		line.tooltip_text = str(entry["label"])

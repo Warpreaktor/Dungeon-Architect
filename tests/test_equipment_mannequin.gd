@@ -75,6 +75,12 @@ func _initialize() -> void:
 	assert(two_handed.equipment_item_id("off_hand").is_empty())
 	view.open_for(two_handed)
 	var mannequin: EquipmentMannequin = view.get_node("Center/Card/Margins/Content/Columns/EquipmentArea/EquipmentMannequin") as EquipmentMannequin
+	assert(mannequin._stat_values.size() == EquipmentMannequin.STATS.size())
+	for entry in EquipmentMannequin.STATS:
+		var value: Label = mannequin._stat_values[str(entry["id"])] as Label
+		assert(value != null and value.text != "-")
+		assert(value.get_theme_font_size("font_size") == 14)
+		assert(value.get_theme_color("font_color").is_equal_approx(Color(0.91, 0.94, 0.97, 1.0)))
 	var off_hand: EquipmentSlotControl = mannequin.slots["off_hand"] as EquipmentSlotControl
 	assert(off_hand.item_id.is_empty())
 	assert(off_hand._icon.texture == ItemCatalog.get_item("warhammer").icon)

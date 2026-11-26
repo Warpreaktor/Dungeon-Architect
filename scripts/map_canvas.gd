@@ -65,6 +65,10 @@ var _collapse_progress: float = -1.0
 var _collapse_axis := Vector2i.ZERO
 var _spike_burst_cell := Vector2i.ZERO
 var _spike_burst_progress: float = -1.0
+var _crossbow_progress: float = -1.0
+var _crossbow_source := Vector2i.ZERO
+var _crossbow_target := Vector2i.ZERO
+var _crossbow_avoided: bool = false
 var _trap_playback_destination := Vector2i.ZERO
 
 var _hovered := Vector2i(-1, -1)
@@ -267,6 +271,8 @@ func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool
 		var effect: String = str(event.get("effect", ""))
 		if effect in ["falling_slab", "spike_burst"] and event.get("cell") is Vector2i:
 			playback_events.append({"effect": effect, "cell": event["cell"]})
+		elif effect == "crossbow_shot" and event.get("cell") is Vector2i and event.get("opener_cell") is Vector2i and event["cell"] != event["opener_cell"]:
+			playback_events.append(event)
 	if playback_events.is_empty():
 		return false
 	_cancel_player_step()
@@ -274,7 +280,7 @@ func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool
 	_trap_playback = create_tween()
 	var visual_cell: Vector2 = _player_visual_cell
 	for event in playback_events:
-		var cell: Vector2i = event["cell"]
+		var cell: Vector2i = event["opener_cell"] if event["effect"] == "crossbow_shot" else event["cell"]
 		if visual_cell != Vector2(cell):
 			_trap_playback.tween_method(_update_player_visual_cell, visual_cell, Vector2(cell), PLAYER_STEP_SECONDS * 0.65)
 		match str(event["effect"]):
@@ -282,6 +288,10 @@ func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool
 				_trap_playback.tween_callback(_begin_collapse.bind(cell))
 				_trap_playback.tween_method(_update_collapse, 0.0, 1.0, 0.65)
 				_trap_playback.tween_callback(_clear_collapse)
+			"crossbow_shot":
+				_trap_playback.tween_callback(_begin_crossbow_shot.bind(event["cell"], cell, bool(event.get("avoided", false))))
+				_trap_playback.tween_method(_update_crossbow_shot, 0.0, 1.0, 0.46)
+				_trap_playback.tween_callback(_clear_crossbow_shot)
 			"spike_burst":
 				_trap_playback.tween_callback(_begin_spike_burst.bind(cell))
 				_trap_playback.tween_method(_update_spike_burst, 0.0, 1.0, 0.58)
@@ -324,6 +334,23 @@ func _clear_spike_burst() -> void:
 	queue_redraw()
 
 
+func _begin_crossbow_shot(source: Vector2i, target: Vector2i, avoided: bool) -> void:
+	_crossbow_source = source
+	_crossbow_target = target
+	_crossbow_avoided = avoided
+	_update_crossbow_shot(0.0)
+
+
+func _update_crossbow_shot(progress: float) -> void:
+	_crossbow_progress = progress
+	queue_redraw()
+
+
+func _clear_crossbow_shot() -> void:
+	_crossbow_progress = -1.0
+	queue_redraw()
+
+
 func skip_trap_playback() -> void:
 	if _trap_playback != null:
 		_trap_playback.kill()
@@ -334,6 +361,7 @@ func _finish_trap_playback() -> void:
 	_trap_playback = null
 	_clear_collapse()
 	_clear_spike_burst()
+	_clear_crossbow_shot()
 	_update_player_visual_cell(Vector2(_trap_playback_destination))
 	trap_playback_finished.emit()
 
@@ -345,6 +373,7 @@ func _cancel_trap_playback() -> bool:
 		_trap_playback = null
 	_clear_collapse()
 	_clear_spike_burst()
+	_clear_crossbow_shot()
 	return interrupted
 
 
@@ -436,6 +465,8 @@ func _draw() -> void:
 		_draw_collapse()
 	if _spike_burst_progress >= 0.0:
 		_draw_spike_burst()
+	if _crossbow_progress >= 0.0:
+		_draw_crossbow_shot()
 
 	if show_grid:
 		var grid_color := Color(0.82, 0.84, 0.91, 0.20)
@@ -522,6 +553,44 @@ func _draw_spike_burst() -> void:
 			var tint: Color = Color(0.76, 0.68, 0.53, (1.0 - impact) * 0.72) if index % 2 == 0 else Color(0.93, 0.30, 0.18, (1.0 - impact) * 0.48)
 			draw_circle(direction * particle_distance, particle_radius, tint)
 	draw_set_transform(camera_offset, 0.0, Vector2.ONE * zoom)
+
+
+func _draw_crossbow_shot() -> void:
+	var source: Vector2 = (Vector2(_crossbow_source) + Vector2.ONE * 0.5) * TILE_SIZE
+	var target: Vector2 = (Vector2(_crossbow_target) + Vector2.ONE * 0.5) * TILE_SIZE
+	var direction: Vector2 = (target - source).normalized()
+	var side: Vector2 = direction.orthogonal()
+	var start: Vector2 = source + direction * TILE_SIZE * 0.14
+	var finish: Vector2 = target
+	if _crossbow_avoided:
+		finish += direction * TILE_SIZE * 0.23 + side * TILE_SIZE * 0.38
+	var flight: Vector2 = (finish - start).normalized()
+	var wing: Vector2 = flight.orthogonal()
+	var progress: float = _crossbow_progress
+	var launch_alpha: float = 1.0 - smoothstep(0.0, 0.24, progress)
+	if launch_alpha > 0.0:
+		draw_circle(start, 5.5, Color(1.0, 0.76, 0.38, launch_alpha * 0.48))
+		for index in range(5):
+			var ray: Vector2 = direction.rotated((float(index) - 2.0) * 0.45)
+			draw_line(start + ray * 3.0, start + ray * 11.0, Color(1.0, 0.88, 0.58, launch_alpha), 1.4, true)
+	if progress < 0.56:
+		var tip: Vector2 = start.lerp(finish, clampf(progress / 0.56, 0.0, 1.0))
+		var tail: Vector2 = tip - flight * 16.0
+		draw_line(tail - flight * 12.0, tip, Color(0.83, 0.92, 1.0, 0.24), 4.0, true)
+		draw_line(tail, tip - flight * 4.0, Color(0.65, 0.46, 0.25), 2.0, true)
+		draw_line(tail + wing * 3.0, tail + flight * 5.0, Color(0.85, 0.87, 0.9), 1.5, true)
+		draw_line(tail - wing * 3.0, tail + flight * 5.0, Color(0.85, 0.87, 0.9), 1.5, true)
+		draw_colored_polygon(PackedVector2Array([tip, tip - flight * 6.0 + wing * 3.0, tip - flight * 6.0 - wing * 3.0]), Color(0.90, 0.94, 0.98))
+	else:
+		var impact: float = clampf((progress - 0.56) / 0.44, 0.0, 1.0)
+		var alpha: float = 1.0 - impact
+		if not _crossbow_avoided:
+			draw_circle(finish, lerpf(5.0, 12.0, impact), Color(0.98, 0.62, 0.25, alpha * 0.38))
+			for index in range(8):
+				var ray: Vector2 = Vector2.from_angle(TAU * float(index) / 8.0)
+				draw_line(finish + ray * lerpf(3.0, 15.0, impact), finish + ray * lerpf(8.0, 20.0, impact), Color(1.0, 0.84, 0.57, alpha), 1.3, true)
+		else:
+			draw_line(finish - flight * 17.0, finish + flight * 3.0, Color(0.79, 0.89, 1.0, alpha * 0.7), 1.5, true)
 
 
 func _update_fog(cells: Rect2i) -> void:

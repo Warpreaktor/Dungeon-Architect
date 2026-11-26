@@ -274,6 +274,7 @@ func _test_door_successful_disarm() -> void:
 	_request_choice(session)
 	assert(not session.resolve_pending_trap_choice("disarm"))
 	assert(session.is_trap_disarmed(door) and not session.is_entity_removed(door))
+	assert(not session.has_trap_visual_events())
 	assert(int(session.carried_items["key"]) == 1)
 	var before: int = session.trap_random.state
 	assert(session.move_by(1, 0))
@@ -299,6 +300,7 @@ func _test_door_failed_disarm() -> void:
 	_request_choice(session)
 	assert(not session.resolve_pending_trap_choice("disarm", 1))
 	assert(not session.has_pending_door_trap() and session.trap_state(door) == "armed")
+	assert(not session.has_trap_visual_events())
 	assert(not session.is_entity_removed(door) and not session.can_disarm_trap(door))
 	assert(session.is_door_trap_visible(door) and session.player_pos == Vector2i(2, 2))
 	assert(int(session.carried_items["key"]) == 1 and session.steps == 0)

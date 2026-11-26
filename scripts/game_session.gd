@@ -1650,7 +1650,7 @@ func take_trap_visual_events() -> Array[Dictionary]:
 	return result
 
 
-func _activate_trap(trap: TrapDefinition, trap_key: String, opener: HeroState = null) -> void:
+func _activate_trap(trap: TrapDefinition, trap_key: String, opener: HeroState = null, door_cell: Vector2i = Vector2i(-1, -1)) -> void:
 	revealed_traps[trap_key] = true
 	if trap.trigger_visual != "none" and trap.can_attach_to("floor"):
 		_trap_visual_events.append({"effect": trap.trigger_visual, "cell": player_pos})
@@ -1660,7 +1660,10 @@ func _activate_trap(trap: TrapDefinition, trap_key: String, opener: HeroState = 
 		if opener != null and opener.health > 0 and party.has(opener):
 			targets.append(opener)
 	for target in targets:
-		if trap.check(target, trap_random):
+		var avoided: bool = trap.check(target, trap_random)
+		if trap.can_attach_to("door") and trap.trigger_visual != "none":
+			_trap_visual_events.append({"effect": trap.trigger_visual, "cell": door_cell, "opener_cell": player_pos, "avoided": avoided})
+		if avoided:
 			_append_trap_result("%s: избежал ловушки «%s»." % [target.definition.display_name, trap.display_name])
 			continue
 		_apply_trap_effects(trap, target)
@@ -1912,7 +1915,7 @@ func resolve_pending_door_trap() -> bool:
 	if trap != null and not is_trap_disarmed(door):
 		if opener == null or opener.health <= 0 or not party.has(opener):
 			return false
-		_activate_trap(trap, door_id, opener)
+		_activate_trap(trap, door_id, opener, cell)
 		record_casualties()
 		if is_party_defeated():
 			return false

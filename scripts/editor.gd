@@ -3217,8 +3217,6 @@ func _on_game_dialogue_closed() -> void:
 		shot.finished.connect(shot.queue_free)
 		shot.play()
 		var moved: bool = moving_session.resolve_pending_door_trap()
-		_refresh_stats()
-		_flash_party_damage()
 		_complete_player_move(moving_session, previous_pos, moved, true)
 		return
 	if not _pending_game_messages.is_empty():

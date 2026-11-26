@@ -74,6 +74,28 @@ func get_terrain(x: int, y: int) -> String:
 	return str(terrain[y][x])
 
 
+func narrow_passage_axis(cell: Vector2i) -> Vector2i:
+	if not contains(cell.x, cell.y) or get_terrain(cell.x, cell.y) != "floor":
+		return Vector2i.ZERO
+	for direction in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		var neighbor: Vector2i = cell + direction
+		if not contains(neighbor.x, neighbor.y):
+			return Vector2i.ZERO
+	var horizontal: bool = get_terrain(cell.x - 1, cell.y) == "floor" and get_terrain(cell.x + 1, cell.y) == "floor"
+	var vertical: bool = get_terrain(cell.x, cell.y - 1) == "floor" and get_terrain(cell.x, cell.y + 1) == "floor"
+	if horizontal and get_terrain(cell.x, cell.y - 1) == "wall" and get_terrain(cell.x, cell.y + 1) == "wall":
+		return Vector2i.RIGHT
+	if vertical and get_terrain(cell.x - 1, cell.y) == "wall" and get_terrain(cell.x + 1, cell.y) == "wall":
+		return Vector2i.DOWN
+	return Vector2i.ZERO
+
+
+func trap_placement_error(definition: TrapDefinition, cell: Vector2i) -> String:
+	if definition.placement_constraint == "narrow_passage" and narrow_passage_axis(cell) == Vector2i.ZERO:
+		return "Установите ловушку в узком проходе"
+	return ""
+
+
 func set_terrain(x: int, y: int, kind: String) -> bool:
 	if not contains(x, y) or kind not in ["floor", "wall"]:
 		return false
@@ -82,6 +104,9 @@ func set_terrain(x: int, y: int, kind: String) -> bool:
 	terrain[y][x] = kind
 	if kind == "wall":
 		for entity in entities_at(x, y):
+			var trap: TrapDefinition = TrapCatalog.from_entity(entity)
+			if trap != null and trap.placement_constraint == "narrow_passage":
+				continue
 			_remove_entity(entity)
 	return true
 
@@ -130,7 +155,7 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		if not TrapCatalog.has(trap_id):
 			trap_id = TrapCatalog.DEFAULT_TRAP_ID
 		var trap_definition: TrapDefinition = TrapCatalog.get_trap(trap_id)
-		if not trap_definition.can_attach_to("floor"):
+		if not trap_definition.can_attach_to("floor") or not trap_placement_error(trap_definition, Vector2i(x, y)).is_empty():
 			return false
 		properties = {"trap_id": trap_id}
 		properties.merge(TrapCatalog.settings_overrides(trap_definition, options), true)
@@ -654,6 +679,9 @@ func move_existing(kind: String, entity_id: String, source: Vector2i, target: Ve
 			moving = entry
 			break
 	if moving.is_empty():
+		return false
+	var trap: TrapDefinition = TrapCatalog.from_entity(moving)
+	if trap != null and not trap_placement_error(trap, target).is_empty():
 		return false
 	for entry in entities_at(target.x, target.y):
 		if str(entry["type"]) == kind or (kind in ["portal", "portal_local", "stairs_down"] and str(entry["type"]) in ["portal", "portal_local", "stairs_down"]):

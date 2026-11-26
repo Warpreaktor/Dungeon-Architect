@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <path d="M8 1H56L63 8V56L56 63H8L1 56V8Z" fill="#1c3040" stroke="#64879d" stroke-width="1.5"/>
+  <path d="M9 5H55L59 9V55L55 59H9L5 55V9Z" fill="none" stroke="#354f61"/>
+  <path d="M8 8H12V12H8ZM52 8H56V12H52ZM8 52H12V56H8ZM52 52H56V56H52Z" fill="#68879a"/>
+  <path d="M12 18L20 12H49L54 17V32L47 38H11V23Z" fill="#4b5363" stroke="#101821" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M12 18L20 12H49L43 18Z" fill="#b2b9c3" stroke="#202a35" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M12 18H43V33H12Z" fill="#9199a7" stroke="#202a35" stroke-width="1.5"/>
+  <path d="M43 18L49 12L54 17V32L43 38V33Z" fill="#687385" stroke="#202a35" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M28 18L24 23L29 27L25 33M43 24L49 22M15 29H21" stroke="#4e5868" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 39V47L16 47L23 55L30 47H26V39ZM39 39V47H35L42 55L49 47H45V39Z" fill="#e4bd79" stroke="#1a2028" stroke-width="1.6" stroke-linejoin="round"/>
+</svg>

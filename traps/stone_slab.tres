@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="TrapDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/trap_definition.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/icons/traps/stone_slab.svg" id="2_icon"]
+
+[resource]
+script = ExtResource("1_script")
+trap_id = "stone_slab"
+display_name = "Каменная глыба"
+description = "Каменная плита падает в узком проходе и наносит {direct_damage} HP урона героям, не прошедшим проверку Ловкости.{after_trigger}"
+icon = ExtResource("2_icon")
+placement = "floor"
+placement_constraint = "narrow_passage"
+trigger_message = "Под ногами раздался глухой щелчок. С потолка посыпалась каменная пыль, и огромная плита начала стремительно опускаться!"
+hidden_by_default = true
+detection_difficulty = 8
+avoidance_difficulty = 15
+disarm_difficulty = 16
+avoidance_stat = "agility"
+direct_damage = 8
+disarm_on_trigger = true
+blocks_path = false

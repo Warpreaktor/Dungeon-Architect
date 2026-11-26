@@ -7,6 +7,7 @@ signal map_edited
 signal hover_changed(cell: Vector2i)
 signal move_selection_changed(description: String)
 signal move_failed
+signal placement_rejected(message: String)
 signal player_step_finished
 signal edit_action_committed(before: Dictionary, after: Dictionary)
 signal configurable_entity_tapped(kind: String, entity_id: String)
@@ -664,6 +665,16 @@ func _hand_tap(point: Vector2, is_double: bool) -> void:
 			_cancelled_tap_cell = cell
 			cancel_move_selection()
 			return
+		if _moving_kind == "trap":
+			for entity in map_data.entities_at(_moving_from.x, _moving_from.y):
+				if str(entity.get("id", "")) != _moving_id:
+					continue
+				var trap: TrapDefinition = TrapCatalog.from_entity(entity)
+				if trap != null:
+					var error: String = map_data.trap_placement_error(trap, cell)
+					if not error.is_empty():
+						placement_rejected.emit(error)
+						return
 		var before := capture_edit_state()
 		if map_data.move_existing(_moving_kind, _moving_id, _moving_from, cell):
 			edit_action_committed.emit(before, capture_edit_state())
@@ -782,6 +793,10 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 						modified = map_data.attach_door_trap(str(entity["id"]), trap_id)
 						break
 			elif trap.can_attach_to("floor"):
+				var error: String = map_data.trap_placement_error(trap, cell)
+				if not error.is_empty():
+					placement_rejected.emit(error)
+					return
 				modified = map_data.place_entity("trap", cell.x, cell.y, {"trap_id": trap_id})
 	elif selected_tool not in ["key", "potion", "gold", "sword"]:
 		# Подбираемые вещи появляются только через источники добычи (пока сундуки).

@@ -19,6 +19,12 @@ static func analyze(map_data: DungeonMap, result: Dictionary) -> Array[Dictionar
 			exits.append(entity)
 		elif kind == "door":
 			doors.append(entity)
+		elif kind == "trap":
+			var trap: TrapDefinition = TrapCatalog.from_entity(entity)
+			if trap != null:
+				var error: String = map_data.trap_placement_error(trap, _position(entity))
+				if not error.is_empty():
+					issues.append(_issue("error", "%s: %s" % [trap.display_name, error], "trap", _position(entity)))
 		elif kind == "chest" or kind == "monster":
 			var is_random: bool = DungeonMap.chest_is_random(entity) if kind == "chest" else DungeonMap.monster_loot_is_random(entity)
 			if not is_random:

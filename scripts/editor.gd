@@ -408,6 +408,7 @@ func _build_interface() -> void:
 	_canvas.edit_action_committed.connect(_on_edit_action_committed)
 	_canvas.move_selection_changed.connect(_on_move_selection_changed)
 	_canvas.move_failed.connect(_on_move_failed)
+	_canvas.placement_rejected.connect(_on_placement_rejected)
 	_canvas.configurable_entity_tapped.connect(_on_configurable_entity_tapped)
 	_canvas.developer_interaction_enabled = DeveloperMode.is_enabled() and not standalone_game
 	_canvas.message_cell_tapped.connect(_on_message_cell_tapped)
@@ -1845,6 +1846,12 @@ func _on_move_selection_changed(description: String) -> void:
 
 func _on_move_failed() -> void:
 	_set_status("Перенос невозможен: целевая клетка занята или не подходит.")
+
+
+func _on_placement_rejected(message: String) -> void:
+	_set_status(message)
+	_game_notice.show()
+	_game_notice.show_message(message)
 
 
 func _toggle_grid(value: bool) -> void:

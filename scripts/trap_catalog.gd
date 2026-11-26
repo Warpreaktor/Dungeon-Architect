@@ -5,6 +5,7 @@ const DEFAULT_TRAP_ID := "spikes"
 const LEGACY_OVERRIDE_FIELDS := ["detection_difficulty", "avoidance_difficulty", "disarm_difficulty", "avoidance_stat", "initial_state"]
 const DEFINITIONS := {
 	"spikes": preload("res://traps/spikes.tres"),
+	"stone_slab": preload("res://traps/stone_slab.tres"),
 	"door_crossbow": preload("res://traps/door_crossbow.tres")
 }
 

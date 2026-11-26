@@ -70,3 +70,5 @@ test_editor_save_feedback.gd
 test_editor_autosave.gd
 
 test_battle_action_emblem.gd
+
+test_battle_action_emblem.gd

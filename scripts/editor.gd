@@ -37,6 +37,8 @@ const GAME_SYSTEM_MENU_SCENE: PackedScene = preload("res://scenes/game_system_me
 const MAP_SCREEN_SCENE: PackedScene = preload("res://scenes/map_screen.tscn")
 const MINI_MAP_SCENE: PackedScene = preload("res://scenes/mini_map.tscn")
 const EDITOR_SETTINGS_PATH := "user://editor_state.cfg"
+const SAVE_FEEDBACK_SECONDS := 1.25
+const SAVE_CONFIRMATION_ICON: Texture2D = preload("res://assets/icons/commands/saved.svg")
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
 	"save": preload("res://assets/icons/commands/save.png"),
@@ -114,6 +116,7 @@ var _undo_stack: Array[Dictionary] = []
 var _redo_stack: Array[Dictionary] = []
 var _undo_button: Button
 var _save_button: Button
+var _save_feedback_timer: Timer
 var _brand_label: Label
 var _file_menu: MenuButton
 var _settings_menu: MenuButton
@@ -323,6 +326,11 @@ func _build_interface() -> void:
 	_save_button.custom_minimum_size.y = 44
 	toolbar.add_child(_save_button)
 	_register_editor_control(_save_button)
+	_save_feedback_timer = Timer.new()
+	_save_feedback_timer.one_shot = true
+	_save_feedback_timer.wait_time = SAVE_FEEDBACK_SECONDS
+	_save_feedback_timer.timeout.connect(_clear_save_feedback)
+	add_child(_save_feedback_timer)
 
 	_undo_button = _button("", "Отменить (Ctrl+Z)", _undo_edit)
 	_set_command_icon(_undo_button, "undo")
@@ -1237,7 +1245,7 @@ func _apply_editor_panels() -> void:
 	_palette_toggle.text = "" if narrow else "Объекты"
 	_settings_menu.text = "" if get_viewport_rect().size.x < 760 else "Настройки"
 	_layers_menu.text = "" if narrow else "Слои"
-	_save_button.text = "" if get_viewport_rect().size.x < 760 else "Сохранить"
+	_refresh_save_button_caption()
 	_palette_toggle.set_pressed_no_signal(_show_palette)
 	_fit_button.visible = editing
 	_update_issues_caption()
@@ -1405,6 +1413,7 @@ func _register_editor_control(control: Control) -> void:
 
 
 func _set_map(new_map: DungeonMap) -> void:
+	_clear_save_feedback()
 	_clear_reachability()
 	_developer_preview = null
 	map_data = new_map
@@ -1931,6 +1940,7 @@ func _on_canvas_edited() -> void:
 func _mark_dirty() -> void:
 	if is_play_mode:
 		return
+	_clear_save_feedback()
 	_schedule_reachability_refresh()
 	is_dirty = true
 	_set_status("Изменения не сохранены • Ctrl+S для сохранения")
@@ -2042,13 +2052,19 @@ func _write_map(path: String) -> bool:
 		_set_status("Ошибка записи: " + str(FileAccess.get_open_error()))
 		return false
 	file.store_string(JSON.stringify(map_data.to_dict(), "\t"))
+	file.flush()
+	var write_error: Error = file.get_error()
 	file.close()
+	if write_error != OK:
+		_set_status("Ошибка записи: " + error_string(write_error))
+		return false
 	return true
 
 
 func _save_internal() -> void:
 	if is_play_mode or standalone_game:
 		return
+	_clear_save_feedback()
 	if not _ensure_maps_dir():
 		_set_status("Не удалось создать папку карт")
 		return
@@ -2057,6 +2073,30 @@ func _save_internal() -> void:
 		is_dirty = false
 		_remember_last_map(map_data.map_id)
 		_set_status("Сохранено: " + path)
+		_show_save_feedback()
+
+
+func _refresh_save_button_caption() -> void:
+	var confirmed: bool = _save_feedback_timer != null and not _save_feedback_timer.is_stopped()
+	_save_button.text = "" if get_viewport_rect().size.x < 760 else ("Сохранено" if confirmed else "Сохранить")
+
+
+func _show_save_feedback() -> void:
+	_save_feedback_timer.start()
+	_save_button.icon = SAVE_CONFIRMATION_ICON
+	_save_button.self_modulate = Color(0.75, 1.0, 0.8)
+	_save_button.tooltip_text = "Карта сохранена"
+	_refresh_save_button_caption()
+
+
+func _clear_save_feedback() -> void:
+	if _save_button == null or _save_feedback_timer == null:
+		return
+	_save_feedback_timer.stop()
+	_set_command_icon(_save_button, "save")
+	_save_button.self_modulate = Color.WHITE
+	_save_button.tooltip_text = "Сохранить карту (Ctrl+S)"
+	_refresh_save_button_caption()
 
 
 func _show_load() -> void:
@@ -2927,6 +2967,8 @@ func _stop_play_mode(return_to_menu: bool = true) -> void:
 
 
 func _update_mode_ui() -> void:
+	if is_play_mode or standalone_game:
+		_clear_save_feedback()
 	_editor_header.visible = not (is_play_mode or standalone_game)
 	_apply_editor_panels()
 	for control in [_file_menu, _settings_menu, _save_button, _undo_button, _redo_button, _layers_menu]:

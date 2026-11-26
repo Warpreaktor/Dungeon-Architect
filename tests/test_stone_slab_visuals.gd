@@ -88,7 +88,8 @@ func _test_visual_events() -> void:
 
 	var old: GameSession = GameSession.start_for(_corridor(Vector2i.RIGHT, "spikes"))
 	_prepare(old)
-	assert(old.move_by(1, 0) and not old.has_trap_visual_events())
+	assert(old.move_by(1, 0))
+	assert(old.take_trap_visual_events() == [{"effect": "spike_burst", "cell": CELL}])
 
 
 func _test_playback() -> void:

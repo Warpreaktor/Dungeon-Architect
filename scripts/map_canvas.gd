@@ -63,6 +63,8 @@ var _trap_playback: Tween
 var _collapse_cell := Vector2i.ZERO
 var _collapse_progress: float = -1.0
 var _collapse_axis := Vector2i.ZERO
+var _spike_burst_cell := Vector2i.ZERO
+var _spike_burst_progress: float = -1.0
 var _trap_playback_destination := Vector2i.ZERO
 
 var _hovered := Vector2i(-1, -1)
@@ -260,22 +262,30 @@ func _cancel_player_step() -> void:
 func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool:
 	if mode != "play" or game_session == null or _trap_playback != null:
 		return false
-	var collapses: Array[Vector2i] = []
+	var playback_events: Array[Dictionary] = []
 	for event in events:
-		if event.get("effect") == "falling_slab" and event.get("cell") is Vector2i:
-			collapses.append(event["cell"])
-	if collapses.is_empty():
+		var effect: String = str(event.get("effect", ""))
+		if effect in ["falling_slab", "spike_burst"] and event.get("cell") is Vector2i:
+			playback_events.append({"effect": effect, "cell": event["cell"]})
+	if playback_events.is_empty():
 		return false
 	_cancel_player_step()
 	_trap_playback_destination = destination
 	_trap_playback = create_tween()
 	var visual_cell: Vector2 = _player_visual_cell
-	for cell in collapses:
+	for event in playback_events:
+		var cell: Vector2i = event["cell"]
 		if visual_cell != Vector2(cell):
 			_trap_playback.tween_method(_update_player_visual_cell, visual_cell, Vector2(cell), PLAYER_STEP_SECONDS * 0.65)
-		_trap_playback.tween_callback(_begin_collapse.bind(cell))
-		_trap_playback.tween_method(_update_collapse, 0.0, 1.0, 0.65)
-		_trap_playback.tween_callback(_clear_collapse)
+		match str(event["effect"]):
+			"falling_slab":
+				_trap_playback.tween_callback(_begin_collapse.bind(cell))
+				_trap_playback.tween_method(_update_collapse, 0.0, 1.0, 0.65)
+				_trap_playback.tween_callback(_clear_collapse)
+			"spike_burst":
+				_trap_playback.tween_callback(_begin_spike_burst.bind(cell))
+				_trap_playback.tween_method(_update_spike_burst, 0.0, 1.0, 0.58)
+				_trap_playback.tween_callback(_clear_spike_burst)
 		visual_cell = Vector2(cell)
 	if visual_cell != Vector2(destination):
 		_trap_playback.tween_method(_update_player_visual_cell, visual_cell, Vector2(destination), PLAYER_STEP_SECONDS * 0.65)
@@ -299,6 +309,21 @@ func _clear_collapse() -> void:
 	queue_redraw()
 
 
+func _begin_spike_burst(cell: Vector2i) -> void:
+	_spike_burst_cell = cell
+	_update_spike_burst(0.0)
+
+
+func _update_spike_burst(progress: float) -> void:
+	_spike_burst_progress = progress
+	queue_redraw()
+
+
+func _clear_spike_burst() -> void:
+	_spike_burst_progress = -1.0
+	queue_redraw()
+
+
 func skip_trap_playback() -> void:
 	if _trap_playback != null:
 		_trap_playback.kill()
@@ -308,6 +333,7 @@ func skip_trap_playback() -> void:
 func _finish_trap_playback() -> void:
 	_trap_playback = null
 	_clear_collapse()
+	_clear_spike_burst()
 	_update_player_visual_cell(Vector2(_trap_playback_destination))
 	trap_playback_finished.emit()
 
@@ -318,6 +344,7 @@ func _cancel_trap_playback() -> bool:
 		_trap_playback.kill()
 		_trap_playback = null
 	_clear_collapse()
+	_clear_spike_burst()
 	return interrupted
 
 
@@ -407,6 +434,8 @@ func _draw() -> void:
 
 	if _collapse_progress >= 0.0:
 		_draw_collapse()
+	if _spike_burst_progress >= 0.0:
+		_draw_spike_burst()
 
 	if show_grid:
 		var grid_color := Color(0.82, 0.84, 0.91, 0.20)
@@ -458,6 +487,40 @@ func _draw_collapse() -> void:
 			draw_circle(dust_pos, lerpf(2.0, 5.5, impact), Color(0.69, 0.64, 0.54, (1.0 - impact) * 0.64))
 		var ring_alpha: float = (1.0 - impact) * 0.75
 		draw_arc(Vector2.ZERO, lerpf(12.0, 29.0, impact), 0.0, TAU, 32, Color(1.0, 0.84, 0.61, ring_alpha), 1.5, true)
+	draw_set_transform(camera_offset, 0.0, Vector2.ONE * zoom)
+
+
+func _draw_spike_burst() -> void:
+	var center: Vector2 = (Vector2(_spike_burst_cell) + Vector2.ONE * 0.5) * TILE_SIZE
+	draw_set_transform(camera_offset + center * zoom, 0.0, Vector2.ONE * zoom)
+	var progress: float = _spike_burst_progress
+	var rise: float = smoothstep(0.08, 0.34, progress)
+	var retract: float = 1.0 - smoothstep(0.62, 1.0, progress)
+	var spike_phase: float = clampf(rise * retract, 0.0, 1.0)
+	var impact: float = clampf((progress - 0.26) / 0.74, 0.0, 1.0)
+	var glow_alpha: float = (1.0 - smoothstep(0.58, 1.0, progress)) * 0.56
+	draw_circle(Vector2.ZERO, lerpf(7.0, 18.0, impact), Color(0.98, 0.24, 0.18, glow_alpha))
+	draw_arc(Vector2.ZERO, lerpf(10.0, 28.0, impact), 0.0, TAU, 32, Color(1.0, 0.84, 0.56, (1.0 - impact) * 0.62), 1.7, true)
+	var crack_alpha: float = 0.26 + spike_phase * 0.5
+	for points in [PackedVector2Array([Vector2(-18, 4), Vector2(-8, 0), Vector2(0, 1), Vector2(9, -4), Vector2(18, -1)]), PackedVector2Array([Vector2(-12, 14), Vector2(-5, 9), Vector2(2, 6), Vector2(8, 10), Vector2(14, 7)]), PackedVector2Array([Vector2(-15, -10), Vector2(-5, -7), Vector2(3, -12), Vector2(12, -9)])]:
+		draw_polyline(points, Color(0.18, 0.06, 0.04, crack_alpha), 2.0, true)
+	var positions := [-16.0, -8.0, 0.0, 8.0, 16.0]
+	for index in positions.size():
+		var offset_x: float = positions[index]
+		var height: float = lerpf(0.0, 18.0 + float(index % 2) * 5.0 + (6.0 if index == 2 else 0.0), spike_phase)
+		var width: float = 5.0 if index == 2 else 4.0
+		var base_y: float = 14.0 - height * 0.15
+		var spike := PackedVector2Array([Vector2(offset_x - width, 14), Vector2(offset_x, base_y - height), Vector2(offset_x + width, 14)])
+		draw_colored_polygon(spike, Color(0.85, 0.87, 0.90, 0.96))
+		draw_polyline(PackedVector2Array([Vector2(offset_x - width, 14), Vector2(offset_x, base_y - height), Vector2(offset_x + width, 14)]), Color(0.39, 0.43, 0.46, 0.9), 1.3, true)
+		draw_line(Vector2(offset_x, base_y - height), Vector2(offset_x, 13), Color(0.63, 0.66, 0.71, 0.72), 1.0)
+	if progress >= 0.22:
+		for index in range(10):
+			var direction := Vector2.from_angle(TAU * float(index) / 10.0)
+			var particle_distance: float = lerpf(5.0, 26.0, impact)
+			var particle_radius: float = lerpf(1.0, 3.5, 1.0 - impact * 0.55)
+			var tint: Color = Color(0.76, 0.68, 0.53, (1.0 - impact) * 0.72) if index % 2 == 0 else Color(0.93, 0.30, 0.18, (1.0 - impact) * 0.48)
+			draw_circle(direction * particle_distance, particle_radius, tint)
 	draw_set_transform(camera_offset, 0.0, Vector2.ONE * zoom)
 
 

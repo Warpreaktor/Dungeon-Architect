@@ -34,6 +34,8 @@ func _touch(canvas: DungeonCanvas, cell: Vector2i) -> void:
 
 func _run() -> void:
 	var editor: Node = load("res://scenes/editor.tscn").instantiate()
+	var storage = preload("res://tests/editor_test_storage.gd").new()
+	storage.configure(editor)
 	root.add_child(editor)
 	await process_frame
 	await process_frame
@@ -125,5 +127,7 @@ func _run() -> void:
 	assert(restored != null)
 	assert(JSON.stringify(restored.to_dict()) == configured_json)
 	editor.queue_free()
+	await process_frame
+	storage.cleanup()
 	print("Editor door crossbow: palette, attachment, properties and undo/redo OK")
 	quit()

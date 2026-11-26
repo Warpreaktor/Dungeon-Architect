@@ -190,6 +190,8 @@ func _test_repeatable_mechanism() -> void:
 
 func _test_editor() -> void:
 	var editor: Node = load("res://scenes/editor.tscn").instantiate()
+	var storage = preload("res://tests/editor_test_storage.gd").new()
+	storage.configure(editor)
 	root.add_child(editor)
 	await process_frame
 	var dungeon: DungeonMap = _map("trap_editor")
@@ -264,5 +266,6 @@ func _test_editor() -> void:
 	assert(_json(dungeon.to_dict()) == author_map)
 	editor.queue_free()
 	await process_frame
+	storage.cleanup()
 	print("Trap configuration: visibility, resource defaults, legacy saves, floor states, editor history and isolation OK")
 	quit()

@@ -8,6 +8,8 @@ func _initialize() -> void:
 func _run() -> void:
 	var editor_scene: PackedScene = load("res://scenes/editor.tscn")
 	var editor: Node = editor_scene.instantiate()
+	var storage = preload("res://tests/editor_test_storage.gd").new()
+	storage.configure(editor)
 	root.add_child(editor)
 	await process_frame
 
@@ -106,7 +108,8 @@ func _run() -> void:
 	assert(name_input.text != old_name)
 	assert(current_map.display_name == name_input.text)
 	assert(current_map.map_id == old_id)
-	assert(bool(editor.get("is_dirty")))
+	assert(not bool(editor.get("is_dirty")))
+	assert(FileAccess.file_exists(storage.directory.path_join(old_id + ".json")))
 
 	var reach_index := layers_menu.get_popup().get_item_index(1)
 	var grid_index := layers_menu.get_popup().get_item_index(2)
@@ -150,5 +153,7 @@ func _run() -> void:
 	canvas.restore_edit_state(changed)
 	assert(current_map.entities_at(edit_cell.x, edit_cell.y).size() == 1)
 	editor.queue_free()
+	await process_frame
+	storage.cleanup()
 	print("Editor UI: map settings dialog, compact panels and diagnostics OK")
 	quit()

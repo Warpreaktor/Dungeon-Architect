@@ -142,6 +142,8 @@ func _click(canvas: DungeonCanvas, cell: Vector2i, touch: bool = false) -> void:
 
 func _test_editor() -> void:
 	var editor: Node = load("res://scenes/editor.tscn").instantiate()
+	var storage = preload("res://tests/editor_test_storage.gd").new()
+	storage.configure(editor)
 	root.add_child(editor)
 	await process_frame
 	var dungeon: DungeonMap = _corridor(Vector2i.RIGHT)
@@ -170,4 +172,5 @@ func _test_editor() -> void:
 	assert(canvas.capture_edit_state() == after)
 	editor.queue_free()
 	await process_frame
+	storage.cleanup()
 	quit()

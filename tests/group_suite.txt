@@ -57,3 +57,5 @@ test_stone_slab_reaction.gd
 test_stone_slab_visuals.gd
 
 test_editor_save_feedback.gd
+
+test_editor_autosave.gd

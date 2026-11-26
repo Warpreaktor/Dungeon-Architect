@@ -38,6 +38,7 @@ const MAP_SCREEN_SCENE: PackedScene = preload("res://scenes/map_screen.tscn")
 const MINI_MAP_SCENE: PackedScene = preload("res://scenes/mini_map.tscn")
 const EDITOR_SETTINGS_PATH := "user://editor_state.cfg"
 const SAVE_FEEDBACK_SECONDS := 1.25
+const NAME_AUTOSAVE_DELAY := 0.4
 const SAVE_CONFIRMATION_ICON: Texture2D = preload("res://assets/icons/commands/saved.svg")
 const COMMAND_ICONS := {
 	"new": preload("res://assets/icons/commands/new.png"),
@@ -117,6 +118,7 @@ var _redo_stack: Array[Dictionary] = []
 var _undo_button: Button
 var _save_button: Button
 var _save_feedback_timer: Timer
+var _name_autosave_timer: Timer
 var _brand_label: Label
 var _file_menu: MenuButton
 var _settings_menu: MenuButton
@@ -331,6 +333,11 @@ func _build_interface() -> void:
 	_save_feedback_timer.wait_time = SAVE_FEEDBACK_SECONDS
 	_save_feedback_timer.timeout.connect(_clear_save_feedback)
 	add_child(_save_feedback_timer)
+	_name_autosave_timer = Timer.new()
+	_name_autosave_timer.one_shot = true
+	_name_autosave_timer.wait_time = NAME_AUTOSAVE_DELAY
+	_name_autosave_timer.timeout.connect(_on_name_autosave_timeout)
+	add_child(_name_autosave_timer)
 
 	_undo_button = _button("", "Отменить (Ctrl+Z)", _undo_edit)
 	_set_command_icon(_undo_button, "undo")
@@ -721,6 +728,7 @@ func _create_dialogs() -> void:
 	_name_input.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	_name_input.keep_editing_on_text_submit = false
 	_name_input.text_changed.connect(_on_name_changed)
+	_name_input.focus_exited.connect(_flush_name_autosave)
 	name_row.add_child(_name_input)
 	_register_editor_control(_name_input)
 	var random_name_button := Button.new()
@@ -778,7 +786,7 @@ func _create_dialogs() -> void:
 
 	_new_dialog = ConfirmationDialog.new()
 	_new_dialog.title = "Новая карта"
-	_new_dialog.dialog_text = "Размер новой карты. Несохранённые изменения будут потеряны."
+	_new_dialog.dialog_text = "Размер новой карты."
 	_new_dialog.ok_button_text = "Создать"
 	_new_dialog.confirmed.connect(_new_map)
 	add_child(_new_dialog)
@@ -1413,6 +1421,7 @@ func _register_editor_control(control: Control) -> void:
 
 
 func _set_map(new_map: DungeonMap) -> void:
+	_name_autosave_timer.stop()
 	_clear_save_feedback()
 	_clear_reachability()
 	_developer_preview = null
@@ -1503,8 +1512,8 @@ func _on_message_saved(cell: Vector2i, text: String) -> void:
 		return
 	var before := _canvas.capture_edit_state()
 	if map_data.set_message_at(cell.x, cell.y, text):
-		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_canvas.queue_redraw()
 
 
@@ -1529,8 +1538,8 @@ func _on_trigger_event_id_changed(trigger_id: String, event_id: String) -> void:
 		return
 	var before := _canvas.capture_edit_state()
 	if map_data.set_trigger_event_id(trigger_id, event_id):
-		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_canvas.queue_redraw()
 
 
@@ -1684,8 +1693,8 @@ func _apply_exit_link(destination: DungeonMap) -> void:
 		return
 	var before: Dictionary = _canvas.capture_edit_state()
 	if map_data.set_exit_target(_linking_exit_id, destination.map_id):
-		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_canvas.queue_redraw()
 	_set_status("Переход ведёт в «%s»." % destination.display_name)
 	_linking_exit_id = ""
@@ -1697,8 +1706,8 @@ func _unlink_selected_exit() -> void:
 		return
 	var before: Dictionary = _canvas.capture_edit_state()
 	if map_data.set_exit_target(_linking_exit_id, ""):
-		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_canvas.queue_redraw()
 	_linking_exit_id = ""
 	_load_dialog.hide()
@@ -1744,8 +1753,8 @@ func _on_door_configuration_changed(door_id: String, lock_id: String, trap_messa
 		if not settings.is_empty():
 			changed = map_data.set_trap_configuration(door_id, settings) or changed
 	if changed:
-		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_canvas.queue_redraw()
 
 
@@ -1765,8 +1774,8 @@ func _on_trap_configuration_changed(entity_id: String, settings: Dictionary) -> 
 		return
 	var before: Dictionary = _canvas.capture_edit_state()
 	if map_data.set_trap_configuration(entity_id, settings):
-		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_canvas.queue_redraw()
 
 
@@ -1786,8 +1795,8 @@ func _on_chest_contents_changed(chest_id: String, contents: Array[String], gold_
 		return
 	var before := _canvas.capture_edit_state()
 	if map_data.set_chest_contents(chest_id, contents, gold_amount, random_mode, hidden, quantities):
-		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_canvas.queue_redraw()
 
 
@@ -1809,8 +1818,8 @@ func _on_monster_configuration_changed(monster_entity_id: String, party: Array[S
 	var changed: bool = map_data.set_monster_party(monster_entity_id, party)
 	changed = map_data.set_monster_loot(monster_entity_id, contents, gold_amount, random_mode, hidden, quantities) or changed
 	if changed:
-		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_on_canvas_edited()
+		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_canvas.queue_redraw()
 
 
@@ -1881,12 +1890,39 @@ func _generate_map_name() -> void:
 	var new_name := DungeonMap.random_display_name(map_data.display_name)
 	_name_input.text = new_name
 	_on_name_changed(new_name)
+	_flush_name_autosave()
 
 
 func _on_name_changed(value: String) -> void:
-	if map_data != null:
-		map_data.display_name = value
-		_mark_dirty()
+	if is_play_mode or standalone_game or map_data == null or map_data.display_name == value:
+		return
+	map_data.display_name = value
+	_mark_dirty()
+	_name_autosave_timer.start()
+
+
+func _on_name_autosave_timeout() -> void:
+	if _canvas.has_edit_stroke():
+		_name_autosave_timer.start()
+		return
+	_autosave_map()
+
+
+func _flush_name_autosave() -> void:
+	if _name_autosave_timer != null and not _name_autosave_timer.is_stopped() and not _canvas.has_edit_stroke():
+		_autosave_map()
+
+
+func _flush_pending_map_edits() -> void:
+	if is_play_mode or standalone_game or map_data == null:
+		return
+	_canvas.finish_edit_stroke()
+	_flush_name_autosave()
+
+
+func _notification(what: int) -> void:
+	if what in [NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_WM_CLOSE_REQUEST] and is_node_ready():
+		_flush_pending_map_edits()
 
 
 func _on_edit_action_committed(before: Dictionary, after: Dictionary) -> void:
@@ -1897,6 +1933,7 @@ func _on_edit_action_committed(before: Dictionary, after: Dictionary) -> void:
 		_undo_stack.pop_front()
 	_redo_stack.clear()
 	_update_history_buttons()
+	_autosave_map()
 
 
 func _undo_edit() -> void:
@@ -1911,6 +1948,7 @@ func _undo_edit() -> void:
 	_update_history_buttons()
 	_on_canvas_edited()
 	_set_status("Действие отменено")
+	_autosave_map()
 
 
 func _redo_edit() -> void:
@@ -1925,6 +1963,7 @@ func _redo_edit() -> void:
 	_update_history_buttons()
 	_on_canvas_edited()
 	_set_status("Действие повторено")
+	_autosave_map()
 
 
 func _update_history_buttons() -> void:
@@ -1943,7 +1982,6 @@ func _mark_dirty() -> void:
 	_clear_save_feedback()
 	_schedule_reachability_refresh()
 	is_dirty = true
-	_set_status("Изменения не сохранены • Ctrl+S для сохранения")
 
 
 func _set_status(message: String) -> void:
@@ -1997,8 +2035,13 @@ func _request_new() -> void:
 func _new_map() -> void:
 	var width := int(_width_input.value)
 	var height := int(_height_input.value)
+	_confirm_if_dirty(_create_new_map.bind(width, height))
+
+
+func _create_new_map(width: int, height: int) -> void:
 	_set_map(DungeonMap.create_blank(width, height))
 	_set_status("Создана пустая карта %d×%d." % [width, height])
+	_autosave_map()
 
 
 func _maps_dir() -> String:
@@ -2009,6 +2052,8 @@ func _maps_dir() -> String:
 func _remember_last_map(map_id: String) -> void:
 	var config := ConfigFile.new()
 	config.load(EDITOR_SETTINGS_PATH)
+	if str(config.get_value("editor", "last_map_id", "")) == map_id:
+		return
 	config.set_value("editor", "last_map_id", map_id)
 	if config.save(EDITOR_SETTINGS_PATH) != OK:
 		_set_status("Не удалось запомнить последнюю карту")
@@ -2047,33 +2092,70 @@ func _ensure_maps_dir() -> bool:
 
 
 func _write_map(path: String) -> bool:
-	var file := FileAccess.open(path, FileAccess.WRITE)
+	return _write_map_data(map_data, path)
+
+
+func _write_map_data(saved: DungeonMap, path: String) -> bool:
+	if DirAccess.dir_exists_absolute(path):
+		_set_status("Ошибка записи: путь занят папкой")
+		return false
+	var temp_path: String = path + ".tmp"
+	if DirAccess.dir_exists_absolute(temp_path):
+		_set_status("Ошибка записи: временный путь занят папкой")
+		return false
+	var file := FileAccess.open(temp_path, FileAccess.WRITE)
 	if file == null:
 		_set_status("Ошибка записи: " + str(FileAccess.get_open_error()))
 		return false
-	file.store_string(JSON.stringify(map_data.to_dict(), "\t"))
+	file.store_string(JSON.stringify(saved.to_dict(), "\t"))
 	file.flush()
 	var write_error: Error = file.get_error()
 	file.close()
+	if write_error == OK:
+		write_error = DirAccess.rename_absolute(temp_path, path)
 	if write_error != OK:
+		DirAccess.remove_absolute(temp_path)
 		_set_status("Ошибка записи: " + error_string(write_error))
 		return false
 	return true
 
 
 func _save_internal() -> void:
-	if is_play_mode or standalone_game:
+	if is_play_mode or standalone_game or map_data == null:
 		return
+	_flush_pending_map_edits()
+	_persist_current_map(true)
+
+
+func _autosave_map() -> void:
+	if is_play_mode or standalone_game or map_data == null:
+		return
+	is_dirty = true
+	_persist_current_map()
+
+
+func _persist_current_map(manual: bool = false) -> void:
+	_name_autosave_timer.stop()
 	_clear_save_feedback()
 	if not _ensure_maps_dir():
 		_set_status("Не удалось создать папку карт")
+		_show_save_error()
 		return
 	var path := _maps_dir().path_join(map_data.map_id + ".json")
 	if _write_map(path):
 		is_dirty = false
 		_remember_last_map(map_data.map_id)
-		_set_status("Сохранено: " + path)
+		if manual:
+			_set_status("Сохранено: " + path)
 		_show_save_feedback()
+	else:
+		_show_save_error()
+
+
+func _show_save_error() -> void:
+	is_dirty = true
+	_save_button.self_modulate = Color(1.0, 0.55, 0.55)
+	_save_button.tooltip_text = "Не удалось сохранить карту. Повторить (Ctrl+S)"
 
 
 func _refresh_save_button_caption() -> void:
@@ -2282,6 +2364,7 @@ func _load_selected() -> void:
 
 
 func _confirm_if_dirty(action: Callable) -> void:
+	_flush_pending_map_edits()
 	if not is_dirty:
 		action.call()
 		return
@@ -2701,13 +2784,7 @@ func _delete_selected() -> void:
 
 
 func _write_saved_map(saved: DungeonMap, path: String) -> bool:
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		_set_status("Ошибка записи карты: " + str(FileAccess.get_open_error()))
-		return false
-	file.store_string(JSON.stringify(saved.to_dict(), "\t"))
-	file.close()
-	return true
+	return _write_map_data(saved, path)
 
 
 func _show_export() -> void:
@@ -2718,6 +2795,7 @@ func _show_export() -> void:
 
 
 func _export_to_path(path: String) -> void:
+	_flush_pending_map_edits()
 	if _write_map(path):
 		_set_status("Экспортировано: " + path)
 
@@ -2875,6 +2953,7 @@ func _on_developer_loadout_changed() -> void:
 
 
 func _start_play_mode() -> void:
+	_flush_pending_map_edits()
 	_clear_held_movement()
 	_settings_dialog.hide()
 	_clear_reachability()

@@ -720,6 +720,10 @@ func _begin_edit_stroke() -> void:
 		_stroke_before = capture_edit_state()
 
 
+func has_edit_stroke() -> bool:
+	return not _stroke_before.is_empty()
+
+
 func finish_edit_stroke() -> void:
 	if _stroke_before.is_empty():
 		return
@@ -790,11 +794,11 @@ func _hand_tap(point: Vector2, is_double: bool) -> void:
 						return
 		var before := capture_edit_state()
 		if map_data.move_existing(_moving_kind, _moving_id, _moving_from, cell):
-			edit_action_committed.emit(before, capture_edit_state())
 			_cancelled_tap_time = now
 			_cancelled_tap_cell = cell
 			cancel_move_selection()
 			map_edited.emit()
+			edit_action_committed.emit(before, capture_edit_state())
 			queue_redraw()
 		else:
 			move_failed.emit()
@@ -882,6 +886,7 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 	var cell := _screen_to_cell(point)
 	if not map_data.contains(cell.x, cell.y):
 		return
+	_begin_edit_stroke()
 	var modified := false
 	if erase or selected_tool == "erase":
 		modified = map_data.erase_at(cell.x, cell.y)

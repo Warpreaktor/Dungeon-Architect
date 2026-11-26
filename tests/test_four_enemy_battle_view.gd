@@ -94,6 +94,22 @@ func _check_attack_animation(view: BattleView) -> void:
 		assert(view._impact_idle[id] == view._impact_origin[id])
 	view._playback = view.create_tween()
 	view._playback.pause()
+	var enemy_actor: String = "enemy_3"
+	var ability_id: String = "skeleton_rusty_slash"
+	var announcement: Array[Dictionary] = [{"type": "action_start", "actor_id": enemy_actor, "ability_id": ability_id, "slot_index": -1}]
+	view._queue_clash_animation(announcement)
+	view._playback.custom_step(view.action_emblem_seconds * 0.5)
+	assert(view._action_emblem != null and view._action_emblem.modulate.a > 0.0)
+	assert(view._action_emblem._caption.text == AbilityCatalog.get_ability(ability_id).display_name)
+	assert(view._action_emblem._source == view._impact_portraits[enemy_actor])
+	assert(not view._enemy_sequence_scroll.visible and not (view._extra_enemy_views[enemy_actor] as BattleSupportEnemyView)._slots.visible)
+	for id in initial:
+		assert((view._impact_portraits[id] as TextureRect).global_position.is_equal_approx(initial[id]))
+	view._playback.custom_step(10.0)
+	assert(view._action_emblem == null)
+	assert(state.rng.state == original_rng and state.events.size() == event_count)
+	view._playback = view.create_tween()
+	view._playback.pause()
 	view._queue_single_attack({"type": "attack", "actor_id": actor_id, "target_id": target_id,
 		"ability_id": "basic_strike", "damage": 1, "hp_after": original_health - 1,
 		"hp_max": target.max_health})

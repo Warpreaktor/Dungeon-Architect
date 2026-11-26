@@ -64,6 +64,7 @@ var _items_session: GameSession
 var _item_picker: BattleItemPicker
 ## Временные портреты поверх поля: движение не меняет настоящие UI-узлы.
 var _impact_layer: Control
+var _action_emblem: BattleActionEmblem
 var _impact_portraits: Dictionary = {}
 var _impact_idle: Dictionary = {}
 var _impact_origin: Dictionary = {}
@@ -123,6 +124,7 @@ const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 
 @export_range(0.0, 2.0, 0.01) var clash_tick_seconds: float = 0.20
 @export_range(0.0, 2.0, 0.01) var clash_action_start_seconds: float = 0.08
+@export_range(0.1, 2.0, 0.01) var action_emblem_seconds: float = 0.65
 @export_range(0.0, 2.0, 0.01) var clash_windup_seconds: float = 0.20
 @export_range(0.0, 2.0, 0.01) var clash_impact_seconds: float = 0.13
 @export_range(0.0, 2.0, 0.01) var clash_hold_seconds: float = 0.46
@@ -130,7 +132,6 @@ const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 @export_range(0.0, 2.0, 0.01) var clash_idle_seconds: float = 0.40
 @export_range(0.0, 1.0, 0.01) var clash_recoil_fraction: float = 0.18
 @export_range(0.0, 1.0, 0.01) var clash_contact_overlap_fraction: float = 0.14
-@export_range(0.0, 1.0, 0.01) var clash_cast_icon_fraction: float = 0.42
 
 
 
@@ -1054,6 +1055,7 @@ func _create_impact_layer() -> void:
 
 
 func _clear_impact_layer() -> void:
+	_clear_action_emblem()
 	for flash in _shield_flash_tweens.values():
 		var tween: Tween = flash as Tween
 		if tween != null and tween.is_valid():
@@ -1096,20 +1098,40 @@ func _play_phase_events(phase_events: Array) -> void:
 
 func _queue_clash_animation(group_events: Array[Dictionary]) -> void:
 	var has_attack: bool = false
+	var announced: Dictionary = {}
 	for event in group_events:
 		var kind: String = str(event.get("type", ""))
+		var actor_id: String = str(event.get("actor_id", ""))
+		var ability_id: String = str(event.get("ability_id", ""))
 		if kind in ["attack", "counter"]:
+			if not announced.has(actor_id) or announced[actor_id] != ability_id:
+				_queue_action_emblem(event)
+				announced[actor_id] = ability_id
 			_queue_single_attack(event)
 			has_attack = true
 		else:
+			if kind in ["rest", "reload"] and not bool(event.get("premature", false)) and not announced.has(actor_id):
+				_queue_action_emblem(event)
+				announced[actor_id] = "rest"
 			_playback.tween_callback(_display_phase_event.bind(event))
 			if kind in ["tick", "turn"]:
 				_playback.tween_interval(clash_tick_seconds)
 			elif kind == "action_start":
-				_playback.tween_callback(_show_clash_ability.bind(event))
-				_playback.tween_interval(clash_action_start_seconds)
+				var failed: bool = group_events.any(func(result: Dictionary) -> bool:
+					return result.get("type") == "failed" and result.get("actor_id") == actor_id and result.get("ability_id") == ability_id)
+				if not failed:
+					_queue_action_emblem(event)
+					announced[actor_id] = ability_id
+				else:
+					_playback.tween_interval(clash_action_start_seconds)
 	if not has_attack:
 		_playback.tween_interval(clash_idle_seconds)
+
+
+func _queue_action_emblem(event: Dictionary) -> void:
+	_playback.tween_callback(_show_clash_ability.bind(event))
+	_playback.tween_method(_advance_action_emblem, 0.0, 1.0, action_emblem_seconds).set_trans(Tween.TRANS_LINEAR)
+	_playback.tween_callback(_clear_action_emblem)
 
 
 func _queue_single_attack(event: Dictionary) -> void:
@@ -1144,24 +1166,38 @@ func _set_attack_layer(portrait: TextureRect, attacking: bool) -> void:
 
 
 func _show_clash_ability(event: Dictionary) -> void:
-	if _impact_layer == null or not is_instance_valid(_impact_layer):
+	_clear_action_emblem()
+	if not is_instance_valid(_impact_layer):
 		return
 	var actor_id: String = str(event.get("actor_id", ""))
 	var portrait: TextureRect = _impact_portraits.get(actor_id) as TextureRect
-	var ability: AbilityDefinition = AbilityCatalog.get_ability(str(event.get("ability_id", "")))
-	if portrait == null or ability == null or ability.icon == null:
+	if portrait == null:
 		return
-	var icon := TextureRect.new()
-	icon.texture = ability.icon
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon.size = portrait.size * clash_cast_icon_fraction
-	icon.position = portrait.position + Vector2((portrait.size.x - icon.size.x) * 0.5, -icon.size.y * 0.65)
-	_impact_layer.add_child(icon)
-	var effect: Tween = icon.create_tween()
-	effect.tween_property(icon, "modulate:a", 0.0, clash_windup_seconds + clash_impact_seconds + clash_hold_seconds)
-	effect.tween_callback(icon.queue_free)
+	var kind: String = str(event.get("type", ""))
+	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
+	var ability_id: String = str(event.get("ability_id", ""))
+	var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id) if not ability_id.is_empty() else null
+	var resting: bool = kind in ["rest", "reload"]
+	if ability == null and not resting and kind not in ["attack", "counter"]:
+		return
+	_action_emblem = BattleActionEmblem.new()
+	_impact_layer.add_child(_action_emblem)
+	_action_emblem.configure(ability, actor, portrait, _impact_layer.size,
+		"Отдых" if resting else ("Контратака" if kind == "counter" else "Атака"),
+		BattleAbilitySlot.REST_ICON if resting else BattleAbilitySlot.ATTACK_ICON,
+		BattleActionEmblem.Effect.REST if resting else BattleActionEmblem.Effect.ATTACK)
+
+
+func _advance_action_emblem(progress: float) -> void:
+	if is_instance_valid(_action_emblem):
+		_action_emblem.advance(progress)
+
+
+func _clear_action_emblem() -> void:
+	if is_instance_valid(_action_emblem):
+		_action_emblem.hide()
+		_action_emblem.queue_free()
+	_action_emblem = null
 
 
 func _display_phase_event(event: Dictionary) -> void:
@@ -1284,7 +1320,6 @@ func _display_phase_event(event: Dictionary) -> void:
 					(slot as BattleAbilitySlot).modulate = Color.WHITE
 			elif _extra_enemy_views.has(actor_id):
 				(_extra_enemy_views[actor_id] as BattleSupportEnemyView).reset_played()
-			_show_reload_icon(actor_id)
 		"failed":
 			# Текущий слот коротко вспыхивает красным, без текстовых предупреждений.
 			var slot_index: int = int(event.get("slot_index", -1))
@@ -1304,7 +1339,6 @@ func _display_phase_event(event: Dictionary) -> void:
 		"rest":
 			if event.has("remaining_energy"):
 				_set_display_energy(actor_id, int(event["remaining_energy"]))
-			_show_reload_icon(actor_id)
 
 
 func _emit_combat_event_log(event: Dictionary) -> void:
@@ -1393,24 +1427,6 @@ func _set_block_display(actor_id: String, amount: int) -> void:
 	value.text = "%d / %d" % [armor, amount] if amount > 0 else str(armor)
 	value.tooltip_text = "Броня: %d\nАктивный блок: %d" % [armor, amount]
 	icon.modulate = Color.WHITE if armor > 0 or amount > 0 else _defense_idle_color
-
-
-func _show_reload_icon(actor_id: String) -> void:
-	var portrait: TextureRect = _impact_portraits.get(actor_id) as TextureRect
-	if portrait == null:
-		return
-	var icon := TextureRect.new()
-	icon.texture = BattleAbilitySlot.SPECIAL_ICON
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.size = portrait.size * 0.64
-	icon.position = portrait.size * 0.18
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon.modulate = Color(0.75, 0.86, 1.0, 0.92)
-	portrait.add_child(icon)
-	var tween: Tween = create_tween()
-	tween.tween_property(icon, "modulate:a", 0.0, 0.55)
-	tween.tween_callback(icon.queue_free)
 
 
 func _spawn_number(actor_id: String, number: String, ink: Color, x_offset: float = 0) -> void:

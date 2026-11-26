@@ -2,10 +2,7 @@ class_name TrapCatalog
 extends RefCounted
 
 const DEFAULT_TRAP_ID := "spikes"
-const DIFFICULTY_FIELDS := ["detection_difficulty", "avoidance_difficulty", "disarm_difficulty"]
-const STAT_IDS := ["agility", "strength", "perception"]
-const INITIAL_STATES := ["armed", "disarmed", "discharged"]
-const OVERRIDE_FIELDS := ["detection_difficulty", "avoidance_difficulty", "disarm_difficulty", "avoidance_stat", "hidden", "initial_state"]
+const LEGACY_OVERRIDE_FIELDS := ["detection_difficulty", "avoidance_difficulty", "disarm_difficulty", "avoidance_stat", "initial_state"]
 const DEFINITIONS := {
 	"spikes": preload("res://traps/spikes.tres"),
 	"door_crossbow": preload("res://traps/door_crossbow.tres")
@@ -51,53 +48,27 @@ static func settings(entity: Dictionary) -> Dictionary:
 
 
 static func normalize_settings(definition: TrapDefinition, source: Dictionary) -> Dictionary:
-	var result: Dictionary = {}
-	for field in DIFFICULTY_FIELDS:
-		var value: Variant = source.get(field, definition.get(field))
-		result[field] = clampi(int(value), 0, 999) if typeof(value) in [TYPE_INT, TYPE_FLOAT] else int(definition.get(field))
-	var stat: String = str(source.get("avoidance_stat", definition.avoidance_stat))
-	result["avoidance_stat"] = stat if stat in STAT_IDS else definition.avoidance_stat
 	var hidden: Variant = source.get("hidden", definition.hidden_by_default)
-	result["hidden"] = hidden if typeof(hidden) == TYPE_BOOL else definition.hidden_by_default
-	var initial: String = str(source.get("initial_state", "armed"))
-	result["initial_state"] = initial if initial in INITIAL_STATES and (initial != "discharged" or definition.disarm_on_trigger) else "armed"
-	return result
+	return {"hidden": hidden if typeof(hidden) == TYPE_BOOL else definition.hidden_by_default}
 
 
 static func settings_overrides(definition: TrapDefinition, source: Dictionary) -> Dictionary:
 	var values: Dictionary = normalize_settings(definition, source)
-	var defaults: Dictionary = normalize_settings(definition, {})
-	var result: Dictionary = {}
-	for field in OVERRIDE_FIELDS:
-		if values[field] != defaults[field]:
-			result[field] = values[field]
-	return result
+	return values if values["hidden"] != definition.hidden_by_default else {}
 
 
-static func initial_state(entity: Dictionary) -> String:
-	return str(settings(entity).get("initial_state", "armed"))
-
-
-static func _configured(definition: TrapDefinition, values: Dictionary) -> TrapDefinition:
-	if values.is_empty():
-		return null
-	var overrides: Dictionary = settings_overrides(definition, values)
-	overrides.erase("initial_state")
-	if overrides.is_empty():
-		return definition
-	var result: TrapDefinition = definition.duplicate() as TrapDefinition
-	for field in DIFFICULTY_FIELDS:
-		result.set(field, values[field])
-	result.avoidance_stat = str(values["avoidance_stat"])
-	result.hidden_by_default = bool(values["hidden"])
-	return result
+static func remove_legacy_overrides(properties: Dictionary) -> void:
+	for field in LEGACY_OVERRIDE_FIELDS:
+		properties.erase(field)
 
 
 static func from_entity(entity: Dictionary) -> TrapDefinition:
-	var properties: Dictionary = entity.get("properties", {})
-	return _configured(get_trap(str(properties.get("trap_id", DEFAULT_TRAP_ID))), settings(entity))
+	if str(entity.get("type", "")) != "trap":
+		return null
+	var definition: TrapDefinition = get_trap(DungeonMap.trap_id(entity))
+	return definition if definition.can_attach_to("floor") else null
 
 
 static func from_door(door: Dictionary) -> TrapDefinition:
 	var trap_id: String = DungeonMap.door_trap_id(door)
-	return _configured(get_trap(trap_id), settings(door)) if not trap_id.is_empty() else null
+	return get_trap(trap_id) if not trap_id.is_empty() else null

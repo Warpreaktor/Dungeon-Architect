@@ -1433,7 +1433,7 @@ func trap_state(entity: Dictionary) -> String:
 	var entity_id: String = str(entity.get("id", ""))
 	if disarmed_traps.has(entity_id):
 		return "discharged" if discharged_traps.has(entity_id) else "disarmed"
-	return TrapCatalog.initial_state(entity)
+	return "armed"
 
 
 func is_trap_disarmed(entity: Dictionary) -> bool:
@@ -1458,7 +1458,7 @@ func is_trap_revealed(entity: Dictionary) -> bool:
 
 func is_door_trap_visible(door: Dictionary) -> bool:
 	var trap: TrapDefinition = TrapCatalog.from_door(door)
-	return trap != null and (not trap.hidden_by_default or is_trap_revealed(door) or (hero != null and hero.has_vision_effect()))
+	return trap != null and (not bool(TrapCatalog.settings(door).get("hidden", true)) or is_trap_revealed(door) or (hero != null and hero.has_vision_effect()))
 
 
 func _discover_trap(entity: Dictionary, trap: TrapDefinition, hidden: bool) -> bool:
@@ -1852,7 +1852,7 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 			last_event_message = "Дверь заперта. Нужен %s ключ." % LockCatalog.label(required_key).to_lower()
 			return false
 		door_trap = TrapCatalog.from_door(door)
-		if door_trap != null and resolved_door_id != str(door["id"]) and _discover_trap(door, door_trap, door_trap.hidden_by_default):
+		if door_trap != null and resolved_door_id != str(door["id"]) and _discover_trap(door, door_trap, bool(TrapCatalog.settings(door).get("hidden", true))):
 			last_move_detected_trap = true
 	var arrival: Vector2i = target
 	var local_portal: Dictionary = _find_active_entity(target, "portal_local")

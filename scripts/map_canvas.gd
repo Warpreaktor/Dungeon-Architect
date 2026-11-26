@@ -419,7 +419,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 			if icon != null:
 				draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		elif kind == "trap":
-			_draw_trap(origin, entity, game_session.is_trap_disarmed(entity) if mode == "play" and game_session != null else TrapCatalog.initial_state(entity) != "armed")
+			_draw_trap(origin, entity, mode == "play" and game_session != null and game_session.is_trap_disarmed(entity))
 			if mode == "play" and game_session != null and not game_session.is_trap_disarmed(entity):
 				visible_floor_trap = entity
 		elif kind == "portal_local":
@@ -468,7 +468,7 @@ func _draw_door_trap_marker(origin: Vector2, door: Dictionary) -> void:
 		return
 	var rect := Rect2(origin + Vector2(1, 1), Vector2(22, 22))
 	draw_rect(rect.grow(1), Color("#111b28"))
-	var inactive: bool = game_session.is_trap_disarmed(door) if mode == "play" and game_session != null else TrapCatalog.initial_state(door) != "armed"
+	var inactive: bool = mode == "play" and game_session != null and game_session.is_trap_disarmed(door)
 	draw_texture_rect(icon, rect, false, Color(0.58, 0.63, 0.70, 0.72) if inactive else Color.WHITE)
 
 

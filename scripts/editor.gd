@@ -1717,7 +1717,7 @@ func _on_door_tapped(door_id: String) -> void:
 			if not attachment is Dictionary:
 				attachment = {}
 			_door_popup.configure(door_id, LockCatalog.required_key(entity), DungeonMap.door_trap_id(entity), str(attachment.get("message", "")), TrapCatalog.settings(entity))
-			_door_popup.popup_centered_clamped(Vector2i(510, 700), 0.9)
+			_door_popup.popup_centered_clamped(Vector2i(510, 460), 0.9)
 			return
 
 
@@ -1745,7 +1745,7 @@ func _on_trap_tapped(entity_id: String) -> void:
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == entity_id and str(entity.get("type", "")) == "trap" and TrapCatalog.from_entity(entity) != null:
 			_trap_popup.configure(entity)
-			_trap_popup.popup_centered_clamped(Vector2i(480, 660), 0.9)
+			_trap_popup.popup_centered_clamped(Vector2i(400, 200), 0.9)
 			return
 
 

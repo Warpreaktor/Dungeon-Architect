@@ -210,16 +210,14 @@ func set_trap_configuration(entity_id: String, settings: Dictionary) -> bool:
 		var definition: TrapDefinition = TrapCatalog.from_door(entity) if door else TrapCatalog.from_entity(entity)
 		if definition == null:
 			return false
-		var base: TrapDefinition = TrapCatalog.get_trap(definition.trap_id)
 		var target: Dictionary = properties["trap"] if door else properties
 		var values: Dictionary = TrapCatalog.settings(entity)
 		values.merge(settings, true)
-		values = TrapCatalog.normalize_settings(base, values)
-		if values == TrapCatalog.settings(entity):
+		TrapCatalog.remove_legacy_overrides(target)
+		target.erase("hidden")
+		target.merge(TrapCatalog.settings_overrides(definition, values), true)
+		if properties == entity.get("properties", {}):
 			return false
-		for field in TrapCatalog.OVERRIDE_FIELDS:
-			target.erase(field)
-		target.merge(TrapCatalog.settings_overrides(base, values), true)
 		if door:
 			properties["trap"] = target
 		entity["properties"] = properties
@@ -813,7 +811,12 @@ static func from_dict(value: Variant) -> DungeonMap:
 		if seen_ids.has(entity_id):
 			return null
 		seen_ids[entity_id] = true
-		result._append_entity({"id": entity_id, "type": kind, "x": x, "y": y, "properties": props.duplicate(true)})
+		var properties: Dictionary = props.duplicate(true)
+		if kind == "trap":
+			TrapCatalog.remove_legacy_overrides(properties)
+		elif kind == "door" and properties.get("trap") is Dictionary:
+			TrapCatalog.remove_legacy_overrides(properties["trap"])
+		result._append_entity({"id": entity_id, "type": kind, "x": x, "y": y, "properties": properties})
 	var raw_metadata: Variant = value.get("metadata", {"theme": "stone_dungeon"})
 	if typeof(raw_metadata) == TYPE_DICTIONARY:
 		result.metadata = raw_metadata

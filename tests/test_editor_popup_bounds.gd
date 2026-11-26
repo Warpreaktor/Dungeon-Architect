@@ -49,7 +49,7 @@ func _run() -> void:
 	root.add_child(trap_popup)
 	await process_frame
 	trap_popup.configure({"id": "trap", "type": "trap", "properties": {"trap_id": "spikes"}})
-	trap_popup.popup_centered_clamped(Vector2i(480, 660), 0.9)
+	trap_popup.popup_centered_clamped(Vector2i(400, 200), 0.9)
 	await process_frame
 	assert(trap_popup.size.y <= root.size.y)
 	var trap_content: VBoxContainer = trap_popup.get_child(0).get_child(0)

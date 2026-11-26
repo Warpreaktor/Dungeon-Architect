@@ -42,3 +42,5 @@ test_stage5_full_adventure.gd
 test_stage5_campaign_library.gd
 
 test_stage5_campaign_creation_flow.gd
+
+test_trap_detection.gd

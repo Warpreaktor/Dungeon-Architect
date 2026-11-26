@@ -20,6 +20,7 @@ func _initialize() -> void:
 	var members: Array[HeroState] = play.party_members()
 	var starting_health: Array[int] = []
 	for member in members:
+		member.perception = TrapCatalog.get_trap("spikes").detection_difficulty - 1
 		starting_health.append(member.health)
 	assert(play.move_by(1, 0))
 	assert(play.is_trap_disarmed(trap_entity))

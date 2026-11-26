@@ -11,6 +11,7 @@ var energy: int = 0
 var strength: int = 0
 var agility: int = 0
 var perception: int = 0
+var known_traps_by_map: Dictionary = {}
 var base_defense: int = 0
 var defense: int = 0
 var gold: int = 0
@@ -464,6 +465,7 @@ func to_snapshot() -> Dictionary:
 		"strength": strength,
 		"agility": agility,
 		"perception": perception,
+		"known_traps_by_map": known_traps_by_map.duplicate(true),
 		"base_defense": base_defense,
 		"gold": gold,
 		"learned_ability_ids": learned_ability_ids.duplicate(),
@@ -514,7 +516,17 @@ static func from_snapshot(data: Dictionary) -> HeroState:
 		return null
 	if not (data.get("overworld_statuses") is Dictionary):
 		return null
+	var trap_knowledge: Variant = data.get("known_traps_by_map", {})
+	if not (trap_knowledge is Dictionary):
+		return null
+	for map_id in trap_knowledge:
+		if typeof(map_id) != TYPE_STRING or str(map_id).is_empty() or not (trap_knowledge[map_id] is Dictionary):
+			return null
+		for trap_id in trap_knowledge[map_id]:
+			if typeof(trap_id) != TYPE_STRING or str(trap_id).is_empty() or typeof(trap_knowledge[map_id][trap_id]) != TYPE_BOOL or not trap_knowledge[map_id][trap_id]:
+				return null
 	var result := HeroState.new(HeroCatalog.get_hero(hero_id))
+	result.known_traps_by_map = trap_knowledge.duplicate(true)
 	result.max_health = int(data["max_health"])
 	result.health = int(data["health"])
 	if data.has("energy"):

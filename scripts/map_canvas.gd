@@ -399,6 +399,8 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 			draw_rect(rect, Color(0.85, 0.25, 0.35, 0.24))
 	var entities_here: Array = game_session.entities_at(x, y) if mode == "play" and game_session != null else map_data.entities_at(x, y)
 	var has_hidden_entity := false
+	var visible_floor_trap: Dictionary = {}
+	var drawable_entities: int = 0
 	for entity in entities_here:
 		if mode == "play" and game_session != null and game_session.is_entity_removed(entity):
 			continue
@@ -407,6 +409,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 			continue
 		if mode == "play" and kind in ["player_spawn", "trigger", "message"]:
 			continue
+		drawable_entities += 1
 		var origin := Vector2(x, y) * TILE_SIZE
 		if kind == "chest" and ((mode == "play" and game_session != null and game_session.is_chest_open(entity)) or (not DungeonMap.chest_is_random(entity) and DungeonMap.chest_contents(entity).is_empty())):
 			_draw_open_chest(origin)
@@ -417,6 +420,8 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 				draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		elif kind == "trap":
 			_draw_trap(origin, entity, mode == "play" and game_session != null and game_session.is_trap_disarmed(entity))
+			if mode == "play" and game_session != null and not game_session.is_trap_disarmed(entity):
+				visible_floor_trap = entity
 		elif kind == "portal_local":
 			var portal_color: String = str(entity.get("properties", {}).get("color", ""))
 			var portal_texture: Texture2D = _local_portal_textures.get(portal_color)
@@ -426,10 +431,12 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 			_draw_entity(kind, origin)
 			if kind == "door":
 				_draw_door_lock(origin, LockCatalog.required_key(entity))
-				if mode == "edit":
+				if mode == "edit" or (game_session != null and game_session.is_door_trap_visible(entity)):
 					_draw_door_trap_marker(origin, entity)
 		if mode == "edit" and DungeonMap.is_entity_hidden(entity):
 			has_hidden_entity = true
+	if drawable_entities > 1 and not visible_floor_trap.is_empty():
+		_draw_triggered_trap_marker(rect.position, visible_floor_trap)
 	if Vector2i(x, y) == stairs_up_cell:
 		if _stairs_up_texture != null:
 			draw_texture_rect(_stairs_up_texture, rect, false)

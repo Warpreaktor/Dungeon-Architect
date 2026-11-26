@@ -8,7 +8,8 @@ func _initialize() -> void:
 	assert(map.place_entity("trap", 2, 2, {"trap_id": "spikes"}))
 	var trap: Dictionary = map.entities_at(2, 2)[0]
 	assert(DungeonMap.is_entity_hidden(trap))
-	var session := GameSession.start_for(map)
+	var session := GameSession.start_for(map, "petushan")
+	session.hero.perception = TrapCatalog.get_trap("spikes").detection_difficulty - 1
 	assert(session.is_entity_hidden_from_hero(trap))
 	assert(not session.is_trap_revealed(trap))
 	assert(session.move_by(1, 0))

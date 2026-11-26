@@ -35,6 +35,7 @@ var removed_entities: Dictionary = {} # ID объектов, исчезнувш�
 var opened_chests: Dictionary = {} # ID открытых сундуков только в этом прохождении.
 var disarmed_traps: Dictionary = {} # ID разряженных ловушек только в этом прохождении.
 var revealed_traps: Dictionary = {}
+var last_move_detected_trap: bool = false
 var pending_chest_id: String = "" # Ожидает завершения анимации шага до открытия сундука.
 var pending_door_trap_id: String = ""
 var pending_door_trap_cell := Vector2i(-1, -1)
@@ -1246,6 +1247,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	opened_chests = saved.get("chests", {}).duplicate(true)
 	disarmed_traps = saved.get("traps", {}).duplicate(true)
 	revealed_traps = saved.get("revealed_traps", {}).duplicate(true)
+	last_move_detected_trap = false
 	pending_chest_id = ""
 	pending_door_trap_id = ""
 	pending_door_trap_cell = Vector2i(-1, -1)
@@ -1412,8 +1414,55 @@ func is_trap_disarmed(entity: Dictionary) -> bool:
 	return disarmed_traps.has(str(entity.get("id", "")))
 
 
+func is_trap_known_by(entity: Dictionary, member: HeroState) -> bool:
+	if map_data == null or member == null:
+		return false
+	var knowledge: Dictionary = member.known_traps_by_map.get(map_data.map_id, {})
+	return knowledge.has(str(entity.get("id", "")))
+
+
 func is_trap_revealed(entity: Dictionary) -> bool:
-	return revealed_traps.has(str(entity.get("id", ""))) or is_trap_disarmed(entity)
+	if revealed_traps.has(str(entity.get("id", ""))) or is_trap_disarmed(entity):
+		return true
+	for member in party:
+		if member.health > 0 and is_trap_known_by(entity, member):
+			return true
+	return false
+
+
+func is_door_trap_visible(door: Dictionary) -> bool:
+	var trap: TrapDefinition = TrapCatalog.from_door(door)
+	return trap != null and (not trap.hidden_by_default or is_trap_revealed(door) or (hero != null and hero.has_vision_effect()))
+
+
+func _discover_trap(entity: Dictionary, trap: TrapDefinition, hidden: bool) -> bool:
+	if trap == null or not hidden or is_trap_disarmed(entity):
+		return false
+	var already_revealed: bool = is_trap_revealed(entity)
+	var discovered: bool = false
+	var trap_id: String = str(entity.get("id", ""))
+	if trap_id.is_empty():
+		return false
+	for member in party:
+		if member.health <= 0 or is_trap_known_by(entity, member) or member.effective_perception() < trap.detection_difficulty:
+			continue
+		if not member.known_traps_by_map.has(map_data.map_id):
+			member.known_traps_by_map[map_data.map_id] = {}
+		member.known_traps_by_map[map_data.map_id][trap_id] = true
+		discovered = true
+	return discovered and not already_revealed
+
+
+func _discover_floor_traps(cell: Vector2i) -> bool:
+	var discovered: bool = false
+	for entity in map_data.entities_at(cell.x, cell.y):
+		if str(entity.get("type", "")) != "trap":
+			continue
+		var trap: TrapDefinition = TrapCatalog.from_entity(entity)
+		if trap != null and trap.can_attach_to("floor"):
+			if _discover_trap(entity, trap, DungeonMap.is_entity_hidden(entity)):
+				discovered = true
+	return discovered
 
 
 func entities_at(x: int, y: int) -> Array:
@@ -1617,6 +1666,7 @@ func can_enter(cell: Vector2i) -> bool:
 
 
 func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
+	last_move_detected_trap = false
 	last_event_message = ""
 	_trigger_events.clear()
 	_party_damage_events.clear()
@@ -1636,19 +1686,35 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 
 	var door := _find_active_entity(target, "door")
 	var opened_door_id := ""
+	var required_key: String = ""
+	var door_trap: TrapDefinition = null
 	if not door.is_empty():
-		var required_key: String = LockCatalog.required_key(door)
+		required_key = LockCatalog.required_key(door)
 		if int(carried_items.get(required_key, 0)) <= 0:
 			last_event_message = "Дверь заперта. Нужен %s ключ." % LockCatalog.label(required_key).to_lower()
 			return false
-		var trap: TrapDefinition = TrapCatalog.from_door(door)
-		if trap != null and not is_trap_disarmed(door):
+		door_trap = TrapCatalog.from_door(door)
+		if door_trap != null and _discover_trap(door, door_trap, door_trap.hidden_by_default):
+			last_move_detected_trap = true
+	var arrival: Vector2i = target
+	var local_portal: Dictionary = _find_active_entity(target, "portal_local")
+	if not local_portal.is_empty():
+		var paired: Vector2i = map_data.local_portal_destination(str(local_portal["id"]))
+		if DungeonMap.valid_arrival_cell(map_data, paired):
+			arrival = paired
+	if arrival == target and _discover_floor_traps(target):
+		last_move_detected_trap = true
+	if last_move_detected_trap:
+		return false
+
+	if not door.is_empty():
+		if door_trap != null and not is_trap_disarmed(door):
 			pending_door_trap_id = str(door["id"])
 			pending_door_trap_cell = target
 			_message_events.append({
 				"activation": "door_trap", "entity_id": pending_door_trap_id,
 				"text": DungeonMap.door_trap_message(door), "loot": [],
-				"icon_type": "trap", "icon_id": trap.trap_id
+				"icon_type": "trap", "icon_id": door_trap.trap_id
 			})
 			return false
 		_remove_carried_item(required_key, 1)
@@ -1664,12 +1730,6 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false) -> bool:
 		else:
 			_open_chest(chest)
 
-	var arrival: Vector2i = target
-	var local_portal: Dictionary = _find_active_entity(target, "portal_local")
-	if not local_portal.is_empty():
-		var paired: Vector2i = map_data.local_portal_destination(str(local_portal["id"]))
-		if DungeonMap.valid_arrival_cell(map_data, paired):
-			arrival = paired
 	player_pos = arrival
 	target = arrival
 	steps += 1

@@ -74,6 +74,8 @@ func _test_multiple_floors_and_revisits() -> void:
 	var first_container_id: String = str(session.ground_container_at(Vector2i(2, 4))["id"])
 
 	assert(session.move_by(0, 1))
+	assert(not session.move_by(1, 0))
+	assert(session.last_move_detected_trap)
 	assert(session.move_by(1, 0))
 	assert(session.is_trap_disarmed(trap))
 	assert(session.is_trap_revealed(trap))

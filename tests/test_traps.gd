@@ -34,6 +34,7 @@ func _initialize() -> void:
 
 	var session := GameSession.start_for(restored)
 	assert(session != null)
+	session.hero.perception = trap.detection_difficulty - 1
 	assert(DungeonMap.is_entity_hidden(restored_trap))
 	assert(session.is_entity_hidden_from_hero(restored_trap))
 	session.hero.vision_bonus = 1

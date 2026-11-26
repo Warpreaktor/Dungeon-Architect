@@ -1107,7 +1107,7 @@ func _advance_held_move() -> void:
 		return
 	var previous_pos: Vector2i = game_session.player_pos
 	_try_move_player(direction.x, direction.y)
-	if not is_play_mode or game_session == null or game_session.player_pos == previous_pos:
+	if _held_move_direction() == direction and (not is_play_mode or game_session == null or game_session.player_pos == previous_pos):
 		# Упёрлись в стену/закрытую дверь: не спамим попытками каждый кадр.
 		_blocked_hold_direction = direction
 
@@ -3048,6 +3048,11 @@ func _try_move_player(dx: int, dy: int) -> void:
 	var previous_pos: Vector2i = game_session.player_pos
 	var moving_session: GameSession = game_session
 	var moved := moving_session.move_by(dx, dy, true)
+	if moving_session.last_move_detected_trap:
+		_clear_held_movement()
+		_canvas.queue_redraw()
+		_refresh_map_overlays()
+		return
 	if game_session.has_pending_encounter():
 		_collect_game_messages()
 		if not _game_dialogue.visible:
@@ -3197,6 +3202,8 @@ func _finish_combat() -> void:
 	# Победа двигает игровую позицию, а визуальное перемещение надо запускать отдельно.
 	var previous_pos: Vector2i = game_session.player_pos
 	var moved: bool = game_session.win_pending_encounter(battle)
+	if game_session.last_move_detected_trap:
+		_clear_held_movement()
 	if _battle_view != null:
 		_battle_view.queue_free()
 		_battle_view = null
@@ -3228,7 +3235,7 @@ func _finish_combat() -> void:
 		return
 	if not game_session.last_event_message.is_empty():
 		_show_game_event(game_session.last_event_message)
-	elif not moved:
+	elif not moved and not game_session.last_move_detected_trap:
 		_set_status("Монстр побеждён, но клетка пока недоступна.")
 
 

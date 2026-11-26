@@ -46,6 +46,7 @@ func _test_trap_death_and_continuation() -> void:
 	var session := GameSession.start_for(dungeon)
 	assert(session.add_party_member("volcha"))
 	for member in session.party_members():
+		member.perception = TrapCatalog.get_trap("spikes").detection_difficulty - 1
 		member.health = 1
 	session.trap_random.seed = 12
 	assert(session.move_by(1, 0))

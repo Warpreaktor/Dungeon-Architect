@@ -10,6 +10,10 @@ extends Resource
 @export_enum("floor", "door") var placement: String = "floor"
 @export_multiline var trigger_message: String = ""
 @export var hidden_by_default: bool = true
+@export_range(0, 999, 1) var detection_difficulty: int = 0
+@export_range(0, 999, 1) var avoidance_difficulty: int = 0
+@export_range(0, 999, 1) var disarm_difficulty: int = 0
+@export_enum("agility", "strength", "perception") var avoidance_stat: String = "agility"
 @export_range(0, 9999, 1) var direct_damage: int = 0
 @export var overworld_status_id: String = ""
 @export var overworld_status_label: String = ""

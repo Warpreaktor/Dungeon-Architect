@@ -50,7 +50,10 @@ func show_event(event: Dictionary) -> void:
 			_actor_select.add_item(str(actor))
 		if _actor_select.item_count > 0:
 			_actor_select.select(clampi(int(event.get("selected_actor", 0)), 0, _actor_select.item_count - 1))
-		_actor_select.visible = _actor_select.item_count > 1
+		_actor_select.visible = bool(event.get("select_actor", true)) and _actor_select.item_count > 1
+		_disarm_button.visible = choices.has("disarm")
+		_cancel_button.visible = choices.has("cancel")
+		_avoid_button.visible = choices.has("avoid")
 		_disarm_button.text = str(choices.get("disarm", ""))
 		_cancel_button.text = str(choices.get("cancel", ""))
 		_avoid_button.text = str(choices.get("avoid", ""))
@@ -140,7 +143,7 @@ func has_choices() -> bool:
 
 
 func _choose(choice: String) -> void:
-	if not has_choices():
+	if not has_choices() or (choice == "disarm" and not _disarm_button.visible):
 		return
 	var selected: int = _actor_select.selected
 	hide()

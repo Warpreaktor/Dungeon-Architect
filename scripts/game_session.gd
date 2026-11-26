@@ -36,6 +36,7 @@ var opened_chests: Dictionary = {} # ID открытых сундуков тол
 var disarmed_traps: Dictionary = {} # Неактивные механизмы текущего этажа.
 var revealed_traps: Dictionary = {}
 var discharged_traps: Dictionary = {}
+var failed_trap_disarms: Dictionary = {}
 var last_move_detected_trap: bool = false
 var pending_chest_id: String = "" # Ожидает завершения анимации шага до открытия сундука.
 var pending_door_trap_id: String = ""
@@ -900,6 +901,7 @@ func _capture_floor_state() -> Dictionary:
 		"traps": disarmed_traps.duplicate(true),
 		"revealed_traps": revealed_traps.duplicate(true),
 		"discharged_traps": discharged_traps.duplicate(true),
+		"failed_trap_disarms": failed_trap_disarms.duplicate(true),
 		"triggers": activated_triggers.duplicate(true),
 		"messages": shown_messages.duplicate(true),
 		"revealed": visited_cells.duplicate(true)
@@ -1262,6 +1264,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	disarmed_traps = saved.get("traps", {}).duplicate(true)
 	revealed_traps = saved.get("revealed_traps", {}).duplicate(true)
 	discharged_traps = saved.get("discharged_traps", {}).duplicate(true)
+	failed_trap_disarms = saved.get("failed_trap_disarms", {}).duplicate(true)
 	last_move_detected_trap = false
 	pending_chest_id = ""
 	pending_door_trap_id = ""
@@ -1438,6 +1441,10 @@ func trap_state(entity: Dictionary) -> String:
 
 func is_trap_disarmed(entity: Dictionary) -> bool:
 	return trap_state(entity) != "armed"
+
+
+func can_disarm_trap(entity: Dictionary) -> bool:
+	return not is_trap_disarmed(entity) and not failed_trap_disarms.has(str(entity.get("id", "")))
 
 
 func is_trap_known_by(entity: Dictionary, member: HeroState) -> bool:
@@ -1642,28 +1649,32 @@ func _activate_trap(trap: TrapDefinition, trap_key: String, opener: HeroState = 
 		if trap.check(target, trap_random):
 			_append_trap_result("%s: избежал ловушки «%s»." % [target.definition.display_name, trap.display_name])
 			continue
-		var parts: Array[String] = []
-		if trap.direct_damage > 0:
-			var health_before: int = target.health
-			target.take_damage(trap.direct_damage)
-			var damage: int = health_before - target.health
-			if damage > 0:
-				_record_party_damage(target, damage, trap.trap_id)
-				parts.append("-%d HP" % damage)
-		if target.health > 0 and trap.applies_overworld_status():
-			if target.apply_overworld_status(trap.overworld_status_id, trap.overworld_status_label,
-				trap.overworld_status_damage, trap.overworld_status_ticks, trap.overworld_status_interval_steps):
-				parts.append("%s %d на %d фазы" % [
-					trap.overworld_status_label, trap.overworld_status_damage, trap.overworld_status_ticks
-				])
-		if parts.is_empty():
-			parts.append("без повреждений")
-		_append_trap_result("%s: ловушка «%s», %s." % [
-			target.definition.display_name, trap.display_name, " и ".join(parts)
-		])
+		_apply_trap_effects(trap, target)
 	if trap.disarm_on_trigger:
 		disarmed_traps[trap_key] = true
 		discharged_traps[trap_key] = true
+
+
+func _apply_trap_effects(trap: TrapDefinition, target: HeroState) -> void:
+	var parts: Array[String] = []
+	if trap.direct_damage > 0:
+		var health_before: int = target.health
+		target.take_damage(trap.direct_damage)
+		var damage: int = health_before - target.health
+		if damage > 0:
+			_record_party_damage(target, damage, trap.trap_id)
+			parts.append("-%d HP" % damage)
+	if target.health > 0 and trap.applies_overworld_status():
+		if target.apply_overworld_status(trap.overworld_status_id, trap.overworld_status_label,
+			trap.overworld_status_damage, trap.overworld_status_ticks, trap.overworld_status_interval_steps):
+			parts.append("%s %d на %d фазы" % [
+				trap.overworld_status_label, trap.overworld_status_damage, trap.overworld_status_ticks
+			])
+	if parts.is_empty():
+		parts.append("без повреждений")
+	_append_trap_result("%s: ловушка «%s», %s." % [
+		target.definition.display_name, trap.display_name, " и ".join(parts)
+	])
 
 
 func _activate_traps_at(cell: Vector2i) -> void:
@@ -1695,12 +1706,17 @@ func _request_trap_choice(entity: Dictionary, trap: TrapDefinition, cell: Vector
 	for member in _pending_trap_actors:
 		actors.append("%d. %s" % [party.find(member) + 1, member.definition.display_name])
 	var selected: int = _pending_trap_actors.find(opener)
+	var can_disarm: bool = can_disarm_trap(entity)
+	var choices: Dictionary = {"cancel": "Нет" if can_disarm else "Отмена", "avoid": "Проскочить (%s)" % trap.avoidance_stat_label()}
+	if can_disarm:
+		choices["disarm"] = "Да"
 	_message_events.append({
 		"activation": "trap_choice", "entity_id": entity["id"],
-		"text": "%s. Обезвредить ловушку?" % trap.display_name,
+		"text": "%s. Обезвредить ловушку?" % trap.display_name if can_disarm else "%s. Преодолеть ловушку?" % trap.display_name,
 		"icon_type": "trap", "icon_id": trap.trap_id,
-		"choices": {"disarm": "Да", "cancel": "Нет", "avoid": "Проскочить (%s)" % trap.avoidance_stat_label()},
-		"actors": actors, "selected_actor": maxi(selected, 0)
+		"choices": choices,
+		"actors": actors, "selected_actor": maxi(selected, 0),
+		"select_actor": can_disarm or trap.can_attach_to("door")
 	})
 
 
@@ -1713,6 +1729,8 @@ func _discard_trap_message(activation: String, entity_id: String) -> void:
 
 func resolve_pending_trap_choice(choice: String, actor_index: int = -1, defer_chest_open: bool = false) -> bool:
 	if not has_pending_trap_choice() or choice not in ["disarm", "cancel", "avoid"]:
+		return false
+	if choice == "disarm" and failed_trap_disarms.has(str(_pending_trap_choice["entity_id"])):
 		return false
 	var pending: Dictionary = _pending_trap_choice.duplicate()
 	var accepted: Array[String] = _pending_trap_accepted.duplicate()
@@ -1748,12 +1766,13 @@ func resolve_pending_trap_choice(choice: String, actor_index: int = -1, defer_ch
 			revealed_traps[entity_id] = true
 			_append_trap_result("%s: ловушка «%s» обезврежена." % [actor.definition.display_name, trap.display_name])
 			return false
+		failed_trap_disarms[entity_id] = true
+		revealed_traps[entity_id] = true
 		_append_trap_result("%s: не удалось обезвредить ловушку «%s»." % [actor.definition.display_name, trap.display_name])
-		if kind == "trap":
-			_activate_trap(trap, entity_id)
-			record_casualties()
-			_refresh_visibility()
-			return false
+		_apply_trap_effects(trap, actor)
+		record_casualties()
+		_refresh_visibility()
+		return false
 	if kind == "door":
 		opener = actor
 	accepted.append(entity_id)
@@ -2550,6 +2569,7 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, ca
 	session.disarmed_traps = current["traps"].duplicate(true)
 	session.revealed_traps = current["revealed_traps"].duplicate(true)
 	session.discharged_traps = current["discharged_traps"].duplicate(true)
+	session.failed_trap_disarms = current["failed_trap_disarms"].duplicate(true)
 	session.activated_triggers = current["triggers"].duplicate(true)
 	session.shown_messages = current["messages"].duplicate(true)
 	session._init_masks()

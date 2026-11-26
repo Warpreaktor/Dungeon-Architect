@@ -4,6 +4,7 @@ extends SceneTree
 func _initialize() -> void:
 	_test_cancel_and_disarm()
 	_test_failed_disarm()
+	_test_lethal_failed_disarm()
 	_test_individual_saves_and_replay()
 	_test_door_opener()
 	_test_door_successful_disarm()
@@ -90,24 +91,90 @@ func _test_cancel_and_disarm() -> void:
 
 
 func _test_failed_disarm() -> void:
-	var dungeon: DungeonMap = _floor_map()
+	var dungeon: DungeonMap = _floor_map(true)
 	var trap: TrapDefinition = TrapCatalog.get_trap("spikes")
 	var entity: Dictionary = dungeon.entities_at(3, 2)[0]
-	var session: GameSession = GameSession.start_for(dungeon, "petushan")
-	session.hero.agility = trap.disarm_difficulty
+	var source: String = JSON.stringify(dungeon.to_dict())
+	var session: GameSession = GameSession.start_for_party(dungeon, ["petushan", "volcha", "burolom", "luma"])
+	for member in session.party:
+		member.agility = trap.disarm_difficulty
+		member.perception = trap.detection_difficulty
+	var actor: HeroState = session.party[2]
+	var health_before: int = actor.health
 	session.trap_random.seed = _seed_for_roll(trap, 1, 1)
-	_request_choice(session)
+	assert(not session.move_by(1, 0) and session.last_move_detected_trap)
+	assert(_request_choice(session)["choices"].has("disarm"))
 	var probe := RandomNumberGenerator.new()
 	probe.seed = session.trap_random.seed
+	probe.state = session.trap_random.state
 	probe.randi_range(1, trap.check_die_sides)
-	probe.randi_range(1, trap.check_die_sides)
-	assert(not session.resolve_pending_trap_choice("disarm"))
+	assert(not session.resolve_pending_trap_choice("disarm", 2))
 	assert(session.trap_random.state == probe.state)
-	assert(session.is_trap_disarmed(entity))
+	assert(session.trap_state(entity) == "armed" and session.is_trap_revealed(entity))
+	assert(not session.can_disarm_trap(entity))
 	assert(session.player_pos == Vector2i(2, 2) and session.steps == 0)
+	assert(actor.health == health_before - trap.direct_damage)
+	assert(actor.overworld_statuses.has(trap.overworld_status_id))
+	for member in session.party:
+		if member != actor:
+			assert(member.health == member.effective_max_health() and member.overworld_statuses.is_empty())
+	var damage: Array[Dictionary] = session.take_party_damage_events()
+	assert(damage.size() == 1 and damage[0]["hero_index"] == 2)
 	assert(session.take_trap_result_message().contains("не удалось"))
-	assert(not session.resolve_pending_trap_choice("disarm"))
-	assert(session.trap_random.state == probe.state)
+	assert(not session.has_pending_trap_choice())
+	var event: Dictionary = _request_choice(session)
+	assert(not event["choices"].has("disarm") and not event["select_actor"])
+	assert(not session.resolve_pending_trap_choice("disarm", 1))
+	assert(session.has_pending_trap_choice() and session.trap_random.state == probe.state)
+	assert(not session.resolve_pending_trap_choice("cancel"))
+	assert(session.trap_random.state == probe.state and session.take_party_damage_events().is_empty())
+	assert(JSON.stringify(dungeon.to_dict()) == source)
+
+	var other: DungeonMap = _floor_map()
+	var raw: Dictionary = other.to_dict()
+	for other_entity in raw["entities"]:
+		if other_entity["type"] == "trap":
+			other_entity["id"] = entity["id"]
+	other = DungeonMap.from_dict(raw)
+	assert(session.enter_map(other))
+	assert(session.can_disarm_trap(other.entities_at(3, 2)[0]))
+	var maps: Dictionary = {dungeon.map_id: dungeon, other.map_id: other}
+	var snapshot: Dictionary = JSON.parse_string(JSON.stringify(session.progress_snapshot()))
+	var restored: GameSession = GameSession.from_progress_snapshot(snapshot, maps)
+	assert(restored != null and restored.enter_map(dungeon))
+	assert(restored.trap_state(entity) == "armed" and restored.is_trap_revealed(entity))
+	assert(not restored.can_disarm_trap(entity))
+	assert(restored.trap_random.state == probe.state)
+	assert(not _request_choice(restored)["choices"].has("disarm"))
+	for member in restored.party:
+		member.agility = trap.avoidance_difficulty
+		probe.randi_range(1, trap.check_die_sides)
+	assert(restored.resolve_pending_trap_choice("avoid"))
+	assert(restored.trap_state(entity) == "discharged" and restored.trap_random.state == probe.state)
+	assert(restored.take_party_damage_events().is_empty())
+
+	for floor in snapshot["floors"].values():
+		floor.erase("failed_trap_disarms")
+	var legacy: GameSession = GameSession.from_progress_snapshot(snapshot, maps)
+	assert(legacy != null and legacy.enter_map(dungeon))
+	assert(legacy.can_disarm_trap(entity))
+
+
+func _test_lethal_failed_disarm() -> void:
+	var dungeon: DungeonMap = _floor_map()
+	var entity: Dictionary = dungeon.entities_at(3, 2)[0]
+	var trap: TrapDefinition = TrapCatalog.from_entity(entity)
+	var session: GameSession = GameSession.start_for_party(dungeon, ["petushan", "volcha"])
+	var actor: HeroState = session.party[1]
+	actor.health = 1
+	session.trap_random.seed = _seed_for_roll(trap, 1, 1)
+	_request_choice(session)
+	assert(not session.resolve_pending_trap_choice("disarm", 1))
+	assert(session.party.size() == 1 and session.take_casualty_events().size() == 1)
+	assert(session.hero.health == session.hero.effective_max_health())
+	assert(session.trap_state(entity) == "armed" and not session.can_disarm_trap(entity))
+	assert(not _request_choice(session)["choices"].has("disarm"))
+	assert(not session.resolve_pending_trap_choice("cancel"))
 
 
 func _test_individual_saves_and_replay() -> void:
@@ -221,23 +288,39 @@ func _test_door_failed_disarm() -> void:
 	var door: Dictionary = dungeon.entities_at(3, 2)[0]
 	var trap: TrapDefinition = TrapCatalog.from_door(door)
 	assert(dungeon.set_message_at(3, 2, "Авторское послание"))
-	var session: GameSession = GameSession.start_for(dungeon, "petushan")
+	var session: GameSession = GameSession.start_for_party(dungeon, ["petushan", "volcha"])
 	session.hero.perception = trap.detection_difficulty
-	session.hero.agility = 0
+	var actor: HeroState = session.party[1]
+	actor.agility = trap.disarm_difficulty
+	session.trap_random.seed = _seed_for_roll(trap, 1, 1)
+	var before: int = actor.health
 	assert(session._receive_item("key", 1) == 1)
 	assert(not session.move_by(1, 0) and session.last_move_detected_trap)
 	_request_choice(session)
-	assert(not session.resolve_pending_trap_choice("disarm"))
-	assert(session.has_pending_door_trap() and not session.is_trap_disarmed(door))
-	assert(int(session.carried_items["key"]) == 1)
+	assert(not session.resolve_pending_trap_choice("disarm", 1))
+	assert(not session.has_pending_door_trap() and session.trap_state(door) == "armed")
+	assert(not session.is_entity_removed(door) and not session.can_disarm_trap(door))
+	assert(session.is_door_trap_visible(door) and session.player_pos == Vector2i(2, 2))
+	assert(int(session.carried_items["key"]) == 1 and session.steps == 0)
+	assert(actor.health == before - trap.direct_damage and session.hero.health == session.hero.effective_max_health())
+	assert(session.take_message_events().is_empty())
+	assert(session.take_trap_result_message().contains("не удалось"))
+	var saved_rng: int = session.trap_random.state
+	var event: Dictionary = _request_choice(session)
+	assert(not event["choices"].has("disarm") and event["select_actor"])
+	assert(not session.resolve_pending_trap_choice("disarm", 0))
+	assert(session.trap_random.state == saved_rng and session.has_pending_trap_choice())
+	actor.agility = trap.avoidance_difficulty
+	assert(not session.resolve_pending_trap_choice("avoid", 1))
 	assert(session.take_message_events()[0]["activation"] == "door_trap")
 	assert(session.resolve_pending_door_trap())
-	assert(session.is_trap_disarmed(door) and session.is_entity_removed(door))
+	assert(session.trap_state(door) == "discharged" and session.is_entity_removed(door))
+	assert(actor.health == before - trap.direct_damage)
 	assert(int(session.carried_items.get("key", 0)) == 0)
 	var events: Array[Dictionary] = session.take_message_events()
 	assert(events.size() == 1 and events[0]["activation"] == "door_open")
 	assert(events[0]["text"] == "Авторское послание")
-	assert(str(events[0]["result_text"]).contains("не удалось"))
+	assert(str(events[0]["result_text"]).contains("избежал"))
 
 
 func _test_stat_selection() -> void:
@@ -275,7 +358,18 @@ func _test_dialogue() -> void:
 	editor.call("_advance_held_move")
 	assert(session.steps == 0)
 	editor.call("_on_dpad_down", Vector2i.RIGHT)
-	assert(dialogue.has_choices())
+	assert(dialogue.has_choices() and dialogue._disarm_button.visible)
+	session.trap_random.seed = _seed_for_roll(TrapCatalog.get_trap("spikes"), 1, 1)
+	dialogue._disarm_button.pressed.emit()
+	assert(not dialogue.visible and session.steps == 0)
+	editor.call("_on_dpad_down", Vector2i.RIGHT)
+	assert(dialogue.has_choices() and not dialogue._disarm_button.visible)
+	assert(dialogue._cancel_button.visible and dialogue._avoid_button.visible)
+	var after_failure: int = session.trap_random.state
+	dialogue._disarm_button.pressed.emit()
+	assert(dialogue.has_choices() and session.trap_random.state == after_failure)
+	for member in session.party:
+		member.agility = TrapCatalog.get_trap("spikes").avoidance_difficulty
 	dialogue._avoid_button.pressed.emit()
 	await create_timer(0.6).timeout
 	assert(session.steps == 1 and session.player_pos == Vector2i(3, 2))

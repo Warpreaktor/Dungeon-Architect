@@ -1,175 +1,194 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/hero_selection.gd" id="1_script"]
 [ext_resource type="Theme" path="res://themes/hero_hud.tres" id="2_theme"]
+[ext_resource type="Script" path="res://scripts/hero_catalog_grid.gd" id="3_catalog"]
+[ext_resource type="Script" path="res://scripts/hero_preview_panel.gd" id="4_preview"]
+[ext_resource type="Script" path="res://scripts/party_selection_bar.gd" id="5_party"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_idle"]
-bg_color = Color(0.14, 0.20, 0.28, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.35, 0.45, 0.55, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_primary"]
+bg_color = Color(0.48, 0.34, 0.18, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_left = 6
+corner_radius_bottom_right = 6
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hover"]
-bg_color = Color(0.19, 0.27, 0.36, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.84, 0.66, 0.36, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pressed"]
-bg_color = Color(0.24, 0.31, 0.39, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 0.81, 0.45, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
+bg_color = Color(0.66, 0.48, 0.25, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_left = 6
+corner_radius_bottom_right = 6
 
 [node name="HeroSelection" type="VBoxContainer"]
 visible = false
-layout_mode = 2
-theme_override_constants/separation = 12
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = -12.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+theme_override_constants/separation = 8
 script = ExtResource("1_script")
 
 [node name="Title" type="Label" parent="."]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.92, 0.78, 0.55, 1)
-theme_override_font_sizes/font_size = 21
+theme_override_colors/font_color = Color(0.94, 0.79, 0.54, 1)
+theme_override_font_sizes/font_size = 24
 text = "Выбор отряда"
-horizontal_alignment = 1
 
-[node name="Scroll" type="ScrollContainer" parent="."]
-custom_minimum_size = Vector2(0, 310)
+[node name="Rule" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="Body" type="BoxContainer" parent="."]
 layout_mode = 2
 size_flags_vertical = 3
-horizontal_scroll_mode = 0
+theme_override_constants/separation = 12
 
-[node name="Cards" type="HFlowContainer" parent="Scroll"]
+[node name="Catalog" type="VBoxContainer" parent="Body"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-alignment = 1
-theme_override_constants/h_separation = 18
-theme_override_constants/v_separation = 12
-
-[node name="VolchaButton" type="Button" parent="Scroll/Cards"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(202, 276)
-layout_mode = 2
-focus_mode = 2
-theme = ExtResource("2_theme")
-theme_override_styles/normal = SubResource("StyleBoxFlat_idle")
-theme_override_styles/hover = SubResource("StyleBoxFlat_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_pressed")
-
-[node name="CardContent" type="VBoxContainer" parent="Scroll/Cards/VolchaButton"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = 12.0
-offset_right = -12.0
-offset_bottom = -12.0
-mouse_filter = 2
-alignment = 1
-theme_override_constants/separation = 7
-
-[node name="Portrait" type="TextureRect" parent="Scroll/Cards/VolchaButton/CardContent"]
-custom_minimum_size = Vector2(112, 165)
-layout_mode = 2
-size_flags_horizontal = 4
 size_flags_vertical = 3
-mouse_filter = 2
+size_flags_stretch_ratio = 2.0
+theme_override_constants/separation = 6
+script = ExtResource("3_catalog")
+
+[node name="Search" type="LineEdit" parent="Body/Catalog"]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+placeholder_text = "Поиск героя"
+clear_button_enabled = true
+
+[node name="Count" type="Label" parent="Body/Catalog"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.80, 0.84, 1)
+
+[node name="Scroll" type="ScrollContainer" parent="Body/Catalog"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 3
+follow_focus = true
+scroll_deadzone = 12
+
+[node name="Grid" type="GridContainer" parent="Body/Catalog/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 7
+theme_override_constants/v_separation = 7
+
+[node name="Preview" type="PanelContainer" parent="Body"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("4_preview")
+
+[node name="Content" type="VBoxContainer" parent="Body/Preview"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Body/Preview/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.79, 0.54, 1)
+theme_override_font_sizes/font_size = 20
+text_overrun_behavior = 3
+
+[node name="Scroll" type="ScrollContainer" parent="Body/Preview/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 3
+scroll_deadzone = 12
+
+[node name="Details" type="VBoxContainer" parent="Body/Preview/Content/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="Overview" type="BoxContainer" parent="Body/Preview/Content/Scroll/Details"]
+layout_mode = 2
+vertical = true
+theme_override_constants/separation = 8
+
+[node name="Portrait" type="TextureRect" parent="Body/Preview/Content/Scroll/Details/Overview"]
+layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
-
-[node name="Name" type="Label" parent="Scroll/Cards/VolchaButton/CardContent"]
-layout_mode = 2
 mouse_filter = 2
-theme_override_font_sizes/font_size = 22
-horizontal_alignment = 1
 
-[node name="Stats" type="Label" parent="Scroll/Cards/VolchaButton/CardContent"]
+[node name="Stats" type="GridContainer" parent="Body/Preview/Content/Scroll/Details/Overview"]
 layout_mode = 2
-mouse_filter = 2
-theme_override_font_sizes/font_size = 16
-horizontal_alignment = 1
+size_flags_horizontal = 3
+columns = 2
+theme_override_constants/h_separation = 9
+theme_override_constants/v_separation = 4
 
-[node name="PetushanButton" type="Button" parent="Scroll/Cards"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(202, 276)
+[node name="AbilityTitle" type="Label" parent="Body/Preview/Content/Scroll/Details"]
 layout_mode = 2
-focus_mode = 2
-theme = ExtResource("2_theme")
-theme_override_styles/normal = SubResource("StyleBoxFlat_idle")
+theme_override_colors/font_color = Color(0.94, 0.79, 0.54, 1)
+text = "Личные способности"
+
+[node name="Abilities" type="HFlowContainer" parent="Body/Preview/Content/Scroll/Details"]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 4
+
+[node name="Toggle" type="Button" parent="Body/Preview/Content"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
 theme_override_styles/hover = SubResource("StyleBoxFlat_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_pressed")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_hover")
+text = "Добавить в отряд"
 
-[node name="CardContent" type="VBoxContainer" parent="Scroll/Cards/PetushanButton"]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = 12.0
-offset_right = -12.0
-offset_bottom = -12.0
-mouse_filter = 2
-alignment = 1
-theme_override_constants/separation = 7
-
-[node name="Portrait" type="TextureRect" parent="Scroll/Cards/PetushanButton/CardContent"]
-custom_minimum_size = Vector2(112, 165)
+[node name="CatalogBack" type="Button" parent="Body/Preview/Content"]
+visible = false
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 3
-mouse_filter = 2
-expand_mode = 1
-stretch_mode = 5
+text = "К каталогу"
 
-[node name="Name" type="Label" parent="Scroll/Cards/PetushanButton/CardContent"]
+[node name="FooterRule" type="HSeparator" parent="."]
 layout_mode = 2
-mouse_filter = 2
-theme_override_font_sizes/font_size = 22
-horizontal_alignment = 1
 
-[node name="Stats" type="Label" parent="Scroll/Cards/PetushanButton/CardContent"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_font_sizes/font_size = 16
-horizontal_alignment = 1
-
-[node name="PartyCount" type="Label" parent="."]
+[node name="PartyBar" type="VBoxContainer" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Отряд: 0 / 4"
-horizontal_alignment = 1
+theme_override_constants/separation = 5
+script = ExtResource("5_party")
 
-[node name="StartPartyButton" type="Button" parent="."]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(180, 48)
+[node name="Count" type="Label" parent="PartyBar"]
 layout_mode = 2
-size_flags_horizontal = 4
-disabled = true
-text = "Начать игру"
+text = "Отряд"
 
-[node name="BackButton" type="Button" parent="."]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(140, 48)
+[node name="Slots" type="HBoxContainer" parent="PartyBar"]
 layout_mode = 2
-size_flags_horizontal = 4
+theme_override_constants/separation = 6
+
+[node name="Actions" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackButton" type="Button" parent="Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 44)
+layout_mode = 2
 text = "Назад"
+
+[node name="Spacer" type="Control" parent="Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="StartPartyButton" type="Button" parent="Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 44)
+layout_mode = 2
+disabled = true
+theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
+theme_override_styles/hover = SubResource("StyleBoxFlat_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_hover")
+text = "Начать игру"

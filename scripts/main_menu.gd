@@ -46,9 +46,15 @@ func _ready() -> void:
 	_map_list.item_activated.connect(_on_map_activated)
 	_hero_selection.party_chosen.connect(_launch_selected_party)
 	_hero_selection.back_requested.connect(_return_to_library)
+	_hero_selection.visibility_changed.connect(_update_selection_screen)
+	_update_selection_screen()
 	get_viewport().size_changed.connect(_resize_layout)
 	_resize_layout()
 	%PlayButton.grab_focus()
+
+
+func _update_selection_screen() -> void:
+	$SafeArea.visible = not _hero_selection.visible
 
 
 func _resize_layout() -> void:

@@ -11,27 +11,29 @@ func _verify() -> void:
 	var picker: HeroSelection = load("res://scenes/hero_selection.tscn").instantiate() as HeroSelection
 	root.add_child(picker)
 	assert(picker.selected_party().is_empty())
-	assert((picker.get_node("StartPartyButton") as Button).disabled)
+	assert((picker.get_node("%StartPartyButton") as Button).disabled)
 	var chosen_parties: Array = []
 	picker.party_chosen.connect(func(ids: Array[String]) -> void: chosen_parties.append(ids.duplicate()))
 	for hero_id in PARTY_IDS:
-		var button: Button = picker.get_node("Scroll/Cards/%sButton" % hero_id.capitalize()) as Button
+		var button: Button = picker._catalog.tiles.get(hero_id) as Button
 		assert(button != null)
-		button.button_pressed = true
+		button.pressed.emit()
+		picker._preview.toggle_button.pressed.emit()
 	assert(picker.selected_party() == PARTY_IDS)
-	assert(not (picker.get_node("StartPartyButton") as Button).disabled)
-	assert((picker.get_node("PartyCount") as Label).text == "Отряд: 4 / 4")
-	picker.get_node("StartPartyButton").pressed.emit()
+	assert(not (picker.get_node("%StartPartyButton") as Button).disabled)
+	assert(picker._party_bar.count.text == "Отряд: 4 / 4")
+	picker.get_node("%StartPartyButton").pressed.emit()
 	assert(chosen_parties.size() == 1 and chosen_parties[0] == PARTY_IDS)
 
-	var wolf_button: Button = picker.get_node("Scroll/Cards/VolchaButton") as Button
-	wolf_button.button_pressed = false
+	var wolf_button: Button = picker._catalog.tiles["volcha"] as Button
+	picker._party_bar._remove_buttons[0].pressed.emit()
 	assert(picker.selected_party() == ["petushan", "burolom", "luma"])
-	wolf_button.button_pressed = true
+	wolf_button.pressed.emit()
+	picker._preview.toggle_button.pressed.emit()
 	assert(picker.selected_party() == ["petushan", "burolom", "luma", "volcha"])
 	picker.reset_selection()
 	assert(picker.selected_party().is_empty())
-	assert((picker.get_node("StartPartyButton") as Button).disabled)
+	assert((picker.get_node("%StartPartyButton") as Button).disabled)
 	picker.queue_free()
 
 	var test_panel := EditorTestHeroPanel.new()

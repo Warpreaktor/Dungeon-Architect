@@ -158,14 +158,16 @@ func _test_party_save_and_editor() -> void:
 	assert(restored.inventory_slot_ids().has("burolom_drill"))
 	var picker: HeroSelection = load("res://scenes/hero_selection.tscn").instantiate() as HeroSelection
 	root.add_child(picker)
-	var card: Button = picker.get_node("Scroll/Cards/BurolomButton") as Button
+	var card: Button = picker._catalog.tiles.get("burolom") as Button
 	assert(card != null)
-	assert((card.get_node("CardContent/Name") as Label).text == "Буролом")
+	assert(card.tooltip_text == "Буролом")
 	var chosen: Array[String] = []
 	picker.party_chosen.connect(func(ids: Array[String]) -> void: chosen.assign(ids))
-	card.button_pressed = true
+	card.pressed.emit()
+	assert(picker._preview.hero_name.text == "Буролом")
+	picker._preview.toggle_button.pressed.emit()
 	assert(picker.selected_party() == ["burolom"])
-	picker.get_node("StartPartyButton").pressed.emit()
+	picker.get_node("%StartPartyButton").pressed.emit()
 	assert(chosen == ["burolom"])
 	picker.queue_free()
 	var panel := EditorTestHeroPanel.new()

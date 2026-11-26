@@ -14,9 +14,16 @@ var _names: Array[Label] = []
 var _ids: Array[String] = []
 var _contents: Array[HBoxContainer] = []
 var _compact: bool = false
+var _highlighted_drop: int = -1
+var _drop_style: StyleBoxFlat
 
 
 func _ready() -> void:
+	_drop_style = StyleBoxFlat.new()
+	_drop_style.bg_color = Color(0.16, 0.27, 0.24)
+	_drop_style.border_color = Color(0.63, 0.86, 0.66)
+	_drop_style.set_border_width_all(2)
+	_drop_style.set_corner_radius_all(6)
 	for index in range(GameSession.MAX_PARTY_SIZE):
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(0, 66)
@@ -98,3 +105,26 @@ func target_rect(index: int) -> Rect2:
 	if not _compact:
 		rect.size.x = 48.0
 	return rect
+
+
+func accepts_drop(point: Vector2) -> bool:
+	for index in range(_ids.size(), _buttons.size()):
+		if _buttons[index].is_visible_in_tree() and _buttons[index].get_global_rect().has_point(point):
+			return true
+	return false
+
+
+func highlight_drop(point: Vector2) -> void:
+	var target: int = _ids.size() if accepts_drop(point) else -1
+	if target == _highlighted_drop:
+		return
+	clear_drop_highlight()
+	if target >= 0:
+		_highlighted_drop = target
+		_buttons[target].add_theme_stylebox_override("disabled", _drop_style)
+
+
+func clear_drop_highlight() -> void:
+	if _highlighted_drop >= 0:
+		_buttons[_highlighted_drop].remove_theme_stylebox_override("disabled")
+		_highlighted_drop = -1

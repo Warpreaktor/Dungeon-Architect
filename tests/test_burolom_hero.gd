@@ -165,7 +165,7 @@ func _test_party_save_and_editor() -> void:
 	picker.party_chosen.connect(func(ids: Array[String]) -> void: chosen.assign(ids))
 	card.pressed.emit()
 	assert(picker._preview.hero_name.text == "Буролом")
-	picker._preview.toggle_button.pressed.emit()
+	picker._catalog.hero_add_requested.emit("burolom")
 	assert(picker.selected_party() == ["burolom"])
 	picker.get_node("%StartPartyButton").pressed.emit()
 	assert(chosen == ["burolom"])

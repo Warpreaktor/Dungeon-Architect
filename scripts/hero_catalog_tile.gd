@@ -1,6 +1,8 @@
 class_name HeroCatalogTile
 extends Button
 
+signal add_requested(hero_id: String)
+
 const GOLD := Color(0.94, 0.76, 0.43)
 const INK := Color(0.07, 0.11, 0.16)
 var hero: HeroDefinition
@@ -73,3 +75,9 @@ func set_selection(focused: bool, party_position: int) -> void:
 	add_theme_stylebox_override("hover", hover)
 	add_theme_stylebox_override("pressed", hover)
 	_badge.text = "✓ %d" % party_position if party_position > 0 else ""
+
+
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ENTER:
+		add_requested.emit(hero.hero_id)
+		accept_event()

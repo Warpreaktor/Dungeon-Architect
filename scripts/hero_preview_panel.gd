@@ -1,7 +1,6 @@
 class_name HeroPreviewPanel
 extends PanelContainer
 
-signal toggle_requested
 signal catalog_requested
 
 const ABILITY_ICON_SCENE: PackedScene = preload("res://scenes/ability_icon.tscn")
@@ -22,7 +21,6 @@ const STAT_NAMES := {"max_health": "Жизнь", "energy": "Энергия", "st
 @onready var abilities: HFlowContainer = $Content/Scroll/Details/Abilities
 @onready var ability_title: Label = $Content/Scroll/Details/AbilityTitle
 @onready var scroll: ScrollContainer = $Content/Scroll
-@onready var toggle_button: Button = $Content/Toggle
 @onready var catalog_button: Button = $Content/CatalogBack
 
 var _stat_labels: Dictionary = {}
@@ -30,7 +28,6 @@ var _stat_names: Dictionary = {}
 
 
 func _ready() -> void:
-	toggle_button.pressed.connect(func() -> void: toggle_requested.emit())
 	catalog_button.pressed.connect(func() -> void: catalog_requested.emit())
 	for key in STAT_NAMES:
 		var row := HBoxContainer.new()
@@ -98,11 +95,6 @@ func show_hero(hero: HeroDefinition) -> void:
 		icon.configure_ability(ability)
 	ability_title.visible = abilities.get_child_count() > 0
 	scroll.scroll_vertical = 0
-
-
-func refresh_action(has_hero: bool, in_party: bool, full: bool) -> void:
-	toggle_button.text = "Убрать из отряда" if in_party else "Добавить в отряд"
-	toggle_button.disabled = not has_hero or (full and not in_party)
 
 
 func adapt(horizontal_details: bool, separate_page: bool, available_height: float) -> void:

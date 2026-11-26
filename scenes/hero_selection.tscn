@@ -137,14 +137,6 @@ layout_mode = 2
 theme_override_constants/h_separation = 10
 theme_override_constants/v_separation = 4
 
-[node name="Toggle" type="Button" parent="Body/Preview/Content"]
-custom_minimum_size = Vector2(0, 42)
-layout_mode = 2
-theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
-theme_override_styles/hover = SubResource("StyleBoxFlat_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_hover")
-text = "Добавить в отряд"
-
 [node name="CatalogBack" type="Button" parent="Body/Preview/Content"]
 visible = false
 custom_minimum_size = Vector2(0, 40)

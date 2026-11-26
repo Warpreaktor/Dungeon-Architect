@@ -2,6 +2,7 @@ class_name HeroCatalogGrid
 extends VBoxContainer
 
 signal hero_focused(hero_id: String)
+signal hero_add_requested(hero_id: String)
 
 const TILE_TARGET := 108.0
 const TILE_MAX := 140.0

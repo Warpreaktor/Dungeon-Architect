@@ -10,6 +10,137 @@ func _settle() -> void:
 		await process_frame
 
 
+func _mouse(picker: HeroSelection, point: Vector2, pressed: bool, double_click: bool = false) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.position = point
+	event.pressed = pressed
+	event.double_click = double_click
+	picker._input(event)
+
+
+func _touch(picker: HeroSelection, point: Vector2, pressed: bool, canceled: bool = false) -> void:
+	var event := InputEventScreenTouch.new()
+	event.index = 0
+	event.position = point
+	event.pressed = pressed
+	event.canceled = canceled
+	picker._input(event)
+
+
+func _drag(picker: HeroSelection, point: Vector2, touch: bool) -> void:
+	if touch:
+		var event := InputEventScreenDrag.new()
+		event.index = 0
+		event.position = point
+		picker._input(event)
+	else:
+		var event := InputEventMouseMotion.new()
+		event.position = point
+		event.button_mask = MOUSE_BUTTON_MASK_LEFT
+		picker._input(event)
+
+
+func _point(picker: HeroSelection, id: String) -> Vector2:
+	return (picker._catalog.tiles[id] as HeroCatalogTile).get_global_rect().get_center()
+
+
+func _test_gestures(picker: HeroSelection, definitions: Array[HeroDefinition]) -> void:
+	var small: Array[HeroDefinition] = []
+	for index in range(GameSession.MAX_PARTY_SIZE):
+		small.append(definitions[index])
+	picker.set_heroes(small)
+	await _settle()
+	assert(picker._preview.get_node_or_null("Content/Toggle") == null)
+	var first: String = small[0].hero_id
+	var point: Vector2 = _point(picker, first)
+	_mouse(picker, point, true)
+	_mouse(picker, point, false)
+	assert(picker.selected_party().is_empty() and picker._focused_id == first)
+	_mouse(picker, point, true, true)
+	_mouse(picker, point, false)
+	assert(picker.selected_party() == [first])
+	_mouse(picker, point, true, true)
+	_mouse(picker, point, false)
+	assert(picker.selected_party() == [first])
+	var second: String = small[1].hero_id
+	point = _point(picker, second)
+	var target: Vector2 = picker._party_bar.target_rect(1).get_center()
+	_mouse(picker, point, true)
+	_drag(picker, target, false)
+	assert(picker._gesture == HeroSelection.Gesture.DRAG and picker._drag_portrait != null)
+	_mouse(picker, target, false)
+	assert(picker.selected_party() == [first, second] and picker._drag_portrait == null)
+	var third: String = small[2].hero_id
+	point = _point(picker, third)
+	target = picker._party_bar.target_rect(2).get_center()
+	_touch(picker, point, true)
+	# Emulated mouse input must not produce a second addition.
+	var emulated := InputEventMouseButton.new()
+	emulated.device = InputEvent.DEVICE_ID_EMULATION
+	emulated.button_index = MOUSE_BUTTON_LEFT
+	emulated.position = point
+	emulated.pressed = true
+	picker._input(emulated)
+	_drag(picker, target, true)
+	assert(picker._gesture == HeroSelection.Gesture.DRAG)
+	_touch(picker, target, false, true)
+	emulated.pressed = false
+	emulated.position = target
+	picker._input(emulated)
+	assert(picker.selected_party() == [first, second] and picker._drag_portrait == null)
+	_touch(picker, point, true)
+	_drag(picker, target, true)
+	_touch(picker, target, false)
+	assert(picker.selected_party() == [first, second, third])
+	var fourth: String = small[3].hero_id
+	point = _point(picker, fourth)
+	_touch(picker, point, true)
+	_drag(picker, Vector2(2, 2), true)
+	_touch(picker, Vector2(2, 2), false)
+	assert(picker.selected_party() == [first, second, third])
+	_touch(picker, point, true)
+	_drag(picker, picker._party_bar.target_rect(3).get_center(), true)
+	_touch(picker, picker._party_bar.target_rect(3).get_center(), false)
+	assert(picker.selected_party() == [first, second, third, fourth])
+	assert(not picker._party_bar.accepts_drop(target))
+	picker.set_heroes(definitions)
+	root.size = Vector2i(900, 540)
+	await _settle()
+	point = _point(picker, first)
+	assert(picker._catalog.scroll.get_v_scroll_bar().max_value > picker._catalog.scroll.get_v_scroll_bar().page)
+	_touch(picker, point, true)
+	picker._started_at = Time.get_ticks_msec()
+	_drag(picker, point - Vector2(0, 60), true)
+	assert(picker._gesture == HeroSelection.Gesture.SCROLL)
+	_touch(picker, point - Vector2(0, 60), false)
+	assert(picker.selected_party().is_empty() and picker._catalog.scroll.scroll_vertical > 0)
+	picker._catalog.scroll.scroll_vertical = 0
+	await _settle()
+	point = _point(picker, first)
+	target = picker._party_bar.target_rect(0).get_center()
+	_touch(picker, point, true)
+	picker._started_at -= HeroSelection.TOUCH_HOLD_MS
+	_drag(picker, target, true)
+	assert(picker._gesture == HeroSelection.Gesture.DRAG)
+	_touch(picker, target, false)
+	assert(picker.selected_party() == [first])
+	picker.reset_selection()
+	root.size = Vector2i(480, 540)
+	await _settle()
+	assert(picker._separate_page and picker._catalog.visible)
+	point = _point(picker, first)
+	_touch(picker, point, true)
+	_touch(picker, point, false)
+	assert(picker.selected_party().is_empty() and picker._catalog.visible)
+	_touch(picker, point, true)
+	_touch(picker, point, false)
+	assert(picker.selected_party() == [first] and picker._catalog.visible)
+	root.size = Vector2i(1280, 800)
+	picker.reset_selection()
+	await _settle()
+
+
 func _verify() -> void:
 	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
 	root.size = Vector2i(1280, 800)
@@ -26,6 +157,7 @@ func _verify() -> void:
 		hero.hero_id = "catalog_hero_%02d" % definitions.size()
 		hero.display_name = "Персонаж %02d" % definitions.size()
 		definitions.append(hero)
+	await _test_gestures(picker, definitions)
 	picker.set_heroes(definitions)
 	await _settle()
 	assert(picker._catalog.tiles.size() == definitions.size())
@@ -42,7 +174,7 @@ func _verify() -> void:
 		picker._catalog.tiles[id].pressed.emit()
 		assert(picker._preview.hero_name.text == definitions[index].display_name)
 		assert(picker.selected_party() == original)
-		picker._preview.toggle_button.pressed.emit()
+		picker._catalog.hero_add_requested.emit(id)
 		original.append(id)
 		assert(picker.selected_party() == original)
 		assert(picker._party_bar.portraits[index].texture == definitions[index].portrait)
@@ -50,8 +182,8 @@ func _verify() -> void:
 	var extra: HeroDefinition = definitions[GameSession.MAX_PARTY_SIZE]
 	picker._catalog.tiles[extra.hero_id].pressed.emit()
 	assert(picker._preview.hero_name.text == extra.display_name)
-	assert(picker._preview.toggle_button.disabled)
-	picker._toggle_focused()
+	assert(not picker._can_add_hero(extra.hero_id))
+	picker._catalog.hero_add_requested.emit(extra.hero_id)
 	assert(picker.selected_party() == original)
 	picker._catalog.search.text = extra.display_name.to_upper()
 	picker._catalog.search.text_changed.emit(picker._catalog.search.text)
@@ -61,8 +193,8 @@ func _verify() -> void:
 	picker._party_bar._remove_buttons[0].pressed.emit()
 	original.pop_front()
 	assert(picker.selected_party() == original)
-	assert(not picker._preview.toggle_button.disabled)
-	picker._preview.toggle_button.pressed.emit()
+	assert(picker._can_add_hero(extra.hero_id))
+	picker._catalog.hero_add_requested.emit(extra.hero_id)
 	original.append(extra.hero_id)
 	assert(picker.selected_party() == original)
 	var emitted: Array = []

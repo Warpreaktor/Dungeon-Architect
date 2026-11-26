@@ -18,7 +18,7 @@ func _verify() -> void:
 		var button: Button = picker._catalog.tiles.get(hero_id) as Button
 		assert(button != null)
 		button.pressed.emit()
-		picker._preview.toggle_button.pressed.emit()
+		picker._catalog.hero_add_requested.emit(hero_id)
 	assert(picker.selected_party() == PARTY_IDS)
 	assert(not (picker.get_node("%StartPartyButton") as Button).disabled)
 	assert(picker._party_bar.count.text == "Отряд: 4 / 4")
@@ -29,7 +29,7 @@ func _verify() -> void:
 	picker._party_bar._remove_buttons[0].pressed.emit()
 	assert(picker.selected_party() == ["petushan", "burolom", "luma"])
 	wolf_button.pressed.emit()
-	picker._preview.toggle_button.pressed.emit()
+	picker._catalog.hero_add_requested.emit("volcha")
 	assert(picker.selected_party() == ["petushan", "burolom", "luma", "volcha"])
 	picker.reset_selection()
 	assert(picker.selected_party().is_empty())

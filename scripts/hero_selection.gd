@@ -51,10 +51,10 @@ func _ready() -> void:
 	add_child(_pending_focus)
 	_preview.catalog_requested.connect(_show_catalog)
 	_party_bar.member_focused.connect(_focus_hero)
-	_party_bar.member_removed.connect(_remove_hero)
 	_start_button.pressed.connect(_confirm_party)
 	%BackButton.pressed.connect(func() -> void: back_requested.emit())
 	resized.connect(_adapt_layout)
+	get_viewport().size_changed.connect(_adapt_layout)
 	visibility_changed.connect(_on_visibility_changed)
 	var heroes: Array[HeroDefinition] = []
 	for id in HeroCatalog.list_ids():
@@ -145,6 +145,8 @@ func _move_gesture(point: Vector2) -> void:
 			if not _gesture_from_party:
 				_source_rect = (_catalog.tiles[_gesture_id] as HeroCatalogTile).get_global_rect()
 			_begin_transfer(_gesture_id, _source_rect, _origin, _gesture_from_party)
+			if _gesture_from_party and _separate_page and not _catalog.visible:
+				_show_catalog()
 		else:
 			_gesture = Gesture.SCROLL
 		_last_tap_id = ""
@@ -265,7 +267,7 @@ func _remove_hero(hero_id: String) -> void:
 func _refresh_selection() -> void:
 	_catalog.refresh_selection(_focused_id, _selected_ids)
 	_party_bar.refresh(_selected_ids, _heroes)
-	_party_bar.adapt(size.x < 760.0)
+	_adapt_party_row()
 	_start_button.disabled = _selected_ids.is_empty()
 	_sync_preview_portrait()
 
@@ -281,8 +283,20 @@ func _adapt_layout() -> void:
 	_preview.custom_minimum_size.x = 0.0 if narrow else minf(310.0, size.x * 0.36)
 	_preview.size_flags_stretch_ratio = 0.65 if _body.vertical else 1.0
 	_preview.adapt(narrow, _separate_page, size.y)
-	_party_bar.adapt(size.x < 760.0)
+	_adapt_party_row()
 	_catalog.call_deferred("_layout_tiles")
+
+
+func _adapt_party_row() -> void:
+	var width: float = minf(size.x, get_viewport_rect().size.x + offset_right - offset_left)
+	var start_width: float = clampf(width * 0.16, 96.0, 160.0)
+	_start_button.custom_minimum_size = Vector2(start_width, 52.0)
+	var gap: int = $PartyRow.get_theme_constant("separation")
+	var slot_gap: int = _party_bar.row.get_theme_constant("separation")
+	var slots: int = GameSession.MAX_PARTY_SIZE
+	var side: float = floorf((width - start_width - gap - slot_gap * (slots - 1)) / slots)
+	var height_limit: float = minf(size.y, get_viewport_rect().size.y) * 0.19
+	_party_bar.adapt(maxf(1.0, minf(side, minf(150.0, height_limit))))
 
 
 func _show_catalog() -> void:
@@ -326,7 +340,7 @@ func _move_to_catalog(hero_id: String) -> void:
 	_catalog.set_transfer("", hero_id)
 	_refresh_selection()
 	_party_bar.set_transfer("")
-	_settle_to_catalog(hero_id, LAND_SECONDS)
+	_drag_layer.settle(func() -> Rect2: return _catalog.return_rect(hero_id), LAND_SECONDS, _finish_transfer, true)
 
 
 func _settle_to_party(hero_id: String, duration: float) -> void:

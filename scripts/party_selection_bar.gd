@@ -2,18 +2,15 @@ class_name PartySelectionBar
 extends VBoxContainer
 
 signal member_focused(hero_id: String)
-signal member_removed(hero_id: String)
 
 @onready var count: Label = $Count
 @onready var row: HBoxContainer = $Slots
 
 var portraits: Array[TextureRect] = []
 var _buttons: Array[Button] = []
-var _remove_buttons: Array[Button] = []
 var _names: Array[Label] = []
 var _ids: Array[String] = []
-var _contents: Array[HBoxContainer] = []
-var _compact: bool = false
+var _contents: Array[VBoxContainer] = []
 var _transfer_id := ""
 var _highlights: Array[Panel] = []
 
@@ -21,12 +18,12 @@ var _highlights: Array[Panel] = []
 func _ready() -> void:
 	for index in range(GameSession.MAX_PARTY_SIZE):
 		var button := Button.new()
-		button.custom_minimum_size = Vector2(0, 66)
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.custom_minimum_size = Vector2(60, 82)
 		button.pressed.connect(_focus.bind(index))
 		row.add_child(button)
 		_buttons.append(button)
-		var content := HBoxContainer.new()
+		var content := VBoxContainer.new()
+		content.add_theme_constant_override("separation", 2)
 		content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		button.add_child(content)
 		_contents.append(content)
@@ -36,30 +33,19 @@ func _ready() -> void:
 		content.offset_bottom = -4
 		content.offset_right = -4
 		var portrait := TextureRect.new()
-		portrait.custom_minimum_size = Vector2(48, 48)
+		portrait.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		content.add_child(portrait)
 		portraits.append(portrait)
 		var label := Label.new()
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", 13)
 		label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		content.add_child(label)
 		_names.append(label)
-		var remove := Button.new()
-		remove.text = "×"
-		remove.custom_minimum_size = Vector2(28, 28)
-		remove.pressed.connect(_remove.bind(index))
-		button.add_child(remove)
-		remove.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-		remove.offset_left = -30
-		remove.offset_right = -2
-		remove.offset_top = 2
-		remove.offset_bottom = 30
-		remove.tooltip_text = "Убрать из отряда"
-		_remove_buttons.append(remove)
 		var highlight := Panel.new()
 		highlight.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var style := StyleBoxFlat.new()
@@ -82,30 +68,22 @@ func refresh(ids: Array[String], heroes: Dictionary) -> void:
 		portraits[index].texture = hero.portrait if hero != null else null
 		portraits[index].visible = hero != null
 		_names[index].text = hero.display_name if hero != null else "+"
-		_names[index].horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if hero != null else HORIZONTAL_ALIGNMENT_CENTER
+		_names[index].size_flags_vertical = Control.SIZE_FILL if hero != null else Control.SIZE_EXPAND_FILL
+		_names[index].vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_buttons[index].tooltip_text = hero.display_name if hero != null else ""
 		_buttons[index].disabled = hero == null
-		_remove_buttons[index].visible = hero != null
 	_apply_transfer()
 
 
-func adapt(compact: bool) -> void:
-	_compact = compact
+func adapt(side: float) -> void:
 	for index in range(_buttons.size()):
-		_names[index].visible = not compact or index >= _ids.size()
-		_contents[index].offset_right = -4 if compact or index >= _ids.size() else -34
-		portraits[index].custom_minimum_size.x = 0.0 if compact else 48.0
-		portraits[index].size_flags_horizontal = Control.SIZE_EXPAND_FILL if compact else Control.SIZE_FILL
+		_buttons[index].custom_minimum_size = Vector2(side, side + 22.0)
+		_names[index].add_theme_font_size_override("font_size", 12 if side < 80.0 else 13)
 
 
 func _focus(index: int) -> void:
 	if index < _ids.size():
 		member_focused.emit(_ids[index])
-
-
-func _remove(index: int) -> void:
-	if index < _ids.size():
-		member_removed.emit(_ids[index])
 
 
 func target_rect(index: int) -> Rect2:
@@ -127,8 +105,6 @@ func member_at(point: Vector2) -> String:
 	var index: int = slot_at(point)
 	if index < 0 or index >= _ids.size() or _ids[index] == _transfer_id:
 		return ""
-	if _remove_buttons[index].is_visible_in_tree() and _remove_buttons[index].get_global_rect().has_point(point):
-		return ""
 	return _ids[index]
 
 
@@ -142,7 +118,6 @@ func _apply_transfer() -> void:
 		var hidden: bool = index < _ids.size() and _ids[index] == _transfer_id
 		_contents[index].modulate.a = 0.0 if hidden else 1.0
 		_buttons[index].disabled = hidden or index >= _ids.size()
-		_remove_buttons[index].visible = index < _ids.size() and not hidden
 
 
 func highlight_slot(index: int) -> void:

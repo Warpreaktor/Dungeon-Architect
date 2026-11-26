@@ -46,9 +46,10 @@ func _point(picker: HeroSelection, id: String) -> Vector2:
 
 
 func _wait_flight(picker: HeroSelection) -> void:
-	await create_timer(0.35).timeout
+	await create_timer(0.65).timeout
 	await _settle()
 	assert(picker._drag_layer.card == null and picker._transfer_id.is_empty())
+	assert(picker._drag_layer._ash_bits.is_empty())
 
 
 func _test_gestures(picker: HeroSelection, definitions: Array[HeroDefinition]) -> void:
@@ -153,7 +154,11 @@ func _test_gestures(picker: HeroSelection, definitions: Array[HeroDefinition]) -
 	assert(picker._catalog.tiles[second].visible and picker._catalog.tiles[second].modulate.a == 0.0)
 	await _wait_flight(picker)
 	assert(picker._catalog.tiles[second].modulate.a == 1.0)
-	picker._party_bar._remove_buttons[0].pressed.emit()
+	point = picker._party_bar.target_rect(0).get_center()
+	target = picker._catalog.scroll.get_global_rect().get_center()
+	_touch(picker, point, true)
+	_drag(picker, target, true)
+	_touch(picker, target, false)
 	assert(picker.selected_party() == [third, fourth])
 	assert(picker._catalog.tiles[first].visible and picker._catalog.tiles[first].modulate.a == 0.0)
 	picker.hide()
@@ -248,8 +253,13 @@ func _verify() -> void:
 	assert(picker._catalog.tiles[extra.hero_id].visible)
 	assert(not picker._catalog.tiles[original[0]].visible)
 	assert(picker.selected_party() == original)
-	picker._party_bar._remove_buttons[0].pressed.emit()
+	var source: Vector2 = picker._party_bar.target_rect(0).get_center()
+	var destination: Vector2 = picker._catalog.scroll.get_global_rect().get_center()
+	_mouse(picker, source, true)
+	_drag(picker, destination, false)
+	_mouse(picker, destination, false)
 	original.pop_front()
+	await _wait_flight(picker)
 	assert(picker.selected_party() == original)
 	assert(picker._can_add_hero(extra.hero_id))
 	picker._catalog.hero_add_requested.emit(extra.hero_id)
@@ -267,6 +277,12 @@ func _verify() -> void:
 		assert(picker.get_global_rect().encloses(picker._party_bar.get_global_rect()))
 		assert(picker.get_global_rect().encloses(picker._start_button.get_global_rect()))
 		assert(root.get_visible_rect().encloses(picker._start_button.get_global_rect()))
+		for slot in range(GameSession.MAX_PARTY_SIZE):
+			var rect: Rect2 = picker._party_bar.target_rect(slot)
+			assert(root.get_visible_rect().encloses(rect))
+			assert(rect.end.x <= picker._start_button.get_global_rect().position.x)
+			assert(rect.size.y > rect.size.x)
+			assert(picker._party_bar.portraits[slot].size.x > 40.0)
 		assert(picker.selected_party() == original)
 		if picker._separate_page:
 			picker._show_catalog()
@@ -283,6 +299,7 @@ func _verify() -> void:
 	assert(picker._catalog.search.text.is_empty())
 	picker.hide()
 	assert(picker._drag_layer.card == null and picker._transfer_id.is_empty())
+	assert(picker._drag_layer._ash_bits.is_empty())
 	picker.queue_free()
 	await process_frame
 	print("Hero selection: adaptive catalog, 25 heroes, search, preview and ordered party OK")

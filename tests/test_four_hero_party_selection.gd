@@ -26,7 +26,7 @@ func _verify() -> void:
 	assert(chosen_parties.size() == 1 and chosen_parties[0] == PARTY_IDS)
 
 	var wolf_button: Button = picker._catalog.tiles["volcha"] as Button
-	picker._party_bar._remove_buttons[0].pressed.emit()
+	picker._remove_hero("volcha")
 	assert(picker.selected_party() == ["petushan", "burolom", "luma"])
 	wolf_button.pressed.emit()
 	picker._catalog.hero_add_requested.emit("volcha")

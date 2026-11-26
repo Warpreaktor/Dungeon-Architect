@@ -5,6 +5,7 @@ const LIFT_SCALE := 1.05
 const LIFT_SECONDS := 0.10
 const MAX_TILT := 8.0
 const FOLLOW_SPEED := 22.0
+const ASH_SECONDS := 0.32
 
 var card: Control
 var _tween: Tween
@@ -12,6 +13,8 @@ var _following := false
 var _pointer := Vector2.ZERO
 var _offset := Vector2.ZERO
 var _tilt := 0.0
+var _ash_bits: Array[ColorRect] = []
+var _ash_rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
@@ -19,6 +22,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	z_index = 30
 	set_process(false)
+	_ash_rng.randomize()
 
 
 func lift(visual: Control, source: Rect2, pointer: Vector2) -> void:
@@ -55,7 +59,7 @@ func _process(delta: float) -> void:
 	_tilt = lerpf(_tilt, 0.0, weight)
 
 
-func settle(target: Callable, duration: float, finished: Callable) -> void:
+func settle(target: Callable, duration: float, finished: Callable, as_ash: bool = false) -> void:
 	if not is_instance_valid(card):
 		finished.call()
 		return
@@ -78,6 +82,36 @@ func settle(target: Callable, duration: float, finished: Callable) -> void:
 	, 0.0, 1.0, duration)
 	_tween.tween_callback(func() -> void:
 		_tween = null
+		if as_ash:
+			_crumble(finished)
+		else:
+			clear()
+			finished.call()
+	)
+
+
+func _crumble(finished: Callable) -> void:
+	var frame := Rect2(card.global_position, card.size)
+	var unit: float = maxf(1.0, minf(frame.size.x, frame.size.y) / 18.0)
+	_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(card, "modulate:a", 0.0, ASH_SECONDS * 0.45)
+	_tween.tween_property(card, "scale", Vector2.ONE * 0.95, ASH_SECONDS * 0.45)
+	for index in range(36):
+		var bit := ColorRect.new()
+		bit.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bit.size = Vector2.ONE * unit * _ash_rng.randf_range(0.45, 1.25)
+		bit.pivot_offset = bit.size * 0.5
+		bit.color = Color(0.28, 0.26, 0.24).lerp(Color(0.83, 0.57, 0.31), _ash_rng.randf())
+		add_child(bit)
+		bit.global_position = frame.position + Vector2(_ash_rng.randf(), _ash_rng.randf()) * frame.size
+		_ash_bits.append(bit)
+		var drift := Vector2(_ash_rng.randf_range(-7.0, 7.0), _ash_rng.randf_range(-11.0, -2.0)) * unit
+		_tween.tween_property(bit, "global_position", bit.global_position + drift, ASH_SECONDS)
+		_tween.tween_property(bit, "rotation_degrees", _ash_rng.randf_range(-150.0, 150.0), ASH_SECONDS)
+		_tween.tween_property(bit, "modulate:a", 0.0, ASH_SECONDS)
+		_tween.tween_property(bit, "scale", Vector2.ONE * 0.2, ASH_SECONDS)
+	_tween.chain().tween_callback(func() -> void:
+		_tween = null
 		clear()
 		finished.call()
 	)
@@ -91,6 +125,10 @@ func clear() -> void:
 		card.hide()
 		card.queue_free()
 	card = null
+	for bit in _ash_bits:
+		bit.hide()
+		bit.queue_free()
+	_ash_bits.clear()
 
 
 func _stop_tween() -> void:

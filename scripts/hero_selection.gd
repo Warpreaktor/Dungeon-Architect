@@ -21,8 +21,8 @@ var _transfer_id := ""
 const DRAG_DISTANCE := 12.0
 const TOUCH_HOLD_MS := 220
 const DOUBLE_TAP_MS := 320
-const LAND_SECONDS := 0.20
-const RETURN_SECONDS := 0.25
+const LAND_SECONDS := 0.32
+const RETURN_SECONDS := 0.40
 
 enum Gesture { NONE, TAP, SCROLL, DRAG }
 var _gesture: Gesture = Gesture.NONE
@@ -153,8 +153,14 @@ func _move_gesture(point: Vector2) -> void:
 	if _gesture == Gesture.SCROLL and _touch_index >= 0:
 		_catalog.scroll.scroll_vertical = _scroll_origin + roundi(_origin.y - point.y)
 	elif _gesture == Gesture.DRAG:
-		_drag_layer.follow(point)
+		_drag_layer.follow(point, _gesture_from_party and _leaves_party_row(point))
 		_party_bar.highlight_slot(_drop_slot(point))
+
+
+func _leaves_party_row(point: Vector2) -> bool:
+	var band: Rect2 = $PartyRow.get_global_rect()
+	var leading_edge: float = _source_rect.position.y + point.y - _origin.y
+	return leading_edge < band.position.y or not band.has_point(point)
 
 
 func _end_gesture(point: Vector2, double_click: bool = false, canceled: bool = false) -> void:
@@ -166,6 +172,7 @@ func _end_gesture(point: Vector2, double_click: bool = false, canceled: bool = f
 		if target >= 0:
 			_move_to_party(id, target)
 		elif not canceled and _gesture_from_party and _catalog.is_visible_in_tree() and _catalog.get_global_rect().has_point(point):
+			_drag_layer.follow(point, true)
 			_move_to_catalog(id)
 		else:
 			_return_gesture()
@@ -311,6 +318,7 @@ func _begin_transfer(hero_id: String, source: Rect2, point: Vector2, from_party:
 	_transfer_id = hero_id
 	if is_visible_in_tree() and source.has_area():
 		var visual := HeroCatalogTile.new()
+		visual.theme = theme
 		_drag_layer.lift(visual, source, point)
 		visual.configure(_heroes[hero_id] as HeroDefinition)
 		visual.set_selection(hero_id == _focused_id, 0)
@@ -340,7 +348,7 @@ func _move_to_catalog(hero_id: String) -> void:
 	_catalog.set_transfer("", hero_id)
 	_refresh_selection()
 	_party_bar.set_transfer("")
-	_drag_layer.settle(func() -> Rect2: return _catalog.return_rect(hero_id), LAND_SECONDS, _finish_transfer, true)
+	_drag_layer.discard(func() -> Rect2: return _catalog.visible_tile_rect(hero_id), _finish_transfer)
 
 
 func _settle_to_party(hero_id: String, duration: float) -> void:

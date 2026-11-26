@@ -46,10 +46,12 @@ func _point(picker: HeroSelection, id: String) -> Vector2:
 
 
 func _wait_flight(picker: HeroSelection) -> void:
-	await create_timer(0.65).timeout
+	var deadline: int = Time.get_ticks_msec() + 4000
+	while picker._drag_layer.card != null and Time.get_ticks_msec() < deadline:
+		await create_timer(0.03).timeout
 	await _settle()
 	assert(picker._drag_layer.card == null and picker._transfer_id.is_empty())
-	assert(picker._drag_layer._ash_bits.is_empty())
+	assert(picker._drag_layer._dust == null and picker._drag_layer._group == null)
 
 
 func _test_gestures(picker: HeroSelection, definitions: Array[HeroDefinition]) -> void:
@@ -143,6 +145,16 @@ func _test_gestures(picker: HeroSelection, definitions: Array[HeroDefinition]) -
 	target = picker._catalog.scroll.get_global_rect().get_center()
 	_touch(picker, point, true)
 	_drag(picker, target, true)
+	assert(picker._drag_layer._burn_requested)
+	picker._drag_layer._process(0.15)
+	assert(picker._drag_layer._burn > 0.0)
+	assert(picker.selected_party() == [second, first, third, fourth])
+	_drag(picker, point, true)
+	assert(not picker._drag_layer._burn_requested)
+	picker._drag_layer._process(0.2)
+	assert(is_zero_approx(picker._drag_layer._burn))
+	_drag(picker, target, true)
+	picker._drag_layer._process(0.15)
 	_touch(picker, target, false, true)
 	assert(picker.selected_party() == [second, first, third, fourth])
 	await _wait_flight(picker)
@@ -152,6 +164,11 @@ func _test_gestures(picker: HeroSelection, definitions: Array[HeroDefinition]) -
 	_mouse(picker, target, false)
 	assert(picker.selected_party() == [first, third, fourth])
 	assert(picker._catalog.tiles[second].visible and picker._catalog.tiles[second].modulate.a == 0.0)
+	assert(picker._drag_layer._dust != null)
+	await create_timer(CardDragLayer.BURN_SECONDS + CardDragLayer.SCATTER_SECONDS + 0.12).timeout
+	assert(picker._drag_layer.card != null)
+	assert(picker._drag_layer._burn > 0.0 and picker._drag_layer._scatter < 1.0)
+	assert(picker._catalog.tiles[second].modulate.a == 0.0)
 	await _wait_flight(picker)
 	assert(picker._catalog.tiles[second].modulate.a == 1.0)
 	point = picker._party_bar.target_rect(0).get_center()
@@ -299,7 +316,7 @@ func _verify() -> void:
 	assert(picker._catalog.search.text.is_empty())
 	picker.hide()
 	assert(picker._drag_layer.card == null and picker._transfer_id.is_empty())
-	assert(picker._drag_layer._ash_bits.is_empty())
+	assert(picker._drag_layer._dust == null and picker._drag_layer._group == null)
 	picker.queue_free()
 	await process_frame
 	print("Hero selection: adaptive catalog, 25 heroes, search, preview and ordered party OK")

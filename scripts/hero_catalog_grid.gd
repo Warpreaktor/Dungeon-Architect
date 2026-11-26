@@ -140,6 +140,13 @@ func _set_landing(tile: HeroCatalogTile, landing: bool) -> void:
 	tile.disabled = landing
 
 
+func visible_tile_rect(hero_id: String) -> Rect2:
+	var tile: HeroCatalogTile = tiles.get(hero_id) as HeroCatalogTile
+	if tile != null and tile.is_visible_in_tree() and scroll.get_global_rect().encloses(tile.get_global_rect()):
+		return tile.get_global_rect()
+	return Rect2()
+
+
 func return_rect(hero_id: String) -> Rect2:
 	var tile: HeroCatalogTile = tiles.get(hero_id) as HeroCatalogTile
 	if tile != null and tile.is_visible_in_tree() and scroll.get_global_rect().intersects(tile.get_global_rect()):

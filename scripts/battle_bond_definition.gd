@@ -2,6 +2,8 @@ class_name BattleBondDefinition
 extends Resource
 
 @export var companion_monster_id: String = ""
+@export var commander_separated_name: String = ""
+@export var commander_separated_portrait: Texture2D
 @export var command_ability_id: String = ""
 @export var marked_status_id: String = ""
 @export var heal_ability_id: String = ""

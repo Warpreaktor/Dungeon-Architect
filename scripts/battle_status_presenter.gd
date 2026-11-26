@@ -35,6 +35,7 @@ var _impact_portraits: Dictionary = {}
 var _status_markers: Dictionary = {}
 var _impact_status_markers: Dictionary = {}
 var _status_tweens: Dictionary = {}
+var _second_rows: Dictionary = {}
 var _visible_statuses: Dictionary = {"hero": {}, "enemy": {}}
 
 
@@ -47,6 +48,19 @@ func setup(portraits: Dictionary) -> void:
 		var portrait: TextureRect = portraits[actor_id] as TextureRect
 		if portrait != null:
 			_status_markers[str(actor_id)] = _make_status_markers(portrait, str(actor_id))
+			portrait.resized.connect(_layout_status_markers.bind(str(actor_id)))
+
+
+func move_markers(actor_id: String, portrait: TextureRect, second_row: bool) -> void:
+	_second_rows[actor_id] = second_row
+	var refresh: Callable = _layout_status_markers.bind(actor_id)
+	if not portrait.resized.is_connected(refresh):
+		portrait.resized.connect(refresh)
+	for marker in (_status_markers.get(actor_id, {}) as Dictionary).values():
+		var icon: TextureRect = marker as TextureRect
+		if icon.get_parent() != portrait:
+			icon.reparent(portrait, false)
+	_layout_status_markers(actor_id)
 
 
 func reset() -> void:
@@ -105,10 +119,15 @@ func _visible_marker_ids(actor_id: String) -> Array[String]:
 	return ids
 
 
-func _marker_position(parent: TextureRect, index: int) -> Vector2:
+func _marker_scale(actor_id: String) -> float:
+	var count: int = maxi(_visible_marker_ids(actor_id).size(), 1)
+	return minf(BLEED_MARKER_SCALE, (1.0 - 2.0 * BLEED_MARKER_OFFSET.x - STATUS_MARKER_GAP * (count - 1)) / count)
+
+
+func _marker_position(parent: TextureRect, index: int, actor_id: String) -> Vector2:
 	return parent.size * Vector2(
-		BLEED_MARKER_OFFSET.x + float(index) * (BLEED_MARKER_SCALE + STATUS_MARKER_GAP),
-		BLEED_MARKER_OFFSET.y)
+		BLEED_MARKER_OFFSET.x + float(index) * (_marker_scale(actor_id) + STATUS_MARKER_GAP),
+		0.37 if bool(_second_rows.get(actor_id, false)) else BLEED_MARKER_OFFSET.y)
 
 
 func _layout_status_markers(actor_id: String, skip_animation: String = "") -> void:
@@ -123,8 +142,8 @@ func _layout_status_markers(actor_id: String, skip_animation: String = "") -> vo
 			var animating: bool = collection == _impact_status_markers and _status_tweens.has(actor_id + ":" + str(status_id))
 			if icon.visible and status_id != skip_animation and not animating:
 				var portrait: TextureRect = icon.get_parent() as TextureRect
-				icon.size = portrait.size * BLEED_MARKER_SCALE
-				icon.position = _marker_position(portrait, ids.find(status_id))
+				icon.size = portrait.size * _marker_scale(actor_id)
+				icon.position = _marker_position(portrait, ids.find(status_id), actor_id)
 				icon.modulate = Color.WHITE
 
 
@@ -164,8 +183,8 @@ func flash(actor_id: String, status_id: String) -> void:
 	var peak_size: Vector2 = portrait.size * BLEED_FLASH_PEAK_SCALE
 	tween.tween_property(icon, "size", peak_size, BLEED_FLASH_IN_SECONDS)
 	tween.parallel().tween_property(icon, "position", (portrait.size - peak_size) * 0.5, BLEED_FLASH_IN_SECONDS)
-	tween.tween_property(icon, "size", portrait.size * BLEED_MARKER_SCALE, BLEED_FLASH_OUT_SECONDS)
-	tween.parallel().tween_property(icon, "position", _marker_position(portrait, _visible_marker_ids(actor_id).find(status_id)), BLEED_FLASH_OUT_SECONDS)
+	tween.tween_property(icon, "size", portrait.size * _marker_scale(actor_id), BLEED_FLASH_OUT_SECONDS)
+	tween.parallel().tween_property(icon, "position", _marker_position(portrait, _visible_marker_ids(actor_id).find(status_id), actor_id), BLEED_FLASH_OUT_SECONDS)
 	tween.parallel().tween_property(icon, "modulate", Color.WHITE, BLEED_FLASH_OUT_SECONDS)
 	tween.tween_callback(_finish_status_flash.bind(actor_id, status_id))
 

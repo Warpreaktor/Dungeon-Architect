@@ -3368,9 +3368,9 @@ func _show_combat_view() -> void:
 	_battle_view.combat_log_line.connect(_append_combat_log)
 	_battle_view.item_use_requested.connect(_on_battle_item_requested)
 	var monsters: Array[MonsterDefinition] = game_session.pending_monster_definitions()
-	var main_monster: MonsterDefinition = monsters[0] if not monsters.is_empty() else game_session.pending_monster_definition()
-	var second_monster: MonsterDefinition = monsters[1] if monsters.size() > 1 else null
-	_battle_view.begin(CombatSession.new(main_monster, game_session.hero, second_monster, game_session.trap_random.randi(), game_session.party), game_session.hero)
+	var combat: CombatSession = CombatSession.for_encounter(MonsterCatalog.normalize_legacy_encounter(monsters),
+		game_session.hero, game_session.trap_random.randi(), game_session.party)
+	_battle_view.begin(combat, game_session.hero)
 	_battle_view.bind_combat_items(game_session)
 
 

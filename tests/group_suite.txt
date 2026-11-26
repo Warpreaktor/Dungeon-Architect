@@ -1,5 +1,6 @@
 test_round_group_compositions.gd
 test_four_enemy_core.gd
+test_four_enemy_battle_view.gd
 test_monster_party_popup.gd
 test_monster_encounter_party.gd
 test_manual_hero_turn_selection.gd

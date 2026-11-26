@@ -24,6 +24,7 @@ const HEALTH_METER_SCENE: PackedScene = preload("res://scenes/health_meter.tscn"
 const ATTACK_ICON: Texture2D = preload("res://assets/icons/stats/24x24/attack.png")
 const DEFENSE_ICON: Texture2D = preload("res://assets/icons/stats/24x24/defense.png")
 
+var _margin: MarginContainer
 var _portrait: TextureRect
 var _name: Label
 var _energy: Label
@@ -47,6 +48,7 @@ func _ready() -> void:
 	custom_minimum_size.x = 202.0
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var margin := MarginContainer.new()
+	_margin = margin
 	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
 		margin.add_theme_constant_override(side, CONTENT_MARGIN)
 	add_child(margin)
@@ -128,6 +130,27 @@ func _add_icon(parent: Container, texture: Texture2D) -> TextureRect:
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(icon)
 	return icon
+
+
+func fit_card(portrait_side: float, font_size: int) -> void:
+	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		_margin.add_theme_constant_override(side, 4)
+	_portrait.custom_minimum_size = Vector2.ONE * portrait_side
+	for label in [_name, _energy]:
+		label.clip_text = true
+		label.add_theme_font_size_override("font_size", font_size)
+	_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_health.get_node("HeartIcon").hide()
+	_health.get_node("HealthColumn/HealthCaption/HealthTitle").hide()
+	var value: Label = _health.get_node("HealthColumn/HealthCaption/HealthValue")
+	value.add_theme_font_size_override("font_size", font_size)
+	value.clip_text = true
+	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
+func set_energy_text(value: String) -> void:
+	_energy.text = value
 
 
 func portrait_node() -> TextureRect:

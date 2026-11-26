@@ -1,9 +1,10 @@
 class_name AbilityIconCatalog
 extends RefCounted
 
-# Каталог иконок боевых приёмов.
-# Не хранит игровой баланс и не привязывает движок к конкретному герою —
-# только отдаёт текстуру по ID способности.
+const STYLE_DIRECTORY: String = "res://assets/abilities/frames"
+const ATTACK_ART: Texture2D = preload("res://assets/icons/stats/24x24/attack.png")
+const DEFENSE_ART: Texture2D = preload("res://assets/icons/stats/24x24/defense.png")
+const SUPPORT_ART: Texture2D = preload("res://assets/icons/stats/24x24/health.png")
 
 const ICON_PATHS := {
 	# Волча — утверждённые приёмы.
@@ -46,3 +47,29 @@ static func get_icon(ability_id: String) -> Texture2D:
 	if icon_path.is_empty():
 		return null
 	return load(icon_path) as Texture2D
+
+
+static func art_for(ability: AbilityDefinition) -> Texture2D:
+	if ability == null:
+		return null
+	if ability.icon_art != null:
+		return ability.icon_art
+	if ability.icon != null:
+		return ability.icon
+	match ability.category:
+		AbilityDefinition.Category.DEFENSE:
+			return DEFENSE_ART
+		AbilityDefinition.Category.SUPPORT:
+			return SUPPORT_ART
+		_:
+			return ATTACK_ART
+
+
+static func style_for_actor(actor: BattleParticipant) -> AbilityIconStyle:
+	if actor == null or actor.team_id != "enemies" or not MonsterCatalog.has(actor.definition_id):
+		return null
+	for style_id in ResourceCatalog.list_ids(STYLE_DIRECTORY):
+		var style: AbilityIconStyle = ResourceCatalog.load_by_id(STYLE_DIRECTORY, style_id) as AbilityIconStyle
+		if style != null and style.monster_ids.has(actor.definition_id):
+			return style
+	return null

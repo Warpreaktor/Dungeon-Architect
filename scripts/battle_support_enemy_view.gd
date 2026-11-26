@@ -5,6 +5,7 @@ signal info_requested(content: String)
 
 const PORTRAIT_SIZE: Vector2 = Vector2(112.0, 120.0)
 const SLOT_SIZE: Vector2 = Vector2(40.0, 40.0)
+const ABILITY_ICON_SCENE: PackedScene = preload("res://scenes/ability_icon.tscn")
 const SLOT_SEPARATION: int = 3
 const CONTENT_MARGIN: int = 10
 const CONTENT_SEPARATION: int = 7
@@ -257,7 +258,16 @@ func _refresh_slots() -> void:
 		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.mouse_filter = Control.MOUSE_FILTER_PASS
 		_slots.add_child(button)
+		var icon: AbilityIcon = ABILITY_ICON_SCENE.instantiate() as AbilityIcon
+		icon.name = "AbilityIcon"
+		button.add_child(icon)
+		icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		icon.offset_left = 3.0
+		icon.offset_top = 3.0
+		icon.offset_right = -3.0
+		icon.offset_bottom = -3.0
 		var info := Button.new()
+		info.name = "Info"
 		info.text = "ⓘ"
 		info.custom_minimum_size = Vector2(24, 24)
 		info.size = info.custom_minimum_size
@@ -271,21 +281,22 @@ func _refresh_slots() -> void:
 
 func _render_slot(index: int) -> void:
 	var slot: Button = _slots.get_child(index) as Button
+	var icon: AbilityIcon = slot.get_node("AbilityIcon") as AbilityIcon
 	if _participant == null or index >= _participant.action_chain.size():
 		slot.text = "Zz"
-		slot.icon = null
+		icon.configure(null)
 		slot.tooltip_text = "Отдых"
 	elif _revealed.has(index):
 		var ability: AbilityDefinition = AbilityCatalog.get_ability(str(_revealed[index]))
-		slot.icon = BattleAbilitySlot.visual_icon(ability)
-		slot.text = "" if slot.icon != null else (ability.display_name if ability != null else "?")
+		icon.configure_ability(ability, _participant)
+		slot.text = "" if icon.visible else (ability.display_name if ability != null else "?")
 		slot.tooltip_text = BattleAbilityTooltip.describe(ability, _participant, index)
 	else:
 		slot.text = "?"
-		slot.icon = null
+		icon.configure(null)
 		slot.tooltip_text = ""
 	slot.modulate = BattleAbilitySlot.SPENT_MODULATE if _played.has(index) else Color.WHITE
-	var info: Button = slot.get_child(0) as Button
+	var info: Button = slot.get_node("Info") as Button
 	info.visible = not slot.tooltip_text.is_empty()
 
 

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="AbilityIconStyle" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ability_icon_style.gd" id="1_style"]
+
+[resource]
+script = ExtResource("1_style")
+monster_ids = Array[String](["skeleton", "fallen_hero"])
+attack_glow = Color(0.35, 0.95, 0.82, 1)
+frame_path = "res://assets/abilities/frames/frame_undead.png"
+boss_frame_path = "res://assets/abilities/frames/frame_undead_boss.png"

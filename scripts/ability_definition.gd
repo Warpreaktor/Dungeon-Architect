@@ -13,6 +13,7 @@ const UNLIMITED_RANGE: int = -1
 @export_multiline var description: String = ""
 @export var description_data: Resource
 @export var icon: Texture2D
+@export var icon_art: Texture2D
 @export var category: Category = Category.ATTACK
 @export var target: Target = Target.ENEMY
 @export_range(0, 999, 1) var minimum_range: int = 0

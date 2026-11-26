@@ -17,7 +17,7 @@ const SPENT_MODULATE: Color = Color(0.48, 0.48, 0.48)
 
 @onready var _slot_number: Label = $SlotMargin/Row/Labels/SlotNumber
 @onready var _slot_name: Label = $SlotMargin/Row/Labels/SlotName
-@onready var _slot_icon: TextureRect = $SlotMargin/Row/SlotIcon
+@onready var _slot_icon: AbilityIcon = $SlotMargin/Row/SlotIcon
 @onready var _empty_icon: Label = $SlotMargin/Row/EmptyIcon
 
 var slot_index: int = 0
@@ -26,19 +26,7 @@ var _info_button: Button
 
 
 static func visual_icon(ability: AbilityDefinition) -> Texture2D:
-	if ability == null:
-		return null
-	if ability.icon != null:
-		return ability.icon
-	match ability.category:
-		AbilityDefinition.Category.DEFENSE:
-			return DEFENSE_ICON
-		AbilityDefinition.Category.SUPPORT:
-			return SUPPORT_ICON
-		AbilityDefinition.Category.SPECIAL:
-			return SPECIAL_ICON
-		_:
-			return ATTACK_ICON
+	return AbilityIconCatalog.art_for(ability)
 
 
 static func side_for_width(available_width: float, slot_count: int, gap: float, minimum: float, maximum: float) -> float:
@@ -77,8 +65,7 @@ func configure(index: int, ability: AbilityDefinition, editable: bool, actor: Ba
 	_slot_number.text = "П" if ability != null and ability.passive else "%02d" % (index + 1)
 	_slot_name.text = ability.display_name if ability != null else "Добавить"
 	_slot_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_slot_icon.texture = visual_icon(ability)
-	_slot_icon.visible = _slot_icon.texture != null
+	_slot_icon.configure_ability(ability, actor)
 	_empty_icon.visible = not _slot_icon.visible
 	_empty_icon.text = "+"
 	tooltip_text = BattleAbilityTooltip.describe(ability, actor, index)
@@ -98,8 +85,7 @@ func configure_recharge(index: int) -> void:
 	configure(index, null, false)
 	_slot_number.text = "%02d" % (index + 1)
 	_slot_name.text = "Отдых"
-	_slot_icon.texture = REST_ICON
-	_slot_icon.visible = true
+	_slot_icon.configure(REST_ICON)
 	_empty_icon.visible = false
 	tooltip_text = "Отдых: пропустить текущий ход"
 	_info_button.visible = true

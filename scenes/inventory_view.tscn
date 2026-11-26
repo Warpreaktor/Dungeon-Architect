@@ -136,7 +136,8 @@ layout_mode = 2
 [node name="HeroSelector" type="HFlowContainer" parent="Center/Card/Margins/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-alignment = 1
+alignment = 0
+size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
 [node name="Columns" type="Control" parent="Center/Card/Margins/Content"]

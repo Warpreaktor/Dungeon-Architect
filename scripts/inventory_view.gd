@@ -52,6 +52,13 @@ var _touch_target: Dictionary = {}
 var _touch_preview: TextureRect
 var _tooltip_layout_pending: bool = false
 
+const HERO_SELECTOR_BUTTON_SIZE := Vector2(72, 72)
+const HERO_SELECTOR_PORTRAIT_MARGIN := 6
+const HERO_SELECTOR_STYLE_NORMAL := Color(0.09, 0.13, 0.18, 0.98)
+const HERO_SELECTOR_STYLE_HOVER := Color(0.12, 0.18, 0.24, 1.0)
+const HERO_SELECTOR_STYLE_SELECTED := Color(0.18, 0.25, 0.32, 1.0)
+const HERO_SELECTOR_STYLE_BORDER := Color(0.27, 0.42, 0.56, 1.0)
+const HERO_SELECTOR_STYLE_SELECTED_BORDER := Color(0.86, 0.7, 0.4, 1.0)
 
 
 func _ready() -> void:
@@ -109,13 +116,31 @@ func _rebuild_hero_selector() -> void:
 		var index: int = _hero_selector.get_child_count()
 		var button := Button.new()
 		button.toggle_mode = true
-		button.custom_minimum_size = Vector2(106, 40)
+		button.focus_mode = Control.FOCUS_NONE
+		button.custom_minimum_size = HERO_SELECTOR_BUTTON_SIZE
 		button.pressed.connect(_select_member_at.bind(index))
+		var portrait := TextureRect.new()
+		portrait.name = "Portrait"
+		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		portrait.anchor_right = 1.0
+		portrait.anchor_bottom = 1.0
+		portrait.offset_left = HERO_SELECTOR_PORTRAIT_MARGIN
+		portrait.offset_top = HERO_SELECTOR_PORTRAIT_MARGIN
+		portrait.offset_right = -HERO_SELECTOR_PORTRAIT_MARGIN
+		portrait.offset_bottom = -HERO_SELECTOR_PORTRAIT_MARGIN
+		button.add_child(portrait)
 		_hero_selector.add_child(button)
 	for index in range(_selector_members.size()):
 		var button: Button = _hero_selector.get_child(index) as Button
-		button.text = _selector_members[index].definition.display_name
-		button.set_pressed_no_signal(_selector_members[index] == _selected_member)
+		var member: HeroState = _selector_members[index]
+		var portrait: TextureRect = button.get_node("Portrait") as TextureRect
+		portrait.texture = member.definition.portrait
+		button.text = ""
+		button.tooltip_text = member.definition.display_name
+		button.set_pressed_no_signal(member == _selected_member)
+		_apply_hero_selector_button_theme(button, member == _selected_member)
 
 
 func _select_member_at(index: int) -> void:
@@ -136,6 +161,33 @@ func _select_member(member: HeroState) -> void:
 	_mannequin.show_hero(_session)
 	_selected_index = _first_occupied_slot()
 	_update_selection()
+
+
+func _apply_hero_selector_button_theme(button: Button, selected: bool) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = HERO_SELECTOR_STYLE_SELECTED if selected else HERO_SELECTOR_STYLE_NORMAL
+	normal.border_width_left = 2
+	normal.border_width_top = 2
+	normal.border_width_right = 2
+	normal.border_width_bottom = 2
+	normal.border_color = HERO_SELECTOR_STYLE_SELECTED_BORDER if selected else HERO_SELECTOR_STYLE_BORDER
+	normal.corner_radius_top_left = 8
+	normal.corner_radius_top_right = 8
+	normal.corner_radius_bottom_right = 8
+	normal.corner_radius_bottom_left = 8
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = HERO_SELECTOR_STYLE_SELECTED if selected else HERO_SELECTOR_STYLE_HOVER
+	hover.border_color = HERO_SELECTOR_STYLE_SELECTED_BORDER if selected else Color(0.39, 0.58, 0.74, 1.0)
+	var pressed := hover.duplicate() as StyleBoxFlat
+	pressed.bg_color = HERO_SELECTOR_STYLE_SELECTED
+	pressed.border_color = HERO_SELECTOR_STYLE_SELECTED_BORDER
+	var focus := pressed.duplicate() as StyleBoxFlat
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("hover_pressed", pressed)
+	button.add_theme_stylebox_override("focus", focus)
+	button.add_theme_stylebox_override("disabled", normal)
 
 
 func _reset_selection() -> void:

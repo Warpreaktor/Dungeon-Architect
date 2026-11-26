@@ -53,6 +53,13 @@ func _test_reuse(view: InventoryView, dungeon: DungeonMap) -> void:
 	view.open_for(session)
 	var cells: Array[Node] = view._bag_grid.get_children()
 	var buttons: Array[Node] = view._hero_selector.get_children()
+	assert(view._hero_selector.alignment == FlowContainer.ALIGNMENT_BEGIN)
+	for index in range(buttons.size()):
+		var button: Button = buttons[index] as Button
+		assert(button != null and button.text.is_empty())
+		assert(button.tooltip_text == session.party[index].definition.display_name)
+		var portrait: TextureRect = button.get_node("Portrait") as TextureRect
+		assert(portrait != null and portrait.texture == session.party[index].definition.portrait)
 	var styles: Array[StyleBox] = []
 	for cell in cells:
 		styles.append((cell as InventoryGridSlot).get_theme_stylebox("panel"))

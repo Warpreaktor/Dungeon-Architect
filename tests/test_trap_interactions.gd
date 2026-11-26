@@ -338,7 +338,38 @@ func _test_stat_selection() -> void:
 	assert(trap.check(member, probe, true))
 
 
+func _test_portrait_choices() -> void:
+	var session: GameSession = GameSession.start_for_party(_floor_map(), ["petushan", "volcha"])
+	var event: Dictionary = _request_choice(session)
+	var dialogue: GameDialogueView = load("res://scenes/game_dialogue_view.tscn").instantiate()
+	root.add_child(dialogue)
+	dialogue.show_event(event)
+	assert(dialogue.has_choices() and dialogue._actor_buttons.size() == 2)
+	assert(dialogue._choice_prompt.text == "Кто обезвреживает ловушку?")
+	for index in dialogue._actor_buttons.size():
+		var button: Button = dialogue._actor_buttons[index]
+		var portrait: TextureRect = button.find_child("Portrait", true, false) as TextureRect
+		var hp: Label = button.find_child("HP", true, false) as Label
+		assert(portrait != null and portrait.texture == session.party[index].definition.portrait)
+		assert(hp != null and hp.get_theme_font_size("font_size") == 13)
+		assert(hp.has_theme_color_override("font_color"))
+	dialogue._actor_buttons[1].pressed.emit()
+	assert(dialogue._selected_actor_index == 1)
+	assert(dialogue._actor_caption.text == session.party[1].definition.display_name)
+	var selected: Array[int] = []
+	dialogue.choice_selected.connect(func(_choice: String, index: int) -> void: selected.append(index))
+	dialogue._disarm_button.pressed.emit()
+	assert(selected == [1])
+	event["choices"].erase("disarm")
+	event["select_actor"] = false
+	dialogue.show_event(event)
+	assert(not dialogue._actor_portraits.visible and dialogue._actor_buttons.is_empty())
+	assert(not dialogue._disarm_button.visible)
+	dialogue.queue_free()
+
+
 func _test_dialogue() -> void:
+	_test_portrait_choices()
 	var editor: Node = load("res://scenes/editor.tscn").instantiate()
 	root.add_child(editor)
 	await process_frame

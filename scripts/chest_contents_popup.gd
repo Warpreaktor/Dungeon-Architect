@@ -295,6 +295,8 @@ func configure(entity_id: String, contents: Array[String], gold_amount: int = 5,
 		body.visible = false
 		(_group_buttons[category] as Button).text = "▸  " + category
 	_refresh_enabled()
+	_scroll.set_deferred("scroll_vertical", 0)
+	_scroll.set_deferred("scroll_horizontal", 0)
 
 
 func _on_item_toggled(_pressed: bool, item_id: String) -> void:

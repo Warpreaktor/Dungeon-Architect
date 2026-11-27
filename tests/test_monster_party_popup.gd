@@ -68,6 +68,21 @@ func _run() -> void:
 	popup.configure("chest", [], 1)
 	assert(not popup._monster_party.visible)
 	assert(popup._loot_preview.visible and popup._loot_preview.text.contains("Золото"))
+	var chest_saved: Array = []
+	popup.contents_changed.connect(func(_id: String, contents: Array[String], _gold: int, random_mode: bool, _hidden: bool, quantities: Dictionary, _level: int) -> void:
+		chest_saved.append({"contents": contents, "random": random_mode, "quantities": quantities}))
+	var key_check: CheckBox = popup._item_checks["key_red"]
+	var key_amount: SpinBox = popup._item_amounts["key_red"]
+	assert(not key_check.disabled and not key_amount.editable)
+	key_check.button_pressed = true
+	key_amount.value = 2
+	assert(key_amount.editable)
+	popup._random_check.button_pressed = false
+	assert(key_check.button_pressed and key_amount.editable and not popup._loot_preview.visible)
+	popup._random_check.button_pressed = true
+	assert(key_check.button_pressed and key_amount.editable and popup._loot_preview.visible)
+	popup._save()
+	assert(chest_saved == [{"contents": ["key_red"], "random": true, "quantities": {"key_red": 2}}])
 	popup.configure("chest", [], 1, false, true, false, {}, [], {"type": "chest", "properties": {"loot_profile_id": "weapon_rack", "loot_level": 2}})
 	assert(popup.reward_level() == 2)
 	assert(popup._loot_preview.text.contains("Оружие") and not popup._loot_preview.text.contains("Золото"))
@@ -110,6 +125,7 @@ func _test_editor_history() -> void:
 	assert(popup._selected_monster_party() == ["skeleton"])
 	assert(popup.reward_level() == 1)
 	popup._reward_level.select(2)
+	popup._random_check.button_pressed = true
 	_choose(popup, 1, "hunter")
 	_choose(popup, 2, "skeleton")
 	_choose(popup, 3, "lobar")
@@ -118,6 +134,7 @@ func _test_editor_history() -> void:
 	assert(DungeonMap.loot_level(dungeon.entities_at(3, 2)[0]) == 3)
 	assert(DungeonMap.monster_party_ids(dungeon.entities_at(3, 2)[0]) == ["skeleton", "hunter", "skeleton", "lobar"])
 	assert(dungeon.entities_at(3, 2).size() == 1)
+	assert(DungeonMap.monster_loot_is_random(dungeon.entities_at(3, 2)[0]))
 	assert(DungeonMap.monster_item_quantities(dungeon.entities_at(3, 2)[0]) == {"gold": 17})
 	assert(DungeonMap.is_entity_hidden(dungeon.entities_at(3, 2)[0]))
 	assert(editor.get("_undo_stack").size() == 1)
@@ -137,6 +154,7 @@ func _test_editor_history() -> void:
 	assert(reloaded != null and DungeonMap.monster_party_ids(reloaded.entities_at(3, 2)[0]) == ["skeleton", "hunter", "skeleton", "lobar"])
 	assert(DungeonMap.monster_item_quantities(reloaded.entities_at(3, 2)[0]) == {"gold": 17})
 	assert(DungeonMap.loot_level(reloaded.entities_at(3, 2)[0]) == 3)
+	assert(DungeonMap.monster_loot_is_random(reloaded.entities_at(3, 2)[0]))
 	editor.queue_free()
 	await process_frame
 	storage.cleanup()

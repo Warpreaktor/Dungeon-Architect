@@ -67,7 +67,7 @@ layout_mode = 2
 [node name="RandomCheck" type="CheckBox" parent="ContentMargin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Случайно"
+text = "Случайная добыча"
 icon = ExtResource("2_dice")
 
 [node name="RewardLevel" type="OptionButton" parent="ContentMargin/Content"]
@@ -87,6 +87,10 @@ text = "Скрытый объект"
 
 [node name="Separator" type="HSeparator" parent="ContentMargin/Content"]
 layout_mode = 2
+
+[node name="GuaranteedTitle" type="Label" parent="ContentMargin/Content"]
+layout_mode = 2
+text = "Гарантированные предметы"
 
 [node name="LootScroll" type="ScrollContainer" parent="ContentMargin/Content"]
 unique_name_in_owner = true

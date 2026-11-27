@@ -39,6 +39,11 @@ func _initialize() -> void:
 	result = DungeonReachability.analyze(random_map)
 	assert(not result["possible"].has(Vector2i(4, 2)))
 
+	var mixed: Dictionary = random_map.entities_at(2, 2)[0]
+	assert(random_map.set_chest_contents(str(mixed["id"]), ["key"], 5, true))
+	result = DungeonReachability.analyze(random_map)
+	assert(result["reachable"].has(Vector2i(4, 2)))
+
 	var no_start := DungeonMap.create_blank(5, 5)
 	result = DungeonReachability.analyze(no_start)
 	assert(not result["has_spawn"])

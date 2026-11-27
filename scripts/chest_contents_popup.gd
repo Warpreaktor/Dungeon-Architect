@@ -299,15 +299,13 @@ func configure(entity_id: String, contents: Array[String], gold_amount: int = 5,
 
 func _on_item_toggled(_pressed: bool, item_id: String) -> void:
 	var amount: SpinBox = _item_amounts[item_id]
-	amount.editable = not _random_check.button_pressed and (_item_checks[item_id] as CheckBox).button_pressed
+	amount.editable = (_item_checks[item_id] as CheckBox).button_pressed
 
 
 func _refresh_enabled(_pressed: bool = false) -> void:
-	var is_random: bool = _random_check.button_pressed
 	for item_id in _item_checks:
 		var check: CheckBox = _item_checks[item_id]
-		check.disabled = is_random
-		(_item_amounts[item_id] as SpinBox).editable = not is_random and check.button_pressed
+		(_item_amounts[item_id] as SpinBox).editable = check.button_pressed
 	_refresh_preview()
 
 
@@ -344,7 +342,7 @@ func _refresh_preview() -> void:
 		if not categories.has(category):
 			categories.append(category)
 	var profile_name: String = profile.display_name if profile != null else "Обычная добыча"
-	_loot_preview.text = "%s\nВозможная добыча (без учёта прогресса): %s" % [profile_name, ", ".join(categories)]
+	_loot_preview.text = "%s\nСлучайная добыча (без учёта прогресса): %s" % [profile_name, ", ".join(categories)]
 
 
 func _preview_category(item: ItemDefinition) -> String:

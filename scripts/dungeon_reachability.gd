@@ -118,10 +118,6 @@ static func _key_rewards(entity: Dictionary) -> Dictionary:
 		return {"key": 1}
 	if kind not in ["chest", "monster"]:
 		return {}
-	if kind == "chest" and DungeonMap.chest_is_random(entity):
-		return {}
-	if kind == "monster" and DungeonMap.monster_loot_is_random(entity):
-		return {}
 	var contents: Array[String] = DungeonMap.chest_contents(entity) if kind == "chest" else DungeonMap.monster_loot_contents(entity)
 	var quantities: Dictionary = DungeonMap.chest_item_quantities(entity) if kind == "chest" else DungeonMap.monster_item_quantities(entity)
 	var keys: Dictionary = {}

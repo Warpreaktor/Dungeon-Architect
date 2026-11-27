@@ -2129,18 +2129,17 @@ func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: i
 					reward["loot_stage"] = stage
 				rules.apply_quantity(reward)
 				rewards.append(reward)
-	else:
-		for item_id in contents:
-			var item: ItemDefinition = ItemCatalog.get_item(item_id)
-			if item == null:
-				continue
-			var fallback: int = gold_amount if item_id == "gold" else item.default_quantity
-			var quantity: int = clampi(int(quantities.get(item_id, fallback)), 1, 999999 if item_id == "gold" else 9999)
-			var reward: Dictionary = {"item_id": item_id, "quantity": quantity}
-			if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
-				reward["roll_magic"] = true
-				reward["loot_stage"] = maxi(ItemCatalog.LOOT_TABLE.stage_for_victories(loot_victories), rules.minimum_stage)
-			rewards.append(reward)
+	for item_id in contents:
+		var item: ItemDefinition = ItemCatalog.get_item(item_id)
+		if item == null:
+			continue
+		var fallback: int = gold_amount if item_id == "gold" else item.default_quantity
+		var quantity: int = clampi(int(quantities.get(item_id, fallback)), 1, 999999 if item_id == "gold" else 9999)
+		var reward: Dictionary = {"item_id": item_id, "quantity": quantity}
+		if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
+			reward["roll_magic"] = true
+			reward["loot_stage"] = maxi(ItemCatalog.LOOT_TABLE.stage_for_victories(loot_victories), rules.minimum_stage)
+		rewards.append(reward)
 	for index in range(rewards.size()):
 		rewards[index] = _materialize_reward(rewards[index], trap_random)
 	return rewards

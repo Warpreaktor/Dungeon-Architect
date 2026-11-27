@@ -3,6 +3,7 @@ extends SceneTree
 
 func _initialize() -> void:
 	_test_reward_levels()
+	_test_mixed_rewards()
 	_test_profile_pools()
 	_test_source_selection()
 	_test_depth_and_rarity()
@@ -73,6 +74,71 @@ func _test_reward_levels() -> void:
 	var state: int = random_session.trap_random.state
 	random_session._open_chest(loaded.entities_at(3, 2)[0])
 	assert(random_session.trap_random.state == state and random_session.take_message_events().is_empty())
+
+
+func _test_mixed_rewards() -> void:
+	var dungeon := DungeonMap.create_blank(8, 8)
+	assert(dungeon.place_entity("player_spawn", 2, 2))
+	assert(dungeon.place_entity("chest", 3, 2))
+	var chest: Dictionary = dungeon.entities_at(3, 2)[0]
+	var id: String = str(chest["id"])
+	assert(dungeon.set_loot_profile(id, "coin_purse"))
+	assert(dungeon.set_loot_level(id, 3))
+	var baseline: GameSession = _seeded_session(dungeon, 619)
+	assert(baseline.move_by(1, 0))
+	var random_rewards: Array = baseline.take_message_events()[0]["loot"]
+	assert(random_rewards.size() == 1 and random_rewards[0]["item_id"] == "gold")
+	assert(dungeon.set_chest_contents(id, ["key_red", "gold", "ring_copper_wire"], 7, true, false,
+		{"key_red": 2, "gold": 7, "ring_copper_wire": 2}))
+	assert(DungeonMap.chest_is_random(chest) and chest["properties"]["loot_mode"] == "mixed")
+	assert(not dungeon.set_chest_contents(id, ["key_red", "gold", "ring_copper_wire"], 7, true, false,
+		{"key_red": 2, "gold": 7, "ring_copper_wire": 2}))
+	var json: String = JSON.stringify(dungeon.to_dict())
+	var loaded: DungeonMap = DungeonMap.from_dict(JSON.parse_string(json))
+	var source: Dictionary = loaded.entities_at(3, 2)[0]
+	assert(DungeonMap.chest_is_random(source) and DungeonMap.loot_level(source) == 3)
+	assert(DungeonMap.chest_item_quantities(source) == {"key_red": 2, "gold": 7, "ring_copper_wire": 2})
+	var session: GameSession = _seeded_session(loaded, 619)
+	var replay: GameSession = _seeded_session(loaded, 619)
+	assert(session.move_by(1, 0) and replay.move_by(1, 0))
+	var rewards: Array = session.take_message_events()[0]["loot"]
+	assert(rewards == replay.take_message_events()[0]["loot"])
+	assert(rewards.size() == 4 and rewards[0] == random_rewards[0])
+	assert(rewards[1] == {"item_id": "key_red", "quantity": 2})
+	assert(rewards[2] == {"item_id": "gold", "quantity": 7})
+	assert(rewards[3]["item_id"] == "ring_copper_wire" and rewards[3]["instances"].size() == 2)
+	assert(rewards[3]["instances"][0]["instance_id"] != rewards[3]["instances"][1]["instance_id"])
+	assert(session.hero.gold == int(random_rewards[0]["quantity"]) + 7)
+	assert(session.carried_items.get("key_red", 0) == 2)
+	var rng_state: int = session.trap_random.state
+	assert(rng_state == replay.trap_random.state)
+	session._open_chest(source)
+	assert(session.take_message_events().is_empty() and session.trap_random.state == rng_state)
+	assert(JSON.stringify(loaded.to_dict()) == json)
+	var restored: GameSession = GameSession.from_progress_snapshot(session.progress_snapshot(), {loaded.map_id: loaded})
+	assert(restored != null and restored.trap_random.state == rng_state)
+	restored._open_chest(source)
+	assert(restored.take_message_events().is_empty() and restored.trap_random.state == rng_state)
+	assert(restored.carried_items.get("key_red", 0) == 2)
+	var legacy: Dictionary = source.duplicate(true)
+	legacy["properties"]["loot_mode"] = "random"
+	assert(DungeonMap.chest_contents(legacy).is_empty())
+	assert(_seeded_session(loaded, 619)._resolve_source_rewards(legacy) == random_rewards)
+	assert(loaded.set_chest_contents(id, ["key_red"], 5, false))
+	assert(_seeded_session(loaded, 619)._resolve_source_rewards(source) == [{"item_id": "key_red", "quantity": 2}])
+	assert(loaded.set_chest_contents(id, [], 5, true))
+	assert(_seeded_session(loaded, 619)._resolve_source_rewards(source) == random_rewards)
+	assert(loaded.place_entity("monster", 4, 2, {"monster_id": "skeleton"}))
+	var monster: Dictionary = loaded.entities_at(4, 2)[0]
+	assert(loaded.set_monster_loot(str(monster["id"]), ["key_red"], 5, true))
+	assert(DungeonMap.monster_loot_is_random(monster))
+	var monster_rewards: Array[Dictionary] = _seeded_session(loaded, 619)._resolve_source_rewards(monster)
+	assert(monster_rewards.size() > 1 and monster_rewards.back() == {"item_id": "key_red", "quantity": 1})
+	assert(loaded.place_entity("stairs_down", 5, 2))
+	var stairs: Dictionary = loaded.entities_at(5, 2)[0]
+	assert(loaded.set_chest_contents(str(stairs["id"]), ["key_red"], 5, true))
+	var exit_rewards: Array[Dictionary] = _seeded_session(loaded, 619)._resolve_source_rewards(stairs)
+	assert(exit_rewards.size() > 1 and exit_rewards.back() == {"item_id": "key_red", "quantity": 1})
 
 
 func _test_profile_pools() -> void:

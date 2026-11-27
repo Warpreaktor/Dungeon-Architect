@@ -293,6 +293,8 @@ func remove_door_trap(door_id: String) -> bool:
 static func chest_contents(chest: Dictionary) -> Array[String]:
 	var properties: Dictionary = chest.get("properties", {})
 	var contents: Array[String] = []
+	if str(properties.get("loot_mode", "")) == "random":
+		return contents
 	if properties.has("contents"):
 		var raw: Variant = properties["contents"]
 		if raw is Array:
@@ -351,10 +353,16 @@ static func _normalize_reward_quantities(contents: Array[String], supplied: Dict
 	return normalized
 
 
+static func _reward_mode(random_mode: bool, contents: Array[String]) -> String:
+	if not random_mode:
+		return "fixed"
+	return "random" if contents.is_empty() else "mixed"
+
+
 static func chest_is_random(chest: Dictionary) -> bool:
 	var properties: Dictionary = chest.get("properties", {})
 	if properties.has("loot_mode"):
-		return str(properties["loot_mode"]) == "random"
+		return str(properties["loot_mode"]) in ["random", "mixed"]
 	if str(chest.get("type", "")) == "stairs_down":
 		return false
 	var raw: Variant = properties.get("contents", [])
@@ -423,7 +431,7 @@ func set_chest_contents(chest_id: String, new_contents: Array[String], gold_amou
 		var properties: Dictionary = current.duplicate(true)
 		properties["item_quantities"] = item_amounts
 		properties["contents"] = normalized.duplicate()
-		properties["loot_mode"] = "random" if random_mode else "fixed"
+		properties["loot_mode"] = _reward_mode(random_mode, normalized)
 		properties["hidden"] = hidden
 		if "gold" in normalized:
 			properties["gold_amount"] = int(item_amounts["gold"])
@@ -487,6 +495,8 @@ func set_monster_party(entity_id: String, party: Array[String]) -> bool:
 static func monster_loot_contents(monster: Dictionary) -> Array[String]:
 	var properties: Dictionary = monster.get("properties", {})
 	var items: Array[String] = []
+	if str(properties.get("loot_mode", "")) == "random":
+		return items
 	var raw: Variant = properties.get("loot_contents", [])
 	if raw is Array:
 		for entry in raw:
@@ -504,7 +514,7 @@ static func monster_gold_amount(monster: Dictionary) -> int:
 static func monster_loot_is_random(monster: Dictionary) -> bool:
 	var properties: Dictionary = monster.get("properties", {})
 	if properties.has("loot_mode"):
-		return str(properties["loot_mode"]) == "random"
+		return str(properties["loot_mode"]) in ["random", "mixed"]
 	var raw: Variant = properties.get("loot_contents", [])
 	return not (raw is Array and not raw.is_empty())
 
@@ -526,7 +536,7 @@ func set_monster_loot(monster_id: String, contents: Array[String], gold_amount: 
 		var properties: Dictionary = current.duplicate(true)
 		properties["loot_item_quantities"] = item_amounts
 		properties["loot_contents"] = normalized.duplicate()
-		properties["loot_mode"] = "random" if random_mode else "fixed"
+		properties["loot_mode"] = _reward_mode(random_mode, normalized)
 		properties["hidden"] = hidden
 		properties.erase("loot_gold_amount")
 		if "gold" in normalized:

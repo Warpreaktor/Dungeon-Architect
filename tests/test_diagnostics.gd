@@ -29,6 +29,16 @@ func _initialize() -> void:
 	notices = DungeonDiagnostics.analyze(self_locked, DungeonReachability.analyze(self_locked))
 	assert(_has_message(notices, "Ключ для замка недоступен"))
 
+	assert(locked.place_entity("chest", 2, 2))
+	var mixed: Dictionary = locked.entities_at(2, 2)[0]
+	assert(locked.set_chest_contents(str(mixed["id"]), ["gold"], 5, true))
+	notices = DungeonDiagnostics.analyze(locked, DungeonReachability.analyze(locked))
+	assert(_has_message(notices, "Нет гарантированного ключа"))
+	assert(locked.set_chest_contents(str(mixed["id"]), ["key"], 5, true))
+	notices = DungeonDiagnostics.analyze(locked, DungeonReachability.analyze(locked))
+	assert(not _has_message(notices, "Нет гарантированного ключа"))
+	assert(not _has_message(notices, "Выход недостижим"))
+
 	print("DA-3.06.2 diagnostics tests passed")
 	quit()
 

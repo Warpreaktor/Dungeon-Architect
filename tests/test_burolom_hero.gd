@@ -162,11 +162,11 @@ func _test_party_save_and_editor() -> void:
 	root.add_child(picker)
 	var card: Button = picker._catalog.tiles.get("burolom") as Button
 	assert(card != null)
-	assert(card.tooltip_text == "Буролом")
+	assert(card.tooltip_text == HeroCatalog.get_hero("burolom").display_name)
 	var chosen: Array[String] = []
 	picker.party_chosen.connect(func(ids: Array[String]) -> void: chosen.assign(ids))
 	card.pressed.emit()
-	assert(picker._preview.hero_name.text == "Буролом")
+	assert(picker._preview.hero_name.text == HeroCatalog.get_hero("burolom").display_name)
 	picker._catalog.hero_add_requested.emit("burolom")
 	assert(picker.selected_party() == ["burolom"])
 	picker.get_node("%StartPartyButton").pressed.emit()

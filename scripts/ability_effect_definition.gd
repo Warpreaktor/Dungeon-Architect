@@ -66,7 +66,7 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER, MELEE_DODGE_PE
 @export_range(0, 100, 1) var max_health_reduction_percent: int = 0
 @export_range(1, 99, 1) var max_stacks: int = 99
 @export_range(0, 100, 1) var heal_if_health_at_most_percent: int = 0
-## Совместимость ресурсов стартовых способностей Волчи.
+## Совместимость ресурсов стартовых способностей.
 @export_range(0.0, 100.0, 0.01) var energy_damage_factor: float = 0.0
 @export_range(0, 999, 1) var energy_damage_cap: int = 0
 @export_range(-999, 0, 1) var energy_floor: int = 0

@@ -6,13 +6,14 @@ func _initialize() -> void:
 		"ability_id": "basic_strike", "damage": 4, "hp_after": 16, "hp_max": 20,
 		"block_absorbed": 3, "armor_after": 0, "shield_durability_after": 2,
 		"shield_broken": ""}
-	var line: String = BattleCombatLog.format_event(hit, "Волча", "Кадавр")
-	assert(line.contains("Волча → Кадавр"))
+	var hero_name: String = HeroCatalog.get_hero("volcha").display_name
+	var line: String = BattleCombatLog.format_event(hit, hero_name, "Кадавр")
+	assert(line.contains("%s → Кадавр" % hero_name))
 	assert(line.contains("HP −4 (16/20)"))
 	assert(line.contains("блок −3"))
 	assert(line.contains("прочность щита 2"))
 	assert(BattleCombatLog.format_event({"type": "tick", "tick": 5}, "A", "B") == "  Такт 5")
-	assert(BattleCombatLog.format_event({"type": "reload", "actor_id": "hero"}, "Волча", "Б") == "    Волча: Отдых")
+	assert(BattleCombatLog.format_event({"type": "reload", "actor_id": "hero"}, hero_name, "Б") == "    %s: Отдых" % hero_name)
 	assert(BattleCombatLog.format_event({"type": "action_start"}, "A", "B").is_empty())
 
 	# Важная регрессия: HP после каждого удара не равен HP в конце фазы.

@@ -13,7 +13,7 @@ amount = 4
 [resource]
 script = ExtResource("1_script")
 ability_id = "rooster_crush"
-display_name = "Сокрушение Петушана"
+display_name = "Сокрушение"
 category = 0
 target = 1
 effects = Array[Resource]([SubResource("Effect0")])

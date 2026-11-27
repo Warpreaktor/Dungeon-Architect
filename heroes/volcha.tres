@@ -8,7 +8,7 @@
 [resource]
 script = ExtResource("1_script")
 hero_id = "volcha"
-display_name = "Волча"
+display_name = "Варг"
 portrait = ExtResource("2_portrait")
 map_icon = ExtResource("3_map")
 max_health = 24

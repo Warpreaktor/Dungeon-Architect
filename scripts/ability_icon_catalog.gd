@@ -7,14 +7,12 @@ const DEFENSE_ART: Texture2D = preload("res://assets/icons/stats/24x24/defense.p
 const SUPPORT_ART: Texture2D = preload("res://assets/icons/stats/24x24/health.png")
 
 const ICON_PATHS := {
-	# Волча — утверждённые приёмы.
 	"volcha_wolf_lunge": "res://assets/abilities/volcha/wolf_lunge.png",
 	"volcha_strike_and_rebound": "res://assets/abilities/volcha/strike_and_rebound.png",
 	"volcha_wolf_instinct": "res://assets/abilities/volcha/wolf_instinct.png",
 	"volcha_broken_rhythm": "res://assets/abilities/volcha/broken_rhythm.png",
 	"volcha_cut_tendons": "res://assets/abilities/volcha/cut_tendons.png",
 
-	# Петушан.
 	"petushan_peck_while_hot": "res://assets/abilities/petushan/peck_while_hot.png",
 	"petushan_not_in_brow_but_eye": "res://assets/abilities/petushan/not_in_brow_but_eye.png",
 	"petushan_spur_under_rib": "res://assets/abilities/petushan/spur_under_rib.png",

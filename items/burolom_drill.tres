@@ -6,8 +6,8 @@
 [resource]
 script = ExtResource("1_script")
 item_id = "burolom_drill"
-display_name = "Механический бур Буролома"
-description = "Шахтёрский бур, без которого Буролом не может выполнить упор лапами."
+display_name = "Механический бур"
+description = "Шахтёрский бур, необходимый для упора лапами."
 icon = ExtResource("2_icon")
 category = 3
 stackable = false

@@ -19,7 +19,6 @@ const TILE_SIZE := 48.0
 const FOG_SHADER: Shader = preload("res://shaders/map_fog.gdshader")
 const FOG_COLOR := Color("#05080c")
 const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
-const WALL_TEXTURE: Texture2D = preload("res://assets/stone_wall.png")
 const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.png")
 var _portal_texture: Texture2D = ImageAsset.texture("res://assets/icons/portals/portal_gateway.png")
 var _stairs_up_texture: Texture2D = ImageAsset.texture("res://assets/icons/map_objects/stairs_up.png")
@@ -633,10 +632,10 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 		draw_rect(rect, FOG_COLOR)
 		return
 	var is_wall := map_data.get_terrain(x, y) == "wall"
+	draw_texture_rect(FLOOR_TEXTURE, rect, false)
 	if is_wall:
-		draw_texture_rect(WALL_TEXTURE, rect, false)
-	else:
-		draw_texture_rect(FLOOR_TEXTURE, rect, false)
+		var source: Rect2i = WallTiles.texture_region(map_data, Vector2i(x, y))
+		draw_texture_rect_region(WallTiles.atlas().texture, rect, Rect2(source))
 	# Полупрозрачный слой анализа виден только автору, не игроку.
 	if mode == "edit" and not reachability_result.is_empty() and not is_wall:
 		var position := Vector2i(x, y)

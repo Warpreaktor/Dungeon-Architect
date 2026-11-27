@@ -21,11 +21,15 @@ static func make_ability(value: String) -> AbilityDefinition:
 	var ability := AbilityDefinition.new()
 	ability.ability_id = value
 	ability.display_name = "Удар: %s" % weapon.display_name
-	ability.description = weapon.get_description()
-	ability.icon = weapon.monster_attack_icon
+	ability.description = "Обычный удар экипированным оружием."
+	ability.icon = weapon.monster_attack_icon if weapon.monster_attack_icon != null else weapon.icon
 	ability.category = AbilityDefinition.Category.ATTACK
 	ability.target = AbilityDefinition.Target.ENEMY
 	ability.damage_delivery = AbilityDefinition.DamageDelivery.RANGED if weapon.weapon_kind == ItemDefinition.WeaponKind.RANGED else AbilityDefinition.DamageDelivery.MELEE
+	var requirement := AbilityRequirementDefinition.new()
+	requirement.kind = AbilityRequirementDefinition.Kind.SPECIFIC_WEAPON
+	requirement.weapon_item_id = weapon.item_id
+	ability.requirements.append(requirement)
 	var effect := AbilityEffectDefinition.new()
 	effect.kind = AbilityEffectDefinition.Kind.DAMAGE
 	effect.recipient = AbilityEffectDefinition.Recipient.TARGET

@@ -16,16 +16,41 @@ static func known_ability_ids(participant: BattleParticipant) -> Array[String]:
 	if participant == null:
 		return ids
 	for id in participant.personal_ability_ids + participant.learned_ability_ids:
+		if MonsterWeaponStrike.is_weapon_strike(id) and id != equipped_weapon_ability_id(participant):
+			continue
 		if get_ability(id) != null and not ids.has(id):
 			ids.append(id)
 	for id in COMMON_EQUIPMENT_ABILITIES:
 		if not ids.has(id) and _has_equipment(participant, int(COMMON_EQUIPMENT_ABILITIES[id])):
 			ids.append(id)
+	if participant.team_id == "heroes":
+		var weapon_id: String = equipped_weapon_ability_id(participant)
+		if not weapon_id.is_empty() and not ids.has(weapon_id):
+			ids.append(weapon_id)
 	return ids
 
 
+static func equipped_weapon_ability_id(participant: BattleParticipant) -> String:
+	if participant == null or participant.equipped_weapon_id.is_empty():
+		return ""
+	var weapon: ItemDefinition = ItemCatalog.get_item(participant.equipped_weapon_id)
+	if weapon == null or weapon.equipment_slot != ItemDefinition.EquipmentSlot.WEAPON:
+		return ""
+	return MonsterWeaponStrike.ability_id(weapon.item_id)
+
+
+static func is_automatic_equipment_ability(ability_id: String) -> bool:
+	return COMMON_EQUIPMENT_ABILITIES.has(ability_id) or MonsterWeaponStrike.is_weapon_strike(ability_id)
+
+
+static func is_personal_ability_locked(participant: BattleParticipant, ability_id: String) -> bool:
+	if participant == null or participant._hero_snapshot == null or participant._hero_snapshot.definition == null:
+		return false
+	return participant._hero_snapshot.definition.is_personal_ability_locked(ability_id)
+
+
 static func uses_hero_action_slot(ability_id: String) -> bool:
-	if ability_id.is_empty() or ability_id == "rest" or COMMON_EQUIPMENT_ABILITIES.has(ability_id):
+	if ability_id.is_empty() or ability_id == "rest" or is_automatic_equipment_ability(ability_id):
 		return false
 	var ability: AbilityDefinition = get_ability(ability_id)
 	return ability != null and not ability.passive and ability.validation_error().is_empty()
@@ -40,6 +65,9 @@ static func round_hero_ability_ids(participant: BattleParticipant) -> Array[Stri
 		var id: String = participant.action_chain[index]
 		if id in known and not is_personal_ability_locked(participant, id) and uses_hero_action_slot(id) and not ids.has(id):
 			ids.append(id)
+	var weapon_id: String = equipped_weapon_ability_id(participant)
+	if not weapon_id.is_empty() and weapon_id in known:
+		ids.append(weapon_id)
 	for id in COMMON_EQUIPMENT_ABILITIES:
 		if id in known:
 			ids.append(id)

@@ -210,7 +210,7 @@ func _refresh() -> void:
 	for ability in AbilityCatalog.available_abilities(_actor):
 		var locked: bool = _hero.definition.is_personal_ability_locked(ability.ability_id)
 		var selectable: bool = _hero.can_select_action(ability.ability_id)
-		if not selectable and not ability.passive and not AbilityCatalog.COMMON_EQUIPMENT_ABILITIES.has(ability.ability_id):
+		if not selectable and not locked and not ability.passive and not AbilityCatalog.is_automatic_equipment_ability(ability.ability_id):
 			continue
 		var slot: BattleAbilitySlot = SLOT_SCENE.instantiate() as BattleAbilitySlot
 		_skills_grid.add_child(slot)
@@ -218,9 +218,9 @@ func _refresh() -> void:
 		var side: float = 60.0 if panel_width < 440.0 else (88.0 if panel_width < 860.0 else 112.0)
 		slot.custom_minimum_size = Vector2(side, side)
 		slot.configure(index, ability, selectable, _actor)
-		if AbilityCatalog.COMMON_EQUIPMENT_ABILITIES.has(ability.ability_id):
+		if AbilityCatalog.is_automatic_equipment_ability(ability.ability_id):
 			slot.set_slot_number_visible(false)
-		var selected: bool = active.has(ability.ability_id)
+		var selected: bool = active.has(ability.ability_id) or MonsterWeaponStrike.is_weapon_strike(ability.ability_id)
 		slot.set_current(selected)
 		if locked:
 			slot.modulate = Color(0.46, 0.46, 0.46)

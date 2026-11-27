@@ -72,3 +72,5 @@ test_editor_autosave.gd
 test_battle_action_emblem.gd
 
 test_battle_action_emblem.gd
+
+test_hero_weapon_strikes.gd

@@ -953,7 +953,9 @@ func perform_basic_attack(_legacy_attack_damage: int = 0) -> int:
 		return 0
 	last_counter_damage = 0
 	last_blocked_damage = 0
-	var attack_id: String = "basic_strike" if AbilityCatalog.can_prepare(get_hero(), "basic_strike") else ""
+	var attack_id: String = AbilityCatalog.equipped_weapon_ability_id(get_hero())
+	if attack_id.is_empty() and AbilityCatalog.can_prepare(get_hero(), "basic_strike"):
+		attack_id = "basic_strike"
 	for id in get_hero().personal_ability_ids + get_hero().learned_ability_ids:
 		if not attack_id.is_empty():
 			break

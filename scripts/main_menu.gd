@@ -5,6 +5,12 @@ signal editor_requested
 signal game_requested(data: DungeonMap, hero_ids: Array[String], campaign: CampaignDefinition)
 signal continue_game_requested(session: GameSession)
 
+@onready var _artwork: Node2D = $Artwork
+@onready var _background: Sprite2D = $Artwork/Background
+@onready var _veil: ColorRect = $Artwork/Veil
+@onready var _ambience: Node2D = $Artwork/Ambience
+@onready var _safe_area: MarginContainer = $SafeArea
+@onready var _title: Label = %Title
 @onready var _card: PanelContainer = %Card
 @onready var _home: VBoxContainer = %HomeActions
 @onready var _play_actions: VBoxContainer = %PlayActions
@@ -19,6 +25,13 @@ signal continue_game_requested(session: GameSession)
 @onready var _home_error: Label = %HomeError
 const LIBRARY_CAMPAIGNS := 0
 const LIBRARY_PERSONAL := 1
+const CAMPFIRE_ANCHOR := Vector2(0.427, 0.823)
+const FIRE_ANCHORS := {
+	"Campfire": CAMPFIRE_ANCHOR,
+	"TorchLeft": Vector2(0.562, 0.400),
+	"TorchRight": Vector2(0.867, 0.362),
+	"Lantern": Vector2(0.038, 0.546)
+}
 
 var _library_mode: int = LIBRARY_CAMPAIGNS
 var _personal_maps: Array[DungeonMap] = []
@@ -49,6 +62,7 @@ func _ready() -> void:
 	_hero_selection.visibility_changed.connect(_update_selection_screen)
 	_update_selection_screen()
 	get_viewport().size_changed.connect(_resize_layout)
+	resized.connect(_resize_layout)
 	_resize_layout()
 	%PlayButton.grab_focus()
 
@@ -58,10 +72,42 @@ func _update_selection_screen() -> void:
 
 
 func _resize_layout() -> void:
-	var available: Vector2 = get_viewport_rect().size
-	_card.custom_minimum_size.x = minf(780.0, maxf(260.0, available.x - 48.0))
+	if not is_node_ready() or size.x <= 0.0 or size.y <= 0.0:
+		return
+	_layout_ambience()
+	var available: Vector2 = size
+	var side_menu: bool = (_home.visible or _play_actions.visible) and available.x >= 640.0 and available.aspect() >= 1.3
+	var margin: int = _safe_area.get_theme_constant("margin_left")
+	var right_margin: int = margin
+	var card_width: float = minf(780.0, maxf(260.0, available.x - 48.0))
+	var title_size: int = 28
+	if side_menu:
+		var artwork_width: float = _background.texture.get_width() * _artwork.scale.x
+		card_width = clampf(artwork_width * 0.32, 284.0, 400.0)
+		title_size = clampi(roundi(artwork_width * 0.026), 19, 28)
+		var center_x: float = _artwork.position.x + artwork_width * 0.28
+		right_margin = maxi(margin, roundi(available.x + margin - 2.0 * center_x))
+	_safe_area.add_theme_constant_override("margin_right", right_margin)
+	_title.add_theme_font_size_override("font_size", title_size)
+	_card.custom_minimum_size.x = card_width
 	_map_list.custom_minimum_size.y = clampf(available.y * 0.41, 120.0, 320.0)
 	_map_list.max_columns = clampi(floori((_card.custom_minimum_size.x - 48.0) / 215.0), 1, 3)
+
+
+func _layout_ambience() -> void:
+	if not is_node_ready() or _background.texture == null or size.x <= 0.0 or size.y <= 0.0:
+		return
+	var texture_size: Vector2 = _background.texture.get_size()
+	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+		return
+	var fit_scale: float = minf(size.x / texture_size.x, size.y / texture_size.y)
+	_artwork.scale = Vector2.ONE * fit_scale
+	_artwork.position = (size - texture_size * fit_scale) * 0.5
+	_veil.size = texture_size
+	for fire_name in FIRE_ANCHORS:
+		var fire: FireEffect = _ambience.get_node(NodePath(str(fire_name))) as FireEffect
+		var anchor: Vector2 = FIRE_ANCHORS[fire_name]
+		fire.position = texture_size * anchor
 
 
 func _open_library(mode: int = LIBRARY_CAMPAIGNS) -> void:
@@ -93,6 +139,7 @@ func _open_play_menu() -> void:
 	_home_error.hide()
 	_refresh_continue_action()
 	_play_actions.show()
+	_resize_layout()
 	if _continue_game_button.visible:
 		_continue_game_button.grab_focus()
 	else:
@@ -102,6 +149,7 @@ func _open_play_menu() -> void:
 func _back_to_home() -> void:
 	_play_actions.hide()
 	_home.show()
+	_resize_layout()
 	%PlayButton.grab_focus()
 
 

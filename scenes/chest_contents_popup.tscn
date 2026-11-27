@@ -46,61 +46,64 @@ theme_override_colors/font_color = Color(0.91, 0.77, 0.54, 1)
 theme_override_font_sizes/font_size = 21
 text = "Содержимое сундука"
 
-[node name="MonsterParty" type="VBoxContainer" parent="ContentMargin/Content"]
+[node name="LootScroll" type="ScrollContainer" parent="ContentMargin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+scroll_deadzone = 12
+
+[node name="Fields" type="VBoxContainer" parent="ContentMargin/Content/LootScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="MonsterParty" type="VBoxContainer" parent="ContentMargin/Content/LootScroll/Fields"]
 unique_name_in_owner = true
 layout_mode = 2
 visible = false
 theme_override_constants/separation = 6
 
-[node name="PartyTitle" type="Label" parent="ContentMargin/Content/MonsterParty"]
+[node name="PartyTitle" type="Label" parent="ContentMargin/Content/LootScroll/Fields/MonsterParty"]
 layout_mode = 2
 text = "Состав группы"
 
-[node name="MonsterSlots" type="HBoxContainer" parent="ContentMargin/Content/MonsterParty"]
+[node name="MonsterSlots" type="HBoxContainer" parent="ContentMargin/Content/LootScroll/Fields/MonsterParty"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="PartySeparator" type="HSeparator" parent="ContentMargin/Content/MonsterParty"]
+[node name="PartySeparator" type="HSeparator" parent="ContentMargin/Content/LootScroll/Fields/MonsterParty"]
 layout_mode = 2
 
-[node name="RandomCheck" type="CheckBox" parent="ContentMargin/Content"]
+[node name="RandomCheck" type="CheckBox" parent="ContentMargin/Content/LootScroll/Fields"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Случайная добыча"
+text = "Случайно"
 icon = ExtResource("2_dice")
 
-[node name="RewardLevel" type="OptionButton" parent="ContentMargin/Content"]
+[node name="RewardLevel" type="OptionButton" parent="ContentMargin/Content/LootScroll/Fields"]
 unique_name_in_owner = true
 layout_mode = 2
 custom_minimum_size = Vector2(0, 44)
 
-[node name="LootPreview" type="Label" parent="ContentMargin/Content"]
+[node name="LootPreview" type="Label" parent="ContentMargin/Content/LootScroll/Fields"]
 unique_name_in_owner = true
 layout_mode = 2
 autowrap_mode = 2
 
-[node name="HiddenCheck" type="CheckBox" parent="ContentMargin/Content"]
+[node name="HiddenCheck" type="CheckBox" parent="ContentMargin/Content/LootScroll/Fields"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Скрытый объект"
 
-[node name="Separator" type="HSeparator" parent="ContentMargin/Content"]
+[node name="Separator" type="HSeparator" parent="ContentMargin/Content/LootScroll/Fields"]
 layout_mode = 2
 
-[node name="GuaranteedTitle" type="Label" parent="ContentMargin/Content"]
+[node name="GuaranteedTitle" type="Label" parent="ContentMargin/Content/LootScroll/Fields"]
 layout_mode = 2
 text = "Гарантированные предметы"
 
-[node name="LootScroll" type="ScrollContainer" parent="ContentMargin/Content"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 0)
-layout_mode = 2
-size_flags_vertical = 3
-horizontal_scroll_mode = 0
-scroll_deadzone = 12
-
-[node name="LootRows" type="VBoxContainer" parent="ContentMargin/Content/LootScroll"]
+[node name="LootRows" type="VBoxContainer" parent="ContentMargin/Content/LootScroll/Fields"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3

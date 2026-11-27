@@ -163,7 +163,7 @@ layout_mode = 2
 size_flags_horizontal = 4
 texture = ExtResource("10_logo")
 expand_mode = 1
-stretch_mode = 6
+stretch_mode = 5
 
 [node name="HomeActions" type="VBoxContainer" parent="SafeArea/Center/Card/Padding/Content"]
 unique_name_in_owner = true

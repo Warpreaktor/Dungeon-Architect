@@ -111,6 +111,8 @@ func _resize_layout() -> void:
 	var side_menu: bool = menu_mode and available.x >= 640.0 and available.aspect() >= 1.3
 	var margin: int = _safe_area.get_theme_constant("margin_left")
 	var right_margin: int = margin
+	var top_margin: int = 12
+	var bottom_margin: int = 12
 	var card_width: float = minf(780.0, maxf(260.0, available.x - 48.0))
 	if menu_mode:
 		card_width = minf(card_width, 560.0)
@@ -119,10 +121,15 @@ func _resize_layout() -> void:
 		card_width = clampf(artwork_width * 0.37, 360.0, 560.0)
 		var center_x: float = _artwork.position.x + artwork_width * 0.23
 		right_margin = maxi(margin, roundi(available.x + margin - 2.0 * center_x))
+	if menu_mode:
+		bottom_margin = clampi(roundi(available.y * 0.13), 54, 140)
+	_safe_area.add_theme_constant_override("margin_top", top_margin)
+	_safe_area.add_theme_constant_override("margin_bottom", bottom_margin)
 	_safe_area.add_theme_constant_override("margin_right", right_margin)
 	_card.custom_minimum_size.x = card_width
-	var logo_width: float = clampf(card_width * 0.98, 320.0, 700.0)
-	var logo_height: float = clampf(logo_width / 2.98, 90.0, 235.0)
+	var logo_aspect: float = _logo.texture.get_width() / _logo.texture.get_height() if _logo.texture != null and _logo.texture.get_height() > 0.0 else 1.5
+	var logo_width: float = clampf(card_width * 0.86, 300.0, 520.0)
+	var logo_height: float = clampf(logo_width / logo_aspect, 120.0, 360.0)
 	_logo.custom_minimum_size = Vector2(logo_width, logo_height)
 	_map_list.custom_minimum_size.y = clampf(available.y * 0.41, 120.0, 320.0)
 	_map_list.max_columns = clampi(floori((_card.custom_minimum_size.x - 48.0) / 215.0), 1, 3)

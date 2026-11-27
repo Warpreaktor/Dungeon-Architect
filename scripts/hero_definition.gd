@@ -10,7 +10,6 @@ extends Resource
 @export_range(0, 128, 1, "or_greater") var unlocked_personal_ability_count: int = 1
 @export var starting_weapon_id: String = ""
 @export_range(0, 999, 1) var max_energy: int = 0
-@export_range(0, 999, 1) var energy_restoration: int = 0
 ## Сколько действий в алгоритме доступно без артефактов и усилений.
 @export_range(1, 8, 1) var base_action_slots: int = 3
 @export_range(1, 999, 1) var max_health: int = 1

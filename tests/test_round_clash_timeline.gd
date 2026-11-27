@@ -36,8 +36,8 @@ func _initialize() -> void:
 	assert(bool(defense_groups[0]["is_clash"]))
 
 	var resting: Array[Dictionary] = [
-		{"type": "turn", "actor_id": "enemy_support", "reload": true},
-		{"type": "reload", "actor_id": "enemy_support"}
+		{"type": "turn", "actor_id": "enemy_support"},
+		{"type": "turn_skipped", "actor_id": "enemy_support"}
 	]
 	var rest_groups: Array[Dictionary] = BattleClashTimeline.group_events(resting, true)
 	assert(rest_groups.size() == 1)

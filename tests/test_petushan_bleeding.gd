@@ -27,7 +27,6 @@ func _initialize() -> void:
 	assert(target.status_modifier(AbilityEffectDefinition.Stat.ACCURACY) == -20)
 	assert(int(target.statuses["petushan_accuracy_down"].stacks) == 1)
 	assert(int(target.statuses["petushan_accuracy_down"].ticks) == 2)
-	# Второй отдых удалит эффект, точность вернётся в исходное состояние.
 	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
 	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
 	assert(not target.statuses.has("petushan_accuracy_down"))
@@ -53,18 +52,14 @@ func _initialize() -> void:
 	target.action_cursor = 1
 	assert(not bool(target.statuses["bleeding"].get("skip_partial_phase", false)))
 	var hp_before: int = target.health
-	assert(target.owner_phase_status_damage_events("enemy").is_empty())
-	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
-	assert(int(target.statuses["bleeding"].ticks) == spur.effects[1].duration_ticks)
-	var first_tick: Array[Dictionary] = target.owner_phase_status_damage_events("enemy", AbilityEffectDefinition.Clock.OWNER_REST)
+	var first_tick: Array[Dictionary] = target.owner_phase_status_damage_events("enemy", AbilityEffectDefinition.Clock.OWNER_PHASE)
 	assert(first_tick.size() == 1 and int(first_tick[0].damage) == 2)
 	assert(target.health == hp_before - 2)
-	# Первый отдых может совпадать с тактом наложения.
-	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_REST, state.flow.completed_ticks + 1)
+	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, state.flow.completed_ticks + 1)
 	assert(int(target.statuses["bleeding"].ticks) == 1)
-	var second_tick: Array[Dictionary] = target.owner_phase_status_damage_events("enemy", AbilityEffectDefinition.Clock.OWNER_REST)
+	var second_tick: Array[Dictionary] = target.owner_phase_status_damage_events("enemy", AbilityEffectDefinition.Clock.OWNER_PHASE)
 	assert(second_tick.size() == 1 and int(second_tick[0].damage) == 2)
-	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_REST)
+	target.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
 	assert(not target.statuses.has("bleeding"))
 	assert(target.health == hp_before - 4)
 	quit()

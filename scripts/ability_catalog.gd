@@ -50,7 +50,7 @@ static func is_personal_ability_locked(participant: BattleParticipant, ability_i
 
 
 static func uses_hero_action_slot(ability_id: String) -> bool:
-	if ability_id.is_empty() or ability_id == "rest" or is_automatic_equipment_ability(ability_id):
+	if ability_id.is_empty() or is_automatic_equipment_ability(ability_id):
 		return false
 	var ability: AbilityDefinition = get_ability(ability_id)
 	return ability != null and not ability.passive and ability.validation_error().is_empty()
@@ -80,6 +80,13 @@ static func round_hero_unavailable_reason(participant: BattleParticipant, abilit
 	if not round_hero_ability_ids(participant).has(ability_id):
 		return "Приём не подготовлен к бою"
 	return unavailable_reason(participant, ability_id)
+
+
+static func has_round_action(participant: BattleParticipant, context: BattleContext) -> bool:
+	for id in round_hero_ability_ids(participant):
+		if round_hero_unavailable_reason(participant, id).is_empty() and not context.target_ids(participant.participant_id, get_ability(id)).is_empty():
+			return true
+	return false
 
 
 static func passive_damage_multiplier(participant: BattleParticipant) -> float:

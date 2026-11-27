@@ -283,9 +283,9 @@ func _render_slot(index: int) -> void:
 	var slot: Button = _slots.get_child(index) as Button
 	var icon: AbilityIcon = slot.get_node("AbilityIcon") as AbilityIcon
 	if _participant == null or index >= _participant.action_chain.size():
-		slot.text = "Zz"
+		slot.text = ""
 		icon.configure(null)
-		slot.tooltip_text = "Отдых"
+		slot.tooltip_text = ""
 	elif _revealed.has(index):
 		var ability: AbilityDefinition = AbilityCatalog.get_ability(str(_revealed[index]))
 		icon.configure_ability(ability, _participant)

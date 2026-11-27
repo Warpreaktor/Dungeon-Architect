@@ -37,7 +37,6 @@ func _verify() -> void:
 			empty_view.begin(empty_battle, hero)
 			assert(empty_view._round_mode and empty_battle.battle_state.round_combat_active)
 			assert(empty_view._hero_chain.is_empty())
-			assert(empty_view._sequence_slots.get_child_count() == 1)
-			assert(not (empty_view._sequence_slots.get_child(0) as BattleAbilitySlot).disabled)
+			assert(empty_view._sequence_slots.get_child_count() == 0)
 			empty_view.queue_free()
 	quit()

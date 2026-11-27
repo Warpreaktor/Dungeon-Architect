@@ -10,17 +10,14 @@ kind = 0
 recipient = 1
 damage_multiplier = 1.25
 distinct_targets = 2
-vs_rest_multiplier = 1.6
-vs_recent_rest = true
 
 [resource]
 script = ExtResource("1_script")
 ability_id = "kadavr_despair_swing"
 display_name = "Размах отчаяния"
-description = "Удар по разным противникам (до {effect_0_distinct_targets}): ×{effect_0_damage_multiplier}, против отдыхавшей цели ×{effect_0_vs_rest_multiplier}."
+description = "Удар по разным противникам (до {effect_0_distinct_targets}): ×{effect_0_damage_multiplier}."
 icon = ExtResource("3_icon")
 category = 0
 target = 1
 damage_delivery = 0
 effects = Array[Resource]([SubResource("Effect0")])
-resource_costs = {"energy": 5}

@@ -40,7 +40,7 @@ func _exercise(hero_count: int, enemy_count: int) -> void:
 			var actor_id: String = first.prepare_next_round()
 			assert(actor_id == replay.prepare_next_round())
 			assert(not actor_id.is_empty() and not seen.has(actor_id))
-			var ability: String = "rest" if actor_id in first.hero_ids() else ""
+			var ability: String = "guard" if actor_id in first.hero_ids() else ""
 			var turn: Dictionary = first.run_round_turn(actor_id if not ability.is_empty() else "", ability)
 			var repeat_turn: Dictionary = replay.run_round_turn(actor_id if not ability.is_empty() else "", ability)
 			assert(turn == repeat_turn)

@@ -17,5 +17,4 @@ perception = 8
 base_dodge_percent = 0
 base_accuracy_percent = 90
 max_energy = 24
-energy_restoration = 4
 personal_ability_ids = Array[String](["luma_wandering_spark", "luma_star_spear", "luma_sun_shards", "luma_star_devourer", "luma_life_thread", "luma_light_cocoon", "luma_star_birth", "luma_silence", "luma_resonance_seal", "luma_last_spark"])

@@ -77,8 +77,6 @@ func _check() -> void:
 	assert(slot._slot_icon._frame.texture == replacement and icon._frame.texture == replacement)
 	slot.configure_hidden(0)
 	assert(not slot._slot_icon.visible and slot._slot_icon._frame.texture == null)
-	slot.configure_recharge(0)
-	assert(slot._slot_icon.texture == BattleAbilitySlot.REST_ICON and not slot._slot_icon._frame.visible)
 	var card := BattleSupportEnemyView.new()
 	root.add_child(card)
 	second.action_chain = [actual.ability_id]

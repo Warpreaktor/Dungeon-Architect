@@ -54,9 +54,8 @@ func _initialize() -> void:
 	assert(battle.get_participant("hero").action_cursor == 0)
 	assert(battle.get_participant("hero_2").action_cursor == 0)
 	assert(battle.get_participant("hero").completed_phases == 0)
-	var rest: Dictionary = battle.run_round_turn("", "rest")
-	assert(bool(rest.get("success", false)))
-	assert(rest["events"].any(func(e: Dictionary) -> bool: return e.get("type") == "rest"))
+	assert(not battle.run_round_turn("", "rest").success)
+	assert(_turn(battle).success)
 	assert(battle.get_participant("hero").action_cursor == 0)
 
 	var changed: BattleState = _setup()

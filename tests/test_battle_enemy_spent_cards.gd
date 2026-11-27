@@ -18,7 +18,7 @@ func _initialize() -> void:
 	view._refresh_enemy_slots()
 	first = view._enemy_sequence_slots.get_child(0) as BattleAbilitySlot
 	assert(first.modulate == BattleAbilitySlot.SPENT_MODULATE)
-	view._display_phase_event({"type": "reload", "actor_id": "enemy"})
+	view._display_phase_event({"type": "cycle_completed", "actor_id": "enemy"})
 	assert(view._enemy_played.is_empty())
 	assert(first.modulate == Color.WHITE)
 
@@ -29,7 +29,7 @@ func _initialize() -> void:
 	var support_slot: Button = view._support_enemy_view._slots.get_child(0) as Button
 	assert(support_slot.modulate == BattleAbilitySlot.SPENT_MODULATE)
 	assert(view._support_enemy_view._played.has(0))
-	view._display_phase_event({"type": "reload", "actor_id": BattleState.SUPPORT_ENEMY_ID})
+	view._display_phase_event({"type": "cycle_completed", "actor_id": BattleState.SUPPORT_ENEMY_ID})
 	assert(view._support_enemy_view._played.is_empty())
 	assert(support_slot.modulate == Color.WHITE)
 	view.queue_free()

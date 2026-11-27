@@ -17,14 +17,14 @@ recipient = 1
 status_id = "bleeding"
 requires_hit = true
 duration_ticks = 2
-status_clock = 6
+status_clock = 1
 tick_damage = 2
 
 [resource]
 script = ExtResource("1_script")
 ability_id = "petushan_spur_under_rib"
 display_name = "Шпора под ребро"
-description = "Наносит удар с множителем ×{effect_0_damage_multiplier} и накладывает кровотечение: цель теряет {effect_1_tick_damage} HP за отдых, {effect_1_status_duration}."
+description = "Наносит удар с множителем ×{effect_0_damage_multiplier} и накладывает кровотечение: цель теряет {effect_1_tick_damage} HP за собственный ход цели, {effect_1_status_duration}."
 icon = ExtResource("3_icon")
 category = 0
 target = 1

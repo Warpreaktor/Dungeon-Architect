@@ -80,14 +80,11 @@ func _initialize() -> void:
 		return e.get("type") == "action_start" and e.get("ability_id") == "volcha_wolf_instinct" and e.get("actor_id") == "hero"))
 	self_view.queue_free()
 
-	var rest_hero := HeroState.new(UnlockedHeroFixture.definition("volcha"))
-	rest_hero.agility = 100
-	var rest_view := _view(rest_hero)
-	var rest_index: int = rest_view._hero_chain.size()
-	rest_view._on_slot_selected(rest_index)
-	assert(rest_view._combat.battle_state.round_turn_count == 1)
-	assert(rest_view._combat.battle_state.events.any(func(e: Dictionary) -> bool:
-		return e.get("type") == "rest" and e.get("actor_id") == "hero"))
+	var test_hero := HeroState.new(UnlockedHeroFixture.definition("volcha"))
+	test_hero.agility = 100
+	var rest_view := _view(test_hero)
+	rest_view._on_slot_selected(rest_view._hero_chain.size())
+	assert(rest_view._combat.battle_state.round_turn_count == 0)
 	rest_view.queue_free()
 
 	var rooster := HeroState.new(UnlockedHeroFixture.definition("petushan"))

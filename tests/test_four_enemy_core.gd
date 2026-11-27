@@ -41,7 +41,7 @@ func _initialize() -> void:
 	third.health -= 1
 	assert(fourth.action_chain == fourth_chain and fourth.health == skeleton.max_health)
 	assert(battle._runtime_for(ids[2]).initial_chain == replay.battle_state.get_participant(ids[2]).action_chain)
-	battle._runtime_for(ids[2]).intermission_usage["rest"] = 1
+	battle._runtime_for(ids[2]).intermission_usage["wait"] = 1
 	assert(battle._runtime_for(ids[3]).intermission_usage.is_empty())
 	third.action_chain = battle._runtime_for(ids[2]).initial_chain.duplicate()
 	var attack: AbilityDefinition = AbilityCatalog.get_ability("basic_strike")
@@ -103,7 +103,7 @@ func _test_individual_tactics() -> void:
 	wounded.card_ids = ["guard"]
 	monster.ai_profiles = [wounded]
 	var recovery := MonsterIntermissionAction.new()
-	recovery.ability_id = "rest"
+	recovery.ability_id = "wait"
 	recovery.maximum_health_percent = 50
 	monster.intermission_actions = [recovery]
 	var heroes: Array[HeroState] = _heroes()

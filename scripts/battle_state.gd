@@ -271,12 +271,13 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 	var is_hero: bool = actor_id in hero_ids()
 	var ability_id: String = selected_ability_id
 	var slot_index: int = -1
-	var is_rest: bool = false
+	var skipped: bool = false
 	if is_hero:
 		if ability_id.is_empty():
-			return {"success": false, "reason": "Выберите приём", "events": []}
-		is_rest = ability_id == "rest"
-		if not is_rest:
+			if AbilityCatalog.has_round_action(actor, create_context()):
+				return {"success": false, "reason": "Выберите приём", "events": []}
+			skipped = true
+		else:
 			var problem: String = AbilityCatalog.round_hero_unavailable_reason(actor, ability_id)
 			if not problem.is_empty():
 				return {"success": false, "reason": problem, "events": []}
@@ -295,29 +296,28 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 		ability_id = actor.action_chain[slot_index]
 		actor.action_cursor = (actor.action_cursor + 1) % actor.action_chain.size()
 		var enemy_ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id)
-		if enemy_ability == null or not enemy_ability.unavailable_reason(actor).is_empty():
+		if enemy_ability == null or not enemy_ability.unavailable_reason(actor).is_empty() or create_context().target_ids(actor_id, enemy_ability).is_empty():
 			var available: Array[String] = []
+			var attacks: Array[String] = []
 			for known_id in AbilityCatalog.known_ability_ids(actor):
 				var candidate: AbilityDefinition = AbilityCatalog.get_ability(known_id)
-				if candidate != null and candidate.unavailable_reason(actor).is_empty():
+				if candidate != null and not candidate.passive and candidate.unavailable_reason(actor).is_empty() and not create_context().target_ids(actor_id, candidate).is_empty():
 					available.append(known_id)
+					if candidate.category == AbilityDefinition.Category.ATTACK:
+						attacks.append(known_id)
 			if available.is_empty():
-				is_rest = true
+				skipped = true
+				slot_index = -1
 			else:
-				ability_id = available[0]
+				ability_id = attacks[0] if not attacks.is_empty() else available[0]
 	var start_event: int = _prepared_turn_event_start
 	var tick: int = round_turn_count + 1
 	round_turn_count = tick
 	round_cursor += 1
-	actor.is_resting = is_rest
-	actor.last_round_action_was_rest = is_rest
 	events.append({"type": "turn", "round": round_number, "tick": tick, "actor_id": actor_id,
-		"slot_index": slot_index, "reload": is_rest})
-	if is_rest:
-		var restored: int = actor.change_energy(actor.energy_restoration)
-		events.append({"type": "rest", "actor_id": actor_id, "tick": tick, "slot_index": -1,
-			"target_id": actor_id, "restored_energy": restored,
-			"remaining_energy": actor.current_energy()})
+		"slot_index": slot_index})
+	if skipped:
+		events.append({"type": "turn_skipped", "actor_id": actor_id, "tick": tick})
 	else:
 		events.append({"type": "action_start", "actor_id": actor_id,
 			"ability_id": ability_id, "slot_index": slot_index, "tick": tick})
@@ -334,12 +334,11 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 			events.append({"type": "failed", "actor_id": actor_id, "ability_id": ability_id,
 				"slot_index": slot_index, "tick": tick,
 				"reason": outcome.get("reason", "Недоступно")})
-			events.append({"type": "rest", "actor_id": actor_id,
-				"slot_index": slot_index, "tick": tick, "premature": true})
-	actor.is_resting = false
+	if not is_hero and actor.action_cursor == 0:
+		events.append({"type": "cycle_completed", "actor_id": actor_id, "tick": tick})
 	_prepared_turn_actor = ""
 	if not (is_victory or is_defeat):
-		_advance_round_owner_clocks(actor_id, tick, is_rest)
+		_advance_round_owner_clocks(actor_id, tick)
 	var round_finished: bool = round_cursor >= round_order.size() or is_victory or is_defeat
 	if not round_finished:
 		round_finished = next_round_actor_id().is_empty()
@@ -352,16 +351,10 @@ func run_round_turn(selected_target_id: String = "", selected_ability_id: String
 		"events": events.slice(start_event)}
 
 
-func _advance_round_owner_clocks(actor_id: String, tick: int, is_rest: bool = false) -> void:
+func _advance_round_owner_clocks(actor_id: String, tick: int) -> void:
 	var actor: BattleParticipant = get_participant(actor_id)
 	if actor == null or not actor.is_alive():
 		return
-	if is_rest:
-		actor.last_rest_tick = tick
-		events.append_array(actor.owner_phase_status_damage_events(actor_id, AbilityEffectDefinition.Clock.OWNER_REST))
-		for status_id in actor.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_REST, tick):
-			events.append({"type": "status_removed", "actor_id": actor_id,
-				"target_id": actor_id, "status_id": status_id, "removed": true})
 	if actor.is_alive():
 		events.append_array(actor.owner_phase_status_damage_events(actor_id))
 	var before_health: int = actor.health
@@ -692,18 +685,15 @@ func configure_hero_chain(actions: Array[String]) -> Dictionary:
 		return {"success": false, "reason": "Арсенал зафиксирован на весь бой. Можно менять только порядок приёмов."}
 	var hero: BattleParticipant = get_hero()
 	# Сохранённую цепочку не выкидываем при временной потере маны,
-	# щита или изученного приёма. Такой слот отдохнёт при исполнении.
+	# щита или изученного приёма. Такой слот не сработает при исполнении.
 	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES and hero.action_chain == actions:
 		return {"success": true, "reason": ""}
 	if flow.phase_number == 0:
-		var reason: String = BattleChainPlanner.validate(actions, hero, false) if not actions.is_empty() else ""
+		var reason: String = BattleChainPlanner.validate(actions, hero, false)
 		if not reason.is_empty():
 			return {"success": false, "reason": reason}
 	if flow.stage == BattleFlow.Stage.BETWEEN_PHASES and hero.action_chain != actions:
-		# Перенастройка не должна отменять обязательный отдых после круга.
-		# После отдыха новый порядок начинается с первого слота.
-		var rest_pending: bool = hero.action_cursor >= hero.action_chain.size()
-		hero.action_cursor = actions.size() if rest_pending else 0
+		hero.action_cursor = 0
 	hero.action_chain = actions.duplicate()
 	return {"success": true, "reason": ""}
 
@@ -749,7 +739,7 @@ func manual_next_enemy_step() -> Dictionary:
 	var opponent: BattleParticipant = get_participant(actor_id)
 	var step: Dictionary = BattleChainPlanner.next_step(opponent.action_chain, opponent.action_cursor)
 	return {"actor_id": actor_id, "action_id": step["action_id"],
-		"slot_index": step["slot_index"], "reload": step["reload"]}
+		"slot_index": step["slot_index"]}
 
 
 func _begin_manual_phase() -> void:
@@ -768,21 +758,12 @@ func run_manual_tick(slot_index: int, target_id: String = "") -> Dictionary:
 	var enemy: BattleParticipant = get_enemy()
 	if hero == null or enemy == null or not hero.is_alive() or is_defeat:
 		return {"success": false, "reason": "Герой недоступен", "events": []}
-	var resting: bool = slot_index == -1
-	if resting:
-		if target_id.is_empty():
-			target_id = hero_id
-		if target_id != hero_id:
-			return {"success": false, "reason": "Отдых направлен на самого героя", "events": []}
-	if not resting:
-		if is_victory:
-			return {"success": false, "reason": "Необходимо завершить победный отдых", "events": []}
-		if slot_index < 0 or slot_index >= hero.action_chain.size() or manual_used_slots.has(slot_index):
-			return {"success": false, "reason": "Карта уже использована или отсутствует", "events": []}
-		var ability: AbilityDefinition = AbilityCatalog.get_ability(hero.action_chain[slot_index])
-		var invalid_target: String = create_context().target_error(hero_id, target_id, ability)
-		if not invalid_target.is_empty():
-			return {"success": false, "reason": invalid_target, "events": []}
+	if is_victory or slot_index < 0 or slot_index >= hero.action_chain.size() or manual_used_slots.has(slot_index):
+		return {"success": false, "reason": "Карта уже использована или отсутствует", "events": []}
+	var ability: AbilityDefinition = AbilityCatalog.get_ability(hero.action_chain[slot_index])
+	var invalid_target: String = create_context().target_error(hero_id, target_id, ability)
+	if not invalid_target.is_empty():
+		return {"success": false, "reason": invalid_target, "events": []}
 	var start_event: int = events.size()
 	if flow.stage != BattleFlow.Stage.EXECUTING:
 		_begin_manual_phase()
@@ -797,37 +778,30 @@ func run_manual_tick(slot_index: int, target_id: String = "") -> Dictionary:
 		else:
 			next_enemy_clash_cursor = int(clash.get("next_cursor", next_enemy_clash_cursor))
 	var steps: Dictionary = {}
-	steps[hero_id] = {"action_id": "" if resting else hero.action_chain[slot_index],
-		"slot_index": -1 if resting else slot_index, "reload": resting}
-	hero.is_resting = resting
+	steps[hero_id] = {"action_id": hero.action_chain[slot_index], "slot_index": slot_index}
 	if not opponent_id.is_empty():
 		var opponent: BattleParticipant = get_participant(opponent_id)
 		var enemy_step: Dictionary = BattleChainPlanner.next_step(opponent.action_chain, opponent.action_cursor)
 		steps[opponent_id] = enemy_step
 		opponent.action_cursor = int(enemy_step["next_cursor"])
-		opponent.is_resting = bool(enemy_step["reload"])
-	if not resting:
-		manual_used_slots.append(slot_index)
-	hero.action_cursor = 0 if resting else slot_index + 1
+	manual_used_slots.append(slot_index)
+	hero.action_cursor = slot_index + 1
 	var tick: int = flow.completed_ticks + 1
 	_resolve_tick(steps, opponent_id, tick, target_id)
 	flow.mark_tick()
+	if not is_victory and not is_defeat and manual_used_slots.size() == hero.action_chain.size():
+		hero.action_cursor = 0
+		_complete_cycle(hero_id, tick)
 	if hero.completed_phases > _manual_phase_start:
 		end_phase()
 		manual_used_slots.clear()
 		if not is_victory and not is_defeat:
 			flow.complete_phase()
-	if is_defeat or (is_victory and hero.completed_phases > _manual_phase_start):
+	if is_defeat or is_victory:
 		flow.finish_battle()
-	hero.is_resting = false
-	for actor_id in enemy_ids():
-		var actor: BattleParticipant = get_participant(actor_id)
-		if actor != null:
-			actor.is_resting = false
 	last_phase_events = events.slice(start_event)
 	return {"success": true, "events": last_phase_events,
 		"finished": flow.stage == BattleFlow.Stage.FINISHED,
-		"awaiting_victory_rest": is_victory and flow.stage != BattleFlow.Stage.FINISHED,
 		"phase_number": flow.phase_number, "hero_hp": hero.health,
 		"ticks": flow.completed_ticks, "available_slots": manual_available_slots(),
 		"tick_performed": true}
@@ -840,22 +814,16 @@ func _resolve_tick(steps: Dictionary, opponent_id: String, tick: int, selected_t
 	events.append({"type": "tick", "tick": tick, "opponent_id": opponent_id,
 		"hero_slot": int(hero_step.get("slot_index", -1)),
 		"enemy_slot": int(enemy_step.get("slot_index", -1)),
-		"support_slot": int(support_step.get("slot_index", -1)),
-		"hero_reload": bool(hero_step.get("reload", false)),
-		"enemy_reload": bool(enemy_step.get("reload", false)),
-		"support_reload": bool(support_step.get("reload", false))})
+		"support_slot": int(support_step.get("slot_index", -1))})
 	var order: Array[String] = [hero_id]
 	if not opponent_id.is_empty():
 		order.append(opponent_id)
 	for actor_id in order:
-		if is_defeat or (is_victory and not (actor_id == hero_id and bool(steps[actor_id].get("reload", false)))):
+		if is_defeat or is_victory:
 			break
 		if not steps.has(actor_id) or not get_participant(actor_id).is_alive():
 			continue
 		var step: Dictionary = steps[actor_id]
-		if bool(step["reload"]):
-			_complete_rest(actor_id, tick)
-			continue
 		var action_id: String = str(step["action_id"])
 		events.append({"type": "action_start", "actor_id": actor_id,
 			"ability_id": action_id, "slot_index": int(step["slot_index"]), "tick": tick})
@@ -873,32 +841,15 @@ func _resolve_tick(steps: Dictionary, opponent_id: String, tick: int, selected_t
 			events.append({"type": "failed", "actor_id": actor_id, "ability_id": action_id,
 				"slot_index": int(step["slot_index"]), "tick": tick,
 				"reason": outcome.get("reason", "Недоступно")})
-			events.append({"type": "rest", "actor_id": actor_id,
-				"slot_index": int(step["slot_index"]), "tick": tick, "premature": true})
+		if actor_id != hero_id and get_participant(actor_id).action_cursor == 0 and not is_victory and not is_defeat:
+			_complete_cycle(actor_id, tick)
 
 
-func _complete_rest(actor_id: String, tick: int) -> void:
-	var resting: BattleParticipant = get_participant(actor_id)
-	resting.completed_phases += 1
-	resting.last_rest_tick = tick
-	events.append({"type": "reload", "actor_id": actor_id, "tick": tick, "slot_index": -1, "target_id": actor_id})
-	events.append_array(resting.owner_phase_status_damage_events(actor_id, AbilityEffectDefinition.Clock.OWNER_REST))
-	for status_id in resting.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_REST, tick):
-		events.append({"type": "status_removed", "actor_id": actor_id,
-			"target_id": actor_id, "status_id": status_id, "removed": true})
-	if resting.is_alive():
-		events.append_array(resting.owner_phase_status_damage_events(actor_id))
-	var before_health: int = resting.health
-	var before_maximum: int = resting.max_health
-	for expired_id in resting.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE, tick):
-		events.append({"type": "status_removed", "actor_id": actor_id,
-			"target_id": actor_id, "status_id": expired_id, "removed": true})
-	if before_maximum != resting.max_health:
-		events.append({"type": "hp_limit_changed", "actor_id": actor_id,
-			"target_id": actor_id, "hp_after": resting.health, "hp_max": resting.max_health,
-			"hp_difference": resting.health - before_health})
-	resting.advance_consumable_phase()
-	update_outcome()
+func _complete_cycle(actor_id: String, tick: int) -> void:
+	var actor: BattleParticipant = get_participant(actor_id)
+	actor.completed_phases += 1
+	events.append({"type": "cycle_completed", "actor_id": actor_id, "tick": tick})
+	_advance_round_owner_clocks(actor_id, tick)
 
 
 func default_chain(participant_id: String) -> Array[String]:
@@ -976,9 +927,6 @@ func perform_basic_attack(_legacy_attack_damage: int = 0) -> int:
 	turn_index += 1
 	if not is_victory:
 		_counterattack()
-	elif get_hero().is_alive():
-		_complete_rest(hero_id, flow.completed_ticks + 1)
-		end_phase()
 	return damage
 
 

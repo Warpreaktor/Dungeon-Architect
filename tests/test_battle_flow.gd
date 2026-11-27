@@ -35,10 +35,10 @@ func _initialize() -> void:
 	var result: Dictionary = BattlePhaseTestDriver.run_phase(battle, hero_chain, enemy_chain)
 	assert(result.success)
 	assert(battle.flow.phase_number == 1)
-	assert(battle.flow.completed_ticks == 4)
+	assert(battle.flow.completed_ticks == 3)
 	assert(battle.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
 	assert(battle.get_hero().block_attack_bonus_percent == 25)
-	assert(battle.get_enemy().block_attack_bonus_percent == 0)
+	assert(battle.get_enemy().block_attack_bonus_percent == 25)
 	assert(battle.last_phase_events.size() >= 4)
 	var effects: Array[String] = []
 	for event in battle.last_phase_events:
@@ -55,15 +55,15 @@ func _initialize() -> void:
 	assert(not BattlePhaseTestDriver.run_phase(bad, empty, enemy_chain).success)
 	assert(bad.flow.stage == BattleFlow.Stage.PREPARATION)
 
-	# Смертельный удар пропускает оставшиеся карты, но не обязательный отдых.
+	# Смертельный удар пропускает оставшиеся карты, и сразу завершает бой.
 	var finisher := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), hero)
 	finisher.get_enemy().health = 1
 	var killing_chain: Array[String] = ["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib"]
 	var killing: Dictionary = BattlePhaseTestDriver.run_phase(finisher, killing_chain, enemy_chain)
 	assert(killing.success and finisher.is_victory)
 	assert(finisher.flow.stage == BattleFlow.Stage.FINISHED)
-	assert(finisher.flow.completed_ticks == 1 + BattleChainPlanner.REST_TICKS)
-	assert(finisher.get_hero().completed_phases == 1)
+	assert(finisher.flow.completed_ticks == 1)
+	assert(finisher.get_hero().completed_phases == 0)
 	assert(not BattlePhaseTestDriver.run_phase(finisher, killing_chain, enemy_chain).success)
 	var attacks: int = 0
 	for event in finisher.last_phase_events:
@@ -80,14 +80,14 @@ func _initialize() -> void:
 	assert(BattlePhaseTestDriver.run_phase(encounter, killing_chain, enemy_chain).success)
 	assert(encounter.is_victory)
 	encounter.get_hero().commit_hero_result(wounded)
-	assert(int(wounded.overworld_statuses["bleeding"]["ticks"]) == 2)
+	assert(int(wounded.overworld_statuses["bleeding"]["ticks"]) == 3)
 	for step in range(wounded.exploration_phase_length() - 1):
 		assert(wounded.advance_overworld_statuses().is_empty())
 	assert(wounded.advance_overworld_statuses().size() == 1)
-	assert(int(wounded.overworld_statuses["bleeding"]["ticks"]) == 1)
+	assert(int(wounded.overworld_statuses["bleeding"]["ticks"]) == 2)
 	wounded.health = 1
 	var fatal := BattleState.begin(MonsterCatalog.get_monster("rabbit_symbiont"), wounded)
 	fatal.get_enemy().health = 1
 	assert(BattlePhaseTestDriver.run_phase(fatal, killing_chain, enemy_chain).success)
-	assert(fatal.is_defeat and not fatal.is_victory)
+	assert(fatal.is_victory and not fatal.is_defeat)
 	quit()

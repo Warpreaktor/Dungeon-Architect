@@ -16,7 +16,7 @@ func _verify() -> void:
 	view.begin(CombatSession.new(monster, hero), hero)
 	assert(view._round_mode and view._combat.battle_state.round_combat_active)
 	assert(not view.has_node("%PunchButton"))
-	assert(view._sequence_slots.get_child_count() == 2)
+	assert(view._sequence_slots.get_child_count() == 1)
 	assert(view._hero_chain == [initial[0]])
 	assert(hero.get_saved_action_slots() == initial)
 	view.queue_free()

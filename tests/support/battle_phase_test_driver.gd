@@ -22,21 +22,20 @@ static func run_phase(battle: BattleState, hero_actions: Array[String], enemy_ac
     var phase_events: Array[Dictionary] = []
     var first_phase: int = hero.completed_phases
     var ticks: int = 0
-    for slot in range(hero_actions.size() + 1):
-        if battle.is_defeat or battle.flow.stage == BattleFlow.Stage.FINISHED:
+    if battle.flow.stage == BattleFlow.Stage.FINISHED or hero_actions.is_empty():
+        return {"success": false, "events": []}
+    for slot in range(hero_actions.size()):
+        if battle.is_defeat or battle.is_victory or battle.flow.stage == BattleFlow.Stage.FINISHED:
             break
-        var is_rest: bool = slot == hero_actions.size() or battle.is_victory
-        var slot_index: int = -1 if is_rest else slot
-        var target_id: String = ""
-        if not is_rest:
-            var definition: AbilityDefinition = AbilityCatalog.get_ability(hero_actions[slot])
-            var context: BattleContext = battle.create_context()
-            var options: Array[String] = context.target_ids(battle.hero_id, definition)
-            if options.is_empty():
-                return {"success": false, "events": phase_events, "reason": "Нет допустимой цели"}
-            var clash: Dictionary = BattleClashPlanner.next_opponent(battle.participants, battle.enemy_ids(), battle.next_enemy_clash_cursor)
-            var opponent_id: String = str(clash.get("actor_id", ""))
-            target_id = opponent_id if options.has(opponent_id) else options[0]
+        var slot_index: int = slot
+        var definition: AbilityDefinition = AbilityCatalog.get_ability(hero_actions[slot])
+        var context: BattleContext = battle.create_context()
+        var options: Array[String] = context.target_ids(battle.hero_id, definition)
+        if options.is_empty():
+            return {"success": false, "events": phase_events, "reason": "Нет допустимой цели"}
+        var clash: Dictionary = BattleClashPlanner.next_opponent(battle.participants, battle.enemy_ids(), battle.next_enemy_clash_cursor)
+        var opponent_id: String = str(clash.get("actor_id", ""))
+        var target_id: String = opponent_id if options.has(opponent_id) else options[0]
         var result: Dictionary = battle.run_manual_tick(slot_index, target_id)
         if not bool(result.get("success", false)):
             return result

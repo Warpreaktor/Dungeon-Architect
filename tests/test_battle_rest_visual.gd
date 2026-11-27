@@ -20,15 +20,10 @@ func _check() -> void:
 	assert((view.get_node("%EnemyDefenseValue") as Label).text == "0")
 	var yours: HBoxContainer = view.get_node("%SequenceSlots") as HBoxContainer
 	var theirs: HBoxContainer = view.get_node("%EnemySequenceSlots") as HBoxContainer
-	assert(yours.get_child_count() == 2)
+	assert(yours.get_child_count() == 1)
 	assert(theirs.get_child_count() == view._enemy_chain.size())
-	var hero_rest: BattleAbilitySlot = yours.get_child(1) as BattleAbilitySlot
-	assert(not hero_rest.disabled)
-	assert(hero_rest.tooltip_text.contains("Отдых"))
-	assert(not hero_rest._slot_number.visible)
-	assert(hero_rest.get_node("SlotMargin/Row/SlotIcon").texture == BattleAbilitySlot.REST_ICON)
-	view._highlight_slots(-1, -1, true, true)
-	assert(hero_rest.has_theme_stylebox_override("disabled"))
+	assert(AbilityCatalog.get_ability("rest") == null)
+	assert(not ResourceLoader.exists("res://assets/abilities/rest.png"))
 	assert(view._hero_chain.size() == 1)
 	view.queue_free()
 	quit()

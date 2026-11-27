@@ -19,20 +19,15 @@ func _initialize() -> void:
 	var result: Dictionary = BattlePhaseTestDriver.play_phase(combat, chain, combat.battle_state.get_enemy().action_chain)
 	assert(bool(result.get("success", false)))
 	assert(combat.is_victory and not combat.is_defeat)
-	assert(combat.battle_state.get_hero().completed_phases == 1)
-	assert(int(hero.overworld_statuses["bleeding"]["ticks"]) == before - 1)
-	var hero_rest: int = 0
-	for event in result["events"]:
-		if str(event.get("type", "")) == "reload" and str(event.get("actor_id", "")) == "hero":
-			hero_rest += 1
-	assert(hero_rest == 1)
+	assert(combat.battle_state.get_hero().completed_phases == 0)
+	assert(int(hero.overworld_statuses["bleeding"]["ticks"]) == before)
 	var battle_again := BattleState.begin(enemy, hero, 1427)
-	assert(int(battle_again.get_hero().statuses["bleeding"]["ticks"]) == before - 1)
+	assert(int(battle_again.get_hero().statuses["bleeding"]["ticks"]) == before)
 	var nearly_dead := HeroState.new(definition)
 	assert(nearly_dead.apply_overworld_status("bleeding", "Кровотечение", 1, duration, nearly_dead.exploration_phase_length()))
 	nearly_dead.health = 1
 	var fatal := BattleState.begin(enemy, nearly_dead, 1427)
 	fatal.get_enemy().health = 1
 	assert(bool(BattlePhaseTestDriver.run_phase(fatal, chain, fatal.get_enemy().action_chain).get("success", false)))
-	assert(fatal.is_defeat and not fatal.is_victory)
+	assert(fatal.is_victory and not fatal.is_defeat)
 	quit()

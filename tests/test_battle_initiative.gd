@@ -12,8 +12,8 @@ func _fighter(id: String, team: String, agility: int = 0) -> BattleParticipant:
 	return actor
 
 
-func _step(action_id: String, reloading: bool = false) -> Dictionary:
-	return {"action_id": action_id, "reload": reloading}
+func _step(action_id: String) -> Dictionary:
+	return {"action_id": action_id}
 
 
 func _initiative_order(battle: BattleState, steps: Dictionary) -> Array[String]:
@@ -71,13 +71,13 @@ func _initialize() -> void:
 	assert(_initiative_order(battle, steps)[0] == hero.participant_id)
 	hero.agility = enemy.agility
 	support.agility = enemy.agility
-	steps[battle.hero_id] = _step("guard", true)
-	assert(_initiative_order(battle, steps) == [enemy.participant_id, support.participant_id, hero.participant_id])
+	steps[battle.hero_id] = _step("basic_strike")
+	assert(_initiative_order(battle, steps) == ids)
 
 	enemy.health = 0
-	assert(_initiative_order(battle, steps) == [support.participant_id, hero.participant_id])
+	assert(_initiative_order(battle, steps) == [hero.participant_id, support.participant_id])
 	battle.participants.erase(battle.enemy_id)
-	assert(_initiative_order(battle, steps) == [support.participant_id, hero.participant_id])
+	assert(_initiative_order(battle, steps) == [hero.participant_id, support.participant_id])
 
 	var repeat := BattleState.new()
 	var h: BattleParticipant = _fighter(repeat.hero_id, "heroes")
@@ -100,7 +100,7 @@ func _initialize() -> void:
 			if found_first_tick:
 				break
 			found_first_tick = true
-		elif found_first_tick and str(event.get("type", "")) in ["action_start", "reload"]:
+		elif found_first_tick and str(event.get("type", "")) == "action_start":
 			first_tick_actors.append(str(event.get("actor_id", "")))
 	assert(first_tick_actors == [h.participant_id, e.participant_id])
 

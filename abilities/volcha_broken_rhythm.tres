@@ -10,16 +10,14 @@ kind = 0
 recipient = 1
 amount = 0
 damage_multiplier = 0.3
-vs_rest_multiplier = 0.5
 vs_block_multiplier = 0.2
-vs_recent_rest = true
 hit_count = 3
 
 [resource]
 script = ExtResource("1_script")
 ability_id = "volcha_broken_rhythm"
 display_name = "Рваный ритм"
-description = "Серия атак: {effect_0_hit_count_text} с множителем ×{effect_0_damage_multiplier}. По отдыхающей цели ×{effect_0_vs_rest_multiplier}, при активном блоке ×{effect_0_vs_block_multiplier}."
+description = "Серия атак: {effect_0_hit_count_text} с множителем ×{effect_0_damage_multiplier}. При активном блоке ×{effect_0_vs_block_multiplier}."
 icon = ExtResource("3_icon")
 category = 0
 target = 1

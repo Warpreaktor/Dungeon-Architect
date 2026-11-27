@@ -1,13 +1,13 @@
 class_name BattleActionEmblem
 extends Control
 
-enum Effect { ATTACK, DEFENSE, BUFF, CURSE, HEAL, REST }
+enum Effect { ATTACK, DEFENSE, BUFF, CURSE, HEAL }
 
 const ICON_SCENE: PackedScene = preload("res://scenes/ability_icon.tscn")
 const COLORS: Dictionary = {
 	Effect.ATTACK: Color("f6bb76"), Effect.DEFENSE: Color("68bdf4"),
 	Effect.BUFF: Color("e3cb79"), Effect.CURSE: Color("bf89ef"),
-	Effect.HEAL: Color("77df98"), Effect.REST: Color("a6c3db")
+	Effect.HEAL: Color("77df98")
 }
 
 var _icon: AbilityIcon
@@ -23,7 +23,7 @@ var _source: TextureRect
 
 static func effect_for(ability: AbilityDefinition) -> Effect:
 	if ability == null:
-		return Effect.REST
+		return Effect.ATTACK
 	if ability.category == AbilityDefinition.Category.ATTACK:
 		return Effect.ATTACK
 	if ability.category == AbilityDefinition.Category.DEFENSE:
@@ -41,7 +41,7 @@ static func effect_for(ability: AbilityDefinition) -> Effect:
 	return Effect.BUFF
 
 
-func configure(ability: AbilityDefinition, actor: BattleParticipant, source: TextureRect, bounds: Vector2, fallback_name: String = "Отдых", fallback_art: Texture2D = BattleAbilitySlot.REST_ICON, fallback_effect: Effect = Effect.REST) -> void:
+func configure(ability: AbilityDefinition, actor: BattleParticipant, source: TextureRect, bounds: Vector2, fallback_name: String = "Атака", fallback_art: Texture2D = BattleAbilitySlot.ATTACK_ICON, fallback_effect: Effect = Effect.ATTACK) -> void:
 	_source = source
 	_bounds = bounds
 	_effect = effect_for(ability) if ability != null else fallback_effect
@@ -127,5 +127,3 @@ func _draw() -> void:
 			for index in range(9):
 				var direction := Vector2.from_angle(TAU * float(index) / 9.0 + burst * 1.8)
 				draw_circle(center + direction * radius * (0.85 + burst * 0.20), 3.5, Color(_ink, alpha * 0.55))
-		Effect.REST:
-			draw_arc(center, radius * (0.88 + burst * 0.16), 0.0, TAU, 40, Color(_ink, alpha * 0.55), 1.5, true)

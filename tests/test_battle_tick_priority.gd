@@ -1,6 +1,6 @@
 extends SceneTree
 
-## DA-4.07: детерминированные такты, блок, перезарядка, накопление бонуса.
+## DA-4.07: детерминированные такты, блок, накопление бонуса.
 func _fighter(id: String, team: String, hp: int, power: int) -> BattleParticipant:
 	var participant := BattleParticipant.new()
 	participant.participant_id = id
@@ -27,16 +27,16 @@ func _initialize() -> void:
 	var enemy_chain: Array[String] = ["guard", "basic_strike"]
 	assert(battle.tick_policy.priority("volcha_wolf_lunge") == battle.tick_policy.other_priority)
 	var result: Dictionary = BattlePhaseTestDriver.run_phase(battle, hero_chain, enemy_chain)
-	assert(result.success and result.ticks == 4)
+	assert(result.success and result.ticks == 3)
 	var decisions: Array[String] = []
 	for event in battle.last_phase_events:
-		if event.type in ["block", "attack", "reload"]:
+		if event.type in ["block", "attack"]:
 			decisions.append(str(event.actor_id) + ":" + str(event.type))
-	assert(decisions == ["hero:attack", "enemy:block", "hero:block", "enemy:attack", "hero:attack", "enemy:reload", "hero:reload", "enemy:block"])
+	assert(decisions == ["hero:attack", "enemy:block", "hero:block", "enemy:attack", "hero:attack", "enemy:block"])
 	var next: Dictionary = BattlePhaseTestDriver.run_phase(battle, hero_chain, enemy_chain)
-	assert(next.success and next.ticks == 4) # каждый круг заканчивается отдыхом
-	assert(not battle.last_phase_events[0].hero_reload)
-	assert(battle.last_phase_events[-1].type == "block" and battle.last_phase_events[-1].actor_id == "enemy")
+	assert(next.success and next.ticks == 3)
+	assert(battle.last_phase_events[0].hero_slot == 0)
+	assert(battle.get_hero().completed_phases == 2)
 	assert(battle.last_phase_events[0].enemy_slot == 1)
 
 	# При равном приоритете два блока ставятся в порядке герой -> монстр.
@@ -51,7 +51,7 @@ func _initialize() -> void:
 	# Герой убивает монстра первым ударом: у монстра нет ответа.
 	var lethal: BattleState = _battle(100, 1, 10)
 	assert(BattlePhaseTestDriver.run_phase(lethal, ["basic_strike", "guard", "basic_strike"], ["basic_strike"]).success)
-	assert(lethal.is_victory and not lethal.is_defeat and lethal.flow.completed_ticks == 1 + BattleChainPlanner.REST_TICKS)
+	assert(lethal.is_victory and not lethal.is_defeat and lethal.flow.completed_ticks == 1)
 	var enemy_attacks: int = 0
 	for event in lethal.last_phase_events:
 		if event.type == "attack" and event.actor_id == "enemy":
@@ -76,13 +76,4 @@ func _initialize() -> void:
 	assert(hit.success and hit.events[0].damage == 15) # 10 * 1.5
 	assert(fighter.block_attack_bonus_percent == 0)
 
-	# Перезарядки существуют у обоих и не запускают никакого приёма.
-	var rests: BattleState = _battle(200, 200, 1)
-	for i in range(4):
-		assert(BattlePhaseTestDriver.run_phase(rests, ["guard", "guard", "guard"], ["guard", "guard"]).success)
-	var both_reloading: bool = false
-	for event in rests.events:
-		if event.type == "tick" and event.hero_reload and event.enemy_reload:
-			both_reloading = true
-	assert(both_reloading)
 	quit()

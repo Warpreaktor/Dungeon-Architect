@@ -23,7 +23,7 @@ var effects: Dictionary = {}
 var personal_ability_ids: Array[String] = []
 var learned_ability_ids: Array[String] = []
 var action_chain: Array[String] = []
-## Следующий слот; значение action_chain.size() означает такт перезарядки.
+## Следующий слот цепочки.
 var action_cursor: int = 0
 ## Ограничение участника, независимое от глобального защитного MAX_ACTIONS.
 var action_slot_capacity: int = 3
@@ -36,20 +36,14 @@ var last_shield_blocked: int = 0
 var last_block_absorbed: int = 0
 var last_shield_broken: String = ""
 var statuses: Dictionary = {}
-## Number of completed own cycles (including the non-editable rest).
 var completed_phases: int = 0
-var is_resting: bool = false
-var last_round_action_was_rest: bool = false
 var fury_rules: MonsterFuryRules
 var fury_gained_this_round: int = 0
 var fury_guard_armed: bool = false
-## Для совпадения наложения статуса и отдыха в одном такте.
-var last_rest_tick: int = -1
 ## Неиспользуемые пока в контенте запасы будущих ресурсов (ярость, мана и т.д.).
 ## Это изменяемые данные конкретного участника боя, не .tres.
 var resource_amounts: Dictionary = {}
 var max_energy: int = 0
-var energy_restoration: int = 0
 var energy_barrier_hp: int = 0
 var energy_meditation_pending: int = 0
 var energy_delayed_attacks: Dictionary = {}
@@ -74,7 +68,6 @@ static func from_hero(source: HeroState, id: String = "hero") -> BattleParticipa
 	participant.definition_id = source.definition.hero_id if source.definition != null else ""
 	participant._hero_snapshot = source.copy_for_battle()
 	participant.max_energy = source.definition.max_energy
-	participant.energy_restoration = source.definition.energy_restoration
 	participant.resource_amounts["energy"] = source.energy
 	participant.statuses = participant._hero_snapshot.overworld_statuses.duplicate(true)
 	participant._equipment.set_snapshot(participant._hero_snapshot)
@@ -112,7 +105,6 @@ static func from_monster(source: MonsterDefinition, id: String = "enemy") -> Bat
 	if participant.fury_rules != null:
 		participant.resource_amounts["fury"] = 0
 	participant.max_energy = source.max_energy
-	participant.energy_restoration = source.energy_restoration
 	participant.resource_amounts["energy"] = source.max_energy
 	participant.action_slot_capacity = clampi(source.base_action_slots, 1, BattleChainPlanner.MAX_ACTIONS)
 	return participant
@@ -344,7 +336,7 @@ func status_modifier(stat: int) -> int:
 
 
 func apply_status(effect: AbilityEffectDefinition, tick: int) -> void:
-	var partial_phase: bool = not effect.full_owner_turns and not is_resting and action_cursor > 0
+	var partial_phase: bool = not effect.full_owner_turns and action_cursor > 0
 	BattleStatusRules.apply(statuses, effect, tick, partial_phase)
 	_sync_status_health_limit(false)
 
@@ -421,7 +413,7 @@ func advance_consumable_phase() -> void:
 
 func end_phase() -> void:
 	# Бонус блока и активный блок живут до следующего соответствующего удара,
-	# даже если между действиями была перезарядка или граница фазы.
+	# даже если между действиями прошла граница фазы.
 	advance_status_clock(AbilityEffectDefinition.Clock.LEGACY_HERO_PHASE)
 
 

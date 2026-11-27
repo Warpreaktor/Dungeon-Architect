@@ -13,7 +13,7 @@ func _initialize() -> void:
 	assert(line.contains("блок −3"))
 	assert(line.contains("прочность щита 2"))
 	assert(BattleCombatLog.format_event({"type": "tick", "tick": 5}, "A", "B") == "  Такт 5")
-	assert(BattleCombatLog.format_event({"type": "reload", "actor_id": "hero"}, hero_name, "Б") == "    %s: Отдых" % hero_name)
+	assert(BattleCombatLog.format_event({"type": "turn_skipped", "actor_id": "hero"}, "Волча", "Б") == "    Волча: пропуск хода")
 	assert(BattleCombatLog.format_event({"type": "action_start"}, "A", "B").is_empty())
 
 	# Важная регрессия: HP после каждого удара не равен HP в конце фазы.

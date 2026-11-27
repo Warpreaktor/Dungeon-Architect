@@ -69,18 +69,8 @@ func _initialize() -> void:
 	assert(attacked_primary)
 	assert(battle.manual_available_slots() == [0])
 	assert(battle.run_manual_tick(0, "enemy_support").success)
-	assert(battle.manual_available_slots().is_empty())
-	var rest_cursor: int = battle.flow.completed_ticks
-	assert(not battle.run_manual_tick(-1, "enemy").success)
-	assert(battle.flow.completed_ticks == rest_cursor)
-	var rest: Dictionary = battle.run_manual_tick(-1, "hero")
-	assert(rest.success and rest.events[0].hero_reload)
-	var restored_on_self: bool = false
-	for event in rest.events:
-		if event.get("type") == "reload" and event.get("actor_id") == "hero" and event.get("target_id") == "hero":
-			restored_on_self = true
-	assert(restored_on_self)
-	assert(battle.flow.completed_ticks == 4)
+	assert(not battle.run_manual_tick(-1, "hero").success)
+	assert(battle.flow.completed_ticks == 3)
 	assert(battle.get_hero().completed_phases == 1)
 	assert(battle.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
 	assert(battle.manual_available_slots() == [0, 1, 2])
@@ -92,7 +82,9 @@ func _initialize() -> void:
 	var early: BattleState = _battle()
 	assert(early.prepare_manual_combat(prepared).success)
 	assert(early.run_manual_tick(1, "hero").success)
-	assert(early.run_manual_tick(-1).success)
+	assert(not early.run_manual_tick(-1).success)
+	assert(early.run_manual_tick(0, "enemy").success)
+	assert(early.run_manual_tick(2, "enemy").success)
 	assert(early.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
 	assert(early.manual_available_slots() == [0, 1, 2])
 
@@ -100,7 +92,7 @@ func _initialize() -> void:
 	var identical: BattleState = _battle()
 	for session in [replay, identical]:
 		assert(session.prepare_manual_combat(prepared).success)
-	for item in [{"slot": 1, "target": "hero"}, {"slot": 2, "target": "enemy"}, {"slot": -1, "target": ""}]:
+	for item in [{"slot": 1, "target": "hero"}, {"slot": 2, "target": "enemy"}, {"slot": 0, "target": "enemy"}]:
 		var r: Dictionary = replay.run_manual_tick(item.slot, item.target)
 		var c: Dictionary = identical.run_manual_tick(item.slot, item.target)
 		assert(r.success and c.success and r.events == c.events)
@@ -112,14 +104,10 @@ func _initialize() -> void:
 	victory.get_enemy().health = 1
 	assert(victory.prepare_manual_combat(prepared).success)
 	var killing: Dictionary = victory.run_manual_tick(0, "enemy")
-	assert(killing.success and killing.awaiting_victory_rest)
-	assert(victory.is_victory and victory.flow.stage == BattleFlow.Stage.EXECUTING)
-	assert(not victory.run_manual_tick(2, "enemy").success)
-	var closing: Dictionary = victory.run_manual_tick(-1)
-	assert(closing.success and closing.finished)
-	assert(victory.flow.completed_ticks == 2)
-	assert(victory.get_hero().completed_phases == 1)
-	assert(victory.flow.stage == BattleFlow.Stage.FINISHED)
+	assert(killing.success and killing.finished)
+	assert(victory.is_victory and victory.flow.stage == BattleFlow.Stage.FINISHED)
+	assert(not victory.run_manual_tick(-1).success)
+	assert(victory.flow.completed_ticks == 1)
 
 	var wounded := HeroState.new(UnlockedHeroFixture.definition("petushan"))
 	wounded.health = 1
@@ -131,10 +119,8 @@ func _initialize() -> void:
 	var lethal_cards: Array[String] = ["petushan_peck_while_hot", "petushan_not_in_brow_but_eye", "petushan_spur_under_rib"]
 	assert(fatal.prepare_manual_combat(lethal_cards).success)
 	var pending: Dictionary = fatal.run_manual_tick(0, "enemy")
-	assert(pending.success and pending.awaiting_victory_rest)
+	assert(pending.success and pending.finished)
+	assert(fatal.is_victory and not fatal.is_defeat)
 	assert(fatal.get_hero().health == 1)
-	var fatal_rest: Dictionary = fatal.run_manual_tick(-1)
-	assert(fatal_rest.success and fatal_rest.finished)
-	assert(fatal.is_defeat and not fatal.is_victory)
-	assert(fatal.flow.completed_ticks == 2)
+	assert(fatal.flow.completed_ticks == 1)
 	quit()

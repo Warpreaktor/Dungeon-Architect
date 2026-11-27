@@ -18,7 +18,7 @@ func _fighter(actor_id: String, team: String, agility: int) -> BattleParticipant
 func _actor_order(events: Array) -> Array[String]:
 	var result: Array[String] = []
 	for event in events:
-		if str(event.get("type", "")) in ["action_start", "reload"]:
+		if str(event.get("type", "")) in ["action_start"]:
 			result.append(str(event.get("actor_id", "")))
 	return result
 

@@ -189,16 +189,6 @@ static func execute_definition(context: BattleContext, actor_id: String, target_
 						"target_id": recipient.participant_id, "status_id": effect.status_id,
 						"hp_after": recipient.health, "hp_max": recipient.max_health,
 						"hp_difference": recipient.health - before_health})
-				# Если цель уже отдыхала ранее в этом же такте, кровь тоже
-				# должна снять HP за эту фазу. Другой порядок покрыт BattleState.
-				if effect.tick_damage > 0 and recipient.last_rest_tick == context.current_tick:
-					var clock: int = effect.effective_status_clock()
-					var instant: Array[Dictionary] = recipient.owner_phase_status_damage_events(recipient.participant_id, clock)
-					event_list.append_array(instant)
-					var expired: Array[String] = recipient.advance_status_clock(clock, context.current_tick)
-					for expired_id in expired:
-						event_list.append({"type": "status_removed", "actor_id": recipient.participant_id,
-							"target_id": recipient.participant_id, "status_id": expired_id, "removed": true})
 			AbilityEffectDefinition.Kind.REMOVE_STATUS:
 				var before_health: int = recipient.health
 				var before_max_health: int = recipient.max_health
@@ -252,8 +242,6 @@ static func preview_damage(actor: BattleParticipant, ability: AbilityDefinition,
 			multiplier = effect.vs_low_health_multiplier
 		if target.block_armor > 0 and effect.vs_block_multiplier > 0.0:
 			multiplier = effect.vs_block_multiplier
-		elif (target.is_resting or (effect.vs_recent_rest and target.last_round_action_was_rest)) and effect.vs_rest_multiplier > 0.0:
-			multiplier = effect.vs_rest_multiplier
 	if actor.is_fury_unleashed() and effect.fury_hit_multiplier > 0.0:
 		multiplier = effect.fury_hit_multiplier
 	var total: float = maxf(base * (multiplier + float(actor.block_attack_bonus_percent) / float(BattleMath.PERCENT_SCALE)), 0.0)

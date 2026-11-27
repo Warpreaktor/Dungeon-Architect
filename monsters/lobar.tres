@@ -15,4 +15,3 @@ defense = 1
 personal_ability_ids = Array[String](["basic_strike", "guard", "lobar_charge", "lobar_brace"])
 
 max_energy = 19
-energy_restoration = 2

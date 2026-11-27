@@ -55,7 +55,7 @@ func _initialize() -> void:
 			actors.clear()
 			opponents.append(str(event.get("opponent_id", "")))
 			ticks += 1
-		elif event.get("type", "") in ["action_start", "reload"]:
+		elif event.get("type", "") in ["action_start"]:
 			actors.append(str(event.get("actor_id", "")))
 	assert(ticks > 0)
 	assert(actors.size() == 2 and actors.has(battle.hero_id) and actors.has(opponents[-1]))

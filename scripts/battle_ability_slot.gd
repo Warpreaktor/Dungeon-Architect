@@ -10,7 +10,6 @@ const ATTACK_ICON: Texture2D = preload("res://assets/icons/stats/24x24/attack.pn
 const DEFENSE_ICON: Texture2D = preload("res://assets/icons/stats/24x24/defense.png")
 const SUPPORT_ICON: Texture2D = preload("res://assets/icons/stats/24x24/health.png")
 const SPECIAL_ICON: Texture2D = preload("res://assets/icons/stats/24x24/attack.png")
-const REST_ICON: Texture2D = preload("res://assets/abilities/rest.png")
 const INFO_BUTTON_SIDE: float = 30.0
 const SPENT_MODULATE: Color = Color(0.48, 0.48, 0.48)
 
@@ -80,16 +79,6 @@ func set_slot_number_visible(value: bool) -> void:
 
 func _notify_selection() -> void:
 	slot_selected.emit(slot_index)
-
-
-func configure_recharge(index: int) -> void:
-	configure(index, null, false)
-	_slot_number.text = "%02d" % (index + 1)
-	_slot_name.text = "Отдых"
-	_slot_icon.configure(REST_ICON)
-	_empty_icon.visible = false
-	tooltip_text = "Отдых: пропустить текущий ход"
-	_info_button.visible = true
 
 
 func set_locked(value: bool) -> void:

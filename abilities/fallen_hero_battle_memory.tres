@@ -9,14 +9,13 @@ script = ExtResource("2_effect")
 kind = 0
 recipient = 1
 damage_multiplier = 0.8
-vs_rest_multiplier = 1.6
 accuracy_offset_percent = -15
 
 [resource]
 script = ExtResource("1_script")
 ability_id = "fallen_hero_battle_memory"
 display_name = "Память о битве"
-description = "Удар с множителем {effect_0_damage_multiplier}; по отдыхающей цели {effect_0_vs_rest_multiplier}. Меткость атаки {effect_0_accuracy_offset_percent} п.п. от текущей."
+description = "Удар с множителем {effect_0_damage_multiplier}. Меткость атаки {effect_0_accuracy_offset_percent} п.п. от текущей."
 icon = ExtResource("3_icon")
 category = 0
 target = 1

@@ -4,8 +4,6 @@ extends RefCounted
 ## Планировщик не зависит от боевой сцены и длительности анимаций.
 ## Верхняя граница защищает от случайной бесконечной фазы в редакторе цепочки.
 const MAX_ACTIONS: int = 8
-## По боевым правилам после полного круга идёт ровно один обязательный такт отдыха.
-const REST_TICKS: int = 1
 
 
 static func validate(chain: Array[String], participant: BattleParticipant, check_requirements: bool = true) -> String:
@@ -30,28 +28,19 @@ static func validate(chain: Array[String], participant: BattleParticipant, check
 	return ""
 
 
-## После каждого полного круга участник один такт отдыхает.
-## Курсор равный длине цепочки обозначает именно этот отдых.
 static func next_step(chain: Array[String], cursor: int) -> Dictionary:
 	if chain.is_empty():
-		return {"action_id": "", "slot_index": -1, "reload": true, "next_cursor": 0}
-	if cursor >= chain.size() or cursor < 0:
-		return {"action_id": "", "slot_index": -1, "reload": true, "next_cursor": 0}
-	return {"action_id": chain[cursor], "slot_index": cursor, "reload": false,
-		"next_cursor": cursor + 1}
+		return {"action_id": "", "slot_index": -1, "next_cursor": 0}
+	cursor = posmod(cursor, chain.size())
+	return {"action_id": chain[cursor], "slot_index": cursor, "next_cursor": (cursor + 1) % chain.size()}
 
 
-## Фаза включает все приёмы героя и отдельный завершающий такт отдыха.
 static func phase_length(hero_actions: Array[String], _enemy_actions: Array[String]) -> int:
-	return hero_actions.size() + REST_TICKS if not hero_actions.is_empty() else 0
+	return hero_actions.size()
 
 
-## Только для предпросмотра одной непрерывной временной шкалы, не modulo N.
 static func action_at(chain: Array[String], tick: int) -> String:
-	if chain.is_empty() or tick < 0:
-		return ""
-	var cursor: int = tick % (chain.size() + REST_TICKS)
-	return chain[cursor] if cursor < chain.size() else ""
+	return chain[tick % chain.size()] if not chain.is_empty() and tick >= 0 else ""
 
 
 static func preview(hero_actions: Array[String], enemy_actions: Array[String]) -> Array[Dictionary]:

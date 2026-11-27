@@ -418,7 +418,7 @@ func _round_next_actor() -> String:
 
 
 func _selected_round_ability() -> AbilityDefinition:
-	return AbilityCatalog.get_ability(_selected_round_ability_id) if not _selected_round_ability_id.is_empty() and _selected_round_ability_id != "rest" else null
+	return AbilityCatalog.get_ability(_selected_round_ability_id) if not _selected_round_ability_id.is_empty() else null
 
 
 func _refresh_round_controls() -> void:
@@ -466,6 +466,10 @@ func _continue_round() -> void:
 	else:
 		if actor_id in _combat.battle_state.hero_ids():
 			_select_hero_view(actor_id)
+			var state: BattleState = _combat.battle_state
+			if not AbilityCatalog.has_round_action(state.get_participant(actor_id), state.create_context()):
+				_execute_round_turn()
+				return
 		_refresh_round_controls()
 
 
@@ -666,7 +670,7 @@ func _refresh_chain_slots() -> void:
 	var actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
 	if _round_mode:
 		_hero_chain = AbilityCatalog.round_hero_ability_ids(actor)
-		if _selected_round_ability_id != "rest" and not _hero_chain.has(_selected_round_ability_id):
+		if not _hero_chain.has(_selected_round_ability_id):
 			_selected_round_ability_id = ""
 	var available: Array[int] = []
 	if _manual_started:
@@ -687,14 +691,6 @@ func _refresh_chain_slots() -> void:
 		slot.slot_selected.connect(_on_slot_pressed.bind(slot))
 		slot.info_requested.connect(_touch_info.show_text)
 		_touch_info.attach_long_press(slot, func() -> String: return slot.tooltip_text)
-	var rest_slot: BattleAbilitySlot = ABILITY_SLOT_SCENE.instantiate() as BattleAbilitySlot
-	_sequence_slots.add_child(rest_slot)
-	rest_slot.configure_recharge(_hero_chain.size())
-	if _round_mode:
-		rest_slot.set_slot_number_visible(false)
-	rest_slot.disabled = not _round_mode and not _manual_started
-	rest_slot.slot_selected.connect(_on_slot_pressed.bind(rest_slot))
-	rest_slot.info_requested.connect(_touch_info.show_text)
 	_resize_chain_slots()
 	if _round_mode:
 		_highlight_round_action()
@@ -708,7 +704,7 @@ func _highlight_round_action() -> void:
 	if _sequence_slots == null:
 		return
 	for index in range(_sequence_slots.get_child_count()):
-		var selected: bool = _selected_round_ability_id == "rest" if index == _hero_chain.size() else _hero_chain[index] == _selected_round_ability_id
+		var selected: bool = _hero_chain[index] == _selected_round_ability_id
 		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(selected)
 
 
@@ -741,8 +737,6 @@ func _refresh_enemy_slots() -> void:
 				slot.reveal_enemy_action(AbilityCatalog.get_ability(_enemy_chain[index]), enemy)
 			else:
 				slot.configure_hidden(index)
-		else:
-			slot.configure_recharge(index)
 		if _enemy_played.has(index):
 			slot.modulate = BattleAbilitySlot.SPENT_MODULATE
 		slot.info_requested.connect(_touch_info.show_text)
@@ -758,12 +752,12 @@ func _conceal_enemy_actions() -> void:
 			(_enemy_sequence_slots.get_child(index) as BattleAbilitySlot).configure_hidden(index)
 
 
-func _highlight_slots(hero_index: int, enemy_index: int, hero_reloading: bool = false, enemy_reloading: bool = false) -> void:
+func _highlight_slots(hero_index: int, enemy_index: int) -> void:
 	for index in range(_sequence_slots.get_child_count()):
-		var active: bool = index == _hero_chain.size() if hero_reloading else index == hero_index
+		var active: bool = index == hero_index
 		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(active)
 	for index in range(_enemy_sequence_slots.get_child_count()):
-		var active: bool = index == enemy_index if not enemy_reloading else index == _enemy_chain.size()
+		var active: bool = index == enemy_index
 		(_enemy_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(active)
 
 
@@ -777,7 +771,6 @@ func _highlight_next_actions() -> void:
 	if _manual_started:
 		_highlight_manual_selection()
 		return
-	# После завершения отдыха курсор героя уже на первом слоте.
 	var hero_index: int = hero.action_cursor
 	var enemy_index: int = enemy.action_cursor if enemy.is_alive() else -1
 	_highlight_slots(hero_index, enemy_index)
@@ -882,14 +875,11 @@ func _on_slot_selected(_index: int) -> void:
 	if _round_mode:
 		if _is_playing_back or _round_next_actor() != _selected_hero_id:
 			return
-		if _index < 0 or _index > _hero_chain.size():
+		if _index < 0 or _index >= _hero_chain.size():
 			return
-		var ability_id: String = "rest" if _index == _hero_chain.size() else _hero_chain[_index]
+		var ability_id: String = _hero_chain[_index]
 		var actor: BattleParticipant = _combat.battle_state.get_participant(_selected_hero_id)
-		if ability_id != "rest" and not AbilityCatalog.round_hero_unavailable_reason(actor, ability_id).is_empty():
-			return
-		if ability_id == "rest":
-			_execute_round_turn("", "rest")
+		if not AbilityCatalog.round_hero_unavailable_reason(actor, ability_id).is_empty():
 			return
 		_selected_round_ability_id = ability_id
 		_highlight_round_action()
@@ -898,13 +888,9 @@ func _on_slot_selected(_index: int) -> void:
 	if _manual_started:
 		if _is_playing_back or _combat.battle_state.flow.stage == BattleFlow.Stage.FINISHED:
 			return
-		if _index < _hero_chain.size() and not _combat.battle_state.manual_available_slots().has(_index):
+		if not _combat.battle_state.manual_available_slots().has(_index):
 			return
-		var requested_slot: int = -1 if _index == _hero_chain.size() else _index
-		if requested_slot == -1:
-			_selected_manual_slot = -1
-			_play_selected_manual_action("hero")
-			return
+		var requested_slot: int = _index
 		_selected_manual_slot = -2 if _selected_manual_slot == requested_slot else requested_slot
 		_result_text.text = ""
 		_refresh_phase_controls()
@@ -1110,9 +1096,6 @@ func _queue_clash_animation(group_events: Array[Dictionary]) -> void:
 			_queue_single_attack(event)
 			has_attack = true
 		else:
-			if kind in ["rest", "reload"] and not bool(event.get("premature", false)) and not announced.has(actor_id):
-				_queue_action_emblem(event)
-				announced[actor_id] = "rest"
 			_playback.tween_callback(_display_phase_event.bind(event))
 			if kind in ["tick", "turn"]:
 				_playback.tween_interval(clash_tick_seconds)
@@ -1177,15 +1160,14 @@ func _show_clash_ability(event: Dictionary) -> void:
 	var actor: BattleParticipant = _combat.battle_state.get_participant(actor_id)
 	var ability_id: String = str(event.get("ability_id", ""))
 	var ability: AbilityDefinition = AbilityCatalog.get_ability(ability_id) if not ability_id.is_empty() else null
-	var resting: bool = kind in ["rest", "reload"]
-	if ability == null and not resting and kind not in ["attack", "counter"]:
+	if ability == null and kind not in ["attack", "counter"]:
 		return
 	_action_emblem = BattleActionEmblem.new()
 	_impact_layer.add_child(_action_emblem)
 	_action_emblem.configure(ability, actor, portrait, _impact_layer.size,
-		"Отдых" if resting else ("Контратака" if kind == "counter" else "Атака"),
-		BattleAbilitySlot.REST_ICON if resting else BattleAbilitySlot.ATTACK_ICON,
-		BattleActionEmblem.Effect.REST if resting else BattleActionEmblem.Effect.ATTACK)
+		"Контратака" if kind == "counter" else "Атака",
+		BattleAbilitySlot.ATTACK_ICON,
+		BattleActionEmblem.Effect.ATTACK)
 
 
 func _advance_action_emblem(progress: float) -> void:
@@ -1204,7 +1186,7 @@ func _display_phase_event(event: Dictionary) -> void:
 	var actor_id: String = str(event.get("actor_id", ""))
 	var kind: String = str(event.get("type", ""))
 	# Удар записывается при контакте портретов, остальные события здесь.
-	if kind not in ["attack", "counter"] and not (kind == "rest" and bool(event.get("premature", false))):
+	if kind not in ["attack", "counter"]:
 		_emit_combat_event_log(event)
 	match kind:
 		"enemy_chain_changed":
@@ -1218,28 +1200,27 @@ func _display_phase_event(event: Dictionary) -> void:
 		"tick":
 			_conceal_enemy_actions()
 			if _manual_started:
-				var hero_slot: int = _hero_chain.size() if bool(event.get("hero_reload", false)) else int(event.get("hero_slot", -1))
+				var hero_slot: int = int(event.get("hero_slot", -1))
 				_highlight_slots(hero_slot, int(event.get("enemy_slot", -1)))
 			else:
-				_highlight_slots(int(event.get("hero_slot", -1)), int(event.get("enemy_slot", -1)),
-					bool(event.get("hero_reload", false)), bool(event.get("enemy_reload", false)))
+				_highlight_slots(int(event.get("hero_slot", -1)), int(event.get("enemy_slot", -1)))
 			if _support_enemy_view != null:
 				var support_slot: int = int(event.get("support_slot", -1))
 				var support: BattleParticipant = _combat.battle_state.get_participant(BattleState.SUPPORT_ENEMY_ID)
 				if support != null:
-					_support_enemy_view.highlight_cursor(support.action_chain.size() if bool(event.get("support_reload", false)) else support_slot)
+					_support_enemy_view.highlight_cursor(support_slot)
 		"turn":
 			if _round_mode:
 				var slot_index: int = int(event.get("slot_index", -1))
 				if actor_id in _combat.battle_state.hero_ids():
 					_select_hero_view(actor_id)
 					for i in range(_sequence_slots.get_child_count()):
-						(_sequence_slots.get_child(i) as BattleAbilitySlot).set_current(i == (_hero_chain.size() if bool(event.get("reload", false)) else slot_index))
+						(_sequence_slots.get_child(i) as BattleAbilitySlot).set_current(i == slot_index)
 				elif actor_id == "enemy":
 					for i in range(_enemy_sequence_slots.get_child_count()):
-						(_enemy_sequence_slots.get_child(i) as BattleAbilitySlot).set_current(i == (_enemy_chain.size() if bool(event.get("reload", false)) else slot_index))
+						(_enemy_sequence_slots.get_child(i) as BattleAbilitySlot).set_current(i == slot_index)
 				elif _extra_enemy_views.has(actor_id):
-					(_extra_enemy_views[actor_id] as BattleSupportEnemyView).highlight_cursor(_combat.battle_state.get_participant(actor_id).action_chain.size() if bool(event.get("reload", false)) else slot_index)
+					(_extra_enemy_views[actor_id] as BattleSupportEnemyView).highlight_cursor(slot_index)
 				_round_turn_label.text = "Раунд %d · %s" % [int(event.get("round", 0)), _hero_name_for_id(actor_id) if actor_id in _combat.battle_state.hero_ids() else _enemy_name_for_id(actor_id)]
 		"action_start":
 			# Враг показывает только исполняемый сейчас приём, не будущие.
@@ -1313,7 +1294,7 @@ func _display_phase_event(event: Dictionary) -> void:
 				_set_extra_enemy_health(target_id, int(_extra_enemy_hp.get(target_id, 0)) - amount, int(_extra_enemy_max.get(target_id, 0)))
 			if amount > 0:
 				_spawn_number(target_id, "−%d" % amount, Color("#ed4444"), 18.0)
-		"reload":
+		"cycle_completed":
 			if actor_id == "enemy":
 				_enemy_played.clear()
 				for slot in _enemy_sequence_slots.get_children():
@@ -1336,9 +1317,6 @@ func _display_phase_event(event: Dictionary) -> void:
 			var target_id: String = str(event.get("target_id", ""))
 			_set_display_energy(target_id, int(_visible_energy.get(target_id, 0)) - int(event.get("amount", 0)))
 			_set_display_energy(actor_id, int(_visible_energy.get(actor_id, 0)) + int(event.get("restored", 0)))
-		"rest":
-			if event.has("remaining_energy"):
-				_set_display_energy(actor_id, int(event["remaining_energy"]))
 
 
 func _emit_combat_event_log(event: Dictionary) -> void:
@@ -1638,7 +1616,7 @@ func _highlight_manual_selection() -> void:
 	if _sequence_slots == null:
 		return
 	for index in range(_sequence_slots.get_child_count()):
-		var selected: bool = (_selected_manual_slot == -1 and index == _hero_chain.size()) or index == _selected_manual_slot
+		var selected: bool = index == _selected_manual_slot
 		(_sequence_slots.get_child(index) as BattleAbilitySlot).set_current(selected)
 
 

@@ -1,6 +1,6 @@
 extends SceneTree
 
-## DA-4.08: базовый блок, разрушение щита, досрочный отдых, резервирование.
+## DA-4.08: базовый блок, разрушение щита, недоступный приём, резервирование.
 func _initialize() -> void:
 	# Без щита блок всегда работает и выдаёт +25%.
 	var wolf := HeroState.new(HeroCatalog.get_hero("petushan"))
@@ -93,21 +93,21 @@ func _initialize() -> void:
 	assert(not paid.validation_error().is_empty())
 
 	# Устаревшая способность в готовой цепочке не срывает всю фазу.
-	var rest_battle := BattleState.begin(MonsterCatalog.get_monster("lobar"), wolf)
-	assert(BattlePhaseTestDriver.run_phase(rest_battle, ["guard", "basic_strike", "guard"], ["guard", "basic_strike"]).success)
-	rest_battle.get_hero().personal_ability_ids.erase("basic_strike")
-	var sequence: Dictionary = BattlePhaseTestDriver.run_phase(rest_battle, ["guard", "basic_strike", "guard"], ["guard", "basic_strike"])
+	var invalid_ability_battle := BattleState.begin(MonsterCatalog.get_monster("lobar"), wolf)
+	assert(BattlePhaseTestDriver.run_phase(invalid_ability_battle, ["guard", "basic_strike", "guard"], ["guard", "basic_strike"]).success)
+	invalid_ability_battle.get_hero().personal_ability_ids.erase("basic_strike")
+	var sequence: Dictionary = BattlePhaseTestDriver.run_phase(invalid_ability_battle, ["guard", "basic_strike", "guard"], ["guard", "basic_strike"])
 	assert(sequence.success)
-	var saw_rest: bool = false
+	var saw_failure: bool = false
 	for event in sequence.events:
-		if event.type == "rest" and event.actor_id == "hero":
-			saw_rest = true
-	assert(saw_rest)
-	assert(rest_battle.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
-	assert(rest_battle.get_hero().block_attack_bonus_percent >= 50)
+		if event.type == "failed" and event.actor_id == "hero":
+			saw_failure = true
+	assert(saw_failure)
+	assert(invalid_ability_battle.flow.stage == BattleFlow.Stage.BETWEEN_PHASES)
+	assert(invalid_ability_battle.get_hero().block_attack_bonus_percent >= 50)
 
-	assert(not rest_battle.configure_hero_chain(["guard", "guard", "guard"]).success)
-	assert(rest_battle.get_hero().action_chain == ["guard", "basic_strike", "guard"])
+	assert(not invalid_ability_battle.configure_hero_chain(["guard", "guard", "guard"]).success)
+	assert(invalid_ability_battle.get_hero().action_chain == ["guard", "basic_strike", "guard"])
 
 	var reorder_battle := BattleState.begin(MonsterCatalog.get_monster("lobar"), wolf)
 	var original: Array[String] = ["guard", "basic_strike", "guard"]
@@ -116,11 +116,11 @@ func _initialize() -> void:
 	assert(reorder_battle.configure_hero_chain(reordered).success)
 	assert(reorder_battle.get_hero().action_cursor == 0)
 	assert(BattlePhaseTestDriver.run_phase(reorder_battle, reordered, ["guard", "basic_strike"]).success)
-	assert(not bool(reorder_battle.last_phase_events[0].get("hero_reload", false)))
+	assert(int(reorder_battle.last_phase_events[0].get("hero_slot", 0)) == 0)
 	var last_tick: Dictionary = {}
 	for event in reorder_battle.last_phase_events:
 		if event.type == "tick":
 			last_tick = event
-	assert(bool(last_tick.get("hero_reload", false)))
+	assert(int(last_tick.get("hero_slot", -1)) == reordered.size() - 1)
 	assert(not reorder_battle.configure_hero_chain(["guard", "guard"]).success)
 	quit()

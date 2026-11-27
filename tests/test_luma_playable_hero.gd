@@ -43,7 +43,7 @@ func _test_catalog() -> void:
 	assert(hero.hero_id == "luma" and hero.display_name == "Люма")
 	assert(hero.max_health == 16 and hero.strength == 2 and hero.agility == 5)
 	assert(hero.perception == 8 and hero.base_accuracy_percent == 90)
-	assert(hero.max_energy == 24 and hero.energy_restoration == 4)
+	assert(hero.max_energy == 24)
 	assert(hero.portrait != null and hero.portrait.get_width() == 320)
 	assert(hero.map_icon != null and hero.map_icon.get_width() == 80)
 	assert(hero.personal_ability_ids.size() == ABILITY_IDS.size())

@@ -34,10 +34,6 @@ func order_for_tick(participants: Dictionary, steps: Dictionary, actor_ids: Arra
 		var right_agility: int = right.effective_agility()
 		var left_step: Dictionary = steps[left_id]
 		var right_step: Dictionary = steps[right_id]
-		var left_reloading: bool = bool(left_step.get("reload", false))
-		var right_reloading: bool = bool(right_step.get("reload", false))
-		if left_reloading != right_reloading:
-			return not left_reloading
 		var left_priority: int = priority(str(left_step.get("action_id", "")))
 		var right_priority: int = priority(str(right_step.get("action_id", "")))
 		if left_priority != right_priority:

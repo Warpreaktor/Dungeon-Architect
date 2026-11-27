@@ -68,7 +68,7 @@ func _initialize() -> void:
 		assert(MonsterAiPlanner.choose_profile(weighted, enemy, "", rng_a).profile_id
 			== MonsterAiPlanner.choose_profile(weighted, enemy, "", rng_b).profile_id)
 	var intermission := MonsterIntermissionAction.new()
-	intermission.ability_id = "rest"
+	intermission.ability_id = "wait"
 	enemy.learned_ability_ids.append(intermission.ability_id)
 	assert(intermission.accepts(enemy, 0))
 	assert(not intermission.accepts(enemy, intermission.max_uses_per_battle))
@@ -105,7 +105,7 @@ func _initialize() -> void:
 	assert(bool(result.get("success", false)))
 	var support_events: int = 0
 	for event in result.get("events", []):
-		if str(event.get("actor_id", "")) == dummy.participant_id and event.get("type", "") in ["action_start", "reload"]:
+		if str(event.get("actor_id", "")) == dummy.participant_id and event.get("type", "") in ["action_start"]:
 			support_events += 1
 	assert(support_events > 0)
 	assert(dummy.health == dummy.max_health)

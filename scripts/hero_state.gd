@@ -285,7 +285,7 @@ func apply_potion(item: ItemDefinition) -> Dictionary:
 
 
 func exploration_phase_length() -> int:
-	return action_slot_capacity() + BattleChainPlanner.REST_TICKS
+	return action_slot_capacity() + 1
 
 
 func advance_effects() -> void:
@@ -548,6 +548,8 @@ static func from_snapshot(data: Dictionary) -> HeroState:
 	result.bonus_action_slots = int(data["bonus_action_slots"])
 	var learned: Array[String] = []
 	for learned_id_raw in data["learned_ability_ids"]:
+		if learned_id_raw == "rest":
+			continue
 		if typeof(learned_id_raw) != TYPE_STRING or str(learned_id_raw).is_empty() or AbilityCatalog.get_ability(str(learned_id_raw)) == null or learned.has(str(learned_id_raw)):
 			return null
 		learned.append(str(learned_id_raw))
@@ -610,6 +612,9 @@ static func from_snapshot(data: Dictionary) -> HeroState:
 		if typeof(status_id) != TYPE_STRING or not (statuses[status_id] is Dictionary):
 			return null
 	result.overworld_statuses = statuses.duplicate(true)
+	for status in result.overworld_statuses.values():
+		if int(status.get("clock", -1)) == 6:
+			status["clock"] = AbilityEffectDefinition.Clock.OWNER_PHASE
 	result._potion_phase_progress = int(data["potion_phase_progress"])
 	result._recalculate_equipment_stats()
 	if result.health > result.effective_max_health() and result.equipped_instance_ids.is_empty():

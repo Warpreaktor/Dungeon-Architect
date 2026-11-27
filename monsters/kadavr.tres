@@ -23,4 +23,3 @@ guaranteed_card_ids = Array[String](["kadavr_search", "kadavr_curse", "kadavr_de
 random_card_count = 0
 base_action_slots = 6
 max_energy = 24
-energy_restoration = 5

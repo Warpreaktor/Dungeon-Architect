@@ -20,7 +20,6 @@ enum Rank { COMMON, ELITE, BOSS }
 @export_range(0, 8, 1) var max_intermission_actions: int = 1
 @export var starting_resources: Dictionary = {}
 @export_range(0, 999, 1) var max_energy: int = 0
-@export_range(0, 999, 1) var energy_restoration: int = 0
 ## Обязательные карты в колоде на бой (порядок фиксирован).
 ## Если не заданы, обязательная карта берётся из personal_ability_ids.
 @export var guaranteed_card_ids: Array[String] = []

@@ -36,7 +36,6 @@ func _initialize() -> void:
 		{"slot": 0, "target": "enemy_support"},
 		{"slot": 1, "target": "hero"},
 		{"slot": 2, "target": "enemy"},
-		{"slot": -1, "target": ""},
 	]
 	for command in commands:
 		var first: Dictionary = one.run_manual_tick(command.slot, command.target)

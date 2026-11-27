@@ -47,17 +47,17 @@ func _initialize() -> void:
 	AbilityExecutor.apply_damage(enemy, hero, 1, "test_attack", battle.rng)
 	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == 0)
 
-	# Защитные эффекты остаются после отдыха и собственного бафа.
+	# Защитные эффекты остаются после завершения фазы и собственного бафа.
 	hero.resource_amounts["energy"] = hero.max_energy
 	assert(battle.execute_definition("hero", "hero", instinct).success)
-	var dodge_before_rest: int = hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT)
+	var dodge_before_phase: int = hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT)
 	hero.end_phase()
-	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == dodge_before_rest)
-	# Блок сохраняется через отдых и поддержку, но опускается при собственной атаке.
+	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == dodge_before_phase)
+	# Блок сохраняется через завершение фазы и поддержку, но опускается при собственной атаке.
 	hero.prepare_block(BattleMath.RULES.unarmed_block_armor)
-	var block_before_rest: int = hero.block_armor
+	var block_before_phase: int = hero.block_armor
 	hero.end_phase()
-	assert(hero.block_armor == block_before_rest)
+	assert(hero.block_armor == block_before_phase)
 	var self_heal := AbilityDefinition.new()
 	self_heal.ability_id = "test_self_heal"
 	self_heal.display_name = "Test heal"
@@ -69,10 +69,10 @@ func _initialize() -> void:
 	self_heal.effects.append(healing)
 	hero.personal_ability_ids.append(self_heal.ability_id)
 	assert(battle.execute_definition("hero", "hero", self_heal).success)
-	assert(hero.block_armor == block_before_rest)
+	assert(hero.block_armor == block_before_phase)
 	assert(battle.execute_definition("hero", "enemy", lunge).success)
 	assert(hero.block_armor == 0)
-	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == dodge_before_rest)
+	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == dodge_before_phase)
 	# Следующая входящая атака потратит уклонение, независимо от исхода броска.
 	AbilityExecutor.apply_damage(enemy, hero, 0, "test_attack", battle.rng)
 	assert(hero.status_modifier(AbilityEffectDefinition.Stat.DODGE_PERCENT) == 0)
@@ -92,12 +92,9 @@ func _initialize() -> void:
 	var rhythm_effect: AbilityEffectDefinition = rhythm.effects[0]
 	assert(rhythm_effect.hit_count == 3)
 	assert(AbilityExecutor.preview_damage(hero, rhythm, rhythm_effect, enemy) == floori(float(base) * rhythm_effect.damage_multiplier))
-	enemy.is_resting = true
-	assert(AbilityExecutor.preview_damage(hero, rhythm, rhythm_effect, enemy) == floori(float(base) * rhythm_effect.vs_rest_multiplier))
 	enemy.prepare_block(2)
 	assert(AbilityExecutor.preview_damage(hero, rhythm, rhythm_effect, enemy) == floori(float(base) * rhythm_effect.vs_block_multiplier))
 	enemy.block_armor = 0
-	enemy.is_resting = false
 
 	hero.accuracy_bonus = BattleMath.PERCENT_SCALE
 	var tendons: AbilityDefinition = AbilityCatalog.get_ability("volcha_cut_tendons")
@@ -109,7 +106,7 @@ func _initialize() -> void:
 	assert(enemy.status_modifier(AbilityEffectDefinition.Stat.AGILITY) == -2)
 	enemy.advance_status_clock(AbilityEffectDefinition.Clock.OWNER_PHASE)
 	assert(enemy.status_modifier(AbilityEffectDefinition.Stat.AGILITY) == 0)
-	# A debuff applied in a partly completed enemy cycle survives that partial rest.
+	# A debuff applied in a partly completed enemy cycle survives that partial cycle.
 	enemy.action_cursor = 1
 	hero.resource_amounts["energy"] = hero.max_energy
 	assert(battle.execute_definition("hero", "enemy", tendons).success)

@@ -20,4 +20,3 @@ base_accuracy_percent = 85
 starting_weapon_id = "burolom_drill"
 personal_ability_ids = Array[String](["burolom_control_pass", "burolom_notch", "burolom_strata_break", "burolom_brace"])
 max_energy = 22
-energy_restoration = 3

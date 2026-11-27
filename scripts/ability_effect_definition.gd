@@ -4,7 +4,7 @@ extends Resource
 ## Данные эффекта отделены от алгоритма его исполнения.
 enum Kind { DAMAGE, BLOCK, HEAL, APPLY_STATUS, REMOVE_STATUS, WAIT, DRAIN_ENERGY, TRANSFER_ENERGY, BARRIER, DELAYED_DAMAGE, MEDITATE, RESONANCE_SEAL, HP_COST }
 enum Recipient { SELF, TARGET }
-enum Clock { LEGACY_HERO_PHASE, OWNER_PHASE, INCOMING_ATTACK, BATTLE, MELEE_INCOMING_ATTACK, OUTGOING_ATTACK, OWNER_REST }
+enum Clock { LEGACY_HERO_PHASE, OWNER_PHASE, INCOMING_ATTACK, BATTLE, MELEE_INCOMING_ATTACK, OUTGOING_ATTACK }
 enum Stack { REFRESH, ADD, ONCE }
 enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER, MELEE_DODGE_PERCENT, ARMOR_PIERCE_PERCENT, ARMOR }
 
@@ -19,7 +19,6 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER, MELEE_DODGE_PE
 @export_range(0.0, 10.0, 0.01) var first_slot_multiplier: float = 0.0
 ## Доля урона, проходящая сквозь активный блок и будущую броню.
 @export_range(0.0, 1.0, 0.01) var armor_pierce_fraction: float = 0.0
-@export_range(0.0, 10.0, 0.01) var vs_rest_multiplier: float = 0.0
 @export_range(0.0, 10.0, 0.01) var vs_block_multiplier: float = 0.0
 @export var target_status_id: String = ""
 @export_range(0.0, 10.0, 0.01) var vs_target_status_multiplier: float = 0.0
@@ -32,7 +31,6 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER, MELEE_DODGE_PE
 @export var repeat_targets: bool = false
 @export_range(0, 20, 1) var fury_hit_count: int = 0
 @export_range(0.0, 10.0, 0.01) var fury_hit_multiplier: float = 0.0
-@export var vs_recent_rest: bool = false
 @export var full_owner_turns: bool = false
 ## Параметры боевых ресурсов выражены через проценты от динамической базы.
 ## Нулевое значение использует damage_multiplier, положительное задаёт долю базы.
@@ -46,7 +44,6 @@ enum Stat { NONE, DODGE_PERCENT, AGILITY, ACCURACY, ATTACK_POWER, MELEE_DODGE_PE
 @export var stack_policy: Stack = Stack.REFRESH
 @export var requires_unblocked_hit: bool = false
 @export_range(0, 999, 1) var duration_ticks: int = 0
-## Периодический урон раз в собственный отдых владельца эффекта.
 @export_range(0, 9999, 1) var tick_damage: int = 0
 @export_range(0, 999, 1) var next_block_penalty: int = 0
 @export_range(0, 100, 1) var heal_percent_max: int = 0
@@ -98,8 +95,6 @@ func effective_stack_policy() -> int:
 
 
 func status_duration_description() -> String:
-	if effective_status_clock() == Clock.OWNER_REST:
-		return "на %s цели" % DescriptionTemplate.quantity(duration_ticks, "отдых", "отдыха", "отдыхов")
 	if effective_status_clock() == Clock.MELEE_INCOMING_ATTACK:
 		return "до следующей входящей ближней атаки"
 	if effective_status_clock() == Clock.OUTGOING_ATTACK:

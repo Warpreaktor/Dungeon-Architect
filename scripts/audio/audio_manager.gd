@@ -6,6 +6,8 @@ signal volume_changed(channel: StringName, value: float)
 const CHANNELS: Array[StringName] = [&"Master", &"Music", &"Ambience", &"SFX", &"UI"]
 const MENU_MUSIC := "res://assets/audio/music/main_menu.mp3"
 const EXPLORATION_MUSIC := "res://assets/audio/music/exploration.ogg"
+const DUNGEON_AMBIENCE := "res://assets/audio/ambience/dungeon.ogg"
+const DUNGEON_AMBIENCE_GAIN := 0.5
 const SETTINGS_PATH := "user://audio_settings.cfg"
 const FADE_SECONDS := 0.8
 const SILENT_DB := -80.0
@@ -96,6 +98,77 @@ func stop_music(fade_seconds: float = FADE_SECONDS) -> void:
 		return
 	_target_path = ""
 	_transition(-1, fade_seconds if _has_music() else 0.0)
+
+
+func play_dungeon_audio() -> void:
+	play_music(_optional_audio_path(EXPLORATION_MUSIC), FADE_SECONDS, Tween.TRANS_SINE)
+	play_ambience(_optional_audio_path(DUNGEON_AMBIENCE))
+
+
+func play_ambience(path: String, fade_seconds: float = FADE_SECONDS) -> bool:
+	if path.is_empty():
+		stop_ambience(fade_seconds)
+		return true
+	if _ambience_player.playing and _ambience_path == path:
+		if _ambience_stopping:
+			_fade_ambience(false, fade_seconds)
+		return true
+	var stream: AudioStream = _load_music(path)
+	if stream == null:
+		stop_ambience(fade_seconds)
+		return false
+	_cancel_ambience_fade()
+	_ambience_player.stop()
+	_ambience_player.stream = stream
+	_ambience_player.volume_db = SILENT_DB
+	_ambience_path = path
+	_ambience_player.play()
+	_fade_ambience(false, fade_seconds)
+	return true
+
+
+func stop_ambience(fade_seconds: float = FADE_SECONDS) -> void:
+	if _ambience_stopping and fade_seconds > 0.0:
+		return
+	_fade_ambience(true, fade_seconds if _ambience_player.playing else 0.0)
+
+
+func _fade_ambience(stopping: bool, duration: float) -> void:
+	_cancel_ambience_fade()
+	_ambience_stopping = stopping
+	if duration <= 0.0:
+		_finish_ambience_fade(stopping)
+		return
+	_ambience_fade = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_ambience_fade.tween_method(_set_player_gain.bind(_ambience_player), db_to_linear(_ambience_player.volume_db), 0.0 if stopping else DUNGEON_AMBIENCE_GAIN, duration)
+	_ambience_fade.tween_callback(_finish_ambience_fade.bind(stopping))
+
+
+func _cancel_ambience_fade() -> void:
+	if _ambience_fade != null:
+		_ambience_fade.kill()
+		_ambience_fade = null
+
+
+func _finish_ambience_fade(stopping: bool) -> void:
+	if stopping:
+		_ambience_player.stop()
+		_ambience_player.stream = null
+		_ambience_player.volume_db = SILENT_DB
+		_ambience_path = ""
+	else:
+		_ambience_player.volume_db = linear_to_db(DUNGEON_AMBIENCE_GAIN)
+	_ambience_stopping = false
+	_ambience_fade = null
+
+
+static func _optional_audio_path(preferred: String) -> String:
+	if ResourceLoader.exists(preferred, "AudioStream"):
+		return preferred
+	var alternative: String = preferred.get_basename() + ".mp3"
+	if ResourceLoader.exists(alternative, "AudioStream"):
+		return alternative
+	return ""
 
 
 func _load_music(path: String) -> AudioStream:

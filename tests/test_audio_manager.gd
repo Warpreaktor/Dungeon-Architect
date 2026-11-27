@@ -76,3 +76,67 @@ func _test_smooth_fade(manager: GameAudioManager) -> void:
 	fade.custom_step(duration * 0.51)
 	assert(is_zero_approx(player.volume_db))
 	manager.stop_music(0.0)
+
+
+func _test_ambience(manager: GameAudioManager) -> void:
+	var player: AudioStreamPlayer = manager._ambience_player
+	assert(player.bus == &"Ambience")
+	var original_volume: float = manager.channel_volume(&"Ambience")
+	var target_gain: float = GameAudioManager.DUNGEON_AMBIENCE_GAIN
+	assert(not player.playing)
+	assert(not manager.play_ambience("res://assets/audio/ambience/missing_test_track.ogg", 0.0))
+	assert(player.stream == null and manager._ambience_path.is_empty())
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_8_BITS
+	stream.mix_rate = 8000
+	var samples := PackedByteArray()
+	samples.resize(stream.mix_rate)
+	stream.data = samples
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_end = samples.size()
+	player.stream = stream
+	player.volume_db = GameAudioManager.SILENT_DB
+	manager._ambience_path = "test_ambience"
+	player.play()
+	manager._fade_ambience(false, 1.0)
+	var fade: Tween = manager._ambience_fade
+	fade.pause()
+	fade.custom_step(0.5)
+	assert(absf(db_to_linear(player.volume_db) - target_gain * 0.5) < 0.01)
+	assert(manager.play_ambience("test_ambience"))
+	assert(manager._ambience_fade == fade and player.stream == stream)
+	fade.custom_step(0.51)
+	assert(player.playing and is_equal_approx(db_to_linear(player.volume_db), target_gain))
+	manager.stop_ambience(1.0)
+	fade = manager._ambience_fade
+	fade.pause()
+	fade.custom_step(0.5)
+	assert(player.playing and absf(db_to_linear(player.volume_db) - target_gain * 0.5) < 0.01)
+	assert(manager.play_ambience("test_ambience", 0.0))
+	assert(player.playing and is_equal_approx(db_to_linear(player.volume_db), target_gain))
+	assert(is_equal_approx(manager.channel_volume(&"Ambience"), original_volume))
+	manager.stop_ambience(0.0)
+	assert(not player.playing and player.stream == null and manager._ambience_path.is_empty())
+
+
+func _test_optional_dungeon_audio(manager: GameAudioManager) -> void:
+	assert(GameAudioManager._optional_audio_path("res://assets/audio/missing_test_track.ogg").is_empty())
+	var music_path: String = GameAudioManager._optional_audio_path(GameAudioManager.EXPLORATION_MUSIC)
+	var ambience_path: String = GameAudioManager._optional_audio_path(GameAudioManager.DUNGEON_AMBIENCE)
+	manager.play_dungeon_audio()
+	assert(manager._target_path == music_path)
+	assert(manager._ambience_path == ambience_path)
+	if not ambience_path.is_empty():
+		var stream: AudioStream = manager._ambience_player.stream
+		if stream is AudioStreamMP3:
+			assert(stream.loop and is_zero_approx(stream.loop_offset))
+		elif stream is AudioStreamOggVorbis:
+			assert(stream.loop and is_zero_approx(stream.loop_offset))
+		else:
+			assert(false, "Unsupported ambience stream")
+		manager.play_dungeon_audio()
+		assert(manager._ambience_player.stream == stream)
+	manager.stop_ambience(0.0)
+	assert(manager._target_path == music_path)
+	assert(not manager._ambience_player.playing)
+	manager.stop_music(0.0)

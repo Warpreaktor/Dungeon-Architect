@@ -39,7 +39,12 @@ func _build_settings_popup() -> void:
 	margins.add_theme_constant_override("margin_right", 20)
 	margins.add_theme_constant_override("margin_top", 18)
 	margins.add_theme_constant_override("margin_bottom", 18)
-	_settings_popup.add_child(margins)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_settings_popup.add_child(scroll)
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margins.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(margins)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
 	margins.add_child(column)
@@ -55,6 +60,9 @@ func _build_settings_popup() -> void:
 	_open_map_button.text = "Открытая карта"
 	_open_map_button.toggled.connect(func(enabled: bool) -> void: test_open_map_changed.emit(enabled))
 	column.add_child(_open_map_button)
+	column.add_child(HSeparator.new())
+	var audio_controls := AudioVolumeControls.new()
+	column.add_child(audio_controls)
 
 
 func open_for(standalone: bool, open_map: bool = false, console_open: bool = false, can_save: bool = false) -> void:
@@ -94,7 +102,7 @@ func close_settings() -> void:
 
 
 func _open_settings() -> void:
-	_settings_popup.popup_centered(Vector2i(330, 180))
+	_settings_popup.popup_centered_clamped(Vector2i(360, 480), 0.94)
 
 
 func _resize_card() -> void:

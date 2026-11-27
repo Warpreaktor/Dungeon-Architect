@@ -3225,6 +3225,7 @@ func _on_game_dialogue_closed() -> void:
 		var moving_session: GameSession = game_session
 		var previous_pos: Vector2i = moving_session.player_pos
 		var shot := AudioStreamPlayer.new()
+		shot.bus = &"SFX"
 		shot.stream = DOOR_CROSSBOW_SOUND
 		add_child(shot)
 		shot.finished.connect(shot.queue_free)

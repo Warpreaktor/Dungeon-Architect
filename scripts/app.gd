@@ -21,6 +21,9 @@ func _show_screen(screen: Control) -> void:
 
 
 func _open_menu() -> void:
+	var audio: GameAudioManager = GameAudioManager.instance(get_tree())
+	if audio != null:
+		audio.play_music(GameAudioManager.MENU_MUSIC)
 	var screen := MENU_SCENE.instantiate() as MainMenu
 	screen.editor_requested.connect(_open_editor)
 	screen.game_requested.connect(_open_game)
@@ -29,12 +32,18 @@ func _open_menu() -> void:
 
 
 func _open_editor() -> void:
+	var audio: GameAudioManager = GameAudioManager.instance(get_tree())
+	if audio != null:
+		audio.stop_music()
 	var editor := EDITOR_SCENE.instantiate() as Control
 	editor.connect("menu_requested", _open_menu)
 	_show_screen(editor)
 
 
 func _open_game(data: DungeonMap, hero_ids: Array[String], campaign: CampaignDefinition) -> void:
+	var audio: GameAudioManager = GameAudioManager.instance(get_tree())
+	if audio != null:
+		audio.play_music(GameAudioManager.EXPLORATION_MUSIC)
 	var game := EDITOR_SCENE.instantiate() as Control
 	game.call("configure_for_game", data, hero_ids, campaign)
 	game.connect("menu_requested", _open_menu)
@@ -42,6 +51,9 @@ func _open_game(data: DungeonMap, hero_ids: Array[String], campaign: CampaignDef
 
 
 func _open_resumed_game(session: GameSession) -> void:
+	var audio: GameAudioManager = GameAudioManager.instance(get_tree())
+	if audio != null:
+		audio.play_music(GameAudioManager.EXPLORATION_MUSIC)
 	var game := EDITOR_SCENE.instantiate() as Control
 	game.call("configure_for_resume", session)
 	game.connect("menu_requested", _open_menu)

@@ -190,6 +190,16 @@ theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 22
 text = "Редактор"
 
+[node name="AudioSettingsButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/HomeActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 56)
+layout_mode = 2
+focus_mode = 2
+script = ExtResource("9_stone_button")
+theme_override_fonts/font = SubResource("SystemFont_campaign_names")
+theme_override_font_sizes/font_size = 22
+text = "Настройки"
+
 [node name="PlayActions" type="VBoxContainer" parent="SafeArea/Center/Card/Padding/Content"]
 unique_name_in_owner = true
 visible = false

@@ -52,7 +52,7 @@ func _run() -> void:
 	assert(torch_left._flame_material != torch_right._flame_material)
 	assert(torch_left._flame_material.get_shader_parameter("speed") != torch_right._flame_material.get_shader_parameter("speed"))
 	var buttons: Array[StoneMenuButton] = []
-	for button_name in ["PlayButton", "EditorButton", "ContinueGameButton", "CampaignButton", "PersonalMapsButton", "PlayBackButton", "BackButton", "StartButton"]:
+	for button_name in ["PlayButton", "EditorButton", "AudioSettingsButton", "ContinueGameButton", "CampaignButton", "PersonalMapsButton", "PlayBackButton", "BackButton", "StartButton"]:
 		var button := menu.get_node("%" + button_name) as StoneMenuButton
 		assert(button != null and button.icon == null)
 		assert(button._stone.texture == StoneMenuButton.STONE)

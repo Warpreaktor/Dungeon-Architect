@@ -50,10 +50,13 @@ var _maps_by_id: Dictionary = {}
 var _thumbnails: Array[Texture2D] = []
 var _panel_style := StyleBoxFlat.new()
 var _menu_style := StyleBoxEmpty.new()
+var _audio_dialog: AcceptDialog
 
 
 func _ready() -> void:
 	%PlayButton.pressed.connect(_open_play_menu)
+	%AudioSettingsButton.pressed.connect(_open_audio_settings)
+	_build_audio_settings()
 	%CampaignButton.pressed.connect(func() -> void: _open_library(LIBRARY_CAMPAIGNS))
 	%PlayBackButton.pressed.connect(_back_to_home)
 	%PersonalMapsButton.pressed.connect(func() -> void: _open_library(LIBRARY_PERSONAL))
@@ -72,6 +75,24 @@ func _ready() -> void:
 	resized.connect(_resize_layout)
 	_resize_layout()
 	%PlayButton.grab_focus()
+
+
+func _build_audio_settings() -> void:
+	_audio_dialog = AcceptDialog.new()
+	_audio_dialog.name = "AudioSettingsDialog"
+	_audio_dialog.title = "Настройки звука"
+	_audio_dialog.ok_button_text = "Закрыть"
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_audio_dialog.add_child(scroll)
+	var controls := AudioVolumeControls.new()
+	controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(controls)
+	add_child(_audio_dialog)
+
+
+func _open_audio_settings() -> void:
+	_audio_dialog.popup_centered_clamped(Vector2i(360, 430), 0.94)
 
 
 func _update_selection_screen() -> void:
@@ -122,14 +143,40 @@ func _resize_layout() -> void:
 		var center_x: float = _artwork.position.x + artwork_width * 0.23
 		right_margin = maxi(margin, roundi(available.x + margin - 2.0 * center_x))
 	if menu_mode:
-		bottom_margin = clampi(roundi(available.y * 0.13), 54, 140)
+		bottom_margin = clampi(roundi(available.y * 0.13), 12, 140)
+		var actions: VBoxContainer = _home if _home.visible else _play_actions
+		var action_count: int = 0
+		for child in actions.get_children():
+			if child is Button and child.visible:
+				action_count += 1
+		var compact_width: float = maxf(284.0, available.y * 0.62 / maxf(1.0, float(action_count)) * StoneMenuButton.STONE.get_size().aspect() + 44.0)
+		card_width = minf(card_width, compact_width)
+		if side_menu:
+			var desired_center: float = _artwork.position.x + _background.texture.get_width() * _artwork.scale.x * 0.23
+			var safe_center: float = clampf(desired_center, margin + card_width * 0.5, available.x - margin - card_width * 0.5)
+			right_margin = maxi(margin, roundi(available.x + margin - 2.0 * safe_center))
+		var actions_height: float = action_count * clampf(ceilf((card_width - 44.0) / StoneMenuButton.STONE.get_size().aspect()), StoneMenuButton.MIN_TOUCH_HEIGHT, StoneMenuButton.MAX_HEIGHT) + maxi(0, action_count - 1) * actions.get_theme_constant("separation")
+		bottom_margin = mini(bottom_margin, maxi(12, floori(available.y - actions_height - 125.0)))
 	_safe_area.add_theme_constant_override("margin_top", top_margin)
 	_safe_area.add_theme_constant_override("margin_bottom", bottom_margin)
 	_safe_area.add_theme_constant_override("margin_right", right_margin)
 	_card.custom_minimum_size.x = card_width
 	var logo_aspect: float = _logo.texture.get_width() / _logo.texture.get_height() if _logo.texture != null and _logo.texture.get_height() > 0.0 else 1.5
-	var logo_width: float = clampf(card_width * 0.86, 300.0, 520.0)
-	var logo_height: float = clampf(logo_width / logo_aspect, 120.0, 360.0)
+	var logo_width: float = maxf(1.0, minf(card_width - 44.0, minf(card_width * 0.86, 520.0)))
+	var logo_height: float = minf(logo_width / logo_aspect, 360.0)
+	if menu_mode:
+		var actions: VBoxContainer = _home if _home.visible else _play_actions
+		var reserved: float = 57.0
+		var count: int = 0
+		for child in actions.get_children():
+			if child is Control and child.visible:
+				if child is StoneMenuButton:
+					reserved += clampf(ceilf((card_width - 44.0) / StoneMenuButton.STONE.get_size().aspect()), StoneMenuButton.MIN_TOUCH_HEIGHT, StoneMenuButton.MAX_HEIGHT)
+				else:
+					reserved += child.get_combined_minimum_size().y
+				count += 1
+		reserved += maxi(0, count - 1) * actions.get_theme_constant("separation")
+		logo_height = maxf(20.0, minf(logo_height, available.y - top_margin - bottom_margin - reserved))
 	_logo.custom_minimum_size = Vector2(logo_width, logo_height)
 	_map_list.custom_minimum_size.y = clampf(available.y * 0.41, 120.0, 320.0)
 	_map_list.max_columns = clampi(floori((_card.custom_minimum_size.x - 48.0) / 215.0), 1, 3)

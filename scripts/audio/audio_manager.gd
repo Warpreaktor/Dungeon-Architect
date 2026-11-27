@@ -57,7 +57,7 @@ func set_channel_volume(channel: StringName, value: float, persist: bool = true)
 	volume_changed.emit(channel, value)
 
 
-func play_music(path: String, fade_seconds: float = FADE_SECONDS) -> bool:
+func play_music(path: String, fade_seconds: float = FADE_SECONDS, fade_transition: Tween.TransitionType = Tween.TRANS_LINEAR) -> bool:
 	if path.is_empty():
 		stop_music(fade_seconds)
 		return true
@@ -78,7 +78,7 @@ func play_music(path: String, fade_seconds: float = FADE_SECONDS) -> bool:
 		_paths[target] = path
 		player.play()
 	_target_path = path
-	_transition(target, fade_seconds)
+	_transition(target, fade_seconds, fade_transition)
 	return true
 
 
@@ -133,12 +133,12 @@ func _cancel_fade() -> void:
 		_fade = null
 
 
-func _transition(target: int, duration: float) -> void:
+func _transition(target: int, duration: float, fade_transition: Tween.TransitionType = Tween.TRANS_LINEAR) -> void:
 	_cancel_fade()
 	if duration <= 0.0:
 		_finish_transition(target)
 		return
-	_fade = create_tween().set_parallel(true)
+	_fade = create_tween().set_parallel(true).set_trans(fade_transition).set_ease(Tween.EASE_IN_OUT)
 	for index in range(_players.size()):
 		var player: AudioStreamPlayer = _players[index]
 		if player.playing:

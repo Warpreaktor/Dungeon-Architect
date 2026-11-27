@@ -21,9 +21,6 @@ func _show_screen(screen: Control) -> void:
 
 
 func _open_menu() -> void:
-	var audio: GameAudioManager = GameAudioManager.instance(get_tree())
-	if audio != null:
-		audio.play_music(GameAudioManager.MENU_MUSIC)
 	var screen := MENU_SCENE.instantiate() as MainMenu
 	screen.editor_requested.connect(_open_editor)
 	screen.game_requested.connect(_open_game)

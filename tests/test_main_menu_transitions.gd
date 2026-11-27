@@ -11,7 +11,11 @@ func _run() -> void:
 	menu._maps_directory = empty_dir.path_join("maps")
 	menu._campaign_library = CampaignLibrary.new(empty_dir.path_join("campaigns"))
 	menu._save_store = ProgressSaveStore.new(empty_dir.path_join("saves"))
+	var audio: GameAudioManager = GameAudioManager.instance(self)
+	assert(audio != null)
+	audio.stop_music(0.0)
 	root.add_child(menu)
+	assert(audio._target_path.is_empty() and not audio._has_music())
 	var play: StoneMenuButton = menu.get_node("%PlayButton")
 	var campaign: StoneMenuButton = menu.get_node("%CampaignButton")
 	var personal: StoneMenuButton = menu.get_node("%PersonalMapsButton")
@@ -24,6 +28,8 @@ func _run() -> void:
 	play.pressed.emit()
 	assert(menu._home.visible and not menu._play_actions.visible)
 	await menu.transition_finished
+	var menu_track: String = GameAudioManager.MENU_MUSIC if ResourceLoader.exists(GameAudioManager.MENU_MUSIC) else ""
+	assert(audio._target_path == menu_track)
 	assert(not menu._curtain.visible and is_zero_approx(menu._curtain.color.a))
 	play.pressed.emit()
 	assert(menu._transitioning and menu._home.visible and menu._curtain.visible)
@@ -71,6 +77,8 @@ func _run() -> void:
 	assert(play._ash_burn == 0.0 and editor._ash_burn == 0.0)
 	editor.pressed.emit()
 	assert(requests.size() == 1)
+	assert(audio._target_path == menu_track)
+	audio.stop_music(0.0)
 	menu.queue_free()
 	await process_frame
 	print("Main menu: intro fade, ash transitions, full-screen fades and input guard OK")

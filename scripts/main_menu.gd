@@ -27,9 +27,10 @@ signal continue_game_requested(session: GameSession)
 @onready var _continue_game_button: Button = %ContinueGameButton
 @onready var _home_error: Label = %HomeError
 const INTRO_FADE_SECONDS := 1.1
+const INTRO_MUSIC_FADE_SECONDS := INTRO_FADE_SECONDS * 2.0
 const SCREEN_FADE_SECONDS := 0.45
-const ASH_SECONDS := 0.88
-const ASH_STAGGER := 0.075
+const ASH_SECONDS := 0.44
+const ASH_STAGGER := 0.04
 const LIBRARY_CAMPAIGNS := 0
 const LIBRARY_PERSONAL := 1
 const TUNNEL_FOG_BOUNDS := Rect2(0.49, 0.46, 0.34, 0.32)
@@ -110,6 +111,11 @@ func _fade_to(opacity: float, duration: float) -> void:
 
 func _intro_fade() -> void:
 	_begin_transition(1.0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var audio: GameAudioManager = GameAudioManager.instance(get_tree())
+	if audio != null:
+		audio.play_music(GameAudioManager.MENU_MUSIC, INTRO_MUSIC_FADE_SECONDS, Tween.TRANS_SINE)
 	await _fade_to(0.0, INTRO_FADE_SECONDS)
 	_end_transition()
 

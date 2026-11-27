@@ -26,6 +26,7 @@ func _run() -> void:
 		assert(manager._target_path == GameAudioManager.MENU_MUSIC)
 		manager.stop_music(0.0)
 		assert(manager._target_path.is_empty() and not manager._has_music())
+	_test_smooth_fade(manager)
 	var controls := AudioVolumeControls.new()
 	root.add_child(controls)
 	assert(controls._sliders.size() == GameAudioManager.CHANNELS.size())
@@ -45,3 +46,31 @@ func _run() -> void:
 	await process_frame
 	print("Audio: optional music, bus routing and volume controls OK")
 	quit()
+
+
+func _test_smooth_fade(manager: GameAudioManager) -> void:
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_8_BITS
+	stream.mix_rate = 8000
+	var samples := PackedByteArray()
+	samples.resize(stream.mix_rate)
+	stream.data = samples
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_end = samples.size()
+	var player: AudioStreamPlayer = manager._players[0]
+	player.stream = stream
+	player.volume_db = GameAudioManager.SILENT_DB
+	player.play()
+	assert(player.playing)
+	var duration: float = MainMenu.INTRO_MUSIC_FADE_SECONDS
+	manager._transition(0, duration, Tween.TRANS_SINE)
+	var fade: Tween = manager._fade
+	fade.pause()
+	fade.custom_step(duration * 0.25)
+	var gain: float = db_to_linear(player.volume_db)
+	assert(gain > 0.0 and gain < 0.2)
+	fade.custom_step(duration * 0.25)
+	assert(absf(db_to_linear(player.volume_db) - 0.5) < 0.01)
+	fade.custom_step(duration * 0.51)
+	assert(is_zero_approx(player.volume_db))
+	manager.stop_music(0.0)

@@ -39,6 +39,46 @@ static func load_definitions(directory: String = DIRECTORY) -> Dictionary:
 	return campaigns
 
 
+static func source_path(map_id: String) -> String:
+	return DIRECTORY.path_join("maps").path_join(map_id + ".json")
+
+
+static func source_campaign(map_id: String) -> CampaignDefinition:
+	for campaign in load_definitions().values():
+		if campaign.map_ids.has(ID_PREFIX + map_id):
+			var source: CampaignDefinition = CampaignDefinition.from_dict(campaign.to_dict())
+			for index in range(source.map_ids.size()):
+				source.map_ids[index] = source.map_ids[index].trim_prefix(ID_PREFIX)
+			source.start_map_id = source.start_map_id.trim_prefix(ID_PREFIX)
+			return source
+	return null
+
+
+static func editable_source_id(path: String) -> String:
+	if not DeveloperMode.is_enabled() or not is_packaged_path(path):
+		return ""
+	var map_id: String = path.get_file().get_basename()
+	if not CampaignDefinition.valid_campaign_id(map_id) or is_official_id(map_id):
+		return ""
+	var absolute_path: String = ProjectSettings.globalize_path(path).replace("\\", "/").simplify_path()
+	var expected_path: String = ProjectSettings.globalize_path(source_path(map_id)).replace("\\", "/").simplify_path()
+	var same_path: bool = absolute_path.nocasecmp_to(expected_path) == 0 if OS.has_feature("windows") else absolute_path == expected_path
+	if not same_path or source_campaign(map_id) == null:
+		return ""
+	return map_id
+
+
+static func editable_source_paths() -> Array[String]:
+	var paths: Array[String] = []
+	if not DeveloperMode.is_enabled():
+		return paths
+	for campaign in load_definitions().values():
+		for map_id in campaign.map_ids:
+			paths.append(source_path(map_id.trim_prefix(ID_PREFIX)))
+	paths.sort()
+	return paths
+
+
 static func load_maps(directory: String = DIRECTORY) -> Dictionary:
 	var result: Dictionary = {}
 	var campaigns: Dictionary = load_definitions(directory)

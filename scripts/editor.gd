@@ -102,6 +102,7 @@ var _startup_campaign: CampaignDefinition
 var _progress_save_store: ProgressSaveStore = ProgressSaveStore.new()
 var _progress_maps_directory: String = SavedMapLibrary.DIRECTORY
 var _editor_maps_directory: String = SavedMapLibrary.DIRECTORY
+var _official_source_path: String = ""
 var _campaign_library: CampaignLibrary = CampaignLibrary.new()
 var _test_party_ids: Array[String] = [HeroCatalog.DEFAULT_HERO_ID]
 var _developer_preview: GameSession
@@ -1301,11 +1302,20 @@ func _on_settings_option_selected(id: int) -> void:
 			if not DeveloperMode.is_available():
 				return
 			var enabled: bool = not DeveloperMode.is_enabled()
+			if not enabled and not _official_source_path.is_empty():
+				_flush_pending_map_edits()
+				if is_dirty:
+					_persist_current_map()
+					if is_dirty:
+						return
 			if not DeveloperMode.set_enabled(enabled):
 				_set_status("Не удалось сохранить режим разработчика")
 				return
 			_settings_menu.get_popup().set_item_checked(_settings_menu.get_popup().get_item_index(SETTINGS_DEVELOPER), enabled)
 			_canvas.developer_interaction_enabled = enabled
+			if not enabled and not _official_source_path.is_empty():
+				_set_map(DungeonMap.create_blank())
+				_remember_last_map("")
 			_developer_preview = null
 			if _developer_inventory != null:
 				_developer_inventory.hide()
@@ -1448,7 +1458,8 @@ func _register_editor_control(control: Control) -> void:
 	_editor_controls.append(control)
 
 
-func _set_map(new_map: DungeonMap) -> void:
+func _set_map(new_map: DungeonMap, source_path: String = "") -> void:
+	_official_source_path = source_path
 	_name_autosave_timer.stop()
 	_clear_save_feedback()
 	_clear_reachability()
@@ -1589,7 +1600,7 @@ func _on_exit_tapped(entity_id: String) -> void:
 	_load_dialog.title = "Переход на карту"
 	_load_dialog.ok_button_text = "Связать"
 	_library_actions.visible = false
-	_campaign_link_actions.visible = true
+	_campaign_link_actions.visible = _official_source_path.is_empty()
 	_campaign_link_label.visible = true
 	_refresh_campaign_link_library()
 	_unlink_stairs_button.visible = true
@@ -1627,6 +1638,13 @@ func _link_selected_exit() -> void:
 		return
 	var destination: DungeonMap = _read_map(path)
 	if not _valid_exit_destination(destination):
+		return
+	if not _official_source_path.is_empty():
+		if OfficialCampaignLibrary.editable_source_id(path) != destination.map_id:
+			return
+		_apply_exit_link(destination)
+		return
+	if OfficialCampaignLibrary.is_packaged_path(path):
 		return
 	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
 	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
@@ -1715,9 +1733,16 @@ func _cancel_exit_link_selection() -> void:
 
 
 func _apply_exit_link(destination: DungeonMap) -> void:
-	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
-	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
-	if campaign == null or not _campaign_library.last_error.is_empty() or not campaign.map_ids.has(destination.map_id):
+	var campaign: CampaignDefinition
+	if not _official_source_path.is_empty():
+		if DeveloperMode.is_enabled():
+			campaign = OfficialCampaignLibrary.source_campaign(map_data.map_id)
+	else:
+		var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
+		campaign = _campaign_library.campaign_for_map(map_data.map_id, maps)
+		if not _campaign_library.last_error.is_empty():
+			campaign = null
+	if campaign == null or not campaign.map_ids.has(destination.map_id):
 		_set_status("Переход разрешён только между картами одной кампании.")
 		return
 	var before: Dictionary = _canvas.capture_edit_state()
@@ -1745,6 +1770,11 @@ func _unlink_selected_exit() -> void:
 func _find_linked_map(map_id: String) -> DungeonMap:
 	if standalone_game:
 		return SavedMapLibrary.load_for_game(_progress_maps_directory).get(map_id) as DungeonMap
+	if not _official_source_path.is_empty():
+		var campaign: CampaignDefinition = OfficialCampaignLibrary.source_campaign(map_data.map_id)
+		if campaign != null and campaign.map_ids.has(map_id):
+			return _read_map(OfficialCampaignLibrary.source_path(map_id))
+		return null
 	# Не полагаемся на имя файла: карта идентифицируется полем id внутри JSON.
 	var folder := DirAccess.open(_maps_dir())
 	if folder == null:
@@ -2093,13 +2123,14 @@ func _maps_dir() -> String:
 	return _editor_maps_directory
 
 
-## На устройстве запоминаем только ID сохранённой карты, не игровые данные.
-func _remember_last_map(map_id: String) -> void:
+## Настройки хранят ссылку на карту, а не её игровые данные.
+func _remember_last_map(map_id: String, source_path: String = "") -> void:
 	var config := ConfigFile.new()
 	config.load(EDITOR_SETTINGS_PATH)
-	if str(config.get_value("editor", "last_map_id", "")) == map_id:
+	if str(config.get_value("editor", "last_map_id", "")) == map_id and str(config.get_value("editor", "last_official_source", "")) == source_path:
 		return
 	config.set_value("editor", "last_map_id", map_id)
+	config.set_value("editor", "last_official_source", source_path)
 	if config.save(EDITOR_SETTINGS_PATH) != OK:
 		_set_status("Не удалось запомнить последнюю карту")
 
@@ -2111,13 +2142,16 @@ func _restore_last_map() -> bool:
 	var saved_id := str(config.get_value("editor", "last_map_id", ""))
 	if saved_id.is_empty() or not saved_id.is_valid_filename():
 		return false
-	var path := _maps_dir().path_join(saved_id + ".json")
+	var source_path: String = str(config.get_value("editor", "last_official_source", ""))
+	if not source_path.is_empty() and OfficialCampaignLibrary.editable_source_id(source_path) != saved_id:
+		return false
+	var path: String = source_path if not source_path.is_empty() else _maps_dir().path_join(saved_id + ".json")
 	if not FileAccess.file_exists(path):
 		return false
 	var saved_map := _read_map(path)
 	if saved_map == null or saved_map.map_id != saved_id:
 		return false
-	_set_map(saved_map)
+	_set_map(saved_map, source_path)
 	_set_status("Открыта последняя карта: " + saved_map.display_name)
 	return true
 
@@ -2126,7 +2160,7 @@ func _forget_last_map_if_deleted(path: String) -> void:
 	var config := ConfigFile.new()
 	if config.load(EDITOR_SETTINGS_PATH) != OK:
 		return
-	if str(config.get_value("editor", "last_map_id", "")) != path.get_file().get_basename():
+	if not str(config.get_value("editor", "last_official_source", "")).is_empty() or str(config.get_value("editor", "last_map_id", "")) != path.get_file().get_basename():
 		return
 	config.set_value("editor", "last_map_id", null)
 	config.save(EDITOR_SETTINGS_PATH)
@@ -2141,7 +2175,7 @@ func _write_map(path: String) -> bool:
 
 
 func _write_map_data(saved: DungeonMap, path: String) -> bool:
-	if OfficialCampaignLibrary.is_official_id(saved.map_id) or OfficialCampaignLibrary.is_packaged_path(path):
+	if OfficialCampaignLibrary.is_official_id(saved.map_id) or (OfficialCampaignLibrary.is_packaged_path(path) and (saved.map_id.is_empty() or OfficialCampaignLibrary.editable_source_id(path) != saved.map_id)):
 		_set_status("Официальные карты доступны только для прохождения.")
 		return false
 	if DirAccess.dir_exists_absolute(path):
@@ -2182,17 +2216,21 @@ func _autosave_map() -> void:
 	_persist_current_map()
 
 
+func _current_map_save_path() -> String:
+	return _official_source_path if not _official_source_path.is_empty() else _maps_dir().path_join(map_data.map_id + ".json")
+
+
 func _persist_current_map(manual: bool = false) -> void:
 	_name_autosave_timer.stop()
 	_clear_save_feedback()
-	if not _ensure_maps_dir():
+	if _official_source_path.is_empty() and not _ensure_maps_dir():
 		_set_status("Не удалось создать папку карт")
 		_show_save_error()
 		return
-	var path := _maps_dir().path_join(map_data.map_id + ".json")
+	var path: String = _current_map_save_path()
 	if _write_map(path):
 		is_dirty = false
-		_remember_last_map(map_data.map_id)
+		_remember_last_map(map_data.map_id, _official_source_path)
 		if manual:
 			_set_status("Сохранено: " + path)
 			_show_save_feedback()
@@ -2253,34 +2291,56 @@ func _refresh_library() -> void:
 	_load_paths.clear()
 	_load_list.clear()
 	_preview_textures.clear()
-	if not _ensure_maps_dir():
-		_set_status("Не удалось открыть папку карт")
-		return
-	var folder := DirAccess.open(_maps_dir())
-	if folder == null:
-		return
-	var files := folder.get_files()
-	files.sort()
-	for filename in files:
-		if not filename.ends_with(".json"):
-			continue
-		var path := _maps_dir().path_join(filename)
+	var paths: Array[String] = []
+	if _ensure_maps_dir():
+		var folder := DirAccess.open(_maps_dir())
+		if folder != null:
+			var files := folder.get_files()
+			files.sort()
+			for filename in files:
+				if filename.ends_with(".json"):
+					paths.append(_maps_dir().path_join(filename))
+	if _linking_exit_id.is_empty():
+		paths.append_array(OfficialCampaignLibrary.editable_source_paths())
+	elif not _official_source_path.is_empty():
+		paths = OfficialCampaignLibrary.editable_source_paths()
+	for path in paths:
 		var data := _read_map(path)
-		if data == null:
-			continue
-		var title := "%s\n%d × %d" % [data.display_name, data.width, data.height]
-		var thumbnail := _make_preview(data)
-		_preview_textures.append(thumbnail)
-		_load_list.add_item(title, thumbnail)
-		var idx := _load_list.item_count - 1
-		_load_list.set_item_tooltip(idx, "%s\n%s" % [data.display_name, filename])
-		_load_paths.append(path)
+		if data != null:
+			_add_library_entry(path, data)
 	if not _load_paths.is_empty():
 		_load_list.select(0)
 
 
+func _add_library_entry(path: String, data: DungeonMap) -> void:
+	var title := "%s\n%d × %d" % [data.display_name, data.width, data.height]
+	if OfficialCampaignLibrary.is_packaged_path(path):
+		title = "[Официальная] " + title
+	var thumbnail := _make_preview(data)
+	_preview_textures.append(thumbnail)
+	_load_list.add_item(title, thumbnail)
+	var idx := _load_list.item_count - 1
+	_load_list.set_item_tooltip(idx, "%s\n%s" % [data.display_name, path])
+	_load_paths.append(path)
+
+
 func _refresh_campaign_link_library() -> void:
 	if _linking_exit_id.is_empty():
+		return
+	if not _official_source_path.is_empty():
+		var official: CampaignDefinition = OfficialCampaignLibrary.source_campaign(map_data.map_id)
+		_load_paths.clear()
+		_load_list.clear()
+		_preview_textures.clear()
+		if official != null and DeveloperMode.is_enabled():
+			_campaign_link_label.text = "Карты кампании: %s" % official.display_name
+			for id in official.map_ids:
+				var path: String = OfficialCampaignLibrary.source_path(id)
+				var data: DungeonMap = _read_map(path)
+				if data != null:
+					_add_library_entry(path, data)
+			if not _load_paths.is_empty():
+				_load_list.select(0)
 		return
 	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
 	var campaigns: Dictionary = _campaign_library.load_all(maps)
@@ -2376,13 +2436,16 @@ func _make_preview(data: DungeonMap) -> ImageTexture:
 
 
 func _read_map(path: String) -> DungeonMap:
+	var official_id: String = ""
 	if OfficialCampaignLibrary.is_packaged_path(path):
-		return null
+		official_id = OfficialCampaignLibrary.editable_source_id(path)
+		if official_id.is_empty():
+			return null
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		return null
 	var dungeon: DungeonMap = DungeonMap.from_dict(JSON.parse_string(file.get_as_text()))
-	if dungeon != null and OfficialCampaignLibrary.is_official_id(dungeon.map_id):
+	if dungeon != null and (OfficialCampaignLibrary.is_official_id(dungeon.map_id) or (not official_id.is_empty() and dungeon.map_id != official_id)):
 		return null
 	return dungeon
 
@@ -2440,16 +2503,20 @@ func _load_from_path(path: String) -> void:
 func _load_from_path_confirmed(path: String) -> void:
 	var loaded_map := _read_map(path)
 	if loaded_map == null:
-		_set_status("Ошибка чтения карты: " + path)
+		_set_status("Официальные карты доступны только в режиме разработчика." if OfficialCampaignLibrary.is_packaged_path(path) and not DeveloperMode.is_enabled() else "Ошибка чтения карты: " + path)
 		return
-	_set_map(loaded_map)
-	if path == _maps_dir().path_join(loaded_map.map_id + ".json"):
-		_remember_last_map(loaded_map.map_id)
+	var source_path: String = OfficialCampaignLibrary.source_path(loaded_map.map_id) if OfficialCampaignLibrary.is_packaged_path(path) else ""
+	_set_map(loaded_map, source_path)
+	if not source_path.is_empty() or path == _maps_dir().path_join(loaded_map.map_id + ".json"):
+		_remember_last_map(loaded_map.map_id, source_path)
 	_set_status("Загружено: " + path)
 
 
 func _open_campaign_manager() -> void:
 	if is_play_mode or map_data == null:
+		return
+	if not _official_source_path.is_empty():
+		_set_status("Состав официальной кампании задаётся в index.json.")
 		return
 	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
 	var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
@@ -2767,7 +2834,7 @@ func _rename_selected() -> void:
 		return
 	saved.display_name = new_name
 	if _write_saved_map(saved, path):
-		if saved.map_id == map_data.map_id:
+		if saved.map_id == map_data.map_id and OfficialCampaignLibrary.is_packaged_path(path) == (not _official_source_path.is_empty()):
 			map_data.display_name = new_name
 			_name_input.text = new_name
 		_set_status("Карта переименована: " + new_name)
@@ -2793,6 +2860,10 @@ func _request_delete() -> void:
 	_delete_path = _selected_library_path()
 	if _delete_path.is_empty():
 		return
+	if OfficialCampaignLibrary.is_packaged_path(_delete_path):
+		_set_status("Официальную карту нельзя удалить из библиотеки.")
+		_delete_path = ""
+		return
 	var candidate: DungeonMap = _read_map(_delete_path)
 	if candidate == null:
 		return
@@ -2812,7 +2883,7 @@ func _request_delete() -> void:
 
 
 func _delete_selected() -> void:
-	if _delete_path.is_empty():
+	if _delete_path.is_empty() or OfficialCampaignLibrary.is_packaged_path(_delete_path):
 		return
 	var candidate: DungeonMap = _read_map(_delete_path)
 	var maps: Dictionary = SavedMapLibrary.load_all(_maps_dir())
@@ -3580,6 +3651,9 @@ func _continue_after_defeat() -> void:
 func _campaign_transition_allowed(map_id: String) -> bool:
 	if game_session == null or not game_session.is_map_in_campaign(map_id):
 		return false
+	if not _official_source_path.is_empty() and not standalone_game:
+		var source: CampaignDefinition = OfficialCampaignLibrary.source_campaign(map_data.map_id)
+		return DeveloperMode.is_enabled() and source != null and source.map_ids.has(map_id)
 	if game_session.campaign_id.is_empty():
 		return true
 	var maps: Dictionary = SavedMapLibrary.load_for_game(_progress_maps_directory)

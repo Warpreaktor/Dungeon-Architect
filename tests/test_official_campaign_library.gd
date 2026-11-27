@@ -5,8 +5,17 @@ const SOURCE_ID := "map_varg_01_dead_garrison_treasury"
 
 
 func _initialize() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
+	var storage = preload("res://tests/editor_test_storage.gd").new()
+	if DeveloperMode.is_available():
+		assert(DeveloperMode.set_enabled(false))
 	_test_bundled_campaign()
 	_test_linked_chapters()
+	await _test_developer_editing(storage)
+	storage.cleanup()
 	print("Official campaigns: bundled content, editor isolation, saves and chapter links OK")
 	quit()
 
@@ -75,6 +84,46 @@ func _test_bundled_campaign() -> void:
 	assert(DirAccess.remove_absolute(store.directory.path_join(ProgressSaveStore.SAVE_FILE)) == OK)
 	assert(DirAccess.remove_absolute(store.directory) == OK)
 	assert(DirAccess.remove_absolute(root_dir) == OK)
+
+
+func _test_developer_editing(storage: RefCounted) -> void:
+	var path: String = OfficialCampaignLibrary.source_path(SOURCE_ID)
+	assert(OfficialCampaignLibrary.editable_source_paths().is_empty())
+	assert(OfficialCampaignLibrary.editable_source_id(path).is_empty())
+	if not DeveloperMode.is_available():
+		assert(not DeveloperMode.set_enabled(true))
+		return
+	var original: String = FileAccess.get_file_as_string(path)
+	assert(DeveloperMode.set_enabled(true))
+	assert(OfficialCampaignLibrary.editable_source_paths().has(path))
+	assert(OfficialCampaignLibrary.editable_source_id(path) == SOURCE_ID)
+	assert(OfficialCampaignLibrary.editable_source_id(ProjectSettings.globalize_path(path)) == SOURCE_ID)
+	assert(OfficialCampaignLibrary.editable_source_id(OfficialCampaignLibrary.DIRECTORY.path_join("index.json")).is_empty())
+	var editor: Node = load("res://scenes/editor.tscn").instantiate()
+	storage.call("configure", editor)
+	root.add_child(editor)
+	await process_frame
+	editor.call("_refresh_library")
+	assert(editor.get("_load_paths").has(path))
+	editor.call("_load_from_path_confirmed", ProjectSettings.globalize_path(path))
+	var source: DungeonMap = editor.get("map_data")
+	assert(source.map_id == SOURCE_ID)
+	assert(editor.call("_current_map_save_path") == path)
+	assert(not editor.call("_write_map_data", source, OfficialCampaignLibrary.DIRECTORY.path_join("index.json")))
+	var personal: DungeonMap = DungeonMap.from_dict(source.to_dict())
+	editor.call("_set_map", personal)
+	assert(editor.call("_current_map_save_path") != path)
+	assert(editor.call("_restore_last_map"))
+	assert(editor.call("_current_map_save_path") == path)
+	editor.call("_on_settings_option_selected", 5)
+	assert(not DeveloperMode.is_enabled())
+	assert(editor.get("_official_source_path").is_empty())
+	assert(editor.call("_read_map", path) == null)
+	editor.call("_refresh_library")
+	assert(not editor.get("_load_paths").has(path))
+	assert(FileAccess.get_file_as_string(path) == original)
+	editor.queue_free()
+	await process_frame
 
 
 func _test_linked_chapters() -> void:

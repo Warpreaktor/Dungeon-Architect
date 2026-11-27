@@ -76,6 +76,7 @@ var claimed_exit_rewards: Dictionary = {}
 var _floor_states: Dictionary = {} # Состояние посещённых карт только в памяти этого прохождения.
 var _stairs_history: Array[Dictionary] = []
 var _pending_return_exit: Dictionary = {}
+var _pending_portal: Dictionary = {}
 
 
 
@@ -1242,7 +1243,7 @@ func _valid_snapshot_inventory(counts: Dictionary, bag: Array, members: Array[He
 
 
 func enter_map(next_map: DungeonMap) -> bool:
-	if has_pending_trap_choice() or has_pending_door_trap() or is_party_defeated() or next_map == null or next_map.map_id.is_empty() or not is_map_in_campaign(next_map.map_id):
+	if has_pending_portal_choice() or has_pending_trap_choice() or has_pending_door_trap() or is_party_defeated() or next_map == null or next_map.map_id.is_empty() or not is_map_in_campaign(next_map.map_id):
 		return false
 	var source_exit: Dictionary = current_exit()
 	var source_id: String = map_data.map_id if map_data != null else ""
@@ -1279,6 +1280,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	elif source_kind == "stairs_up" and not _stairs_history.is_empty():
 		_stairs_history.pop_back()
 	_pending_return_exit.clear()
+	_pending_portal.clear()
 	map_data = destination
 	_ground_loot_containers.clear()
 	_ground_by_cell.clear()
@@ -1768,7 +1770,7 @@ func _request_trap_choice(entity: Dictionary, trap: TrapDefinition, cell: Vector
 	})
 
 
-func _discard_trap_message(activation: String, entity_id: String) -> void:
+func _discard_message_event(activation: String, entity_id: String) -> void:
 	for index in range(_message_events.size() - 1, -1, -1):
 		var event: Dictionary = _message_events[index]
 		if event.get("activation", "") == activation and event.get("entity_id", "") == entity_id:
@@ -1815,7 +1817,7 @@ func _resolve_trap_reaction(choice: String, defer_chest_open: bool) -> bool:
 	if trap == null or player_pos != origin:
 		return false
 	_clear_trap_choice()
-	_discard_trap_message("trap_reaction", str(entity["id"]))
+	_discard_message_event("trap_reaction", str(entity["id"]))
 	last_event_message = ""
 	_trap_result_messages.clear()
 	_party_damage_events.clear()
@@ -1842,8 +1844,8 @@ func _resolve_trap_reaction(choice: String, defer_chest_open: bool) -> bool:
 			record_casualties()
 			if is_party_defeated() and has_pending_trap_choice():
 				var pending_id: String = str(_pending_trap_choice["entity_id"])
-				_discard_trap_message("trap_choice", pending_id)
-				_discard_trap_message("trap_reaction", pending_id)
+				_discard_message_event("trap_choice", pending_id)
+				_discard_message_event("trap_reaction", pending_id)
 				_clear_trap_choice()
 		damage.append_array(_party_damage_events)
 		_party_damage_events = damage
@@ -1876,7 +1878,7 @@ func resolve_pending_trap_choice(choice: String, actor_index: int = -1, defer_ch
 			return false
 		actor = _pending_trap_actors[actor_index]
 	_clear_trap_choice()
-	_discard_trap_message("trap_choice", str(pending["entity_id"]))
+	_discard_message_event("trap_choice", str(pending["entity_id"]))
 	if choice == "cancel" or actor == null or actor.health <= 0 or not party.has(actor):
 		return false
 	var cell: Vector2i = pending["cell"]
@@ -1934,7 +1936,7 @@ func resolve_pending_door_trap() -> bool:
 	pending_door_trap_cell = Vector2i(-1, -1)
 	_pending_door_opener = null
 	_pending_door_accepted.clear()
-	_discard_trap_message("door_trap", door_id)
+	_discard_message_event("door_trap", door_id)
 	var door: Dictionary = _find_active_entity(cell, "door")
 	if door.is_empty() or str(door.get("id", "")) != door_id or not can_enter(cell) or int(carried_items.get(LockCatalog.required_key(door), 0)) <= 0:
 		return false
@@ -1977,7 +1979,7 @@ func move_by(dx: int, dy: int, defer_chest_open: bool = false, opener: HeroState
 
 
 func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String], opener: HeroState, resolved_door_id: String = "") -> bool:
-	if is_party_defeated() or has_pending_encounter() or is_completed or not pending_chest_id.is_empty() or has_pending_door_trap() or has_pending_trap_choice():
+	if is_party_defeated() or has_pending_encounter() or is_completed or not pending_chest_id.is_empty() or has_pending_door_trap() or has_pending_trap_choice() or has_pending_portal_choice():
 		return false
 	last_move_detected_trap = false
 	last_event_message = ""
@@ -2008,18 +2010,12 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 		door_trap = TrapCatalog.from_door(door)
 		if door_trap != null and resolved_door_id != str(door["id"]) and _discover_trap(door, door_trap, bool(TrapCatalog.settings(door).get("hidden", true))):
 			last_move_detected_trap = true
-	var arrival: Vector2i = target
-	var local_portal: Dictionary = _find_active_entity(target, "portal_local")
-	if not local_portal.is_empty():
-		var paired: Vector2i = map_data.local_portal_destination(str(local_portal["id"]))
-		if DungeonMap.valid_arrival_cell(map_data, paired):
-			arrival = paired
-	if arrival == target and resolved_door_id.is_empty() and _discover_floor_traps(target):
+	if resolved_door_id.is_empty() and _discover_floor_traps(target):
 		last_move_detected_trap = true
 	if last_move_detected_trap:
 		return false
 
-	if arrival == target and resolved_door_id.is_empty():
+	if resolved_door_id.is_empty():
 		var floor_trap: Dictionary = _find_active_entity(target, "trap")
 		if not floor_trap.is_empty() and not is_trap_disarmed(floor_trap) and not is_entity_hidden_from_hero(floor_trap) and not accepted.has(str(floor_trap["id"])):
 			var definition: TrapDefinition = TrapCatalog.from_entity(floor_trap)
@@ -2046,7 +2042,7 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 		removed_entities[opened_door_id] = true
 		last_event_message = "Ключ использован. Дверь открыта!"
 
-	if arrival == target and absi(dx) + absi(dy) == 1:
+	if absi(dx) + absi(dy) == 1:
 		var hidden_trap: Dictionary = _find_active_entity(target, "trap")
 		if not hidden_trap.is_empty() and not is_trap_disarmed(hidden_trap) and not accepted.has(str(hidden_trap["id"])) and is_entity_hidden_from_hero(hidden_trap):
 			var hidden_definition: TrapDefinition = TrapCatalog.from_entity(hidden_trap)
@@ -2062,8 +2058,7 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 		else:
 			_open_chest(chest)
 
-	player_pos = arrival
-	target = arrival
+	player_pos = target
 	_advance_movement_effects()
 	if not is_party_defeated():
 		_activate_traps_at(target)
@@ -2089,9 +2084,65 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 		_claim_exit_reward(stairs)
 		is_completed = true
 	else:
-		var portal: Dictionary = _find_active_entity(target, "portal")
-		if not portal.is_empty() and not DungeonMap.exit_target_id(portal).is_empty():
-			is_completed = true
+		_request_portal_choice(target)
+	return true
+
+
+func has_pending_portal_choice() -> bool:
+	return not _pending_portal.is_empty()
+
+
+func _request_portal_choice(cell: Vector2i) -> void:
+	var portal: Dictionary = _find_active_entity(cell, "portal_local")
+	var icon_id := "gateway"
+	if not portal.is_empty():
+		var paired: Vector2i = map_data.local_portal_destination(str(portal["id"]))
+		if not DungeonMap.valid_arrival_cell(map_data, paired):
+			return
+		icon_id = str(portal["properties"]["color"])
+	else:
+		portal = _find_active_entity(cell, "portal")
+		if portal.is_empty() or DungeonMap.exit_target_id(portal).is_empty():
+			return
+	_pending_portal = {"entity_id": str(portal["id"]), "kind": str(portal["type"]), "cell": cell}
+	_message_events.append({
+		"activation": "portal_choice", "entity_id": portal["id"],
+		"title": "ПОРТАЛ", "text": "Войти в портал?",
+		"icon_type": "portal", "icon_id": icon_id,
+		"choices": {"enter_portal": "Войти в портал", "cancel": "Пройти мимо"},
+		"select_actor": false
+	})
+
+
+func resolve_pending_portal_choice(choice: String) -> bool:
+	if not has_pending_portal_choice() or choice not in ["enter_portal", "cancel"]:
+		return false
+	var pending: Dictionary = _pending_portal.duplicate()
+	_pending_portal.clear()
+	_discard_message_event("portal_choice", str(pending["entity_id"]))
+	if choice == "cancel" or is_party_defeated() or player_pos != pending["cell"]:
+		return false
+	var portal: Dictionary = _find_active_entity(player_pos, str(pending["kind"]))
+	if portal.is_empty() or portal["id"] != pending["entity_id"]:
+		return false
+	if portal["type"] == "portal":
+		is_completed = not DungeonMap.exit_target_id(portal).is_empty()
+		return false
+	var destination: Vector2i = map_data.local_portal_destination(str(portal["id"]))
+	if not DungeonMap.valid_arrival_cell(map_data, destination):
+		return false
+	player_pos = destination
+	last_event_message = ""
+	_trap_result_messages.clear()
+	_party_damage_events.clear()
+	_trigger_events.clear()
+	_activate_traps_at(destination)
+	record_casualties()
+	if not is_party_defeated():
+		_collect_pickups_at(destination)
+		_activate_triggers_at(destination)
+		_activate_message_at(destination, "enter")
+	_refresh_visibility()
 	return true
 
 
@@ -2538,7 +2589,7 @@ func _claim_exit_reward(stairs: Dictionary) -> void:
 
 
 func progress_snapshot() -> Dictionary:
-	if is_editor_test or map_data == null or is_party_defeated() or has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_door_trap() or has_pending_trap_choice() or is_completed:
+	if is_editor_test or map_data == null or is_party_defeated() or has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_door_trap() or has_pending_trap_choice() or has_pending_portal_choice() or is_completed:
 		return {}
 	var party_data: Dictionary = party_state_snapshot()
 	if party_data.is_empty():

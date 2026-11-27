@@ -507,7 +507,7 @@ func _build_interface() -> void:
 
 	_game_dialogue = GAME_DIALOGUE_SCENE.instantiate() as GameDialogueView
 	_game_dialogue.closed.connect(_on_game_dialogue_closed)
-	_game_dialogue.choice_selected.connect(_on_trap_choice_selected)
+	_game_dialogue.choice_selected.connect(_on_game_choice_selected)
 	add_child(_game_dialogue)
 
 	var tools_section := _palette_section(palette, "Tools", "ИНСТРУМЕНТЫ")
@@ -3297,14 +3297,24 @@ func _show_next_game_message() -> void:
 		return
 	var event: Dictionary = _pending_game_messages.pop_front()
 	_active_game_message = event
-	if str(event.get("activation", "")) in ["trap_choice", "trap_reaction", "door_trap", "trap_result"]:
+	if str(event.get("activation", "")) in ["trap_choice", "trap_reaction", "door_trap", "trap_result", "portal_choice"]:
 		_clear_held_movement()
 	_game_dialogue.show_event(event)
 
 
-func _on_trap_choice_selected(choice: String, actor_index: int) -> void:
+func _on_game_choice_selected(choice: String, actor_index: int) -> void:
+	var activation: String = str(_active_game_message.get("activation", ""))
 	_active_game_message = {}
-	if not is_play_mode or game_session == null or not game_session.has_pending_trap_choice():
+	if not is_play_mode or game_session == null:
+		return
+	if activation == "portal_choice" and game_session.has_pending_portal_choice():
+		_clear_held_movement()
+		var previous: Vector2i = game_session.player_pos
+		var moved_through_portal: bool = game_session.resolve_pending_portal_choice(choice)
+		_canvas.grab_focus()
+		_complete_player_move(game_session, previous, moved_through_portal, true)
+		return
+	if not game_session.has_pending_trap_choice():
 		return
 	_clear_held_movement()
 	var moving_session: GameSession = game_session
@@ -3413,7 +3423,7 @@ func _complete_player_move(moving_session: GameSession, previous_pos: Vector2i, 
 				return
 			if not moving_session.is_party_defeated():
 				moving_session.open_pending_chest()
-		elif wait_until_arrival or moving_session.has_party_damage_events():
+		elif wait_until_arrival or moving_session.has_pending_portal_choice() or moving_session.has_party_damage_events():
 			await _canvas.player_step_finished
 			if not is_play_mode or game_session != moving_session:
 				return
@@ -3554,7 +3564,7 @@ func _finish_combat() -> void:
 	_mini_map.visible = _minimap_enabled
 	_hero_hud.visible = true
 	_canvas.grab_focus()
-	if game_session.has_trap_visual_events():
+	if game_session.has_trap_visual_events() or game_session.has_pending_portal_choice():
 		_complete_player_move(game_session, previous_pos, moved, true)
 		return
 	if moved:

@@ -20,6 +20,25 @@ func _run() -> void:
 	assert(holder.visible)
 	assert(icon.texture == TrapCatalog.get_trap("door_crossbow").icon)
 	view.dismiss()
+	var choices: Array[String] = []
+	view.choice_selected.connect(func(choice: String, _actor: int) -> void: choices.append(choice))
+	var portal_event: Dictionary = {
+		"text": "Войти в портал?", "title": "ПОРТАЛ", "icon_type": "portal", "icon_id": "blue",
+		"choices": {"enter_portal": "Войти в портал", "cancel": "Пройти мимо"}, "select_actor": false
+	}
+	view.show_event(portal_event)
+	assert(holder.visible and icon.texture != null)
+	assert(view._enter_portal_button.is_visible_in_tree())
+	assert(view._cancel_button.text == "Пройти мимо")
+	assert(not view._actor_portraits.visible and not view._disarm_button.visible and not view._avoid_button.visible)
+	view.dismiss_by_player()
+	assert(choices == ["cancel"] and not view.visible)
+	view.show_event(portal_event)
+	view._enter_portal_button.pressed.emit()
+	assert(choices == ["cancel", "enter_portal"] and not view.visible)
+	view.show_event({"text": "Ловушка", "choices": {"cancel": "Нет", "disarm": "Да"}})
+	assert(not view._enter_portal_button.visible and view._disarm_button.visible)
+	view.dismiss()
 	view.show_event({"text": "Обычное послание"})
 	assert(not holder.visible)
 	var dungeon := DungeonMap.create_blank(8, 8)

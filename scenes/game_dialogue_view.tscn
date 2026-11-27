@@ -174,7 +174,8 @@ horizontal_alignment = 1
 theme_override_colors/font_color = Color(0.94, 0.91, 0.83, 1)
 theme_override_font_sizes/font_size = 18
 
-[node name="DecisionRow" type="HBoxContainer" parent="Center/Card/Margins/Content/ChoiceActions"]
+[node name="DecisionRow" type="BoxContainer" parent="Center/Card/Margins/Content/ChoiceActions"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -184,6 +185,15 @@ layout_mode = 2
 size_flags_horizontal = 3
 custom_minimum_size = Vector2(0, 44)
 text = "Да"
+theme_override_styles/normal = SubResource("StyleBoxFlat_button")
+
+[node name="EnterPortalButton" type="Button" parent="Center/Card/Margins/Content/ChoiceActions/DecisionRow"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 44)
+text = "Войти в портал"
 theme_override_styles/normal = SubResource("StyleBoxFlat_button")
 
 [node name="CancelButton" type="Button" parent="Center/Card/Margins/Content/ChoiceActions/DecisionRow"]

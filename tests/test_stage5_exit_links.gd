@@ -70,10 +70,14 @@ func _test_portals_and_revisits() -> void:
 	assert(DungeonMap.exit_target_id(_exit_at(copied, Vector2i(2, 2))) == second.map_id)
 	var session: GameSession = GameSession.start_for(copied)
 	assert(session.move_by(1, 0))
+	assert(session.has_pending_portal_choice() and not session.is_completed)
+	session.resolve_pending_portal_choice("enter_portal")
 	assert(session.is_completed and session.next_map_id() == second.map_id)
 	assert(session.enter_map(second))
 	assert(session.player_pos == Vector2i(1, 2))
 	assert(session.move_by(1, 0))
+	assert(session.has_pending_portal_choice() and not session.is_completed)
+	session.resolve_pending_portal_choice("enter_portal")
 	assert(session.is_completed and session.next_map_id() == first.map_id)
 	assert(session.enter_map(copied))
 	assert(session.player_pos == Vector2i(1, 2))
@@ -85,6 +89,7 @@ func _test_portals_and_revisits() -> void:
 	var idle: GameSession = GameSession.start_for(plain)
 	assert(idle.move_by(1, 0))
 	assert(not idle.is_completed)
+	assert(not idle.has_pending_portal_choice())
 	assert(idle.next_map_id().is_empty())
 
 

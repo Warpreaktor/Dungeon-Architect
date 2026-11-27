@@ -21,6 +21,8 @@ signal choice_selected(choice: String, actor_index: int)
 @onready var _actor_caption: Label = %ActorCaption
 @onready var _disarm_button: Button = %DisarmButton
 @onready var _cancel_button: Button = %CancelButton
+@onready var _enter_portal_button: Button = %EnterPortalButton
+@onready var _decision_row: BoxContainer = %DecisionRow
 @onready var _avoid_button: Button = %AvoidButton
 @onready var _reaction_actions: VBoxContainer = %ReactionActions
 @onready var _reaction_prompt: Label = %ReactionPrompt
@@ -42,6 +44,7 @@ func _ready() -> void:
 	_continue_button.pressed.connect(dismiss_by_player)
 	_disarm_button.pressed.connect(_choose.bind("disarm"))
 	_cancel_button.pressed.connect(_choose.bind("cancel"))
+	_enter_portal_button.pressed.connect(_choose.bind("enter_portal"))
 	_avoid_button.pressed.connect(_choose.bind("avoid"))
 	_back_button.pressed.connect(_choose.bind("back"))
 	_forward_button.pressed.connect(_choose.bind("forward"))
@@ -75,6 +78,8 @@ func show_event(event: Dictionary) -> void:
 	(_continue_button.get_parent() as Control).visible = choices.is_empty()
 	if _choices.visible:
 		_selected_actor_index = maxi(int(event.get("selected_actor", 0)), 0)
+		_enter_portal_button.visible = choices.has("enter_portal")
+		_enter_portal_button.text = str(choices.get("enter_portal", ""))
 		_disarm_button.visible = choices.has("disarm")
 		_cancel_button.visible = choices.has("cancel")
 		_avoid_button.visible = choices.has("avoid")
@@ -145,6 +150,8 @@ func _resolve_event_icon(event: Dictionary) -> Texture2D:
 		"trap":
 			if TrapCatalog.has(icon_id):
 				return TrapCatalog.get_trap(icon_id).icon
+		"portal":
+			return ImageAsset.texture("res://assets/icons/portals/portal_%s.png" % icon_id)
 		"item":
 			var item := ItemCatalog.get_item(icon_id)
 			return item.icon if item != null else null
@@ -154,6 +161,7 @@ func _resize_card() -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
 	var compact: bool = _choices.visible and viewport_size.y < 450.0
 	var narrow: bool = viewport_size.x < 560.0
+	_decision_row.vertical = _available_choices.has("enter_portal") and narrow
 	var content: VBoxContainer = _choices.get_parent() as VBoxContainer
 	var margins: MarginContainer = content.get_parent() as MarginContainer
 	content.add_theme_constant_override("separation", 8 if compact else 16)

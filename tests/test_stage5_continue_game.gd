@@ -50,7 +50,18 @@ func _run() -> void:
 	assert(menu._library_entries.size() == 1 + OfficialCampaignLibrary.load_definitions().size())
 	assert(menu._library_entries[0].get_theme_constant("icon_max_width") == 82)
 	assert(menu._selected_library_index == 0 and not menu._start_button.disabled)
-	assert(menu._preview_image.texture != null and menu._preview_name.text == campaign.display_name)
+	assert(menu._preview_image.texture == MainMenu.DEFAULT_CAMPAIGN_COVER and menu._preview_name.text == campaign.display_name)
+	assert(menu._library_entries[0].icon == MainMenu.DEFAULT_CAMPAIGN_COVER)
+	for index in range(menu._campaigns.size()):
+		var definition: CampaignDefinition = menu._campaigns[index]
+		if definition.campaign_id == "official_varg":
+			menu._select_library_index(index)
+			assert(menu._preview_image.texture.resource_path == definition.cover_image)
+			assert(menu._library_entries[index].icon == menu._preview_image.texture)
+			assert(menu._preview_image.texture != MainMenu.DEFAULT_CAMPAIGN_COVER)
+			assert(menu._preview_meta.text == "1 глава")
+			break
+	menu._select_library_index(0)
 	(menu.get_node("%BackButton") as Button).pressed.emit()
 	await _wait_transition(menu)
 	assert(menu._play_actions.visible and not menu._library.visible)
@@ -62,7 +73,8 @@ func _run() -> void:
 	assert(menu._library_mode == MainMenu.LIBRARY_PERSONAL)
 	assert(menu._library_entries.size() == 1)
 	assert(menu._library_entries[0].get_theme_constant("icon_max_width") == 82)
-	assert(menu._preview_image.texture != null and not menu._start_button.disabled)
+	assert(menu._preview_image.texture == MainMenu.DEFAULT_CAMPAIGN_COVER and not menu._start_button.disabled)
+	assert(menu._library_entries[0].icon == MainMenu.DEFAULT_CAMPAIGN_COVER)
 	menu._start_button.pressed.emit()
 	assert(menu._hero_selection.visible and not menu._library.visible)
 	assert(not menu.get_node("SafeArea").visible)

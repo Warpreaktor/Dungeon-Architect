@@ -46,6 +46,8 @@ const ASH_SECONDS := 0.44
 const ASH_STAGGER := 0.04
 const LIBRARY_CAMPAIGNS := 0
 const LIBRARY_PERSONAL := 1
+const DEFAULT_CAMPAIGN_COVER: Texture2D = preload("res://assets/campaigns/default_cover.png")
+const CAMPAIGN_COVER_DIRECTORY := "res://assets/campaigns/"
 const TUNNEL_FOG_BOUNDS := Rect2(0.49, 0.46, 0.34, 0.32)
 const CAMPAIGN_TUNNEL_FOG_BOUNDS := Rect2(0.38, 0.25, 0.25, 0.58)
 const CAMPFIRE_ANCHOR := Vector2(0.44258, 0.72051)
@@ -80,7 +82,7 @@ var _save_store: ProgressSaveStore = ProgressSaveStore.new()
 var _maps_directory: String = SavedMapLibrary.DIRECTORY
 var _maps_by_id: Dictionary = {}
 
-var _thumbnails: Array[Texture2D] = []
+var _library_covers: Array[Texture2D] = []
 var _library_entries: Array[Button] = []
 var _selected_library_index: int = -1
 var _entry_group: ButtonGroup = ButtonGroup.new()
@@ -518,7 +520,7 @@ func _continue_saved_game() -> void:
 func _load_saved_maps() -> void:
 	_campaigns.clear()
 	_personal_maps.clear()
-	_thumbnails.clear()
+	_library_covers.clear()
 	_selected_library_index = -1
 	_clear_library_entries()
 	_maps_by_id = SavedMapLibrary.load_for_game(_maps_directory)
@@ -535,11 +537,11 @@ func _load_saved_maps() -> void:
 			if start_map == null:
 				continue
 			_campaigns.append(campaign)
-			_thumbnails.append(MapPreview.make_preview(start_map))
+			_library_covers.append(campaign_cover(campaign))
 	else:
 		_personal_maps = unassigned_maps(_maps_by_id, campaigns)
-		for dungeon in _personal_maps:
-			_thumbnails.append(MapPreview.make_preview(dungeon))
+		for _dungeon in _personal_maps:
+			_library_covers.append(DEFAULT_CAMPAIGN_COVER)
 	_build_library_entries()
 	var has_entries: bool = not _campaigns.is_empty() if _library_mode == LIBRARY_CAMPAIGNS else not _personal_maps.is_empty()
 	_no_maps.visible = not has_entries and _campaign_library.last_error.is_empty()
@@ -550,8 +552,22 @@ func _load_saved_maps() -> void:
 		_update_library_preview()
 
 
+static func campaign_cover(campaign: CampaignDefinition) -> Texture2D:
+	if campaign == null or not OfficialCampaignLibrary.is_official_id(campaign.campaign_id):
+		return DEFAULT_CAMPAIGN_COVER
+	var path: String = campaign.cover_image
+	if not path.begins_with(CAMPAIGN_COVER_DIRECTORY) or path.contains(".."):
+		return DEFAULT_CAMPAIGN_COVER
+	if ResourceLoader.exists(path, "Texture2D"):
+		var cover: Texture2D = ResourceLoader.load(path, "Texture2D") as Texture2D
+		if cover != null:
+			return cover
+	return DEFAULT_CAMPAIGN_COVER
+
+
 func _clear_library_entries() -> void:
 	for child in _entry_list.get_children():
+		_entry_list.remove_child(child)
 		child.queue_free()
 	_library_entries.clear()
 
@@ -586,7 +602,7 @@ func _build_library_entries() -> void:
 		entry.add_theme_constant_override("h_separation", 14)
 		entry.tooltip_text = _library_entry_title(index)
 		entry.text = _library_entry_text(index)
-		entry.icon = _thumbnails[index] if index < _thumbnails.size() else null
+		entry.icon = _library_covers[index] if index < _library_covers.size() else null
 		entry.pressed.connect(_select_library_index.bind(index))
 		entry.focus_entered.connect(_select_library_index.bind(index))
 		_entry_list.add_child(entry)
@@ -609,12 +625,22 @@ func _library_entry_text(index: int) -> String:
 			return ""
 		var campaign: CampaignDefinition = _campaigns[index]
 		var total_maps: int = campaign.map_ids.size()
-		var subtitle: String = "Стартовое приключение" if total_maps <= 1 else "Кампания на %d карт" % total_maps
+		var subtitle: String = _campaign_size_label(total_maps)
 		return "%s\n%s" % [campaign.display_name, subtitle]
 	if index < 0 or index >= _personal_maps.size():
 		return ""
 	var dungeon: DungeonMap = _personal_maps[index]
-	return "%s\nОтдельная карта · %d × %d" % [dungeon.display_name, dungeon.width, dungeon.height]
+	return "%s\nОтдельное приключение" % dungeon.display_name
+
+
+static func _campaign_size_label(count: int) -> String:
+	var noun: String = "глав"
+	if count % 100 < 11 or count % 100 > 14:
+		if count % 10 == 1:
+			noun = "глава"
+		elif count % 10 >= 2 and count % 10 <= 4:
+			noun = "главы"
+	return "%d %s" % [count, noun]
 
 
 func _select_library_index(index: int) -> void:
@@ -633,24 +659,20 @@ func _update_library_preview() -> void:
 	if _selected_library_index < 0:
 		_preview_image.texture = null
 		_preview_name.text = "Нет доступных приключений"
-		_preview_meta.text = "Когда здесь появятся кампании или карты, их можно будет открыть и пройти отсюда."
+		_preview_meta.text = ""
 		return
-	if _selected_library_index < _thumbnails.size():
-		_preview_image.texture = _thumbnails[_selected_library_index]
+	if _selected_library_index < _library_covers.size():
+		_preview_image.texture = _library_covers[_selected_library_index]
 	else:
 		_preview_image.texture = null
 	if _library_mode == LIBRARY_CAMPAIGNS:
 		var campaign: CampaignDefinition = _campaigns[_selected_library_index]
-		var start_map: DungeonMap = _maps_by_id.get(campaign.start_map_id) as DungeonMap
-		var rooms_text: String = "Стартовая карта готова к входу."
-		if start_map != null:
-			rooms_text = "Стартовая карта · %d × %d клеток." % [start_map.width, start_map.height]
 		_preview_name.text = campaign.display_name
-		_preview_meta.text = "%s %s" % [rooms_text, "Выбери приключение и собери отряд героев перед входом в лабиринт."]
+		_preview_meta.text = _campaign_size_label(campaign.map_ids.size())
 	else:
 		var dungeon: DungeonMap = _personal_maps[_selected_library_index]
 		_preview_name.text = dungeon.display_name
-		_preview_meta.text = "Свободная карта без кампании · %d × %d клеток. Подходит для быстрого запуска и тестовых забегов." % [dungeon.width, dungeon.height]
+		_preview_meta.text = "Отдельное приключение"
 
 
 static func unassigned_maps(maps_by_id: Dictionary, campaigns: Dictionary) -> Array[DungeonMap]:

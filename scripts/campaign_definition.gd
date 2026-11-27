@@ -7,6 +7,7 @@ var campaign_id: String = ""
 var display_name: String = ""
 var start_map_id: String = ""
 var map_ids: Array[String] = []
+var cover_image: String = ""
 
 
 static func create(name: String, first_map_id: String) -> CampaignDefinition:
@@ -73,13 +74,16 @@ func has_valid_maps(maps_by_id: Dictionary) -> bool:
 
 
 func to_dict() -> Dictionary:
-	return {
+	var result: Dictionary = {
 		"schema_version": FORMAT_VERSION,
 		"campaign_id": campaign_id,
 		"name": display_name,
 		"start_map_id": start_map_id,
 		"map_ids": map_ids.duplicate()
 	}
+	if not cover_image.is_empty():
+		result["cover_image"] = cover_image
+	return result
 
 
 static func from_dict(value: Variant) -> CampaignDefinition:
@@ -98,6 +102,8 @@ static func from_dict(value: Variant) -> CampaignDefinition:
 	campaign.campaign_id = value["campaign_id"]
 	campaign.display_name = value["name"]
 	campaign.start_map_id = value["start_map_id"]
+	if value.get("cover_image") is String:
+		campaign.cover_image = value["cover_image"]
 	for item in value["map_ids"]:
 		if not (item is String):
 			return null

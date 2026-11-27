@@ -27,6 +27,8 @@ func _run() -> void:
 		manager.stop_music(0.0)
 		assert(manager._target_path.is_empty() and not manager._has_music())
 	_test_smooth_fade(manager)
+	_test_ambience(manager)
+	_test_optional_dungeon_audio(manager)
 	var controls := AudioVolumeControls.new()
 	root.add_child(controls)
 	assert(controls._sliders.size() == GameAudioManager.CHANNELS.size())
@@ -44,7 +46,7 @@ func _run() -> void:
 	manager.set_channel_volume(&"Music", original, false)
 	controls.queue_free()
 	await process_frame
-	print("Audio: optional music, bus routing and volume controls OK")
+	print("Audio: optional music and ambience, fades, bus routing and volume controls OK")
 	quit()
 
 

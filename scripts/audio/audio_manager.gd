@@ -14,6 +14,10 @@ var _players: Array[AudioStreamPlayer] = []
 var _paths: Array[String] = ["", ""]
 var _target_path := ""
 var _fade: Tween
+var _ambience_player: AudioStreamPlayer
+var _ambience_path := ""
+var _ambience_fade: Tween
+var _ambience_stopping := false
 var _settings := ConfigFile.new()
 
 
@@ -35,6 +39,11 @@ func _ready() -> void:
 		player.volume_db = SILENT_DB
 		add_child(player)
 		_players.append(player)
+	_ambience_player = AudioStreamPlayer.new()
+	_ambience_player.name = "DungeonAmbience"
+	_ambience_player.bus = &"Ambience"
+	_ambience_player.volume_db = SILENT_DB
+	add_child(_ambience_player)
 
 
 func channel_volume(channel: StringName) -> float:

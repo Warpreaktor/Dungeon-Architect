@@ -1,0 +1,13 @@
+{
+	"schema_version": 1,
+	"campaigns": [
+		{
+			"schema_version": 1,
+			"campaign_id": "official_varg",
+			"name": "История Варга",
+			"cover_image": "res://assets/campaigns/varg_cover.png",
+			"start_map_id": "map_varg_01_dead_garrison_treasury",
+			"map_ids": ["map_varg_01_dead_garrison_treasury"]
+		}
+	]
+}

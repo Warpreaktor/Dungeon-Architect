@@ -31,6 +31,14 @@ func save_campaign(campaign: CampaignDefinition, maps_by_id: Dictionary) -> bool
 		last_error = "Неверные данные кампании или отсутствует одна из её карт."
 		return false
 
+	if OfficialCampaignLibrary.is_official_id(campaign.campaign_id):
+		last_error = "Официальные кампании доступны только для прохождения."
+		return false
+	for map_id in campaign.map_ids:
+		if OfficialCampaignLibrary.is_official_id(map_id):
+			last_error = "Официальную карту нельзя добавить в пользовательскую кампанию."
+			return false
+
 	var existing: Dictionary = load_all(maps_by_id)
 	if not last_error.is_empty():
 		return false
@@ -115,6 +123,8 @@ func load_all(maps_by_id: Dictionary) -> Dictionary:
 			campaign_id = filename.trim_suffix(FILE_SUFFIX)
 		else:
 			continue
+		if OfficialCampaignLibrary.is_official_id(campaign_id):
+			continue
 		if not CampaignDefinition.valid_campaign_id(campaign_id):
 			last_error = "Неверное имя файла кампании: %s" % filename
 			return {}
@@ -136,6 +146,18 @@ func load_all(maps_by_id: Dictionary) -> Dictionary:
 	return result
 
 
+func load_for_game(maps_by_id: Dictionary) -> Dictionary:
+	var personal_maps: Dictionary = maps_by_id.duplicate()
+	for map_id in maps_by_id:
+		if OfficialCampaignLibrary.is_official_id(str(map_id)):
+			personal_maps.erase(map_id)
+	var result: Dictionary = load_all(personal_maps)
+	if not last_error.is_empty():
+		return result
+	result.merge(OfficialCampaignLibrary.load_campaigns(maps_by_id))
+	return result
+
+
 func diagnose_graph(maps_by_id: Dictionary) -> Array[Dictionary]:
 	var issues: Array[Dictionary] = []
 	var candidates: Dictionary = {}
@@ -151,6 +173,8 @@ func diagnose_graph(maps_by_id: Dictionary) -> Array[Dictionary]:
 			elif filename.ends_with(FILE_SUFFIX):
 				campaign_id = filename.trim_suffix(FILE_SUFFIX)
 			else:
+				continue
+			if OfficialCampaignLibrary.is_official_id(campaign_id):
 				continue
 			if not CampaignDefinition.valid_campaign_id(campaign_id):
 				issues.append({"severity": "error", "campaign_id": "", "map_id": "", "message": "Неверное имя файла кампании: %s." % filename})

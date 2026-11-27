@@ -493,7 +493,7 @@ func _back_to_home() -> void:
 
 
 func _refresh_continue_action() -> void:
-	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
+	_maps_by_id = SavedMapLibrary.load_for_game(_maps_directory)
 	_continue_game_button.visible = _save_store.has_valid_save(_maps_by_id)
 
 
@@ -501,7 +501,7 @@ func _continue_saved_game() -> void:
 	if _transitioning:
 		return
 	_home_error.hide()
-	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
+	_maps_by_id = SavedMapLibrary.load_for_game(_maps_directory)
 	var session: GameSession = _save_store.load_game(_maps_by_id)
 	if session == null:
 		_home_error.text = _save_store.last_error
@@ -521,8 +521,8 @@ func _load_saved_maps() -> void:
 	_thumbnails.clear()
 	_selected_library_index = -1
 	_clear_library_entries()
-	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
-	var campaigns: Dictionary = _campaign_library.load_all(_maps_by_id)
+	_maps_by_id = SavedMapLibrary.load_for_game(_maps_directory)
+	var campaigns: Dictionary = _campaign_library.load_for_game(_maps_by_id)
 	if not _campaign_library.last_error.is_empty():
 		_error_message.text = _campaign_library.last_error
 		_error_message.show()
@@ -665,7 +665,7 @@ static func unassigned_maps(maps_by_id: Dictionary, campaigns: Dictionary) -> Ar
 	ids.sort()
 	for map_id in ids:
 		var dungeon: DungeonMap = maps_by_id[map_id] as DungeonMap
-		if dungeon != null and not assigned.has(map_id):
+		if dungeon != null and not assigned.has(map_id) and not OfficialCampaignLibrary.is_official_id(str(map_id)):
 			result.append(dungeon)
 	return result
 
@@ -674,8 +674,8 @@ func _start_selected() -> void:
 		return
 	if _selected_library_index < 0:
 		return
-	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
-	var campaigns: Dictionary = _campaign_library.load_all(_maps_by_id)
+	_maps_by_id = SavedMapLibrary.load_for_game(_maps_directory)
+	var campaigns: Dictionary = _campaign_library.load_for_game(_maps_by_id)
 	if not _campaign_library.last_error.is_empty():
 		_error_message.text = _campaign_library.last_error
 		_error_message.show()
@@ -733,8 +733,8 @@ func _launch_selected_party(hero_ids: Array[String]) -> void:
 		unique_ids[hero_id] = true
 	if _selected_game_map == null:
 		return
-	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
-	var campaigns: Dictionary = _campaign_library.load_all(_maps_by_id)
+	_maps_by_id = SavedMapLibrary.load_for_game(_maps_directory)
+	var campaigns: Dictionary = _campaign_library.load_for_game(_maps_by_id)
 	if not _campaign_library.last_error.is_empty():
 		_show_changed_selection(_campaign_library.last_error)
 		return

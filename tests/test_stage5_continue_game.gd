@@ -47,7 +47,7 @@ func _run() -> void:
 	await _wait_transition(menu)
 	assert(menu._library.visible and not menu._play_actions.visible)
 	assert(menu._library_mode == MainMenu.LIBRARY_CAMPAIGNS)
-	assert(menu._library_entries.size() == 1)
+	assert(menu._library_entries.size() == 1 + OfficialCampaignLibrary.load_definitions().size())
 	assert(menu._library_entries[0].get_theme_constant("icon_max_width") == 82)
 	assert(menu._selected_library_index == 0 and not menu._start_button.disabled)
 	assert(menu._preview_image.texture != null and menu._preview_name.text == campaign.display_name)

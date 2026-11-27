@@ -1725,6 +1725,8 @@ func _unlink_selected_exit() -> void:
 
 
 func _find_linked_map(map_id: String) -> DungeonMap:
+	if standalone_game:
+		return SavedMapLibrary.load_for_game(_progress_maps_directory).get(map_id) as DungeonMap
 	# Не полагаемся на имя файла: карта идентифицируется полем id внутри JSON.
 	var folder := DirAccess.open(_maps_dir())
 	if folder == null:
@@ -2110,6 +2112,9 @@ func _write_map(path: String) -> bool:
 
 
 func _write_map_data(saved: DungeonMap, path: String) -> bool:
+	if OfficialCampaignLibrary.is_official_id(saved.map_id) or OfficialCampaignLibrary.is_packaged_path(path):
+		_set_status("Официальные карты доступны только для прохождения.")
+		return false
 	if DirAccess.dir_exists_absolute(path):
 		_set_status("Ошибка записи: путь занят папкой")
 		return false
@@ -2342,10 +2347,15 @@ func _make_preview(data: DungeonMap) -> ImageTexture:
 
 
 func _read_map(path: String) -> DungeonMap:
+	if OfficialCampaignLibrary.is_packaged_path(path):
+		return null
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		return null
-	return DungeonMap.from_dict(JSON.parse_string(file.get_as_text()))
+	var dungeon: DungeonMap = DungeonMap.from_dict(JSON.parse_string(file.get_as_text()))
+	if dungeon != null and OfficialCampaignLibrary.is_official_id(dungeon.map_id):
+		return null
+	return dungeon
 
 
 func _selected_library_path() -> String:
@@ -2869,7 +2879,7 @@ func _save_progress() -> void:
 	if not _can_save_progress():
 		_game_system_menu.show_save_error("Сохранение сейчас недоступно.")
 		return
-	var maps: Dictionary = SavedMapLibrary.load_all(_progress_maps_directory)
+	var maps: Dictionary = SavedMapLibrary.load_for_game(_progress_maps_directory)
 	if not _progress_save_store.save_game(game_session, maps):
 		_game_system_menu.show_save_error(_progress_save_store.last_error)
 		return
@@ -3546,8 +3556,9 @@ func _campaign_transition_allowed(map_id: String) -> bool:
 		return false
 	if game_session.campaign_id.is_empty():
 		return true
-	var maps: Dictionary = SavedMapLibrary.load_all(_progress_maps_directory)
-	var campaign: CampaignDefinition = _campaign_library.load_campaign(game_session.campaign_id, maps)
+	var maps: Dictionary = SavedMapLibrary.load_for_game(_progress_maps_directory)
+	var campaigns: Dictionary = _campaign_library.load_for_game(maps)
+	var campaign: CampaignDefinition = campaigns.get(game_session.campaign_id) as CampaignDefinition
 	return campaign != null and campaign.map_ids.has(game_session.map_data.map_id) and campaign.map_ids.has(map_id)
 
 

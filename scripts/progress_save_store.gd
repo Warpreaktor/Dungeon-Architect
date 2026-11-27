@@ -141,7 +141,7 @@ func _decode_session(content: String, maps_by_id: Dictionary) -> GameSession:
 
 
 func _load_campaigns(maps_by_id: Dictionary) -> Dictionary:
-	return campaign_library.load_all(maps_by_id)
+	return campaign_library.load_for_game(maps_by_id)
 
 
 func _is_incompatible_save(path: String, maps_by_id: Dictionary) -> bool:

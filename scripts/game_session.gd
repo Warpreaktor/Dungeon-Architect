@@ -140,7 +140,7 @@ func set_campaign(campaign: CampaignDefinition) -> bool:
 
 
 func is_map_in_campaign(map_id: String) -> bool:
-	return campaign_id.is_empty() or _campaign_map_ids.has(map_id)
+	return _campaign_map_ids.has(map_id) if not campaign_id.is_empty() else not OfficialCampaignLibrary.is_official_id(map_id)
 
 
 func equipment_item_id(slot_id: String) -> String:

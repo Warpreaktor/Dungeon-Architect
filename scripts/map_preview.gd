@@ -4,7 +4,6 @@ extends RefCounted
 ## Рендер миниатюр для библиотеки редактора.
 const PREVIEW_WIDTH := 176
 const PREVIEW_HEIGHT := 116
-const PREVIEW_FLOOR: Texture2D = preload("res://assets/stone_floor.png")
 const PREVIEW_COLORS := {
     "door": Color("#c58a49"), "chest": Color("#edc06c"),
     "monster": Color("#e65d73"), "trap": Color("#e07b8f"), "key": Color("#ffe8a3"),
@@ -23,7 +22,8 @@ static func make_preview(data: DungeonMap) -> ImageTexture:
 	var drawn_height := float(data.height) * cell_size
 	var left := (float(PREVIEW_WIDTH) - drawn_width) * 0.5
 	var top := (float(PREVIEW_HEIGHT) - drawn_height) * 0.5
-	var floor_image := PREVIEW_FLOOR.get_image()
+	var floor_image := FloorTiles.atlas().texture.get_image()
+	var floor_regions: Dictionary = {}
 	var wall_image := WallTiles.atlas().texture.get_image()
 	var wall_regions: Dictionary = {}
 	var x_start := maxi(0, floori(left))
@@ -39,10 +39,13 @@ static func make_preview(data: DungeonMap) -> ImageTexture:
 			if not data.contains(cx, cy):
 				continue
 			var fraction := Vector2(fposmod(world_x, 1.0), fposmod(world_y, 1.0))
-			var floor_pixel := Vector2i(fraction * Vector2(floor_image.get_size())).clamp(Vector2i.ZERO, floor_image.get_size() - Vector2i.ONE)
+			var cell := Vector2i(cx, cy)
+			if not floor_regions.has(cell):
+				floor_regions[cell] = FloorTiles.texture_region(data, cell)
+			var floor_region: Rect2i = floor_regions[cell]
+			var floor_pixel: Vector2i = floor_region.position + Vector2i(fraction * Vector2(floor_region.size)).clamp(Vector2i.ZERO, floor_region.size - Vector2i.ONE)
 			var color: Color = floor_image.get_pixelv(floor_pixel)
 			if data.get_terrain(cx, cy) == "wall":
-				var cell := Vector2i(cx, cy)
 				if not wall_regions.has(cell):
 					wall_regions[cell] = WallTiles.texture_region(data, cell)
 				var region: Rect2i = wall_regions[cell]

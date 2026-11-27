@@ -18,7 +18,6 @@ signal ground_loot_tapped(container_id: String)
 const TILE_SIZE := 48.0
 const FOG_SHADER: Shader = preload("res://shaders/map_fog.gdshader")
 const FOG_COLOR := Color("#05080c")
-const FLOOR_TEXTURE: Texture2D = preload("res://assets/stone_floor.png")
 const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.png")
 var _portal_texture: Texture2D = ImageAsset.texture("res://assets/icons/portals/portal_gateway.png")
 var _stairs_up_texture: Texture2D = ImageAsset.texture("res://assets/icons/map_objects/stairs_up.png")
@@ -632,7 +631,8 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 		draw_rect(rect, FOG_COLOR)
 		return
 	var is_wall := map_data.get_terrain(x, y) == "wall"
-	draw_texture_rect(FLOOR_TEXTURE, rect, false)
+	var floor_region: Rect2i = FloorTiles.texture_region(map_data, Vector2i(x, y))
+	draw_texture_rect_region(FloorTiles.atlas().texture, rect, Rect2(floor_region))
 	if is_wall:
 		var source: Rect2i = WallTiles.texture_region(map_data, Vector2i(x, y))
 		draw_texture_rect_region(WallTiles.atlas().texture, rect, Rect2(source))

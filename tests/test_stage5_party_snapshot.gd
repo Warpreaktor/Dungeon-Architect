@@ -5,6 +5,7 @@ func _initialize() -> void:
 	_test_two_heroes_and_shared_inventory()
 	_test_fallen_hero_and_defeat()
 	_test_corrupt_snapshot_is_rejected()
+	_test_rebalanced_health()
 	_test_map_objects_use_palette_art()
 	print("Stage 5 party snapshot: heroes, bag, shield instances, statuses, casualties, RNG and stairs OK")
 	quit()
@@ -164,3 +165,23 @@ func _test_map_objects_use_palette_art() -> void:
 	var editor_script: Script = load("res://scripts/editor.gd")
 	var palette: Dictionary = editor_script.get_script_constant_map()["TOOL_ICONS"]
 	assert(palette["chest"] == DungeonCanvas.CHEST_TEXTURE)
+
+
+func _test_rebalanced_health() -> void:
+	var dungeon: DungeonMap = _map()
+	var source: GameSession = GameSession.start_for_party(dungeon, ["petushan", "volcha"])
+	var first: HeroState = source.party[0]
+	var second: HeroState = source.party[1]
+	first.max_health *= 2
+	first.health = roundi(first.max_health * 0.5)
+	second.max_health *= 2
+	second.health = 1
+	var restored: GameSession = GameSession.start_for(dungeon)
+	assert(restored.restore_party_state(_round_trip(source.party_state_snapshot())))
+	assert(restored.party[0].max_health == first.definition.max_health)
+	assert(restored.party[0].health == roundi(first.definition.max_health * 0.5))
+	assert(restored.party[1].max_health == second.definition.max_health)
+	assert(restored.party[1].health == 1)
+	var snapshot: Dictionary = _round_trip(restored.party_state_snapshot())
+	assert(restored.restore_party_state(snapshot))
+	assert(_round_trip(restored.party_state_snapshot()) == snapshot)

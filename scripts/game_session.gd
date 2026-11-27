@@ -1108,7 +1108,14 @@ func restore_party_state(snapshot: Dictionary) -> bool:
 		member.item_instances = restored_instances
 		if member.health > member.effective_max_health():
 			return false
+		if member.max_health != member.definition.max_health:
+			var previous_limit: int = member.effective_max_health()
+			member.max_health = member.definition.max_health
+			var current_limit: int = member.effective_max_health()
+			member.health = clampi(roundi(float(member.health) * current_limit / previous_limit), 1, current_limit)
 		member._recalculate_equipment_stats()
+	for member in restored_fallen:
+		member.max_health = member.definition.max_health
 	var restored_quantities: Array[int] = []
 	var legacy_overflow: Array[Dictionary] = []
 	if snapshot.has("bag_quantities"):

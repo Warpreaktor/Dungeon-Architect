@@ -17,7 +17,7 @@ personal_ability_ids = Array[String](["skeleton_rusty_slash", "skeleton_bone_kic
 ai_profiles = Array[ExtResource("1_h25de")]([ExtResource("4_profile")])
 weapon_spawn_chance_percent = 50
 weapon_replaced_ability_id = "skeleton_rusty_slash"
-max_health = 12
+max_health = 6
 strength = 5
 agility = 3
 

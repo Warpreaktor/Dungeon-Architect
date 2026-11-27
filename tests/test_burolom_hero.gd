@@ -28,7 +28,7 @@ func _test_catalog_and_abilities() -> void:
 	assert(HeroCatalog.has("burolom"))
 	var definition: HeroDefinition = UnlockedHeroFixture.definition("burolom")
 	assert(definition.display_name == "Буролом")
-	assert(definition.max_health == 54)
+	assert(definition.max_health == 27)
 	assert(definition.strength == 9 and definition.agility == 3 and definition.perception == 9)
 	assert(definition.base_action_slots == 3 and definition.base_dodge_percent == 0)
 	assert(definition.portrait != null and definition.portrait.get_width() == 320)

@@ -21,7 +21,15 @@ func _run() -> void:
 	var tunnel_far: FireEffect = ambience.get_node("TunnelTorchFar")
 	var fires: Array[FireEffect] = [campfire, torch_left, torch_right, lantern, tunnel_near, tunnel_far]
 	var anchors: Array[Vector2] = [Vector2(0.44258, 0.72051), Vector2(0.56400, 0.36663), Vector2(0.80622, 0.34431), Vector2(0.11722, 0.47184), Vector2(0.68062, 0.44633), Vector2(0.71651, 0.47715)]
-	assert(ambience.get_child_count() == fires.size())
+	var fog: ColorRect = ambience.get_node("TunnelFog")
+	assert(ambience.get_child_count() == fires.size() + 1)
+	assert(fog.mouse_filter == Control.MOUSE_FILTER_IGNORE)
+	assert(fog.get_index() < campfire.get_index())
+	assert(artwork.z_index + fog.z_index < 0)
+	var fog_material: ShaderMaterial = fog.material as ShaderMaterial
+	assert(fog_material != null and fog_material.shader != null)
+	var noise_texture: NoiseTexture2D = fog_material.get_shader_parameter("noise_map") as NoiseTexture2D
+	assert(noise_texture != null and noise_texture.seamless)
 	assert(lantern._embers == null and lantern._smoke == null)
 	assert(torch_left.ember_amount < campfire.ember_amount and torch_left.smoke_amount < campfire.smoke_amount)
 	assert(torch_left._flame_material != torch_right._flame_material)
@@ -40,6 +48,10 @@ func _run() -> void:
 		if menu.size.aspect() >= 4.0 / 3.0 and menu.size.aspect() <= 2.4:
 			for fire in fires:
 				assert(Rect2(Vector2.ZERO, menu.size).has_point(fire.global_position))
+		var fog_bounds: Rect2 = MainMenu.TUNNEL_FOG_BOUNDS
+		assert(fog.global_position.is_equal_approx(background.to_global(texture_size * fog_bounds.position)))
+		assert(fog.size.is_equal_approx(texture_size * fog_bounds.size))
+		assert(fog.get_global_rect().size.is_equal_approx(texture_size * fog_bounds.size * expected_scale))
 		for index in range(fires.size()):
 			var fire: FireEffect = fires[index]
 			var anchor: Vector2 = background.to_global(texture_size * anchors[index])
@@ -58,5 +70,5 @@ func _run() -> void:
 			assert(not card.get_global_rect().has_point(lantern.global_position))
 	menu.queue_free()
 	await process_frame
-	print("Main menu artwork: full viewport coverage, independent fire sources and adaptive layout OK")
+	print("Main menu artwork: full viewport coverage, independent fire sources, ground fog and adaptive layout OK")
 	quit()

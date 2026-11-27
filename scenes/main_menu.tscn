@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_menu"]
 [ext_resource type="Texture2D" path="res://assets/backgrounds/main_menu_camp_clean.png" id="2_back"]
@@ -7,6 +7,7 @@
 
 [ext_resource type="PackedScene" path="res://scenes/hero_selection.tscn" id="5_heroes"]
 [ext_resource type="PackedScene" path="res://scenes/effects/fire_effect.tscn" id="6_fire"]
+[ext_resource type="PackedScene" path="res://scenes/effects/ground_fog.tscn" id="7_fog"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
 bg_color = Color(0.090, 0.132, 0.18, 0.84)
@@ -78,6 +79,8 @@ color = Color(0.024, 0.035, 0.055, 0.18)
 
 [node name="Ambience" type="Node2D" parent="Artwork"]
 unique_name_in_owner = true
+
+[node name="TunnelFog" parent="Artwork/Ambience" instance=ExtResource("7_fog")]
 
 [node name="Campfire" parent="Artwork/Ambience" instance=ExtResource("6_fire")]
 unique_name_in_owner = true

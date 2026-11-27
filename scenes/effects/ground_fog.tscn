@@ -1,0 +1,23 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Shader" path="res://shaders/procedural_ground_fog.gdshader" id="1_fog"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_fog"]
+seed = 1729
+frequency = 0.025
+fractal_octaves = 3
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_fog"]
+width = 256
+height = 256
+seamless = true
+noise = SubResource("FastNoiseLite_fog")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_fog"]
+resource_local_to_scene = true
+shader = ExtResource("1_fog")
+shader_parameter/noise_map = SubResource("NoiseTexture2D_fog")
+
+[node name="GroundFog" type="ColorRect"]
+mouse_filter = 2
+material = SubResource("ShaderMaterial_fog")

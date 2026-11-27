@@ -9,6 +9,7 @@ signal continue_game_requested(session: GameSession)
 @onready var _background: Sprite2D = $Artwork/Background
 @onready var _veil: ColorRect = $Artwork/Veil
 @onready var _ambience: Node2D = $Artwork/Ambience
+@onready var _tunnel_fog: ColorRect = $Artwork/Ambience/TunnelFog
 @onready var _safe_area: MarginContainer = $SafeArea
 @onready var _title: Label = %Title
 @onready var _card: PanelContainer = %Card
@@ -25,6 +26,7 @@ signal continue_game_requested(session: GameSession)
 @onready var _home_error: Label = %HomeError
 const LIBRARY_CAMPAIGNS := 0
 const LIBRARY_PERSONAL := 1
+const TUNNEL_FOG_BOUNDS := Rect2(0.49, 0.46, 0.34, 0.32)
 const CAMPFIRE_ANCHOR := Vector2(0.44258, 0.72051)
 const FIRE_ANCHORS := {
 	"Campfire": CAMPFIRE_ANCHOR,
@@ -116,6 +118,8 @@ func _layout_ambience() -> void:
 		offset.x = clampf(offset.x, min_offset, max_offset)
 	_artwork.position = offset
 	_veil.size = texture_size
+	_tunnel_fog.position = texture_size * TUNNEL_FOG_BOUNDS.position
+	_tunnel_fog.size = texture_size * TUNNEL_FOG_BOUNDS.size
 	for fire_name in FIRE_ANCHORS:
 		var fire: FireEffect = _ambience.get_node(NodePath(str(fire_name))) as FireEffect
 		var anchor: Vector2 = FIRE_ANCHORS[fire_name]

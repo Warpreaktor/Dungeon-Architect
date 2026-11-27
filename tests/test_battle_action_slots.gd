@@ -1,9 +1,11 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 ## Лимит слотов задаётся бойцом, сохранённые шаблоны независимы.
 func _initialize() -> void:
-	var wolf := HeroState.new(HeroCatalog.get_hero("volcha"))
-	var rooster := HeroState.new(HeroCatalog.get_hero("petushan"))
+	var wolf := HeroState.new(UnlockedHeroFixture.definition("volcha"))
+	var rooster := HeroState.new(UnlockedHeroFixture.definition("petushan"))
 	var monster := MonsterCatalog.get_monster("hunter")
 	assert(wolf.action_slot_capacity() == 3)
 	assert(rooster.action_slot_capacity() == 3)
@@ -43,5 +45,5 @@ func _initialize() -> void:
 	legacy["saved_action_slots"] = ["volcha_wolf_lunge", "guard", "wolf_feint", "volcha_wolf_lunge", "volcha_cut_tendons"]
 	var migrated: HeroState = HeroState.from_snapshot(legacy)
 	assert(migrated != null)
-	assert(migrated.get_saved_action_slots() == ["volcha_wolf_lunge", "", "", "", "volcha_cut_tendons"])
+	assert(migrated.get_saved_action_slots() == ["volcha_wolf_lunge", "", "", "", ""])
 	quit()

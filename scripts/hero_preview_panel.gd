@@ -78,6 +78,8 @@ func show_hero(hero: HeroDefinition) -> void:
 		var row := HBoxContainer.new()
 		row.mouse_filter = Control.MOUSE_FILTER_PASS
 		row.tooltip_text = ability.display_name
+		if hero.is_personal_ability_locked(ability_id):
+			row.modulate = Color(0.46, 0.46, 0.46)
 		var icon: AbilityIcon = ABILITY_ICON_SCENE.instantiate() as AbilityIcon
 		icon.custom_minimum_size = Vector2(28, 28)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE

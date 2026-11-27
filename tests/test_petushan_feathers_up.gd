@@ -1,5 +1,7 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 
 func _initialize() -> void:
 	_check_catalog()
@@ -11,7 +13,7 @@ func _initialize() -> void:
 
 
 func _fighters(hero_health: int = -1) -> BattleContext:
-	var source := HeroState.new(HeroCatalog.get_hero("petushan"))
+	var source := HeroState.new(UnlockedHeroFixture.definition("petushan"))
 	if hero_health >= 0:
 		source.health = hero_health
 	var hero := BattleParticipant.from_hero(source)
@@ -69,7 +71,7 @@ func _check_stances() -> void:
 func _check_whirlwind() -> void:
 	var context := _fighters()
 	var hero := context.get_participant("hero")
-	var opponent := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var opponent := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	var shield: ItemDefinition = ItemCatalog.get_item("wooden_shield")
 	opponent.register_shield(shield)
 	opponent.equip_shield(shield)

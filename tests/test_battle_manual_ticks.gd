@@ -1,5 +1,7 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 
 func _actor(id: String, team: String, agility: int) -> BattleParticipant:
 	var actor := BattleParticipant.new()
@@ -119,7 +121,7 @@ func _initialize() -> void:
 	assert(victory.get_hero().completed_phases == 1)
 	assert(victory.flow.stage == BattleFlow.Stage.FINISHED)
 
-	var wounded := HeroState.new(HeroCatalog.get_hero("petushan"))
+	var wounded := HeroState.new(UnlockedHeroFixture.definition("petushan"))
 	wounded.health = 1
 	assert(wounded.apply_overworld_status("bleeding", "Кровотечение", 1, 3, wounded.exploration_phase_length()))
 	var fatal := BattleState.begin(MonsterCatalog.get_monster("skeleton"), wounded, 445566)

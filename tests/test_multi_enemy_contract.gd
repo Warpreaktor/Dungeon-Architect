@@ -1,9 +1,11 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 
 func _initialize() -> void:
 	var definition: MonsterDefinition = MonsterCatalog.get_monster(MonsterCatalog.list_ids()[0])
-	var hero_definition: HeroDefinition = HeroCatalog.get_hero("volcha")
+	var hero_definition: HeroDefinition = UnlockedHeroFixture.definition("volcha")
 	var source := HeroState.new(hero_definition)
 	var seed: int = source.max_health + definition.max_health
 	var battle: BattleState = BattleState.begin(definition, source, seed)

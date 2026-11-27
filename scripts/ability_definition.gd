@@ -97,6 +97,8 @@ func resource_failure(participant: BattleParticipant) -> String:
 func unavailable_reason(participant: BattleParticipant, ignore_fury: bool = false) -> String:
 	if participant == null or not participant.is_alive():
 		return "Участник боя недоступен"
+	if AbilityCatalog.is_personal_ability_locked(participant, ability_id):
+		return "Приём заблокирован"
 	if passive:
 		return "Пассивная способность"
 	if requires_full_fury and not ignore_fury and not participant.is_fury_unleashed():

@@ -958,7 +958,7 @@ func perform_basic_attack(_legacy_attack_damage: int = 0) -> int:
 		if not attack_id.is_empty():
 			break
 		var definition: AbilityDefinition = AbilityCatalog.get_ability(id)
-		if definition != null and definition.category == AbilityDefinition.Category.ATTACK:
+		if definition != null and definition.category == AbilityDefinition.Category.ATTACK and not AbilityCatalog.is_personal_ability_locked(get_hero(), id):
 			attack_id = id
 			break
 	if attack_id.is_empty():

@@ -1,5 +1,7 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 ## Гарантированная карта, случайный добор, фиксированный порядок и курсоры.
 func _initialize() -> void:
 	var monster := MonsterDefinition.new()
@@ -24,7 +26,7 @@ func _initialize() -> void:
 	monster.random_card_count = 0
 	assert(MonsterCardDraw.draw(monster, participant, rng) == ["basic_strike"])
 	monster.random_card_count = 1
-	var combat := BattleState.begin(monster, HeroState.new(HeroCatalog.get_hero("volcha")))
+	var combat := BattleState.begin(monster, HeroState.new(UnlockedHeroFixture.definition("volcha")))
 	var deck: Array[String] = combat.default_chain("enemy")
 	assert(deck.size() == 2 and deck[0] == "basic_strike")
 	var hero_chain: Array[String] = ["volcha_wolf_lunge", "volcha_strike_and_rebound", "volcha_wolf_instinct"]

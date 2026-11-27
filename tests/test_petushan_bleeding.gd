@@ -1,9 +1,11 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 ## Петушан: стартовые способности, динамический урон и фазы кровотечения.
 func _initialize() -> void:
 	assert(AbilityCatalog.validate_catalog().is_empty())
-	var hero := HeroState.new(HeroCatalog.get_hero("petushan"))
+	var hero := HeroState.new(UnlockedHeroFixture.definition("petushan"))
 	var state := BattleState.begin(MonsterCatalog.get_monster("hunter"), hero)
 	var actor: BattleParticipant = state.get_hero()
 	var target: BattleParticipant = state.get_enemy()

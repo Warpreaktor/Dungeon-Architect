@@ -1,5 +1,7 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 ## DA-4.05. Проверяем границы фаз без сцены, кнопок и Tween.
 func _initialize() -> void:
 	var flow := BattleFlow.new()
@@ -23,7 +25,7 @@ func _initialize() -> void:
 
 	# Подготовленные приёмы реально исполняются внутри фаз, бонус блока
 	# сохраняется до следующей атаки даже после границы фазы.
-	var hero := HeroState.new(HeroCatalog.get_hero("petushan"))
+	var hero := HeroState.new(UnlockedHeroFixture.definition("petushan"))
 	hero.learned_ability_ids.append_array(["guard", "basic_strike"])
 	var enemy: MonsterDefinition = MonsterCatalog.get_monster("lobar")
 	var battle := BattleState.begin(enemy, hero)
@@ -48,7 +50,7 @@ func _initialize() -> void:
 	assert(battle.flow.phase_number == 2)
 
 	# Нельзя запустить пустую цепочку, и состояние не меняется.
-	var bad := BattleState.begin(enemy, HeroState.new(HeroCatalog.get_hero("petushan")))
+	var bad := BattleState.begin(enemy, HeroState.new(UnlockedHeroFixture.definition("petushan")))
 	var empty: Array[String] = []
 	assert(not BattlePhaseTestDriver.run_phase(bad, empty, enemy_chain).success)
 	assert(bad.flow.stage == BattleFlow.Stage.PREPARATION)
@@ -68,7 +70,7 @@ func _initialize() -> void:
 		if event.type == "attack":
 			attacks += 1
 	assert(attacks == 1)
-	var wounded := HeroState.new(HeroCatalog.get_hero("petushan"))
+	var wounded := HeroState.new(UnlockedHeroFixture.definition("petushan"))
 	assert(wounded.apply_overworld_status("bleeding", "Кровотечение", 1, 3, wounded.exploration_phase_length()))
 	for step in range(wounded.exploration_phase_length() - 1):
 		assert(wounded.advance_overworld_statuses().is_empty())

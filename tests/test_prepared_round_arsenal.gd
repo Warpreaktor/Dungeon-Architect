@@ -1,13 +1,15 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 
 func _initialize() -> void:
 	call_deferred("_run")
 
 
 func _run() -> void:
-	var rooster := HeroState.new(HeroCatalog.get_hero("petushan"))
-	var wolf := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var rooster := HeroState.new(UnlockedHeroFixture.definition("petushan"))
+	var wolf := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	rooster.agility = 100
 	wolf.agility = 90
 	wolf.bonus_action_slots = 2
@@ -65,7 +67,7 @@ func _run() -> void:
 	var next := BattleState.begin(MonsterCatalog.get_monster("skeleton"), rooster, 4277)
 	assert(AbilityCatalog.round_hero_ability_ids(next.get_hero()).has("petushan_rooster_whirlwind"))
 	assert(not AbilityCatalog.round_hero_ability_ids(next.get_hero()).has("petushan_peck_while_hot"))
-	var unprepared := HeroState.new(HeroCatalog.get_hero("petushan"))
+	var unprepared := HeroState.new(UnlockedHeroFixture.definition("petushan"))
 	unprepared.energy = 0
 	assert(unprepared.save_action_slots(["", "", ""]))
 	var profile := BattleArsenalView.new()
@@ -77,5 +79,5 @@ func _run() -> void:
 	profile.dismiss()
 	profile.queue_free()
 	var saved: HeroState = HeroState.from_snapshot(unprepared.to_snapshot())
-	assert(saved != null and saved.get_saved_action_slots() == unprepared.get_saved_action_slots())
+	assert(saved != null and saved.get_saved_action_slots() == ["", "", ""])
 	quit()

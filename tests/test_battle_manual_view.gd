@@ -1,8 +1,10 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 
 func _initialize() -> void:
-	var hero := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var hero := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	hero.agility = 100
 	var prepared: Array[String] = ["volcha_wolf_lunge", "volcha_strike_and_rebound", "volcha_cut_tendons"]
 	assert(hero.save_action_slots(prepared))
@@ -29,7 +31,7 @@ func _initialize() -> void:
 	assert(combat.battle_state.round_turn_count == 1)
 	view.queue_free()
 
-	var resting := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var resting := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	resting.agility = 100
 	resting.energy = 1
 	assert(resting.save_action_slots(["", "", ""]))

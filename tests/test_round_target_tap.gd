@@ -1,5 +1,7 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 
 func _tap_event() -> InputEventMouseButton:
 	var event := InputEventMouseButton.new()
@@ -25,7 +27,7 @@ func _view(hero: HeroState, party: Array[HeroState] = []) -> BattleView:
 
 
 func _initialize() -> void:
-	var hero := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var hero := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	hero.agility = 100
 	var view := _view(hero)
 	assert(view._round_next_actor() == "hero")
@@ -64,7 +66,7 @@ func _initialize() -> void:
 	assert(view._combat.battle_state.round_turn_count == 1)
 	view.queue_free()
 
-	var self_hero := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var self_hero := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	self_hero.agility = 100
 	var self_view := _view(self_hero)
 	var instinct_index: int = self_view._hero_chain.find("volcha_wolf_instinct")
@@ -78,7 +80,7 @@ func _initialize() -> void:
 		return e.get("type") == "action_start" and e.get("ability_id") == "volcha_wolf_instinct" and e.get("actor_id") == "hero"))
 	self_view.queue_free()
 
-	var rest_hero := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var rest_hero := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	rest_hero.agility = 100
 	var rest_view := _view(rest_hero)
 	var rest_index: int = rest_view._hero_chain.size()
@@ -88,8 +90,8 @@ func _initialize() -> void:
 		return e.get("type") == "rest" and e.get("actor_id") == "hero"))
 	rest_view.queue_free()
 
-	var rooster := HeroState.new(HeroCatalog.get_hero("petushan"))
-	var wolf := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var rooster := HeroState.new(UnlockedHeroFixture.definition("petushan"))
+	var wolf := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	rooster.agility = 10
 	wolf.agility = 100
 	var party: Array[HeroState] = [rooster, wolf]
@@ -118,7 +120,7 @@ func _initialize() -> void:
 	assert(duo_view._support_hero_view.portrait_node().material == null)
 	duo_view.queue_free()
 
-	var slow_hero := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var slow_hero := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	slow_hero.agility = 0
 	var enemy_view := _view(slow_hero)
 	assert(enemy_view._is_playing_back)

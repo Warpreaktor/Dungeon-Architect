@@ -1,5 +1,7 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 const ABILITY_IDS: Array[String] = [
 	"luma_wandering_spark", "luma_star_spear", "luma_sun_shards",
 	"luma_star_devourer", "luma_life_thread", "luma_light_cocoon",
@@ -16,7 +18,7 @@ func _initialize() -> void:
 
 
 func _fighter() -> BattleParticipant:
-	return BattleParticipant.from_hero(HeroState.new(HeroCatalog.get_hero("luma")))
+	return BattleParticipant.from_hero(HeroState.new(UnlockedHeroFixture.definition("luma")))
 
 
 func _context(hero: BattleParticipant, enemies: Array[BattleParticipant], ally: BattleParticipant = null) -> BattleContext:
@@ -37,7 +39,7 @@ func _cast(context: BattleContext, target_id: String, ability_id: String) -> Dic
 
 
 func _test_catalog() -> void:
-	var hero: HeroDefinition = HeroCatalog.get_hero("luma")
+	var hero: HeroDefinition = UnlockedHeroFixture.definition("luma")
 	assert(hero.hero_id == "luma" and hero.display_name == "Люма")
 	assert(hero.max_health == 32 and hero.strength == 2 and hero.agility == 5)
 	assert(hero.perception == 8 and hero.base_accuracy_percent == 90)
@@ -58,7 +60,7 @@ func _test_abilities() -> void:
 	var hero: BattleParticipant = _fighter()
 	var enemy: BattleParticipant = BattleParticipant.from_monster(MonsterCatalog.get_monster("lobar"))
 	var second: BattleParticipant = BattleParticipant.from_monster(MonsterCatalog.get_monster("giant_crab"))
-	var ally: BattleParticipant = BattleParticipant.from_hero(HeroState.new(HeroCatalog.get_hero("volcha")), "hero_2")
+	var ally: BattleParticipant = BattleParticipant.from_hero(HeroState.new(UnlockedHeroFixture.definition("volcha")), "hero_2")
 	hero.accuracy_bonus += 100
 	var enemies: Array[BattleParticipant] = [enemy, second]
 	var ctx: BattleContext = _context(hero, enemies, ally)

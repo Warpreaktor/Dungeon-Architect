@@ -1,8 +1,10 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 
 func _initialize() -> void:
-	var definition: HeroDefinition = HeroCatalog.get_hero("petushan")
+	var definition: HeroDefinition = UnlockedHeroFixture.definition("petushan")
 	var hero := HeroState.new(definition)
 	var duration: int = 3
 	assert(hero.apply_overworld_status("bleeding", "Кровотечение", 1, duration, hero.exploration_phase_length()))

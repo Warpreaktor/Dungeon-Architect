@@ -1,9 +1,11 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 ## Проверки боевых ресурсов, наложения эффектов и собственных часов.
 func _initialize() -> void:
 	assert(AbilityCatalog.validate_catalog().is_empty())
-	var source := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var source := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	var battle := BattleState.begin(MonsterCatalog.get_monster("hunter"), source)
 	var hero := battle.get_hero()
 	var enemy := battle.get_enemy()
@@ -129,7 +131,7 @@ func _initialize() -> void:
 
 
 func _test_new_abilities() -> void:
-	var source := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var source := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	var battle := BattleState.begin(MonsterCatalog.get_monster("kadavr"), source)
 	var hero := battle.get_hero()
 	var enemy := battle.get_enemy()

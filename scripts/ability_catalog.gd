@@ -38,7 +38,7 @@ static func round_hero_ability_ids(participant: BattleParticipant) -> Array[Stri
 	var known: Array[String] = known_ability_ids(participant)
 	for index in range(mini(participant.action_slot_capacity, participant.action_chain.size())):
 		var id: String = participant.action_chain[index]
-		if id in known and uses_hero_action_slot(id) and not ids.has(id):
+		if id in known and not is_personal_ability_locked(participant, id) and uses_hero_action_slot(id) and not ids.has(id):
 			ids.append(id)
 	for id in COMMON_EQUIPMENT_ABILITIES:
 		if id in known:
@@ -47,6 +47,8 @@ static func round_hero_ability_ids(participant: BattleParticipant) -> Array[Stri
 
 
 static func round_hero_unavailable_reason(participant: BattleParticipant, ability_id: String) -> String:
+	if is_personal_ability_locked(participant, ability_id):
+		return "Приём заблокирован"
 	if not round_hero_ability_ids(participant).has(ability_id):
 		return "Приём не подготовлен к бою"
 	return unavailable_reason(participant, ability_id)
@@ -58,7 +60,7 @@ static func passive_damage_multiplier(participant: BattleParticipant) -> float:
 	var bonus: float = 0.0
 	var seen: Dictionary = {}
 	for id in participant.personal_ability_ids + participant.learned_ability_ids:
-		if seen.has(id):
+		if seen.has(id) or is_personal_ability_locked(participant, id):
 			continue
 		seen[id] = true
 		var ability: AbilityDefinition = get_ability(id)

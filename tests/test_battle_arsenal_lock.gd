@@ -1,5 +1,7 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 
 func _initialize() -> void:
 	var first: Array[String] = ["a", "b", "a"]
@@ -8,7 +10,7 @@ func _initialize() -> void:
 	assert(not BattleState.same_arsenal(first, ["a", "b"]))
 	assert(first == ["a", "b", "a"])
 
-	var hero := HeroState.new(HeroCatalog.get_hero("petushan"))
+	var hero := HeroState.new(UnlockedHeroFixture.definition("petushan"))
 	hero.learned_ability_ids.append("basic_strike")
 	hero.max_health = 500
 	hero.health = 500

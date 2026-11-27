@@ -7,6 +7,7 @@ extends Resource
 @export var portrait: Texture2D
 @export var map_icon: Texture2D
 @export var personal_ability_ids: Array[String] = []
+@export_range(0, 128, 1, "or_greater") var unlocked_personal_ability_count: int = 1
 @export var starting_weapon_id: String = ""
 @export_range(0, 999, 1) var max_energy: int = 0
 @export_range(0, 999, 1) var energy_restoration: int = 0
@@ -25,3 +26,8 @@ extends Resource
 @export_range(-1, 100, 1) var base_accuracy_percent: int = -1
 ## Base passive armor, independent of active blocking.
 @export_range(0, 999, 1) var base_defense: int = 0
+
+
+func is_personal_ability_locked(ability_id: String) -> bool:
+	var index: int = personal_ability_ids.find(ability_id)
+	return index >= 0 and index >= unlocked_personal_ability_count

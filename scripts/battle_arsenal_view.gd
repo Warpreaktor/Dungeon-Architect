@@ -208,6 +208,7 @@ func _refresh() -> void:
 	_slots_label.text = "БОЕВЫЕ НАВЫКИ  %d / %d" % [active.size() - active.count(""), _hero.action_slot_capacity()]
 	var index: int = 0
 	for ability in AbilityCatalog.available_abilities(_actor):
+		var locked: bool = _hero.definition.is_personal_ability_locked(ability.ability_id)
 		var selectable: bool = _hero.can_select_action(ability.ability_id)
 		if not selectable and not ability.passive and not AbilityCatalog.COMMON_EQUIPMENT_ABILITIES.has(ability.ability_id):
 			continue
@@ -221,7 +222,10 @@ func _refresh() -> void:
 			slot.set_slot_number_visible(false)
 		var selected: bool = active.has(ability.ability_id)
 		slot.set_current(selected)
-		slot.modulate = Color.WHITE if selected or not selectable else Color(0.52, 0.54, 0.60)
+		if locked:
+			slot.modulate = Color(0.46, 0.46, 0.46)
+		else:
+			slot.modulate = Color.WHITE if selected or not selectable else Color(0.52, 0.54, 0.60)
 		slot.pressed.connect(_toggle_ability.bind(ability.ability_id))
 		slot.info_requested.connect(_show_details)
 		index += 1

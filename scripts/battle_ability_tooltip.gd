@@ -11,6 +11,8 @@ static func describe(ability: AbilityDefinition, participant: BattleParticipant 
 	if not description.is_empty():
 		lines.append(description)
 	if ability.passive:
+		if AbilityCatalog.is_personal_ability_locked(participant, ability.ability_id):
+			lines.append("Приём заблокирован")
 		return "\n".join(lines)
 	match ability.target:
 		AbilityDefinition.Target.SELF:

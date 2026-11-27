@@ -1,5 +1,7 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 
 func _initialize() -> void:
 	var first: Dictionary = _play(72631)
@@ -16,7 +18,7 @@ func _initialize() -> void:
 
 
 func _make_session(seed: int) -> CombatSession:
-	var hero := HeroState.new(HeroCatalog.get_hero("volcha"))
+	var hero := HeroState.new(UnlockedHeroFixture.definition("volcha"))
 	var monster: MonsterDefinition = MonsterCatalog.get_monster("skeleton")
 	return CombatSession.new(monster, hero, monster, seed)
 

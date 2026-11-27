@@ -93,7 +93,7 @@ func action_slot_capacity() -> int:
 
 
 func can_select_action(ability_id: String) -> bool:
-	return AbilityCatalog.uses_hero_action_slot(ability_id) and (ability_id in definition.personal_ability_ids or ability_id in learned_ability_ids)
+	return not definition.is_personal_ability_locked(ability_id) and AbilityCatalog.uses_hero_action_slot(ability_id) and (ability_id in definition.personal_ability_ids or ability_id in learned_ability_ids)
 
 
 func get_saved_action_slots() -> Array[String]:

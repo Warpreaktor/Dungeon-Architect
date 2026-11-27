@@ -8,7 +8,7 @@ func _initialize() -> void:
 func _verify() -> void:
 	for hero_id in ["petushan", "volcha"]:
 		var hero := HeroState.new(HeroCatalog.get_hero(hero_id))
-		assert(hero.get_saved_action_slots() == hero.definition.personal_ability_ids.slice(0, hero.action_slot_capacity()))
+		assert(hero.get_saved_action_slots() == [hero.definition.personal_ability_ids[0], "", ""])
 		var member := PartyPortraitSlot.new()
 		root.add_child(member)
 		member.display_member(hero)
@@ -27,7 +27,7 @@ func _verify() -> void:
 		assert(view._round_mode)
 		assert(combat.battle_state.round_combat_active)
 		assert(not view.has_node("%PunchButton"))
-		assert(view._hero_chain == hero.get_saved_action_slots())
+		assert(view._hero_chain == [hero.definition.personal_ability_ids[0]])
 		view.queue_free()
 		if hero_id == "petushan":
 			assert(hero.save_action_slots(["", "", ""]))

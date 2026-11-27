@@ -1,5 +1,7 @@
 extends SceneTree
 
+const UnlockedHeroFixture = preload("res://tests/support/unlocked_hero_fixture.gd")
+
 const STARTER_ABILITIES: Array[String] = [
 	"burolom_control_pass", "burolom_notch", "burolom_strata_break", "burolom_brace"
 ]
@@ -24,7 +26,7 @@ func _initialize() -> void:
 
 func _test_catalog_and_abilities() -> void:
 	assert(HeroCatalog.has("burolom"))
-	var definition: HeroDefinition = HeroCatalog.get_hero("burolom")
+	var definition: HeroDefinition = UnlockedHeroFixture.definition("burolom")
 	assert(definition.display_name == "Буролом")
 	assert(definition.max_health == 54)
 	assert(definition.strength == 9 and definition.agility == 3 and definition.perception == 9)
@@ -60,7 +62,7 @@ func _test_catalog_and_abilities() -> void:
 
 
 func _battle() -> BattleState:
-	var source := HeroState.new(HeroCatalog.get_hero("burolom"))
+	var source := HeroState.new(UnlockedHeroFixture.definition("burolom"))
 	var state: BattleState = BattleState.begin(MonsterCatalog.get_monster("hunter"), source, 2106)
 	var target: BattleParticipant = state.get_enemy()
 	state.get_hero().accuracy_bonus += 20

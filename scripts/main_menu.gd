@@ -544,8 +544,113 @@ func _load_saved_maps() -> void:
 	var has_entries: bool = not _campaigns.is_empty() if _library_mode == LIBRARY_CAMPAIGNS else not _personal_maps.is_empty()
 	_no_maps.visible = not has_entries and _campaign_library.last_error.is_empty()
 	_start_button.disabled = not has_entries or not _campaign_library.last_error.is_empty()
-	if not _start_button.disabled:
-		_map_list.select(0)
+	if has_entries:
+		_select_library_index(0)
+	else:
+		_update_library_preview()
+
+
+func _clear_library_entries() -> void:
+	for child in _entry_list.get_children():
+		child.queue_free()
+	_library_entries.clear()
+
+
+func _build_library_entries() -> void:
+	_clear_library_entries()
+	var count: int = _campaigns.size() if _library_mode == LIBRARY_CAMPAIGNS else _personal_maps.size()
+	for index in range(count):
+		var entry := Button.new()
+		entry.toggle_mode = true
+		entry.button_group = _entry_group
+		entry.focus_mode = Control.FOCUS_ALL
+		entry.custom_minimum_size = Vector2(0, 104)
+		entry.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		entry.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		entry.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		entry.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+		entry.add_theme_constant_override("icon_max_width", 82)
+		entry.clip_text = false
+		entry.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		entry.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		entry.add_theme_stylebox_override("normal", _entry_style)
+		entry.add_theme_stylebox_override("hover", _entry_hover_style)
+		entry.add_theme_stylebox_override("pressed", _entry_selected_style)
+		entry.add_theme_stylebox_override("hover_pressed", _entry_selected_style)
+		entry.add_theme_stylebox_override("focus", _entry_focus_style)
+		entry.add_theme_color_override("font_color", Color(0.94, 0.94, 0.92, 1.0))
+		entry.add_theme_color_override("font_hover_color", Color(0.99, 0.97, 0.92, 1.0))
+		entry.add_theme_color_override("font_pressed_color", Color(0.99, 0.97, 0.92, 1.0))
+		entry.add_theme_color_override("font_focus_color", Color(0.99, 0.97, 0.92, 1.0))
+		entry.add_theme_font_size_override("font_size", 20)
+		entry.add_theme_constant_override("h_separation", 14)
+		entry.tooltip_text = _library_entry_title(index)
+		entry.text = _library_entry_text(index)
+		entry.icon = _thumbnails[index] if index < _thumbnails.size() else null
+		entry.pressed.connect(_select_library_index.bind(index))
+		entry.focus_entered.connect(_select_library_index.bind(index))
+		_entry_list.add_child(entry)
+		_library_entries.append(entry)
+
+
+func _library_entry_title(index: int) -> String:
+	if _library_mode == LIBRARY_CAMPAIGNS:
+		if index < 0 or index >= _campaigns.size():
+			return ""
+		return _campaigns[index].display_name
+	if index < 0 or index >= _personal_maps.size():
+		return ""
+	return _personal_maps[index].display_name
+
+
+func _library_entry_text(index: int) -> String:
+	if _library_mode == LIBRARY_CAMPAIGNS:
+		if index < 0 or index >= _campaigns.size():
+			return ""
+		var campaign: CampaignDefinition = _campaigns[index]
+		var total_maps: int = campaign.map_ids.size()
+		var subtitle: String = "Стартовое приключение" if total_maps <= 1 else "Кампания на %d карт" % total_maps
+		return "%s\n%s" % [campaign.display_name, subtitle]
+	if index < 0 or index >= _personal_maps.size():
+		return ""
+	var dungeon: DungeonMap = _personal_maps[index]
+	return "%s\nОтдельная карта · %d × %d" % [dungeon.display_name, dungeon.width, dungeon.height]
+
+
+func _select_library_index(index: int) -> void:
+	var count: int = _campaigns.size() if _library_mode == LIBRARY_CAMPAIGNS else _personal_maps.size()
+	if index < 0 or index >= count:
+		return
+	_selected_library_index = index
+	for button_index in range(_library_entries.size()):
+		_library_entries[button_index].set_pressed_no_signal(button_index == index)
+	_error_message.visible = false
+	_start_button.disabled = false
+	_update_library_preview()
+
+
+func _update_library_preview() -> void:
+	if _selected_library_index < 0:
+		_preview_image.texture = null
+		_preview_name.text = "Нет доступных приключений"
+		_preview_meta.text = "Когда здесь появятся кампании или карты, их можно будет открыть и пройти отсюда."
+		return
+	if _selected_library_index < _thumbnails.size():
+		_preview_image.texture = _thumbnails[_selected_library_index]
+	else:
+		_preview_image.texture = null
+	if _library_mode == LIBRARY_CAMPAIGNS:
+		var campaign: CampaignDefinition = _campaigns[_selected_library_index]
+		var start_map: DungeonMap = _maps_by_id.get(campaign.start_map_id) as DungeonMap
+		var rooms_text: String = "Стартовая карта готова к входу."
+		if start_map != null:
+			rooms_text = "Стартовая карта · %d × %d клеток." % [start_map.width, start_map.height]
+		_preview_name.text = campaign.display_name
+		_preview_meta.text = "%s %s" % [rooms_text, "Выбери приключение и собери отряд героев перед входом в лабиринт."]
+	else:
+		var dungeon: DungeonMap = _personal_maps[_selected_library_index]
+		_preview_name.text = dungeon.display_name
+		_preview_meta.text = "Свободная карта без кампании · %d × %d клеток. Подходит для быстрого запуска и тестовых забегов." % [dungeon.width, dungeon.height]
 
 
 static func unassigned_maps(maps_by_id: Dictionary, campaigns: Dictionary) -> Array[DungeonMap]:

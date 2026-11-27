@@ -79,8 +79,6 @@ func show_hero(hero: HeroDefinition) -> void:
 		row.mouse_filter = Control.MOUSE_FILTER_PASS
 		row.tooltip_text = ability.display_name
 		var locked: bool = hero.is_personal_ability_locked(ability_id)
-		if locked:
-			row.modulate = Color(0.46, 0.46, 0.46)
 		var icon: AbilityIcon = ABILITY_ICON_SCENE.instantiate() as AbilityIcon
 		icon.custom_minimum_size = Vector2(28, 28)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -89,6 +87,7 @@ func show_hero(hero: HeroDefinition) -> void:
 		row.add_child(icon)
 		var label := Label.new()
 		label.text = ability.display_name
+		label.modulate = Color(0.65, 0.65, 0.65) if locked else Color.WHITE
 		label.add_theme_font_size_override("font_size", 13)
 		label.custom_minimum_size.x = 108
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

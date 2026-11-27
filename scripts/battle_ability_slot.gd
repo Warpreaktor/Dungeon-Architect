@@ -66,6 +66,7 @@ func configure(index: int, ability: AbilityDefinition, editable: bool, actor: Ba
 	_slot_name.text = ability.display_name if ability != null else "Добавить"
 	_slot_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_slot_icon.configure_ability(ability, actor)
+	set_locked(false)
 	_empty_icon.visible = not _slot_icon.visible
 	_empty_icon.text = "+"
 	tooltip_text = BattleAbilityTooltip.describe(ability, actor, index)
@@ -93,6 +94,8 @@ func configure_recharge(index: int) -> void:
 
 func set_locked(value: bool) -> void:
 	_slot_icon.set_locked(value)
+	_slot_name.modulate = Color(0.65, 0.65, 0.65) if value else Color.WHITE
+	_slot_number.modulate = _slot_name.modulate
 	if value:
 		_info_button.visible = not tooltip_text.is_empty()
 

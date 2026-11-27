@@ -143,9 +143,8 @@ func set_party_rules(rules: HeroPartyRules) -> void:
 
 func _set_landing(tile: HeroCatalogTile, landing: bool) -> void:
 	var locked: bool = not _party_rules.allows(tile.hero.hero_id)
-	var shade: float = 0.40 if locked else 1.0
 	tile.set_locked(locked)
-	tile.modulate = Color(shade, shade, shade, 0.0 if landing else 1.0)
+	tile.modulate = Color(1.0, 1.0, 1.0, 0.0 if landing else 1.0)
 	tile.disabled = landing or locked
 
 

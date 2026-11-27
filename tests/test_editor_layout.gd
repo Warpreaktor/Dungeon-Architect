@@ -67,12 +67,25 @@ func _run() -> void:
 	assert(tabs.get_tab_count() == 3)
 	assert(tabs.get_tab_title(2) == "Состав отряда")
 	assert(tabs.get_tab_title(1) == "Тестирование")
-	var test_hero_select := tabs.get_node("Тестирование/TestProperties/TestHeroSelect") as OptionButton
-	assert(test_hero_select != null and test_hero_select.item_count == HeroCatalog.list_ids().size())
-	var second_hero_select := tabs.get_node("Тестирование/TestProperties/TestSecondHeroSelect") as OptionButton
-	assert(second_hero_select != null and second_hero_select.item_count == HeroCatalog.list_ids().size() + 1)
-	var third_hero_select := tabs.get_node("Тестирование/TestProperties/TestThirdHeroSelect") as OptionButton
-	assert(third_hero_select != null and third_hero_select.item_count == HeroCatalog.list_ids().size() + 1)
+	var test_panel: EditorTestHeroPanel = tabs.get_node("Тестирование") as EditorTestHeroPanel
+	assert(test_panel != null and test_panel._tiles.size() == HeroCatalog.list_ids().size())
+	assert(test_panel._party_buttons.size() == GameSession.MAX_PARTY_SIZE)
+	for id in HeroCatalog.list_ids():
+		var tile: HeroCatalogTile = test_panel._tiles[id]
+		assert(tile.hero == HeroCatalog.get_hero(id) and tile.portrait.texture == tile.hero.portrait)
+	test_panel.select_party([HeroCatalog.DEFAULT_HERO_ID])
+	var alternate: String = ""
+	for id in HeroCatalog.list_ids():
+		if id != HeroCatalog.DEFAULT_HERO_ID:
+			alternate = id
+			break
+	assert(not alternate.is_empty())
+	(test_panel._tiles[alternate] as Button).pressed.emit()
+	test_panel._swap_party(0, 1)
+	assert(editor.get("_test_party_ids") == [alternate, HeroCatalog.DEFAULT_HERO_ID])
+	var test_config := ConfigFile.new()
+	assert(test_config.load(storage.SETTINGS_PATH) == OK)
+	assert(test_config.get_value("editor", "test_party_ids") == [alternate, HeroCatalog.DEFAULT_HERO_ID])
 	assert(settings_menu.get_popup().get_item_index(2) >= 0)
 	assert(tabs.get_tab_title(0) == "Свойства карты")
 	var properties := tabs.get_node("Свойства карты/MapProperties") as VBoxContainer

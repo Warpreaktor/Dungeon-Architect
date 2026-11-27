@@ -50,6 +50,11 @@ func _verify() -> void:
 	assert(not picker._start_button.disabled)
 	assert(picker._party_bar.count.text == "Отряд: 1 / 2")
 	assert((picker._catalog.tiles[BLOCKED_HERO] as Button).disabled)
+	var blocked_tile: HeroCatalogTile = picker._catalog.tiles[BLOCKED_HERO]
+	assert(blocked_tile._lock_overlay.visible and blocked_tile._lock_overlay.get_parent() == blocked_tile.portrait)
+	assert(blocked_tile._lock_overlay.anchor_right == 1.0 and blocked_tile._lock_overlay.anchor_bottom == 1.0)
+	assert(blocked_tile.modulate == Color.WHITE and blocked_tile._lock_overlay.modulate == Color.WHITE)
+	assert(blocked_tile.portrait.self_modulate != Color.WHITE)
 	assert(not (picker._catalog.tiles[OPTIONAL_HERO] as Button).disabled)
 	picker._add_hero(BLOCKED_HERO, false)
 	picker._remove_hero(REQUIRED_HERO)
@@ -83,6 +88,7 @@ func _verify() -> void:
 	assert(picker.selected_party().is_empty())
 	assert(picker._start_button.disabled)
 	assert(not (picker._catalog.tiles[BLOCKED_HERO] as Button).disabled)
+	assert(not blocked_tile._lock_overlay.visible and blocked_tile.portrait.self_modulate == Color.WHITE)
 	assert(picker._party_bar._buttons[3].visible)
 	picker.queue_free()
 

@@ -54,14 +54,10 @@ func _ready() -> void:
 	_lock_overlay.texture = LOCK_ICON
 	_lock_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_lock_overlay.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_lock_overlay.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	_lock_overlay.offset_left = -18
-	_lock_overlay.offset_top = -18
-	_lock_overlay.offset_right = 18
-	_lock_overlay.offset_bottom = 18
 	_lock_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_lock_overlay.visible = false
-	add_child(_lock_overlay)
+	portrait.add_child(_lock_overlay)
+	_lock_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	set_selection(false, 0)
 	set_locked(_locked)
 
@@ -100,11 +96,11 @@ func set_locked(value: bool) -> void:
 	_locked = value
 	if _lock_overlay != null:
 		_lock_overlay.visible = value
-		_lock_overlay.modulate = Color(1.0, 1.0, 1.0, 0.96)
+		_lock_overlay.modulate = Color.WHITE
 	if portrait != null:
-		portrait.modulate = Color(0.78, 0.78, 0.78) if value else Color.WHITE
+		portrait.self_modulate = Color(0.40, 0.40, 0.40) if value else Color.WHITE
 	if _caption != null:
-		_caption.modulate = Color(0.86, 0.82, 0.78) if value else Color.WHITE
+		_caption.modulate = Color(0.65, 0.65, 0.65) if value else Color.WHITE
 	tooltip_text = "%s\nНедоступен в этой кампании" % hero.display_name if value and hero != null else (hero.display_name if hero != null else "")
 
 

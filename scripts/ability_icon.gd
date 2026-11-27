@@ -25,6 +25,7 @@ func configure(art: Texture2D, frame: Texture2D = null, background: Texture2D = 
 	_background.visible = background != null
 	visible = art != null or frame != null or background != null
 	set_state(state)
+	set_locked(false)
 
 
 func configure_ability(ability: AbilityDefinition, actor: BattleParticipant = null, state: State = State.NORMAL) -> void:
@@ -58,4 +59,8 @@ func set_locked(value: bool) -> void:
 		return
 	_lock_overlay.texture = LOCK_OVERLAY
 	_lock_overlay.visible = value
-	_lock_overlay.modulate = Color(1.0, 1.0, 1.0, 0.96)
+	_lock_overlay.modulate = Color.WHITE
+	var shade: Color = Color(0.40, 0.40, 0.40) if value else Color.WHITE
+	self_modulate = shade
+	_frame.self_modulate = shade
+	_background.self_modulate = shade

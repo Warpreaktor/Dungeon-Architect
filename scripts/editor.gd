@@ -324,7 +324,7 @@ func _build_interface() -> void:
 	_settings_menu.tooltip_text = "Настройки редактора и текущей карты"
 	var settings_popup := _settings_menu.get_popup()
 	settings_popup.add_icon_item(COMMAND_ICONS["inspector"], "Свойства карты", SETTINGS_MAP_PROPERTIES)
-	settings_popup.add_item("Тестовый герой", SETTINGS_TEST_HERO)
+	settings_popup.add_item("Тестовый отряд", SETTINGS_TEST_HERO)
 	settings_popup.add_item("Управление кампанией", SETTINGS_CAMPAIGN)
 	settings_popup.add_check_item("Показать консоль", SETTINGS_CONSOLE)
 	if DeveloperMode.is_available():
@@ -769,6 +769,7 @@ func _create_dialogs() -> void:
 	_party_rules_panel.name = "Состав отряда"
 	_settings_tabs.add_child(_party_rules_panel)
 	_party_rules_panel.rules_applied.connect(_on_party_rules_applied)
+	_settings_tabs.tab_changed.connect(_on_settings_tab_changed)
 	if DeveloperMode.is_available() and not standalone_game:
 		_developer_inventory = DeveloperInventoryDialog.new()
 		_developer_inventory.name = "DeveloperInventory"
@@ -1295,7 +1296,7 @@ func _on_settings_option_selected(id: int) -> void:
 			_settings_tabs.current_tab = 1
 			_party_rules_panel.show_rules(map_data.metadata)
 			_test_hero_panel.select_party(_test_party_ids)
-			_settings_dialog.popup_centered_clamped(Vector2i(490, 440))
+			_open_test_party_settings()
 		SETTINGS_DEVELOPER:
 			if not DeveloperMode.is_available():
 				return
@@ -1308,6 +1309,16 @@ func _on_settings_option_selected(id: int) -> void:
 			_developer_preview = null
 			if _developer_inventory != null:
 				_developer_inventory.hide()
+
+
+func _on_settings_tab_changed(index: int) -> void:
+	if _settings_dialog.visible and _settings_tabs.get_tab_control(index) == _test_hero_panel:
+		_open_test_party_settings()
+
+
+func _open_test_party_settings() -> void:
+	var available: Vector2 = get_viewport_rect().size
+	_settings_dialog.popup_centered_clamped(Vector2i(minf(780.0, available.x * 0.88), minf(580.0, available.y * 0.82)))
 
 
 func _on_test_party_selected(hero_ids: Array[String]) -> void:

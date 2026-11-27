@@ -224,7 +224,7 @@ func _refresh() -> void:
 		var selected: bool = active.has(ability.ability_id) or MonsterWeaponStrike.is_weapon_strike(ability.ability_id)
 		slot.set_current(selected)
 		if locked:
-			slot.modulate = Color(0.46, 0.46, 0.46)
+			slot.modulate = Color.WHITE
 		else:
 			slot.modulate = Color.WHITE if selected or not selectable else Color(0.52, 0.54, 0.60)
 		slot.pressed.connect(_toggle_ability.bind(ability.ability_id))

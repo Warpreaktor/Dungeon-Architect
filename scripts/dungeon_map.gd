@@ -22,6 +22,22 @@ const NAME_SECRETS := [
 const PORTAL_COLORS := ["blue", "cyan", "green", "orange", "pink", "purple", "red", "yellow"]
 const ENTITY_TYPES := ["door", "chest", "monster", "trap", "stairs_down", "portal", "portal_local", "key", "potion", "gold", "trigger", "player_spawn", "message"]
 static var CHEST_REWARDS: Array = ItemCatalog.list_ids() + ItemCatalog.LEGACY_UNLISTED_EQUIPMENT_IDS
+const CHEST_VARIANT_NAMES := {
+	"chest": "Сундук",
+	"chest_gold": "Сундук с золотом",
+	"jewelry_table": "Стол с украшениями",
+	"weapon_rack": "Стойка с оружием",
+	"armor_rack": "Стойка с доспехами",
+	"alchemy_table": "Алхимический стол"
+}
+const CHEST_VARIANT_PROFILE_IDS := {
+	"chest": "chest",
+	"chest_gold": "coin_purse",
+	"jewelry_table": "jewelry_box",
+	"weapon_rack": "weapon_rack",
+	"armor_rack": "armor_rack",
+	"alchemy_table": "alchemy_table"
+}
 
 var map_id: String = ""
 var display_name: String = "Безымянное подземелье"
@@ -139,8 +155,11 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 	if kind == "door":
 		properties = {"lock_id": "key"}
 	elif kind == "chest":
-		# Новый сундук пустой: содержимое автор задаёт после размещения.
+		# Обычные сундуки и стилизованные контейнеры используют общую механику добычи.
+		var variant: String = chest_variant({"type": "chest", "properties": {"variant": str(options.get("variant", "chest"))}})
 		properties = {"contents": [], "loot_mode": "random"}
+		if variant != "chest":
+			properties["variant"] = variant
 	elif kind in ["stairs_down", "portal"]:
 		properties = {"target_map_id": ""}
 	elif kind == "portal_local":
@@ -369,6 +388,25 @@ static func chest_is_random(chest: Dictionary) -> bool:
 	if raw is Array and not raw.is_empty():
 		return false
 	return str(properties.get("reward", "")).is_empty()
+
+
+static func chest_variant(entity: Dictionary) -> String:
+	if str(entity.get("type", "")) != "chest":
+		return "chest"
+	var variant: String = str(entity.get("properties", {}).get("variant", "chest"))
+	return variant if CHEST_VARIANT_PROFILE_IDS.has(variant) else "chest"
+
+
+static func chest_variant_name(variant: String) -> String:
+	return str(CHEST_VARIANT_NAMES.get(variant, CHEST_VARIANT_NAMES["chest"]))
+
+
+static func chest_profile_id(entity: Dictionary) -> String:
+	return chest_variant_profile_id(chest_variant(entity))
+
+
+static func chest_variant_profile_id(variant: String) -> String:
+	return str(CHEST_VARIANT_PROFILE_IDS.get(variant, CHEST_VARIANT_PROFILE_IDS["chest"]))
 
 
 static func loot_level(entity: Dictionary) -> int:
@@ -896,6 +934,12 @@ static func from_dict(value: Variant) -> DungeonMap:
 				if original_id != primary.monster_id or (raw_party is Array and not raw_party.is_empty()):
 					properties["monster_id"] = primary.monster_id
 					properties.erase("monster_ids")
+		elif kind == "chest":
+			var variant: String = chest_variant({"type": "chest", "properties": properties})
+			if variant == "chest":
+				properties.erase("variant")
+			else:
+				properties["variant"] = variant
 		result._append_entity({"id": entity_id, "type": kind, "x": x, "y": y, "properties": properties})
 	var raw_metadata: Variant = value.get("metadata", {"theme": "stone_dungeon"})
 	if typeof(raw_metadata) == TYPE_DICTIONARY:

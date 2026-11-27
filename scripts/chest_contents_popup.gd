@@ -273,7 +273,7 @@ func configure(entity_id: String, contents: Array[String], gold_amount: int = 5,
 	if _source.is_empty():
 		_source = {"type": "monster" if is_monster else "chest", "properties": {}}
 	_reward_level.select(DungeonMap.loot_level(_source) - 1)
-	_title.text = "Настройки монстров" if is_monster else "Содержимое сундука"
+	_title.text = "Настройки монстров" if is_monster else ("Содержимое сундука" if DungeonMap.chest_variant(_source) == "chest" else DungeonMap.chest_variant_name(DungeonMap.chest_variant(_source)))
 	_monster_party.visible = is_monster
 	if is_monster:
 		_configure_monster_slots(monster_ids)

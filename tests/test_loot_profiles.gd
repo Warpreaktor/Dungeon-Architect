@@ -6,6 +6,7 @@ func _initialize() -> void:
 	_test_mixed_rewards()
 	_test_profile_pools()
 	_test_source_selection()
+	_test_container_variants()
 	_test_depth_and_rarity()
 	_test_profile_chest_and_persistence()
 	_test_special_reward()
@@ -186,10 +187,38 @@ func _test_profile_pools() -> void:
 func _test_source_selection() -> void:
 	assert(LootProfileCatalog.for_source({"type": "chest"}) == LootProfileCatalog.get_profile("chest"))
 	assert(LootProfileCatalog.for_source({"type": "weapon_rack"}) == LootProfileCatalog.get_profile("weapon_rack"))
+	assert(LootProfileCatalog.for_source({"type": "chest", "properties": {"variant": "weapon_rack"}}) == LootProfileCatalog.get_profile("weapon_rack"))
+	assert(LootProfileCatalog.for_source({"type": "chest", "properties": {"variant": "alchemy_table"}}) == LootProfileCatalog.get_profile("alchemy_table"))
 	assert(LootProfileCatalog.for_source({"type": "monster", "properties": {"monster_id": "skeleton"}}) == LootProfileCatalog.get_profile("monster"))
 	assert(LootProfileCatalog.for_source({"type": "monster", "properties": {"monster_id": "rabbit_symbiont"}}) == LootProfileCatalog.get_profile("boss"))
 	assert(LootProfileCatalog.for_source({"type": "chest", "properties": {"loot_profile_id": "alchemy_table"}}) == LootProfileCatalog.get_profile("alchemy_table"))
 	assert(LootProfileCatalog.for_source({"type": "chest", "properties": {"loot_profile_id": "missing"}}) == LootProfileCatalog.get_profile("chest"))
+
+
+func _test_container_variants() -> void:
+	var dungeon := DungeonMap.create_blank(8, 8)
+	var placements := [
+		{"cell": Vector2i(2, 2), "variant": "chest_gold", "profile": "coin_purse"},
+		{"cell": Vector2i(3, 2), "variant": "jewelry_table", "profile": "jewelry_box"},
+		{"cell": Vector2i(4, 2), "variant": "weapon_rack", "profile": "weapon_rack"},
+		{"cell": Vector2i(5, 2), "variant": "armor_rack", "profile": "armor_rack"},
+		{"cell": Vector2i(6, 2), "variant": "alchemy_table", "profile": "alchemy_table"}
+	]
+	for entry in placements:
+		var cell: Vector2i = entry["cell"]
+		assert(dungeon.place_entity("chest", cell.x, cell.y, {"variant": str(entry["variant"])}))
+		var entity: Dictionary = dungeon.entities_at(cell.x, cell.y)[0]
+		assert(DungeonMap.chest_variant(entity) == str(entry["variant"]))
+		assert(DungeonMap.chest_profile_id(entity) == str(entry["profile"]))
+		assert(LootProfileCatalog.for_source(entity) == LootProfileCatalog.get_profile(str(entry["profile"])))
+	assert(dungeon.place_entity("chest", 2, 3, {"variant": "unknown_variant"}))
+	assert(DungeonMap.chest_variant(dungeon.entities_at(2, 3)[0]) == "chest")
+	var loaded: DungeonMap = DungeonMap.from_dict(JSON.parse_string(JSON.stringify(dungeon.to_dict())))
+	for entry in placements:
+		var cell: Vector2i = entry["cell"]
+		var entity: Dictionary = loaded.entities_at(cell.x, cell.y)[0]
+		assert(DungeonMap.chest_variant(entity) == str(entry["variant"]))
+		assert(LootProfileCatalog.for_source(entity) == LootProfileCatalog.get_profile(str(entry["profile"])))
 
 
 func _test_depth_and_rarity() -> void:

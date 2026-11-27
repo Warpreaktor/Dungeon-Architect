@@ -31,6 +31,10 @@ static func for_source(entity: Dictionary) -> LootProfile:
 		if explicit_profile != null:
 			return explicit_profile
 	var kind: String = str(entity.get("type", ""))
+	if kind == "chest":
+		var variant_profile: LootProfile = get_profile(DungeonMap.chest_profile_id(entity))
+		if variant_profile != null:
+			return variant_profile
 	if kind == "monster":
 		var highest_rank: int = MonsterDefinition.Rank.COMMON
 		var selected_profile: LootProfile = null

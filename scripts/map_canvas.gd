@@ -34,6 +34,11 @@ var _fog_mask: PackedByteArray = PackedByteArray()
 var _fog_mask_size := Vector2i.ZERO
 
 const CHEST_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/chest.png")
+const CHEST_GOLD_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/chest_gold.png")
+const JEWELRY_TABLE_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/jewelry_table.png")
+const WEAPON_RACK_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/weapon_rack.png")
+const ARMOR_RACK_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/armor_rack.png")
+const ALCHEMY_TABLE_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/alchemy_table.png")
 const STAIRS_DOWN_TEXTURE: Texture2D = preload("res://assets/icons/map_objects/stairs_down.png")
 const DOUBLE_TAP_MS := 400
 const TAP_MOVE_LIMIT := 16.0
@@ -658,7 +663,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 		drawable_entities += 1
 		var origin := Vector2(x, y) * TILE_SIZE
 		if kind == "chest" and ((mode == "play" and game_session != null and game_session.is_chest_open(entity)) or (not DungeonMap.chest_is_random(entity) and DungeonMap.chest_contents(entity).is_empty())):
-			_draw_open_chest(origin)
+			_draw_open_chest(origin, entity)
 		elif kind == "monster":
 			var monster_id := str(entity.get("properties", {}).get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
 			var icon: Texture2D = _monster_icons.get(monster_id, _monster_icons.get(MonsterCatalog.DEFAULT_MONSTER_ID))
@@ -674,7 +679,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 			if portal_texture != null:
 				draw_texture_rect(portal_texture, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		else:
-			_draw_entity(kind, origin)
+			_draw_entity(kind, origin, entity)
 			if kind == "door":
 				_draw_door_lock(origin, LockCatalog.required_key(entity))
 				if mode == "edit" or (game_session != null and game_session.is_door_trap_visible(entity)):
@@ -688,6 +693,22 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 			draw_texture_rect(_stairs_up_texture, rect, false)
 	if has_hidden_entity:
 		_draw_hidden_marker(rect.position)
+
+
+func _chest_texture(entity: Dictionary = {}) -> Texture2D:
+	var variant: String = DungeonMap.chest_variant(entity)
+	match variant:
+		"chest_gold":
+			return CHEST_GOLD_TEXTURE
+		"jewelry_table":
+			return JEWELRY_TABLE_TEXTURE
+		"weapon_rack":
+			return WEAPON_RACK_TEXTURE
+		"armor_rack":
+			return ARMOR_RACK_TEXTURE
+		"alchemy_table":
+			return ALCHEMY_TABLE_TEXTURE
+	return CHEST_TEXTURE
 
 
 func _draw_hidden_marker(origin: Vector2) -> void:
@@ -760,11 +781,11 @@ func _draw_trap(origin: Vector2, entity: Dictionary, disarmed: bool) -> void:
 		draw_line(overlay.position + Vector2(8, 36), overlay.position + Vector2(36, 8), Color("#1d2631"), 1.0)
 
 
-func _draw_open_chest(origin: Vector2) -> void:
-	draw_texture_rect(CHEST_TEXTURE, Rect2(origin, Vector2.ONE * TILE_SIZE), false, Color(0.48, 0.48, 0.48, 0.8))
+func _draw_open_chest(origin: Vector2, entity: Dictionary = {}) -> void:
+	draw_texture_rect(_chest_texture(entity), Rect2(origin, Vector2.ONE * TILE_SIZE), false, Color(0.48, 0.48, 0.48, 0.8))
 
 
-func _draw_entity(kind: String, origin: Vector2) -> void:
+func _draw_entity(kind: String, origin: Vector2, entity: Dictionary = {}) -> void:
 	var center := origin + Vector2.ONE * (TILE_SIZE / 2.0)
 	match kind:
 		"door":
@@ -776,7 +797,7 @@ func _draw_entity(kind: String, origin: Vector2) -> void:
 			_draw_entity("chest", origin)
 			draw_circle(origin + Vector2(37, 12), 5, Color("#e8c58a"))
 		"chest":
-			draw_texture_rect(CHEST_TEXTURE, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
+			draw_texture_rect(_chest_texture(entity), Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		"portal":
 			if _portal_texture != null:
 				draw_texture_rect(_portal_texture, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
@@ -965,6 +986,8 @@ func _selected_tool_has_properties() -> bool:
 func _settings_tool_kind() -> String:
 	if selected_tool.begins_with("monster:"):
 		return "monster"
+	if selected_tool.begins_with("chest:"):
+		return "chest"
 	if selected_tool.begins_with("trap:"):
 		var definition: TrapDefinition = TrapCatalog.get_trap(selected_tool.trim_prefix("trap:"))
 		return "trap" if definition.can_attach_to("floor") else ""
@@ -1026,6 +1049,8 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 		modified = map_data.set_terrain(cell.x, cell.y, selected_tool)
 	elif selected_tool == "chest":
 		modified = map_data.place_entity("chest", cell.x, cell.y)
+	elif selected_tool.begins_with("chest:"):
+		modified = map_data.place_entity("chest", cell.x, cell.y, {"variant": selected_tool.trim_prefix("chest:")})
 	elif selected_tool.begins_with("monster:"):
 		var monster_id: String = selected_tool.trim_prefix("monster:")
 		if MonsterCatalog.has(monster_id):

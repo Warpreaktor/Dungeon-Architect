@@ -86,6 +86,10 @@ func _run() -> void:
 	popup.configure("chest", [], 1, false, true, false, {}, [], {"type": "chest", "properties": {"loot_profile_id": "weapon_rack", "loot_level": 2}})
 	assert(popup.reward_level() == 2)
 	assert(popup._loot_preview.text.contains("Оружие") and not popup._loot_preview.text.contains("Золото"))
+	popup.configure("rack", [], 1, false, true, false, {}, [], {"type": "chest", "properties": {"variant": "weapon_rack", "loot_level": 2}})
+	assert(popup.reward_level() == 2)
+	assert((popup.get_node("%Title") as Label).text == "Стойка с оружием")
+	assert(popup._loot_preview.text.contains("Оружие"))
 	popup.configure_exit({"id": "exit", "type": "stairs_down", "properties": {"loot_mode": "random", "loot_level": 3}})
 	assert(popup.reward_level() == 3 and popup._random_check.button_pressed)
 	assert(not popup._hidden_check.visible and popup._loot_preview.visible)
@@ -102,6 +106,9 @@ func _test_editor_history() -> void:
 	storage.configure(editor)
 	root.add_child(editor)
 	await process_frame
+	var buttons: Dictionary = editor.get("_palette_buttons")
+	for tool_id in ["chest:chest_gold", "chest:jewelry_table", "chest:weapon_rack", "chest:armor_rack", "chest:alchemy_table"]:
+		assert(buttons.has(tool_id))
 	var dungeon: DungeonMap = DungeonMap.create_blank(8, 8)
 	assert(dungeon.place_entity("player_spawn", 2, 2))
 	assert(dungeon.place_entity("monster", 3, 2, {"monster_id": "skeleton"}))

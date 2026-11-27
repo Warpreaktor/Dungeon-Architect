@@ -294,6 +294,12 @@ func _verify() -> void:
 		assert(picker.get_global_rect().encloses(picker._party_bar.get_global_rect()))
 		assert(picker.get_global_rect().encloses(picker._start_button.get_global_rect()))
 		assert(root.get_visible_rect().encloses(picker._start_button.get_global_rect()))
+		var adventure: StoneMenuButton = picker._start_button
+		assert(adventure.text == "Приключение")
+		assert(adventure.artwork.resource_path == "res://assets/ui/adventure_button.png")
+		assert(adventure._stone.texture == adventure.artwork)
+		assert(is_equal_approx(adventure._artwork_bounds().size.aspect(), adventure.artwork.get_size().aspect()))
+		assert(adventure.get_theme_font_size("font_size") > 0)
 		for slot in range(GameSession.MAX_PARTY_SIZE):
 			var rect: Rect2 = picker._party_bar.target_rect(slot)
 			assert(root.get_visible_rect().encloses(rect))

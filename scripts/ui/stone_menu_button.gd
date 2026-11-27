@@ -16,6 +16,11 @@ const FRAME_POINTS := [
 	Vector2(0.50, 0.92), Vector2(0.66, 0.87), Vector2(0.82, 0.87)
 ]
 
+@export var artwork: Texture2D = STONE
+@export var fit_caption := false
+@export var frame_points := PackedVector2Array()
+
+var _caption_font_size: int
 var _stone: TextureRect
 var _glow: ShaderMaterial
 var _sparks: CPUParticles2D
@@ -29,9 +34,12 @@ var _ash_scatter := 0.0
 
 
 func _ready() -> void:
+	_caption_font_size = get_theme_font_size("font_size")
 	var empty := StyleBoxEmpty.new()
-	empty.content_margin_left = 22.0
-	empty.content_margin_right = 22.0
+	empty.content_margin_left = 0.0 if fit_caption else 22.0
+	empty.content_margin_right = empty.content_margin_left
+	if fit_caption:
+		clip_text = true
 	empty.content_margin_top = 8.0
 	empty.content_margin_bottom = 8.0
 	for style_name in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
@@ -47,7 +55,7 @@ func _ready() -> void:
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_stone = TextureRect.new()
 	_stone.name = "StoneArtwork"
-	_stone.texture = STONE
+	_stone.texture = artwork
 	_stone.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_stone.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_stone.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -107,9 +115,12 @@ func _sync_visibility() -> void:
 		_sparks.emitting = false
 
 
+func height_for_width(width: float) -> float:
+	return clampf(ceilf(width / artwork.get_size().aspect()), MIN_TOUCH_HEIGHT, MAX_HEIGHT)
+
+
 func _layout_artwork() -> void:
-	var aspect: float = STONE.get_size().aspect()
-	var desired_height: float = clampf(ceilf(size.x / aspect), MIN_TOUCH_HEIGHT, MAX_HEIGHT)
+	var desired_height: float = height_for_width(size.x)
 	if not is_equal_approx(custom_minimum_size.y, desired_height):
 		custom_minimum_size.y = desired_height
 	if size.x <= 0.0 or size.y <= 0.0:
@@ -118,16 +129,32 @@ func _layout_artwork() -> void:
 	var drawn_size: Vector2 = bounds.size
 	var origin: Vector2 = bounds.position
 	_glow.set_shader_parameter("artwork_size", drawn_size)
+	if fit_caption:
+		_fit_caption(drawn_size)
 	if is_instance_valid(_ash_dust):
 		_ash_dust.show_phase(bounds, _ash_burn, _ash_scatter)
 	var points := PackedVector2Array()
-	for point: Vector2 in FRAME_POINTS:
-		points.append(origin + drawn_size * point)
+	if frame_points.is_empty():
+		for point: Vector2 in FRAME_POINTS:
+			points.append(origin + drawn_size * point)
+	else:
+		for point in frame_points:
+			points.append(origin + drawn_size * point)
 	_sparks.emission_points = points
 
 
+func _fit_caption(drawn_size: Vector2) -> void:
+	var font: Font = get_theme_font("font")
+	var natural_width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, _caption_font_size).x
+	var usable_width: float = drawn_size.x * 0.64 - 4.0
+	var scale_factor: float = minf(1.0, minf(usable_width / maxf(1.0, natural_width), drawn_size.y * 0.30 / float(_caption_font_size)))
+	var caption_size: int = maxi(1, floori(_caption_font_size * scale_factor))
+	if get_theme_font_size("font_size") != caption_size:
+		add_theme_font_size_override("font_size", caption_size)
+
+
 func _artwork_bounds() -> Rect2:
-	var drawn_size: Vector2 = STONE.get_size() * minf(size.x / STONE.get_width(), size.y / STONE.get_height())
+	var drawn_size: Vector2 = artwork.get_size() * minf(size.x / artwork.get_width(), size.y / artwork.get_height())
 	return Rect2((size - drawn_size) * 0.5, drawn_size)
 
 
@@ -144,7 +171,7 @@ func set_ash_phase(burn: float, scatter: float) -> void:
 			_ash_dust = ASH_DUST.new()
 			_ash_dust.name = "AshDust"
 			add_child(_ash_dust)
-			_ash_dust.prepare(STONE)
+			_ash_dust.prepare(artwork)
 		_ash_dust.show_phase(_artwork_bounds(), _ash_burn, _ash_scatter)
 	else:
 		_sparks.show()

@@ -7,7 +7,7 @@ signal back_requested
 @onready var _catalog: HeroCatalogGrid = %Catalog
 @onready var _preview: HeroPreviewPanel = %Preview
 @onready var _party_bar: PartySelectionBar = %PartyBar
-@onready var _start_button: Button = %StartPartyButton
+@onready var _start_button: StoneMenuButton = %StartPartyButton
 @onready var _body: BoxContainer = $Body
 @onready var _left_column: VBoxContainer = $Body/LeftColumn
 @onready var _footer_rule: HSeparator = $Body/LeftColumn/FooterRule
@@ -326,8 +326,8 @@ func _adapt_party_row() -> void:
 		width = minf(body_width * left_share, body_width - _preview.get_combined_minimum_size().x)
 		if _left_column.size.x > 0.0:
 			width = minf(width, _left_column.size.x)
-	var start_width: float = clampf(width * 0.16, 96.0, 160.0)
-	_start_button.custom_minimum_size = Vector2(start_width, 52.0)
+	var start_width: float = clampf(width * 0.22, 112.0, 160.0)
+	_start_button.custom_minimum_size = Vector2(start_width, _start_button.height_for_width(start_width))
 	var gap: int = _party_row.get_theme_constant("separation")
 	var slot_gap: int = _party_bar.row.get_theme_constant("separation")
 	var slots: int = GameSession.MAX_PARTY_SIZE

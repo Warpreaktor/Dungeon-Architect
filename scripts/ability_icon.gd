@@ -3,10 +3,18 @@ extends TextureRect
 
 enum State { NORMAL, INACTIVE, SPENT }
 
+const LOCK_OVERLAY: Texture2D = preload("res://assets/ui/lock_overlay.png")
+
 @onready var _background: TextureRect = $Background
 @onready var _frame: TextureRect = $Frame
+@onready var _lock_overlay: TextureRect = $LockOverlay
 
 var _state: State = State.NORMAL
+var _locked: bool = false
+
+
+func _ready() -> void:
+	set_locked(_locked)
 
 
 func configure(art: Texture2D, frame: Texture2D = null, background: Texture2D = null, state: State = State.NORMAL) -> void:
@@ -42,3 +50,12 @@ func set_state(state: State) -> void:
 			modulate = Color(0.48, 0.48, 0.48)
 		_:
 			modulate = Color.WHITE
+
+
+func set_locked(value: bool) -> void:
+	_locked = value
+	if _lock_overlay == null:
+		return
+	_lock_overlay.texture = LOCK_OVERLAY
+	_lock_overlay.visible = value
+	_lock_overlay.modulate = Color(1.0, 1.0, 1.0, 0.96)

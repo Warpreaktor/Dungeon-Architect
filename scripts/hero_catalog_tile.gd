@@ -5,11 +5,14 @@ signal add_requested(hero_id: String)
 
 const GOLD := Color(0.94, 0.76, 0.43)
 const INK := Color(0.07, 0.11, 0.16)
+const LOCK_ICON: Texture2D = preload("res://assets/ui/lock_overlay.png")
 var hero: HeroDefinition
 var portrait: TextureRect
 var _content: BoxContainer
 var _caption: Label
 var _badge: Label
+var _lock_overlay: TextureRect
+var _locked: bool = false
 var _focused: bool = false
 var _party_position: int = -1
 
@@ -47,7 +50,20 @@ func _ready() -> void:
 	_badge.add_theme_constant_override("shadow_offset_y", 1)
 	_badge.position = Vector2(6, 4)
 	add_child(_badge)
+	_lock_overlay = TextureRect.new()
+	_lock_overlay.texture = LOCK_ICON
+	_lock_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_lock_overlay.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_lock_overlay.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_lock_overlay.offset_left = -18
+	_lock_overlay.offset_top = -18
+	_lock_overlay.offset_right = 18
+	_lock_overlay.offset_bottom = 18
+	_lock_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lock_overlay.visible = false
+	add_child(_lock_overlay)
 	set_selection(false, 0)
+	set_locked(_locked)
 
 
 func configure(definition: HeroDefinition) -> void:
@@ -78,6 +94,18 @@ func set_selection(focused: bool, party_position: int) -> void:
 	add_theme_stylebox_override("hover", hover)
 	add_theme_stylebox_override("pressed", hover)
 	_badge.text = "✓ %d" % party_position if party_position > 0 else ""
+
+
+func set_locked(value: bool) -> void:
+	_locked = value
+	if _lock_overlay != null:
+		_lock_overlay.visible = value
+		_lock_overlay.modulate = Color(1.0, 1.0, 1.0, 0.96)
+	if portrait != null:
+		portrait.modulate = Color(0.78, 0.78, 0.78) if value else Color.WHITE
+	if _caption != null:
+		_caption.modulate = Color(0.86, 0.82, 0.78) if value else Color.WHITE
+	tooltip_text = "%s\nНедоступен в этой кампании" % hero.display_name if value and hero != null else (hero.display_name if hero != null else "")
 
 
 func configure_flight() -> void:

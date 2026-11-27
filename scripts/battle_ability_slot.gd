@@ -91,6 +91,12 @@ func configure_recharge(index: int) -> void:
 	_info_button.visible = true
 
 
+func set_locked(value: bool) -> void:
+	_slot_icon.set_locked(value)
+	if value:
+		_info_button.visible = not tooltip_text.is_empty()
+
+
 func set_current(active: bool) -> void:
 	if active:
 		var focus := StyleBoxFlat.new()

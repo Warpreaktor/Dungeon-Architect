@@ -218,6 +218,7 @@ func _refresh() -> void:
 		var side: float = 60.0 if panel_width < 440.0 else (88.0 if panel_width < 860.0 else 112.0)
 		slot.custom_minimum_size = Vector2(side, side)
 		slot.configure(index, ability, selectable, _actor)
+		slot.set_locked(locked)
 		if AbilityCatalog.is_automatic_equipment_ability(ability.ability_id):
 			slot.set_slot_number_visible(false)
 		var selected: bool = active.has(ability.ability_id) or MonsterWeaponStrike.is_weapon_strike(ability.ability_id)

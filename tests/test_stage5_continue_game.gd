@@ -28,23 +28,28 @@ func _run() -> void:
 	menu._save_store = store
 	menu._campaign_library = CampaignLibrary.new(_root_dir.path_join("campaigns"))
 	root.add_child(menu)
+	await _wait_transition(menu)
 	await process_frame
 	assert(menu._home.visible and not menu._play_actions.visible)
-	assert(menu._home.get_child_count() == 2)
+	assert(menu.get_node("%AudioSettingsButton") is StoneMenuButton)
 	assert(not menu._continue_game_button.is_visible_in_tree())
 	var editor_requests: Array[bool] = []
 	menu.editor_requested.connect(func() -> void: editor_requests.append(true))
 	(menu.get_node("%EditorButton") as Button).pressed.emit()
 	assert(editor_requests.size() == 1)
 	(menu.get_node("%PlayButton") as Button).pressed.emit()
+	await _wait_transition(menu)
 	assert(not menu._home.visible and menu._play_actions.visible)
 	assert(not menu._continue_game_button.visible)
 	(menu.get_node("%CampaignButton") as Button).pressed.emit()
+	await _wait_transition(menu)
 	assert(menu._library.visible and not menu._play_actions.visible)
 	assert(menu._library_mode == MainMenu.LIBRARY_CAMPAIGNS)
 	(menu.get_node("%BackButton") as Button).pressed.emit()
+	await _wait_transition(menu)
 	assert(menu._play_actions.visible and not menu._library.visible)
 	(menu.get_node("%PersonalMapsButton") as Button).pressed.emit()
+	await _wait_transition(menu)
 	assert(menu._library.visible and not menu._play_actions.visible)
 	assert(menu._library_mode == MainMenu.LIBRARY_PERSONAL)
 	assert(menu._map_list.item_count == 1)
@@ -55,8 +60,10 @@ func _run() -> void:
 	assert(menu._library.visible and not menu._hero_selection.visible)
 	assert(menu.get_node("SafeArea").visible)
 	(menu.get_node("%BackButton") as Button).pressed.emit()
+	await _wait_transition(menu)
 	assert(menu._play_actions.visible and not menu._library.visible)
 	(menu.get_node("%PlayBackButton") as Button).pressed.emit()
+	await _wait_transition(menu)
 	assert(menu._home.visible and not menu._play_actions.visible)
 	var session: GameSession = GameSession.start_for_party(dungeon, ["petushan", "volcha"])
 	assert(session != null)
@@ -65,6 +72,7 @@ func _run() -> void:
 	assert(session._receive_item("shield", 2, [4, 12]) == 2)
 	assert(store.save_game(session, maps))
 	(menu.get_node("%PlayButton") as Button).pressed.emit()
+	await _wait_transition(menu)
 	assert(menu._continue_game_button.visible and not menu._continue_game_button.disabled)
 	var resumed: Array[GameSession] = []
 	menu.continue_game_requested.connect(func(game: GameSession) -> void: resumed.append(game))
@@ -134,9 +142,11 @@ func _run() -> void:
 	backup_menu._maps_directory = maps_dir
 	backup_menu._save_store = store
 	root.add_child(backup_menu)
+	await _wait_transition(backup_menu)
 	await process_frame
 	assert(not backup_menu._continue_game_button.is_visible_in_tree())
 	(backup_menu.get_node("%PlayButton") as Button).pressed.emit()
+	await _wait_transition(backup_menu)
 	assert(backup_menu._continue_game_button.is_visible_in_tree())
 	backup_menu.queue_free()
 	await process_frame
@@ -148,8 +158,10 @@ func _run() -> void:
 	invalid_menu._maps_directory = maps_dir
 	invalid_menu._save_store = store
 	root.add_child(invalid_menu)
+	await _wait_transition(invalid_menu)
 	await process_frame
 	(invalid_menu.get_node("%PlayButton") as Button).pressed.emit()
+	await _wait_transition(invalid_menu)
 	assert(not invalid_menu._continue_game_button.is_visible_in_tree())
 	invalid_menu.queue_free()
 	await process_frame
@@ -159,6 +171,11 @@ func _run() -> void:
 	DirAccess.remove_absolute(_root_dir)
 	print("Stage 5: main-menu continuation, in-game save, test isolation, backup and unchanged map OK")
 	quit()
+
+
+func _wait_transition(menu: MainMenu) -> void:
+	if menu._transitioning:
+		await menu.transition_finished
 
 
 func _cleanup(directory: String, names: Array[String]) -> void:

@@ -9,7 +9,11 @@ func _run() -> void:
 	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
 	var menu: MainMenu = load("res://scenes/main_menu.tscn").instantiate() as MainMenu
 	root.add_child(menu)
+	assert(menu._transitioning and menu._curtain.visible)
+	assert(is_equal_approx(menu._curtain.color.a, 1.0))
+	await menu.transition_finished
 	await process_frame
+	assert(not menu._curtain.visible and not menu._transitioning)
 	var artwork: Node2D = menu.get_node("Artwork")
 	var background: Sprite2D = artwork.get_node("Background")
 	var ambience: Node2D = artwork.get_node("Ambience")

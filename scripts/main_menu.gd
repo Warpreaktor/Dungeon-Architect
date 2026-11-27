@@ -1,10 +1,12 @@
 class_name MainMenu
 extends Control
 
+signal transition_finished
 signal editor_requested
 signal game_requested(data: DungeonMap, hero_ids: Array[String], campaign: CampaignDefinition)
 signal continue_game_requested(session: GameSession)
 
+@onready var _curtain: ColorRect = $TransitionCurtain
 @onready var _artwork: Node2D = $Artwork
 @onready var _background: Sprite2D = $Artwork/Background
 @onready var _veil: ColorRect = $Artwork/Veil
@@ -24,6 +26,10 @@ signal continue_game_requested(session: GameSession)
 @onready var _hero_selection: HeroSelection = %HeroSelection
 @onready var _continue_game_button: Button = %ContinueGameButton
 @onready var _home_error: Label = %HomeError
+const INTRO_FADE_SECONDS := 1.1
+const SCREEN_FADE_SECONDS := 0.45
+const ASH_SECONDS := 0.88
+const ASH_STAGGER := 0.075
 const LIBRARY_CAMPAIGNS := 0
 const LIBRARY_PERSONAL := 1
 const TUNNEL_FOG_BOUNDS := Rect2(0.49, 0.46, 0.34, 0.32)
@@ -51,18 +57,19 @@ var _thumbnails: Array[Texture2D] = []
 var _panel_style := StyleBoxFlat.new()
 var _menu_style := StyleBoxEmpty.new()
 var _audio_dialog: AcceptDialog
+var _transitioning := false
 
 
 func _ready() -> void:
-	%PlayButton.pressed.connect(_open_play_menu)
+	%PlayButton.pressed.connect(_animate_play_menu)
 	%AudioSettingsButton.pressed.connect(_open_audio_settings)
 	_build_audio_settings()
-	%CampaignButton.pressed.connect(func() -> void: _open_library(LIBRARY_CAMPAIGNS))
-	%PlayBackButton.pressed.connect(_back_to_home)
-	%PersonalMapsButton.pressed.connect(func() -> void: _open_library(LIBRARY_PERSONAL))
+	%CampaignButton.pressed.connect(func() -> void: _animate_library(LIBRARY_CAMPAIGNS))
+	%PlayBackButton.pressed.connect(_animate_home_menu)
+	%PersonalMapsButton.pressed.connect(func() -> void: _animate_library(LIBRARY_PERSONAL))
 	_continue_game_button.pressed.connect(_continue_saved_game)
-	%EditorButton.pressed.connect(func() -> void: editor_requested.emit())
-	%BackButton.pressed.connect(_open_play_menu)
+	%EditorButton.pressed.connect(_request_editor)
+	%BackButton.pressed.connect(_animate_library_back)
 	_start_button.pressed.connect(_start_selected)
 	_map_list.item_selected.connect(_on_map_selected)
 	_map_list.item_activated.connect(_on_map_activated)
@@ -75,6 +82,116 @@ func _ready() -> void:
 	resized.connect(_resize_layout)
 	_resize_layout()
 	%PlayButton.grab_focus()
+	_intro_fade()
+
+
+func _input(_event: InputEvent) -> void:
+	if _transitioning and is_visible_in_tree():
+		get_viewport().set_input_as_handled()
+
+
+func _begin_transition(opacity: float) -> void:
+	_transitioning = true
+	_curtain.color.a = opacity
+	_curtain.show()
+
+
+func _end_transition() -> void:
+	_curtain.hide()
+	_transitioning = false
+	transition_finished.emit()
+
+
+func _fade_to(opacity: float, duration: float) -> void:
+	var tween := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(_curtain, "color:a", opacity, duration)
+	await tween.finished
+
+
+func _intro_fade() -> void:
+	_begin_transition(1.0)
+	await _fade_to(0.0, INTRO_FADE_SECONDS)
+	_end_transition()
+
+
+func _visible_stone_buttons(container: Control) -> Array[StoneMenuButton]:
+	var buttons: Array[StoneMenuButton] = []
+	for child in container.get_children():
+		if child is StoneMenuButton and child.visible:
+			buttons.append(child)
+	return buttons
+
+
+func _ash_phase(buttons: Array[StoneMenuButton], elapsed: float, reverse: bool) -> void:
+	for index in range(buttons.size()):
+		var phase: float = clampf((elapsed - index * ASH_STAGGER) / ASH_SECONDS, 0.0, 1.0)
+		if reverse:
+			phase = 1.0 - phase
+		buttons[index].set_ash_phase(minf(phase / 0.64, 1.0), smoothstep(0.48, 1.0, phase))
+
+
+func _animate_ash(buttons: Array[StoneMenuButton], reverse: bool) -> void:
+	if buttons.is_empty():
+		return
+	var duration: float = ASH_SECONDS + (buttons.size() - 1) * ASH_STAGGER
+	_ash_phase(buttons, 0.0, reverse)
+	var tween := create_tween()
+	tween.tween_method(func(elapsed: float) -> void: _ash_phase(buttons, elapsed, reverse), 0.0, duration, duration)
+	await tween.finished
+
+
+func _swap_action_menu(outgoing: VBoxContainer, incoming: VBoxContainer, change_page: Callable) -> void:
+	_begin_transition(0.0)
+	var old_buttons: Array[StoneMenuButton] = _visible_stone_buttons(outgoing)
+	await _animate_ash(old_buttons, false)
+	change_page.call()
+	for button in old_buttons:
+		button.set_ash_phase(0.0, 0.0)
+	var new_buttons: Array[StoneMenuButton] = _visible_stone_buttons(incoming)
+	_ash_phase(new_buttons, 0.0, true)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await _animate_ash(new_buttons, true)
+	_end_transition()
+
+
+func _animate_play_menu() -> void:
+	if _transitioning or not _home.visible:
+		return
+	await _swap_action_menu(_home, _play_actions, _open_play_menu)
+
+
+func _animate_home_menu() -> void:
+	if _transitioning or not _play_actions.visible:
+		return
+	await _swap_action_menu(_play_actions, _home, _back_to_home)
+
+
+func _fade_page(change_page: Callable) -> void:
+	_begin_transition(0.0)
+	await _fade_to(1.0, SCREEN_FADE_SECONDS)
+	change_page.call()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await _fade_to(0.0, SCREEN_FADE_SECONDS)
+	_end_transition()
+
+
+func _animate_library(mode: int) -> void:
+	if _transitioning or not _play_actions.visible:
+		return
+	await _fade_page(_open_library.bind(mode))
+
+
+func _animate_library_back() -> void:
+	if _transitioning or not _library.visible:
+		return
+	await _fade_page(_open_play_menu)
+
+
+func _request_editor() -> void:
+	if not _transitioning:
+		editor_requested.emit()
 
 
 func _build_audio_settings() -> void:
@@ -92,6 +209,8 @@ func _build_audio_settings() -> void:
 
 
 func _open_audio_settings() -> void:
+	if _transitioning:
+		return
 	_audio_dialog.popup_centered_clamped(Vector2i(360, 430), 0.94)
 
 
@@ -262,6 +381,8 @@ func _refresh_continue_action() -> void:
 
 
 func _continue_saved_game() -> void:
+	if _transitioning:
+		return
 	_home_error.hide()
 	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
 	var session: GameSession = _save_store.load_game(_maps_by_id)
@@ -341,6 +462,8 @@ func _on_map_activated(_index: int) -> void:
 
 
 func _start_selected() -> void:
+	if _transitioning:
+		return
 	var selection: PackedInt32Array = _map_list.get_selected_items()
 	if selection.is_empty():
 		return

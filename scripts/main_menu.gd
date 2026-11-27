@@ -11,7 +11,7 @@ signal continue_game_requested(session: GameSession)
 @onready var _ambience: Node2D = $Artwork/Ambience
 @onready var _tunnel_fog: ColorRect = $Artwork/Ambience/TunnelFog
 @onready var _safe_area: MarginContainer = $SafeArea
-@onready var _title: Label = %Title
+@onready var _logo: TextureRect = %Logo
 @onready var _card: PanelContainer = %Card
 @onready var _home: VBoxContainer = %HomeActions
 @onready var _play_actions: VBoxContainer = %PlayActions
@@ -48,6 +48,8 @@ var _maps_directory: String = SavedMapLibrary.DIRECTORY
 var _maps_by_id: Dictionary = {}
 
 var _thumbnails: Array[Texture2D] = []
+var _panel_style := StyleBoxFlat.new()
+var _menu_style := StyleBoxEmpty.new()
 
 
 func _ready() -> void:
@@ -64,6 +66,7 @@ func _ready() -> void:
 	_hero_selection.party_chosen.connect(_launch_selected_party)
 	_hero_selection.back_requested.connect(_return_to_library)
 	_hero_selection.visibility_changed.connect(_update_selection_screen)
+	_setup_card_styles()
 	_update_selection_screen()
 	get_viewport().size_changed.connect(_resize_layout)
 	resized.connect(_resize_layout)
@@ -73,6 +76,30 @@ func _ready() -> void:
 
 func _update_selection_screen() -> void:
 	$SafeArea.visible = not _hero_selection.visible
+	_apply_menu_chrome()
+
+
+func _setup_card_styles() -> void:
+	_panel_style.bg_color = Color(0.090, 0.132, 0.18, 0.84)
+	_panel_style.border_width_left = 2
+	_panel_style.border_width_top = 2
+	_panel_style.border_width_right = 2
+	_panel_style.border_width_bottom = 2
+	_panel_style.border_color = Color(0.67, 0.51, 0.29, 1)
+	_panel_style.corner_radius_top_left = 12
+	_panel_style.corner_radius_top_right = 12
+	_panel_style.corner_radius_bottom_right = 12
+	_panel_style.corner_radius_bottom_left = 12
+	_panel_style.shadow_color = Color(0, 0, 0, 0.65)
+	_panel_style.shadow_size = 16
+
+
+func _apply_menu_chrome() -> void:
+	if not is_node_ready():
+		return
+	var menu_mode: bool = _home.visible or _play_actions.visible
+	_logo.visible = menu_mode
+	_card.add_theme_stylebox_override("panel", _menu_style if menu_mode else _panel_style)
 
 
 func _resize_layout() -> void:
@@ -80,20 +107,23 @@ func _resize_layout() -> void:
 		return
 	_layout_ambience()
 	var available: Vector2 = size
-	var side_menu: bool = (_home.visible or _play_actions.visible) and available.x >= 640.0 and available.aspect() >= 1.3
+	var menu_mode: bool = _home.visible or _play_actions.visible
+	var side_menu: bool = menu_mode and available.x >= 640.0 and available.aspect() >= 1.3
 	var margin: int = _safe_area.get_theme_constant("margin_left")
 	var right_margin: int = margin
 	var card_width: float = minf(780.0, maxf(260.0, available.x - 48.0))
-	var title_size: int = 28
+	if menu_mode:
+		card_width = minf(card_width, 560.0)
 	if side_menu:
 		var artwork_width: float = _background.texture.get_width() * _artwork.scale.x
-		card_width = clampf(artwork_width * 0.32, 284.0, 400.0)
-		title_size = clampi(roundi(artwork_width * 0.026), 19, 28)
-		var center_x: float = _artwork.position.x + artwork_width * 0.28
+		card_width = clampf(artwork_width * 0.37, 360.0, 560.0)
+		var center_x: float = _artwork.position.x + artwork_width * 0.23
 		right_margin = maxi(margin, roundi(available.x + margin - 2.0 * center_x))
 	_safe_area.add_theme_constant_override("margin_right", right_margin)
-	_title.add_theme_font_size_override("font_size", title_size)
 	_card.custom_minimum_size.x = card_width
+	var logo_width: float = clampf(card_width * 0.98, 320.0, 700.0)
+	var logo_height: float = clampf(logo_width / 2.98, 90.0, 235.0)
+	_logo.custom_minimum_size = Vector2(logo_width, logo_height)
 	_map_list.custom_minimum_size.y = clampf(available.y * 0.41, 120.0, 320.0)
 	_map_list.max_columns = clampi(floori((_card.custom_minimum_size.x - 48.0) / 215.0), 1, 3)
 
@@ -139,6 +169,7 @@ func _open_library(mode: int = LIBRARY_CAMPAIGNS) -> void:
 	_hero_selection.visible = false
 	_error_message.visible = false
 	_load_saved_maps()
+	_apply_menu_chrome()
 	_resize_layout()
 	if _start_button.disabled:
 		%BackButton.grab_focus()
@@ -155,6 +186,7 @@ func _open_play_menu() -> void:
 	_home_error.hide()
 	_refresh_continue_action()
 	_play_actions.show()
+	_apply_menu_chrome()
 	_resize_layout()
 	if _continue_game_button.visible:
 		_continue_game_button.grab_focus()
@@ -165,6 +197,7 @@ func _open_play_menu() -> void:
 func _back_to_home() -> void:
 	_play_actions.hide()
 	_home.show()
+	_apply_menu_chrome()
 	_resize_layout()
 	%PlayButton.grab_focus()
 

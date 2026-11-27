@@ -142,7 +142,7 @@ layout_mode = 2
 [node name="Card" type="PanelContainer" parent="SafeArea/Center"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+theme_override_styles/panel = SubResource("StyleBoxEmpty_card")
 size_flags_horizontal = 0
 
 [node name="Padding" type="MarginContainer" parent="SafeArea/Center/Card"]
@@ -156,19 +156,14 @@ theme_override_constants/margin_bottom = 20
 layout_mode = 2
 theme_override_constants/separation = 17
 
-[node name="Title" type="Label" parent="SafeArea/Center/Card/Padding/Content"]
+[node name="Logo" type="TextureRect" parent="SafeArea/Center/Card/Padding/Content"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(520, 140)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.79, 0.54, 1)
-theme_override_font_sizes/font_size = 28
-text = "DUNGEON ARCHITECT"
-horizontal_alignment = 1
-
-[node name="Rule" type="ColorRect" parent="SafeArea/Center/Card/Padding/Content"]
-custom_minimum_size = Vector2(0, 2)
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.72, 0.53, 0.28, 1)
+size_flags_horizontal = 4
+texture = ExtResource("10_logo")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="HomeActions" type="VBoxContainer" parent="SafeArea/Center/Card/Padding/Content"]
 unique_name_in_owner = true

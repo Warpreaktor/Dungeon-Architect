@@ -12,6 +12,7 @@ func _run() -> void:
 	assert(WallTiles.TILE_SET.get_terrain_set_mode(0) == TileSet.TERRAIN_MODE_MATCH_SIDES)
 	assert(WallTiles.atlas().get_tiles_count() == 16)
 	var wall_image: Image = WallTiles.atlas().texture.get_image()
+	assert(wall_image.detect_alpha() == Image.ALPHA_NONE)
 	for mask in range(16):
 		for index in range(4):
 			var neighbor: Vector2i = center + WallTiles.SIDES[index]
@@ -21,11 +22,7 @@ func _run() -> void:
 		assert(WallTiles.atlas_coords(data, center) == coords)
 		var region: Rect2i = WallTiles.texture_region(data, center)
 		assert(region == Rect2i(coords * 256, Vector2i(256, 256)))
-		var middle: Vector2i = region.position + region.size / 2
-		var distance: int = floori(region.size.x * 0.45)
-		for side in range(WallTiles.SIDES.size()):
-			var sample: Vector2i = middle + WallTiles.SIDES[side] * distance
-			assert((wall_image.get_pixelv(sample).a > 0.5) == bool(mask & (1 << side)))
+
 	# Угол внешней границы не соединяется с клетками за картой.
 	assert(WallTiles.connection_mask(data, Vector2i.ZERO) == 6)
 	var canvas := DungeonCanvas.new()

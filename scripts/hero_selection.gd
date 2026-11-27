@@ -12,7 +12,7 @@ signal back_requested
 @onready var _left_column: VBoxContainer = $Body/LeftColumn
 @onready var _footer_rule: HSeparator = $Body/LeftColumn/FooterRule
 @onready var _party_row: HBoxContainer = $Body/LeftColumn/PartyRow
-@onready var _actions: HBoxContainer = $Actions
+@onready var _back_button: StoneMenuButton = %BackButton
 
 var _selected_ids: Array[String] = []
 var _heroes: Dictionary = {}
@@ -56,7 +56,7 @@ func _ready() -> void:
 	_preview.catalog_requested.connect(_show_catalog)
 	_party_bar.member_focused.connect(_focus_hero)
 	_start_button.pressed.connect(_confirm_party)
-	%BackButton.pressed.connect(func() -> void: back_requested.emit())
+	_back_button.pressed.connect(func() -> void: back_requested.emit())
 	resized.connect(_adapt_layout)
 	_left_column.resized.connect(_adapt_party_row)
 	get_viewport().size_changed.connect(_adapt_layout)
@@ -308,8 +308,8 @@ func _place_party_row(narrow: bool) -> void:
 	_footer_rule.reparent(destination, false)
 	_party_row.reparent(destination, false)
 	if narrow:
-		move_child(_footer_rule, _actions.get_index())
-		move_child(_party_row, _actions.get_index())
+		move_child(_footer_rule, _body.get_index() + 1)
+		move_child(_party_row, _footer_rule.get_index() + 1)
 
 
 func _available_width() -> float:
@@ -328,6 +328,7 @@ func _adapt_party_row() -> void:
 			width = minf(width, _left_column.size.x)
 	var start_width: float = clampf(width * 0.22, 112.0, 160.0)
 	_start_button.custom_minimum_size = Vector2(start_width, _start_button.height_for_width(start_width))
+	_back_button.custom_minimum_size = Vector2(start_width, _back_button.height_for_width(start_width))
 	var gap: int = _party_row.get_theme_constant("separation")
 	var slot_gap: int = _party_bar.row.get_theme_constant("separation")
 	var slots: int = GameSession.MAX_PARTY_SIZE

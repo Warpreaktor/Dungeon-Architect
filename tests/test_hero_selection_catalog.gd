@@ -300,6 +300,14 @@ func _verify() -> void:
 		assert(adventure._stone.texture == adventure.artwork)
 		assert(is_equal_approx(adventure._artwork_bounds().size.aspect(), adventure.artwork.get_size().aspect()))
 		assert(adventure.get_theme_font_size("font_size") > 0)
+		var back: StoneMenuButton = picker._back_button
+		assert(back.text == "Назад" and not back.disabled)
+		assert(back.artwork == StoneMenuButton.STONE and back._stone.texture == back.artwork)
+		assert(back.is_visible_in_tree() and root.get_visible_rect().encloses(back.get_global_rect()))
+		assert(back.get_parent() == adventure.get_parent())
+		assert(back.get_global_rect().position.y >= adventure.get_global_rect().end.y)
+		assert(is_equal_approx(back.get_global_rect().position.x, adventure.get_global_rect().position.x))
+		assert(is_equal_approx(back.size.x, adventure.size.x))
 		for slot in range(GameSession.MAX_PARTY_SIZE):
 			var rect: Rect2 = picker._party_bar.target_rect(slot)
 			assert(root.get_visible_rect().encloses(rect))
@@ -330,6 +338,7 @@ func _verify() -> void:
 			await _settle()
 			assert(not picker._catalog.visible and picker._preview.visible)
 			assert(picker._party_bar.is_visible_in_tree() and picker._start_button.is_visible_in_tree())
+			assert(picker._back_button.is_visible_in_tree())
 		else:
 			assert(picker._catalog.visible and picker._preview.visible)
 			assert(picker._body.vertical == (picker._available_width() < 740.0))
@@ -340,6 +349,10 @@ func _verify() -> void:
 	picker.reset_selection()
 	assert(picker.selected_party().is_empty() and picker._start_button.disabled)
 	assert(picker._catalog.search.text.is_empty())
+	var back_events: Array[bool] = []
+	picker.back_requested.connect(func() -> void: back_events.append(true))
+	picker._back_button.pressed.emit()
+	assert(back_events == [true])
 	picker.hide()
 	assert(picker._drag_layer.card == null and picker._transfer_id.is_empty())
 	assert(picker._drag_layer._dust == null and picker._drag_layer._group == null)

@@ -95,11 +95,15 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="StartPartyButton" type="Button" parent="Body/LeftColumn/PartyRow"]
+[node name="Actions" type="VBoxContainer" parent="Body/LeftColumn/PartyRow"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 6
+
+[node name="StartPartyButton" type="Button" parent="Body/LeftColumn/PartyRow/Actions"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(112, 62)
 layout_mode = 2
-size_flags_vertical = 4
 disabled = true
 theme_override_fonts/font = SubResource("SystemFont_adventure")
 theme_override_font_sizes/font_size = 22
@@ -108,6 +112,15 @@ script = ExtResource("6_stone_button")
 artwork = ExtResource("7_adventure")
 fit_caption = true
 frame_points = PackedVector2Array(0.15, 0.17, 0.24, 0.17, 0.34, 0.17, 0.43, 0.16, 0.5, 0.06, 0.57, 0.16, 0.66, 0.17, 0.76, 0.17, 0.85, 0.17, 0.04, 0.5, 0.96, 0.5, 0.15, 0.83, 0.34, 0.83, 0.5, 0.94, 0.66, 0.83, 0.85, 0.83)
+
+[node name="BackButton" type="Button" parent="Body/LeftColumn/PartyRow/Actions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(112, 48)
+layout_mode = 2
+theme_override_fonts/font = SubResource("SystemFont_adventure")
+theme_override_font_sizes/font_size = 15
+text = "Назад"
+script = ExtResource("6_stone_button")
 
 [node name="Preview" type="PanelContainer" parent="Body"]
 unique_name_in_owner = true
@@ -170,18 +183,3 @@ visible = false
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "К каталогу"
-
-[node name="Actions" type="HBoxContainer" parent="."]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="BackButton" type="Button" parent="Actions"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 44)
-layout_mode = 2
-text = "Назад"
-
-[node name="Spacer" type="Control" parent="Actions"]
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2

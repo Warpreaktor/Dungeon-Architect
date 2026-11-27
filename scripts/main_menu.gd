@@ -25,12 +25,14 @@ signal continue_game_requested(session: GameSession)
 @onready var _home_error: Label = %HomeError
 const LIBRARY_CAMPAIGNS := 0
 const LIBRARY_PERSONAL := 1
-const CAMPFIRE_ANCHOR := Vector2(0.427, 0.823)
+const CAMPFIRE_ANCHOR := Vector2(0.44258, 0.72051)
 const FIRE_ANCHORS := {
 	"Campfire": CAMPFIRE_ANCHOR,
-	"TorchLeft": Vector2(0.562, 0.400),
-	"TorchRight": Vector2(0.867, 0.362),
-	"Lantern": Vector2(0.038, 0.546)
+	"TorchLeft": Vector2(0.56400, 0.36663),
+	"TorchRight": Vector2(0.80622, 0.34431),
+	"TunnelTorchNear": Vector2(0.68062, 0.44633),
+	"TunnelTorchFar": Vector2(0.71651, 0.47715),
+	"Lantern": Vector2(0.11722, 0.47184)
 }
 
 var _library_mode: int = LIBRARY_CAMPAIGNS
@@ -100,9 +102,19 @@ func _layout_ambience() -> void:
 	var texture_size: Vector2 = _background.texture.get_size()
 	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
 		return
-	var fit_scale: float = minf(size.x / texture_size.x, size.y / texture_size.y)
-	_artwork.scale = Vector2.ONE * fit_scale
-	_artwork.position = (size - texture_size * fit_scale) * 0.5
+	var fill_scale: float = maxf(size.x / texture_size.x, size.y / texture_size.y)
+	var drawn_size: Vector2 = texture_size * fill_scale
+	_artwork.scale = Vector2.ONE * fill_scale
+	var offset: Vector2 = (size - drawn_size) * 0.5
+	var lantern_anchor: Vector2 = FIRE_ANCHORS["Lantern"]
+	var torch_anchor: Vector2 = FIRE_ANCHORS["TorchRight"]
+	var safe_left: float = maxf(0.0, lantern_anchor.x - 0.025) * drawn_size.x
+	var safe_right: float = minf(1.0, torch_anchor.x + 0.025) * drawn_size.x
+	var min_offset: float = maxf(size.x - drawn_size.x, -safe_left)
+	var max_offset: float = minf(0.0, size.x - safe_right)
+	if min_offset <= max_offset:
+		offset.x = clampf(offset.x, min_offset, max_offset)
+	_artwork.position = offset
 	_veil.size = texture_size
 	for fire_name in FIRE_ANCHORS:
 		var fire: FireEffect = _ambience.get_node(NodePath(str(fire_name))) as FireEffect

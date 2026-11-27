@@ -81,7 +81,7 @@ unique_name_in_owner = true
 
 [node name="Campfire" parent="Artwork/Ambience" instance=ExtResource("6_fire")]
 unique_name_in_owner = true
-flame_size = Vector2(72, 88)
+flame_size = Vector2(82, 64)
 glow_size = Vector2(180, 118)
 ember_amount = 24
 smoke_amount = 8
@@ -116,6 +116,28 @@ intensity = 0.9
 flicker_speed = 0.95
 flame_speed = 0.8
 flame_sway = 0.09
+
+[node name="TunnelTorchNear" parent="Artwork/Ambience" instance=ExtResource("6_fire")]
+scale = Vector2(0.22, 0.22)
+flame_size = Vector2(54, 88)
+glow_size = Vector2(210, 180)
+ember_amount = 1
+smoke_amount = 1
+intensity = 0.72
+flicker_speed = 1.18
+flame_speed = 0.96
+flame_sway = 0.12
+
+[node name="TunnelTorchFar" parent="Artwork/Ambience" instance=ExtResource("6_fire")]
+scale = Vector2(0.15, 0.15)
+flame_size = Vector2(52, 84)
+glow_size = Vector2(170, 145)
+ember_amount = 0
+smoke_amount = 0
+intensity = 0.56
+flicker_speed = 1.05
+flame_speed = 0.84
+flame_sway = 0.10
 
 [node name="SafeArea" type="MarginContainer" parent="."]
 layout_mode = 1

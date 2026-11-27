@@ -17,8 +17,10 @@ func _run() -> void:
 	var torch_left: FireEffect = ambience.get_node("TorchLeft")
 	var torch_right: FireEffect = ambience.get_node("TorchRight")
 	var lantern: FireEffect = ambience.get_node("Lantern")
-	var fires: Array[FireEffect] = [campfire, torch_left, torch_right, lantern]
-	var anchors: Array[Vector2] = [Vector2(0.427, 0.823), Vector2(0.562, 0.400), Vector2(0.867, 0.362), Vector2(0.038, 0.546)]
+	var tunnel_near: FireEffect = ambience.get_node("TunnelTorchNear")
+	var tunnel_far: FireEffect = ambience.get_node("TunnelTorchFar")
+	var fires: Array[FireEffect] = [campfire, torch_left, torch_right, lantern, tunnel_near, tunnel_far]
+	var anchors: Array[Vector2] = [Vector2(0.44258, 0.72051), Vector2(0.56400, 0.36663), Vector2(0.80622, 0.34431), Vector2(0.11722, 0.47184), Vector2(0.68062, 0.44633), Vector2(0.71651, 0.47715)]
 	assert(ambience.get_child_count() == fires.size())
 	assert(lantern._embers == null and lantern._smoke == null)
 	assert(torch_left.ember_amount < campfire.ember_amount and torch_left.smoke_amount < campfire.smoke_amount)
@@ -29,12 +31,15 @@ func _run() -> void:
 		root.size = dimensions
 		await process_frame
 		await process_frame
-		var expected_scale: float = minf(menu.size.x / texture_size.x, menu.size.y / texture_size.y)
+		var expected_scale: float = maxf(menu.size.x / texture_size.x, menu.size.y / texture_size.y)
 		assert(artwork.scale.is_equal_approx(Vector2.ONE * expected_scale))
-		assert(artwork.position.is_equal_approx((menu.size - texture_size * expected_scale) * 0.5))
-		assert(artwork.position.x >= -0.01 and artwork.position.y >= -0.01)
+		assert(is_equal_approx(artwork.position.y, (menu.size.y - texture_size.y * expected_scale) * 0.5))
+		assert(artwork.position.x <= 0.01 and artwork.position.y <= 0.01)
 		var end: Vector2 = artwork.position + texture_size * expected_scale
-		assert(end.x <= menu.size.x + 0.01 and end.y <= menu.size.y + 0.01)
+		assert(end.x >= menu.size.x - 0.01 and end.y >= menu.size.y - 0.01)
+		if menu.size.aspect() >= 4.0 / 3.0 and menu.size.aspect() <= 2.4:
+			for fire in fires:
+				assert(Rect2(Vector2.ZERO, menu.size).has_point(fire.global_position))
 		for index in range(fires.size()):
 			var fire: FireEffect = fires[index]
 			var anchor: Vector2 = background.to_global(texture_size * anchors[index])
@@ -53,5 +58,5 @@ func _run() -> void:
 			assert(not card.get_global_rect().has_point(lantern.global_position))
 	menu.queue_free()
 	await process_frame
-	print("Main menu artwork: full image, independent fire sources and adaptive layout OK")
+	print("Main menu artwork: full viewport coverage, independent fire sources and adaptive layout OK")
 	quit()

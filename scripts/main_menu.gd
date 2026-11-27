@@ -23,8 +23,16 @@ signal continue_game_requested(session: GameSession)
 @onready var _home: VBoxContainer = %HomeActions
 @onready var _play_actions: VBoxContainer = %PlayActions
 @onready var _library: VBoxContainer = %Library
-@onready var _map_list: ItemList = %MapList
 @onready var _library_title: Label = %LibraryTitle
+@onready var _library_layout: BoxContainer = %LibraryBody
+@onready var _entry_list_title: Label = %EntryListTitle
+@onready var _entry_scroll: ScrollContainer = %EntryScroll
+@onready var _entry_list: VBoxContainer = %EntryList
+@onready var _preview_title: Label = %PreviewTitle
+@onready var _preview_frame: PanelContainer = %PreviewFrame
+@onready var _preview_image: TextureRect = %PreviewImage
+@onready var _preview_name: Label = %PreviewName
+@onready var _preview_meta: Label = %PreviewMeta
 @onready var _no_maps: Label = %NoMaps
 @onready var _error_message: Label = %ErrorMessage
 @onready var _start_button: Button = %StartButton
@@ -73,8 +81,16 @@ var _maps_directory: String = SavedMapLibrary.DIRECTORY
 var _maps_by_id: Dictionary = {}
 
 var _thumbnails: Array[Texture2D] = []
+var _library_entries: Array[Button] = []
+var _selected_library_index: int = -1
+var _entry_group: ButtonGroup = ButtonGroup.new()
 var _panel_style := StyleBoxFlat.new()
 var _menu_style := StyleBoxEmpty.new()
+var _preview_style := StyleBoxFlat.new()
+var _entry_style := StyleBoxFlat.new()
+var _entry_hover_style := StyleBoxFlat.new()
+var _entry_selected_style := StyleBoxFlat.new()
+var _entry_focus_style := StyleBoxFlat.new()
 var _audio_dialog: AcceptDialog
 var _transitioning := false
 
@@ -90,12 +106,12 @@ func _ready() -> void:
 	%EditorButton.pressed.connect(_request_editor)
 	%BackButton.pressed.connect(_animate_library_back)
 	_start_button.pressed.connect(_start_selected)
-	_map_list.item_selected.connect(_on_map_selected)
-	_map_list.item_activated.connect(_on_map_activated)
+	_entry_group.allow_unpress = false
 	_hero_selection.party_chosen.connect(_launch_selected_party)
 	_hero_selection.back_requested.connect(_return_to_library)
 	_hero_selection.visibility_changed.connect(_update_selection_screen)
 	_setup_card_styles()
+	_configure_library_widgets()
 	_update_selection_screen()
 	get_viewport().size_changed.connect(_resize_layout)
 	resized.connect(_resize_layout)
@@ -257,6 +273,52 @@ func _setup_card_styles() -> void:
 	_panel_style.corner_radius_bottom_left = 12
 	_panel_style.shadow_color = Color(0, 0, 0, 0.65)
 	_panel_style.shadow_size = 16
+	_preview_style.bg_color = Color(0.035, 0.05, 0.075, 0.72)
+	_preview_style.border_width_left = 2
+	_preview_style.border_width_top = 2
+	_preview_style.border_width_right = 2
+	_preview_style.border_width_bottom = 2
+	_preview_style.border_color = Color(0.73, 0.62, 0.42, 0.88)
+	_preview_style.corner_radius_top_left = 16
+	_preview_style.corner_radius_top_right = 16
+	_preview_style.corner_radius_bottom_right = 16
+	_preview_style.corner_radius_bottom_left = 16
+	_preview_style.shadow_color = Color(0, 0, 0, 0.42)
+	_preview_style.shadow_size = 12
+	_entry_style.bg_color = Color(0.04, 0.05, 0.07, 0.62)
+	_entry_style.border_width_left = 1
+	_entry_style.border_width_top = 1
+	_entry_style.border_width_right = 1
+	_entry_style.border_width_bottom = 1
+	_entry_style.border_color = Color(0.32, 0.37, 0.42, 0.6)
+	_entry_style.corner_radius_top_left = 18
+	_entry_style.corner_radius_top_right = 18
+	_entry_style.corner_radius_bottom_right = 18
+	_entry_style.corner_radius_bottom_left = 18
+	_entry_style.content_margin_left = 16
+	_entry_style.content_margin_right = 16
+	_entry_style.content_margin_top = 12
+	_entry_style.content_margin_bottom = 12
+	_entry_hover_style = _entry_style.duplicate()
+	_entry_hover_style.bg_color = Color(0.085, 0.10, 0.13, 0.82)
+	_entry_hover_style.border_color = Color(0.66, 0.56, 0.38, 0.75)
+	_entry_selected_style = _entry_style.duplicate()
+	_entry_selected_style.bg_color = Color(0.10, 0.12, 0.16, 0.92)
+	_entry_selected_style.border_width_left = 2
+	_entry_selected_style.border_width_top = 2
+	_entry_selected_style.border_width_right = 2
+	_entry_selected_style.border_width_bottom = 2
+	_entry_selected_style.border_color = Color(0.79, 0.67, 0.44, 0.98)
+	_entry_focus_style = _entry_selected_style.duplicate()
+	_entry_focus_style.shadow_color = Color(0.93, 0.76, 0.35, 0.18)
+	_entry_focus_style.shadow_size = 10
+
+
+func _configure_library_widgets() -> void:
+	_preview_frame.add_theme_stylebox_override("panel", _preview_style)
+	_preview_image.texture = null
+	_preview_name.text = ""
+	_preview_meta.text = ""
 
 
 func _apply_menu_chrome() -> void:
@@ -281,13 +343,18 @@ func _resize_layout() -> void:
 	_layout_ambience()
 	var available: Vector2 = size
 	var menu_mode: bool = _home.visible or _play_actions.visible
+	var library_mode: bool = _library.visible and not _hero_selection.visible
 	var side_menu: bool = menu_mode and available.x >= 640.0 and available.aspect() >= 1.3
 	var margin: int = _safe_area.get_theme_constant("margin_left")
 	var right_margin: int = margin
 	var top_margin: int = 12
 	var bottom_margin: int = 12
 	var card_width: float = minf(780.0, maxf(260.0, available.x - 48.0))
-	if menu_mode:
+	if library_mode:
+		card_width = minf(1180.0, maxf(460.0, available.x - 72.0))
+		top_margin = clampi(roundi(available.y * 0.045), 12, 34)
+		bottom_margin = clampi(roundi(available.y * 0.04), 12, 30)
+	elif menu_mode:
 		card_width = minf(card_width, 560.0)
 	if side_menu:
 		var artwork_width: float = _background.texture.get_width() * _artwork.scale.x
@@ -330,8 +397,10 @@ func _resize_layout() -> void:
 		reserved += maxi(0, count - 1) * actions.get_theme_constant("separation")
 		logo_height = maxf(20.0, minf(logo_height, available.y - top_margin - bottom_margin - reserved))
 	_logo.custom_minimum_size = Vector2(logo_width, logo_height)
-	_map_list.custom_minimum_size.y = clampf(available.y * 0.41, 120.0, 320.0)
-	_map_list.max_columns = clampi(floori((_card.custom_minimum_size.x - 48.0) / 215.0), 1, 3)
+	if library_mode:
+		_library_layout.vertical = available.x < 1080.0 or available.aspect() < 1.28
+		_entry_scroll.custom_minimum_size.y = clampf(available.y * (0.34 if _library_layout.vertical else 0.48), 180.0, 440.0)
+		_preview_frame.custom_minimum_size.y = clampf(available.y * (0.34 if _library_layout.vertical else 0.56), 240.0, 580.0)
 
 
 func _layout_ambience() -> void:
@@ -372,8 +441,12 @@ func _open_library(mode: int = LIBRARY_CAMPAIGNS) -> void:
 	_library_mode = mode
 	_selected_game_map = null
 	_selected_campaign_id = ""
+	_selected_library_index = -1
 	_library_title.text = "Выбор кампании" if mode == LIBRARY_CAMPAIGNS else "Свои карты"
+	_entry_list_title.text = "Кампании" if mode == LIBRARY_CAMPAIGNS else "Свои карты"
+	_preview_title.text = "Карта приключения" if mode == LIBRARY_CAMPAIGNS else "Карта подземелья"
 	_no_maps.text = "Кампаний пока нет" if mode == LIBRARY_CAMPAIGNS else "Свободных карт пока нет"
+	_start_button.text = "Начать приключение" if mode == LIBRARY_CAMPAIGNS else "Открыть карту"
 	_home_error.hide()
 	_home.visible = false
 	_play_actions.hide()
@@ -386,6 +459,8 @@ func _open_library(mode: int = LIBRARY_CAMPAIGNS) -> void:
 	_resize_layout()
 	if _start_button.disabled:
 		%BackButton.grab_focus()
+	elif not _library_entries.is_empty():
+		_library_entries[0].grab_focus()
 	else:
 		_start_button.grab_focus()
 
@@ -444,7 +519,8 @@ func _load_saved_maps() -> void:
 	_campaigns.clear()
 	_personal_maps.clear()
 	_thumbnails.clear()
-	_map_list.clear()
+	_selected_library_index = -1
+	_clear_library_entries()
 	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
 	var campaigns: Dictionary = _campaign_library.load_all(_maps_by_id)
 	if not _campaign_library.last_error.is_empty():
@@ -459,18 +535,12 @@ func _load_saved_maps() -> void:
 			if start_map == null:
 				continue
 			_campaigns.append(campaign)
-			var thumbnail: ImageTexture = MapPreview.make_preview(start_map)
-			_thumbnails.append(thumbnail)
-			_map_list.add_item(campaign.display_name, thumbnail)
-			var index: int = _map_list.item_count - 1
-			_map_list.set_item_tooltip(index, campaign.display_name)
+			_thumbnails.append(MapPreview.make_preview(start_map))
 	else:
 		_personal_maps = unassigned_maps(_maps_by_id, campaigns)
 		for dungeon in _personal_maps:
-			var personal_thumbnail: ImageTexture = MapPreview.make_preview(dungeon)
-			_thumbnails.append(personal_thumbnail)
-			_map_list.add_item(dungeon.display_name, personal_thumbnail)
-			_map_list.set_item_tooltip(_map_list.item_count - 1, dungeon.display_name)
+			_thumbnails.append(MapPreview.make_preview(dungeon))
+	_build_library_entries()
 	var has_entries: bool = not _campaigns.is_empty() if _library_mode == LIBRARY_CAMPAIGNS else not _personal_maps.is_empty()
 	_no_maps.visible = not has_entries and _campaign_library.last_error.is_empty()
 	_start_button.disabled = not has_entries or not _campaign_library.last_error.is_empty()
@@ -494,20 +564,10 @@ static func unassigned_maps(maps_by_id: Dictionary, campaigns: Dictionary) -> Ar
 			result.append(dungeon)
 	return result
 
-func _on_map_selected(_index: int) -> void:
-	_error_message.visible = false
-	_start_button.disabled = _map_list.get_selected_items().is_empty()
-
-
-func _on_map_activated(_index: int) -> void:
-	_start_selected()
-
-
 func _start_selected() -> void:
 	if _transitioning:
 		return
-	var selection: PackedInt32Array = _map_list.get_selected_items()
-	if selection.is_empty():
+	if _selected_library_index < 0:
 		return
 	_maps_by_id = SavedMapLibrary.load_all(_maps_directory)
 	var campaigns: Dictionary = _campaign_library.load_all(_maps_by_id)
@@ -518,16 +578,16 @@ func _start_selected() -> void:
 	var chosen: DungeonMap
 	var selected_campaign_id: String = ""
 	if _library_mode == LIBRARY_CAMPAIGNS:
-		if selection[0] >= _campaigns.size():
+		if _selected_library_index >= _campaigns.size():
 			return
-		selected_campaign_id = _campaigns[selection[0]].campaign_id
+		selected_campaign_id = _campaigns[_selected_library_index].campaign_id
 		var campaign: CampaignDefinition = campaigns.get(selected_campaign_id) as CampaignDefinition
 		if campaign != null:
 			chosen = _maps_by_id.get(campaign.start_map_id) as DungeonMap
 	else:
-		if selection[0] >= _personal_maps.size():
+		if _selected_library_index >= _personal_maps.size():
 			return
-		var selected_id: String = _personal_maps[selection[0]].map_id
+		var selected_id: String = _personal_maps[_selected_library_index].map_id
 		for dungeon in unassigned_maps(_maps_by_id, campaigns):
 			if dungeon.map_id == selected_id:
 				chosen = dungeon
@@ -552,7 +612,10 @@ func _return_to_library() -> void:
 	_hero_selection.visible = false
 	_library.visible = true
 	_refresh_background_state()
-	_start_button.grab_focus()
+	if _selected_library_index >= 0 and _selected_library_index < _library_entries.size():
+		_library_entries[_selected_library_index].grab_focus()
+	else:
+		_start_button.grab_focus()
 
 
 func _launch_selected_party(hero_ids: Array[String]) -> void:
@@ -595,3 +658,5 @@ func _show_changed_selection(message: String) -> void:
 	_load_saved_maps()
 	_error_message.text = message
 	_error_message.show()
+	if _selected_library_index >= 0 and _selected_library_index < _library_entries.size():
+		_library_entries[_selected_library_index].grab_focus()

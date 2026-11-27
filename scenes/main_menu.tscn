@@ -367,24 +367,43 @@ theme_override_constants/separation = 10
 [node name="LibraryTitle" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library"]
 unique_name_in_owner = true
 layout_mode = 2
+visible = false
 theme_override_colors/font_color = Color(0.93, 0.78, 0.55, 1)
 theme_override_font_sizes/font_size = 20
 text = "Выбор кампании"
 
-[node name="MapList" type="ItemList" parent="SafeArea/Center/Card/Padding/Content/Library"]
+[node name="LibraryBody" type="BoxContainer" parent="SafeArea/Center/Card/Padding/Content/Library"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 18
+
+[node name="LibraryListColumn" type="VBoxContainer" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="EntryListTitle" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/LibraryListColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.92, 1)
+theme_override_font_sizes/font_size = 18
+text = "Кампании"
+
+[node name="EntryScroll" type="ScrollContainer" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/LibraryListColumn"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 280)
 layout_mode = 2
-size_flags_horizontal = 3
-theme_override_fonts/font = SubResource("SystemFont_campaign_names")
-theme_override_font_sizes/font_size = 23
-theme_override_colors/font_color = Color(0.96, 0.95, 0.92, 1)
-icon_mode = 1
-fixed_icon_size = Vector2i(176, 116)
-max_columns = 3
-same_column_width = true
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
-[node name="NoMaps" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library"]
+[node name="EntryList" type="VBoxContainer" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/LibraryListColumn/EntryScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="NoMaps" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/LibraryListColumn"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
@@ -392,18 +411,66 @@ theme_override_colors/font_color = Color(0.70, 0.77, 0.81, 1)
 text = "Кампаний пока нет"
 horizontal_alignment = 1
 
-[node name="ErrorMessage" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library"]
+[node name="ErrorMessage" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/LibraryListColumn"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.55, 0.52, 1)
 autowrap_mode = 3
 
-[node name="LibraryActions" type="HFlowContainer" parent="SafeArea/Center/Card/Padding/Content/Library"]
+[node name="PreviewColumn" type="VBoxContainer" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody"]
 layout_mode = 2
-alignment = 1
-theme_override_constants/h_separation = 12
-theme_override_constants/v_separation = 8
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="PreviewTitle" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/PreviewColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.92, 1)
+theme_override_font_sizes/font_size = 18
+text = "Карта приключения"
+
+[node name="PreviewFrame" type="PanelContainer" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/PreviewColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 360)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="PreviewPadding" type="MarginContainer" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/PreviewColumn/PreviewFrame"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="PreviewImage" type="TextureRect" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/PreviewColumn/PreviewFrame/PreviewPadding"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+expand_mode = 1
+stretch_mode = 5
+
+[node name="PreviewName" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/PreviewColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.96, 0.95, 0.92, 1)
+theme_override_fonts/font = SubResource("SystemFont_campaign_names")
+theme_override_font_sizes/font_size = 26
+text = ""
+
+[node name="PreviewMeta" type="Label" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryBody/PreviewColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.77, 0.82, 0.88, 1)
+theme_override_font_sizes/font_size = 16
+text = ""
+autowrap_mode = 3
+
+[node name="LibraryActions" type="HBoxContainer" parent="SafeArea/Center/Card/Padding/Content/Library"]
+layout_mode = 2
+theme_override_constants/separation = 12
 
 [node name="BackButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryActions"]
 unique_name_in_owner = true
@@ -415,15 +482,19 @@ theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 17
 text = "Назад"
 
+[node name="ActionsSpacer" type="Control" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryActions"]
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="StartButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryActions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(204, 48)
+custom_minimum_size = Vector2(270, 48)
 layout_mode = 2
 focus_mode = 2
 script = ExtResource("9_stone_button")
 theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 17
-text = "Начать"
+text = "Начать приключение"
 
 [node name="HeroSelection" parent="." instance=ExtResource("5_heroes")]
 unique_name_in_owner = true

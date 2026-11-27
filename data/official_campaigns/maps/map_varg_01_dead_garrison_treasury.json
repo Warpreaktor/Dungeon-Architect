@@ -1,9 +1,919 @@
 {
-	"schema_version": 1,
-	"id": "map_varg_01_dead_garrison_treasury",
-	"name": "Глава I. Казна Мёртвого гарнизона",
-	"width": 35,
+	"connections": [],
+	"entities": [
+		{
+			"id": "ent_varg01_001",
+			"properties": {
+				"lock_id": "key_red",
+				"trap": {
+					"trap_id": "door_crossbow"
+				}
+			},
+			"type": "door",
+			"x": 18,
+			"y": 9
+		},
+		{
+			"id": "ent_varg01_002",
+			"properties": {
+				"lock_id": "key_blue"
+			},
+			"type": "door",
+			"x": 27,
+			"y": 18
+		},
+		{
+			"id": "ent_varg01_003",
+			"properties": {
+				"lock_id": "key_violet",
+				"trap": {
+					"trap_id": "door_crossbow"
+				}
+			},
+			"type": "door",
+			"x": 12,
+			"y": 3
+		},
+		{
+			"id": "ent_varg01_004",
+			"properties": {},
+			"type": "player_spawn",
+			"x": 3,
+			"y": 31
+		},
+		{
+			"id": "ent_varg01_005",
+			"properties": {
+				"contents": [
+					"potion_health_small",
+					"potion_vision_small",
+					"gold"
+				],
+				"gold_amount": 12.0,
+				"hidden": false,
+				"item_quantities": {
+					"gold": 12.0,
+					"potion_health_small": 2.0,
+					"potion_vision_small": 1.0
+				},
+				"loot_mode": "fixed"
+			},
+			"type": "chest",
+			"x": 11,
+			"y": 25
+		},
+		{
+			"id": "ent_varg01_006",
+			"properties": {
+				"activation": "chest_open",
+				"target_entity_id": "ent_varg01_005",
+				"text": "В мешке у стены уцелели припасы старого разведчика. На крышке выцарапано: «Вернись, пока можешь». Варг усмехнулся: «Поздновато для советов»."
+			},
+			"type": "message",
+			"x": 11,
+			"y": 25
+		},
+		{
+			"id": "ent_varg01_007",
+			"properties": {
+				"loot_contents": [
+					"gold"
+				],
+				"loot_gold_amount": 14.0,
+				"loot_item_quantities": {
+					"gold": 14.0
+				},
+				"loot_mode": "mixed",
+				"monster_id": "fallen_hero"
+			},
+			"type": "monster",
+			"x": 1,
+			"y": 2
+		},
+		{
+			"id": "ent_varg01_008",
+			"properties": {
+				"activation": "monster_encounter",
+				"target_entity_id": "ent_varg01_007",
+				"text": "Капитан в проржавевшем нагруднике всё ещё держит строй. На груди болтается жетон: «Жалованье охранять до смены караула». Смены не было."
+			},
+			"type": "message",
+			"x": 1,
+			"y": 2
+		},
+		{
+			"id": "ent_varg01_009",
+			"properties": {
+				"contents": [
+					"key_red",
+					"potion_health_medium",
+					"wooden_shield",
+					"gold"
+				],
+				"gold_amount": 18.0,
+				"hidden": false,
+				"item_quantities": {
+					"gold": 18.0,
+					"key_red": 1.0,
+					"potion_health_medium": 1.0,
+					"wooden_shield": 1.0
+				},
+				"loot_mode": "fixed"
+			},
+			"type": "chest",
+			"x": 1,
+			"y": 1
+		},
+		{
+			"id": "ent_varg01_010",
+			"properties": {
+				"activation": "chest_open",
+				"target_entity_id": "ent_varg01_009",
+				"text": "Последний приказ капитана: «Подкрепление не пришло. Казну не отдавать никому. Даже своим». Под письмом лежит красный ключ."
+			},
+			"type": "message",
+			"x": 1,
+			"y": 1
+		},
+		{
+			"id": "ent_varg01_011",
+			"properties": {
+				"activation": "door_open",
+				"target_entity_id": "ent_varg01_001",
+				"text": "Красная печать казначейства. Кто-то укрепил дверь уже после того, как солдаты погибли."
+			},
+			"type": "message",
+			"x": 18,
+			"y": 9
+		},
+		{
+			"id": "ent_varg01_012",
+			"properties": {
+				"loot_contents": [
+					"gold"
+				],
+				"loot_gold_amount": 11.0,
+				"loot_item_quantities": {
+					"gold": 11.0
+				},
+				"loot_mode": "mixed",
+				"monster_id": "skeleton",
+				"monster_ids": [
+					"skeleton"
+				]
+			},
+			"type": "monster",
+			"x": 32,
+			"y": 7
+		},
+		{
+			"id": "ent_varg01_013",
+			"properties": {
+				"activation": "monster_encounter",
+				"target_entity_id": "ent_varg01_012",
+				"text": "За узкой дверной аркой слышен перестук костей. Два стража стоят плечом к плечу, хотя охранять им давно уже некого."
+			},
+			"type": "message",
+			"x": 32,
+			"y": 7
+		},
+		{
+			"id": "ent_varg01_014",
+			"properties": {
+				"contents": [
+					"key_blue",
+					"potion_health_medium",
+					"gold"
+				],
+				"gold_amount": 25.0,
+				"hidden": false,
+				"item_quantities": {
+					"gold": 25.0,
+					"key_blue": 1.0,
+					"potion_health_medium": 1.0
+				},
+				"loot_mode": "fixed"
+			},
+			"type": "chest",
+			"x": 31,
+			"y": 7
+		},
+		{
+			"id": "ent_varg01_015",
+			"properties": {
+				"activation": "chest_open",
+				"target_entity_id": "ent_varg01_014",
+				"text": "Из журнала караула: «Снизу идёт сырой холод. На камне появились борозды, которых раньше не было. Нам велели молчать». Рядом лежит голубой ключ."
+			},
+			"type": "message",
+			"x": 31,
+			"y": 7
+		},
+		{
+			"id": "ent_varg01_016",
+			"properties": {
+				"activation": "door_open",
+				"target_entity_id": "ent_varg01_002",
+				"text": "За этой дверью воздух становится тяжёлым и влажным. В казармах пахло ржавчиной, здесь пахнет морем. Под землёй."
+			},
+			"type": "message",
+			"x": 27,
+			"y": 18
+		},
+		{
+			"id": "ent_varg01_017",
+			"properties": {
+				"contents": [
+					"key_violet",
+					"potion_health_small",
+					"potion_strength_small"
+				],
+				"hidden": false,
+				"item_quantities": {
+					"key_violet": 1.0,
+					"potion_health_small": 2.0,
+					"potion_strength_small": 1.0
+				},
+				"loot_mode": "fixed",
+				"variant": "alchemy_table"
+			},
+			"type": "chest",
+			"x": 13,
+			"y": 21
+		},
+		{
+			"id": "ent_varg01_018",
+			"properties": {
+				"activation": "chest_open",
+				"target_entity_id": "ent_varg01_017",
+				"text": "Рабочий журнал мастера: «Замки казны не только запирают двери. Они стягивают повреждённые каменные распорки. Не открывать все сразу». На краю стола лежит фиолетовый ключ."
+			},
+			"type": "message",
+			"x": 13,
+			"y": 21
+		},
+		{
+			"id": "ent_varg01_019",
+			"properties": {
+				"activation": "door_open",
+				"target_entity_id": "ent_varg01_003",
+				"text": "На железе выбито: «Мастерская запечатана по приказу казначея». На косяке видна крохотная прорезь для тетивы."
+			},
+			"type": "message",
+			"x": 12,
+			"y": 3
+		},
+		{
+			"id": "ent_varg01_020",
+			"properties": {
+				"contents": [
+					"amulet_bone_fang",
+					"potion_health_medium",
+					"gold"
+				],
+				"gold_amount": 34.0,
+				"hidden": false,
+				"item_quantities": {
+					"amulet_bone_fang": 1.0,
+					"gold": 34.0,
+					"potion_health_medium": 1.0
+				},
+				"loot_mode": "fixed",
+				"variant": "jewelry_table"
+			},
+			"type": "chest",
+			"x": 16,
+			"y": 3
+		},
+		{
+			"id": "ent_varg01_021",
+			"properties": {
+				"activation": "chest_open",
+				"target_entity_id": "ent_varg01_020",
+				"text": "В закрытой кладовой обнаружилась личная шкатулка мастера. Среди инструментов лежит странный костяной амулет и записка: «Слова казначея дороже золота. А жизнь всё-таки дороже его слов»."
+			},
+			"type": "message",
+			"x": 16,
+			"y": 3
+		},
+		{
+			"id": "ent_varg01_022",
+			"properties": {
+				"contents": [
+					"gold",
+					"potion_health_small"
+				],
+				"gold_amount": 65.0,
+				"hidden": true,
+				"item_quantities": {
+					"gold": 65.0,
+					"potion_health_small": 1.0
+				},
+				"loot_mode": "fixed",
+				"variant": "chest_gold"
+			},
+			"type": "chest",
+			"x": 3,
+			"y": 25
+		},
+		{
+			"id": "ent_varg01_023",
+			"properties": {
+				"activation": "chest_open",
+				"target_entity_id": "ent_varg01_022",
+				"text": "Под плитами скрыт личный запас дезертира. Золото оказалось настоящим. А вот выход, судя по последней записи, он так и не нашёл."
+			},
+			"type": "message",
+			"x": 3,
+			"y": 25
+		},
+		{
+			"id": "ent_varg01_024",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "fallen_hero"
+			},
+			"type": "monster",
+			"x": 5,
+			"y": 14
+		},
+		{
+			"id": "ent_varg01_025",
+			"properties": {
+				"activation": "monster_encounter",
+				"target_entity_id": "ent_varg01_024",
+				"text": "В проломе стоит солдат с переломанным клинком. Мёртвая рука указывает на оружейную, словно он всё ещё запрещает вход."
+			},
+			"type": "message",
+			"x": 5,
+			"y": 14
+		},
+		{
+			"id": "ent_varg01_026",
+			"properties": {
+				"contents": [
+					"hatchet",
+					"potion_vitality_small"
+				],
+				"hidden": false,
+				"item_quantities": {
+					"hatchet": 1.0,
+					"potion_vitality_small": 1.0
+				},
+				"loot_mode": "fixed",
+				"variant": "weapon_rack"
+			},
+			"type": "chest",
+			"x": 5,
+			"y": 15
+		},
+		{
+			"id": "ent_varg01_027",
+			"properties": {
+				"activation": "chest_open",
+				"target_entity_id": "ent_varg01_026",
+				"text": "Уцелевшее оружие смазано и готово к бою. Кто-то до последнего надеялся, что отсюда удастся вырваться с оружием в руках."
+			},
+			"type": "message",
+			"x": 5,
+			"y": 15
+		},
+		{
+			"id": "ent_varg01_028",
+			"properties": {
+				"contents": [
+					"potion_health_small",
+					"gold"
+				],
+				"gold_amount": 19.0,
+				"hidden": false,
+				"item_quantities": {
+					"gold": 19.0,
+					"potion_health_small": 2.0
+				},
+				"loot_mode": "fixed"
+			},
+			"type": "chest",
+			"x": 21,
+			"y": 11
+		},
+		{
+			"id": "ent_varg01_029",
+			"properties": {
+				"activation": "chest_open",
+				"target_entity_id": "ent_varg01_028",
+				"text": "В караульной нише найдены последние запасы полевой аптечки. Кому-то они уже не понадобились."
+			},
+			"type": "message",
+			"x": 21,
+			"y": 11
+		},
+		{
+			"id": "ent_varg01_030",
+			"properties": {
+				"contents": [
+					"potion_vitality_small",
+					"potion_health_medium"
+				],
+				"hidden": false,
+				"item_quantities": {
+					"potion_health_medium": 1.0,
+					"potion_vitality_small": 1.0
+				},
+				"loot_mode": "fixed",
+				"variant": "alchemy_table"
+			},
+			"type": "chest",
+			"x": 31,
+			"y": 21
+		},
+		{
+			"id": "ent_varg01_031",
+			"properties": {
+				"activation": "chest_open",
+				"target_entity_id": "ent_varg01_030",
+				"text": "Колбы треснули от сырости, но несколько запечатанных склянок сохранились. На столе следы огромных когтей. Нет, скорее клешней..."
+			},
+			"type": "message",
+			"x": 31,
+			"y": 21
+		},
+		{
+			"id": "ent_varg01_032",
+			"properties": {
+				"contents": [
+					"gold",
+					"heraldic_shield",
+					"potion_strength_small",
+					"potion_health_medium"
+				],
+				"gold_amount": 110.0,
+				"hidden": false,
+				"item_quantities": {
+					"gold": 110.0,
+					"heraldic_shield": 1.0,
+					"potion_health_medium": 1.0,
+					"potion_strength_small": 1.0
+				},
+				"loot_mode": "fixed",
+				"variant": "chest_gold"
+			},
+			"type": "chest",
+			"x": 25,
+			"y": 30
+		},
+		{
+			"id": "ent_varg01_033",
+			"properties": {
+				"activation": "chest_open",
+				"target_entity_id": "ent_varg01_032",
+				"text": "Золото! Варг едва успевает набить кошель, когда в механизме казны ломается ржавая распорка. Позади грохочет свод. Пыль заполняет проход, а откуда-то впереди доносится тяжёлый скрежет..."
+			},
+			"type": "message",
+			"x": 25,
+			"y": 30
+		},
+		{
+			"id": "ent_varg01_034",
+			"properties": {
+				"hidden": false,
+				"loot_contents": [
+					"gold"
+				],
+				"loot_gold_amount": 35.0,
+				"loot_item_quantities": {
+					"gold": 35.0
+				},
+				"loot_level": 2.0,
+				"loot_mode": "mixed",
+				"loot_profile_id": "boss",
+				"monster_id": "giant_crab"
+			},
+			"type": "monster",
+			"x": 30,
+			"y": 31
+		},
+		{
+			"id": "ent_varg01_035",
+			"properties": {
+				"activation": "monster_encounter",
+				"target_entity_id": "ent_varg01_034",
+				"text": "Из темноты выползает чудовищный Рак. На красном панцире виднеются старые железные скобы. «Вот те раз... Я, кажется, нашёл хозяина здешней казны», — процедил Варг."
+			},
+			"type": "message",
+			"x": 30,
+			"y": 31
+		},
+		{
+			"id": "ent_varg01_036",
+			"properties": {
+				"contents": [
+					"gold"
+				],
+				"gold_amount": 20.0,
+				"item_quantities": {
+					"gold": 20.0
+				},
+				"loot_mode": "fixed",
+				"target_map_id": ""
+			},
+			"type": "stairs_down",
+			"x": 33,
+			"y": 31
+		},
+		{
+			"id": "ent_varg01_037",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "За пробитой тварью стеной обнаружилась лестница в неизвестную глубину. Варг посмотрел на тяжёлый мешок золота: «Спускаться не планировал. Но теперь, похоже, планирую»."
+			},
+			"type": "message",
+			"x": 33,
+			"y": 31
+		},
+		{
+			"id": "ent_varg01_038",
+			"properties": {
+				"hidden": true,
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton"
+			},
+			"type": "monster",
+			"x": 1,
+			"y": 27
+		},
+		{
+			"id": "ent_varg01_039",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton"
+			},
+			"type": "monster",
+			"x": 1,
+			"y": 13
+		},
+		{
+			"id": "ent_varg01_040",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton",
+				"monster_ids": [
+					"fallen_hero"
+				]
+			},
+			"type": "monster",
+			"x": 9,
+			"y": 15
+		},
+		{
+			"id": "ent_varg01_041",
+			"properties": {
+				"activation": "monster_encounter",
+				"target_entity_id": "ent_varg01_040",
+				"text": "Над узким проходом выцарапана надпись: «Казна ждёт своих хозяев». Под надписью шевелится мёртвая стража."
+			},
+			"type": "message",
+			"x": 9,
+			"y": 15
+		},
+		{
+			"id": "ent_varg01_042",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "fallen_hero"
+			},
+			"type": "monster",
+			"x": 33,
+			"y": 10
+		},
+		{
+			"id": "ent_varg01_043",
+			"properties": {
+				"activation": "monster_encounter",
+				"target_entity_id": "ent_varg01_042",
+				"text": "Над узким проходом выцарапана надпись: «Казна ждёт своих хозяев». Под надписью шевелится мёртвая стража."
+			},
+			"type": "message",
+			"x": 33,
+			"y": 10
+		},
+		{
+			"id": "ent_varg01_044",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton"
+			},
+			"type": "monster",
+			"x": 27,
+			"y": 23
+		},
+		{
+			"id": "ent_varg01_045",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "Варг развернул мятый план гарнизона. Половины коридоров на бумаге нет. «Либо картограф был пьян, либо строители очень любили секреты»."
+			},
+			"type": "message",
+			"x": 13,
+			"y": 29
+		},
+		{
+			"id": "ent_varg01_046",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "Здесь когда-то спали солдаты. Под ногами хрустят осколки кубков и костяные пальцы. На стене мелом: «Нас заперли свои»."
+			},
+			"type": "message",
+			"x": 13,
+			"y": 13
+		},
+		{
+			"id": "ent_varg01_047",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "На полу валяется офицерская печать. Рядом выцарапано: «Ключ от казны у капитана. Он не отдаст его даже после смерти»."
+			},
+			"type": "message",
+			"x": 9,
+			"y": 3
+		},
+		{
+			"id": "ent_varg01_048",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "На стене остались отметки смен караула. Последняя дата зачёркнута, а рядом написано: «За дверью кто-то скребётся»."
+			},
+			"type": "message",
+			"x": 7,
+			"y": 10
+		},
+		{
+			"id": "ent_varg01_049",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "В старом ржавом шкафу лежит невручённое жалованье. В ведомости все имена перечёркнуты одним днём."
+			},
+			"type": "message",
+			"x": 21,
+			"y": 17
+		},
+		{
+			"id": "ent_varg01_050",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "Скелет сидит перед нетронутой миской похлёбки. Смерть добралась до караулов быстрее, чем голод."
+			},
+			"type": "message",
+			"x": 33,
+			"y": 16
+		},
+		{
+			"id": "ent_varg01_051",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "Варг коснулся стены. Камень покрыт влажной солью. Где-то далеко слышно глухое постукивание, похожее на удары по панцирю."
+			},
+			"type": "message",
+			"x": 31,
+			"y": 13
+		},
+		{
+			"id": "ent_varg01_052",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "По стенам идут глубокие параллельные борозды. Такие следы не оставляют ни мечи, ни кирки."
+			},
+			"type": "message",
+			"x": 26,
+			"y": 23
+		},
+		{
+			"id": "ent_varg01_053",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "Старинные подпорки стянуты огромными железными скобами. Кое-где они уже выдернуты из кладки."
+			},
+			"type": "message",
+			"x": 33,
+			"y": 25
+		},
+		{
+			"id": "ent_varg01_054",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "На обрывке солдатского письма: «Если не вернусь, ищите мою долю там, где ход кончается глухой стеной»."
+			},
+			"type": "message",
+			"x": 9,
+			"y": 20
+		},
+		{
+			"id": "ent_varg01_055",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "На закопчённой пластине имя мастера-ловушечника. Ниже его рукой: «Я защищаю казну от грабителей, а не от нашей собственной жадности»."
+			},
+			"type": "message",
+			"x": 13,
+			"y": 27
+		},
+		{
+			"id": "ent_varg01_056",
+			"properties": {
+				"activation": "enter",
+				"target_entity_id": "",
+				"text": "У погибшего писаря обнаружены слова капитана: «Запасной арсенал оставьте закрытым. Ни один меч не исправит того, что сидит глубже»."
+			},
+			"type": "message",
+			"x": 5,
+			"y": 19
+		},
+		{
+			"id": "ent_varg01_057",
+			"properties": {
+				"trap_id": "spikes"
+			},
+			"type": "trap",
+			"x": 7,
+			"y": 3
+		},
+		{
+			"id": "ent_varg01_058",
+			"properties": {
+				"trap_id": "spikes"
+			},
+			"type": "trap",
+			"x": 32,
+			"y": 19
+		},
+		{
+			"id": "ent_varg01_059",
+			"properties": {
+				"trap_id": "stone_slab"
+			},
+			"type": "trap",
+			"x": 5,
+			"y": 24
+		},
+		{
+			"id": "ent_varg01_060",
+			"properties": {
+				"trap_id": "stone_slab"
+			},
+			"type": "trap",
+			"x": 11,
+			"y": 22
+		},
+		{
+			"id": "ent_varg01_061",
+			"properties": {
+				"trap_id": "stone_slab"
+			},
+			"type": "trap",
+			"x": 22,
+			"y": 9
+		},
+		{
+			"id": "ent_varg01_062",
+			"properties": {
+				"trap_id": "spikes"
+			},
+			"type": "trap",
+			"x": 4,
+			"y": 27
+		},
+		{
+			"id": "ent_varg01_063",
+			"properties": {
+				"trap_id": "spikes"
+			},
+			"type": "trap",
+			"x": 11,
+			"y": 20
+		},
+		{
+			"id": "ent_varg01_064",
+			"properties": {
+				"trap_id": "spikes"
+			},
+			"type": "trap",
+			"x": 3,
+			"y": 22
+		},
+		{
+			"id": "ent_varg01_065",
+			"properties": {
+				"trap_id": "spikes"
+			},
+			"type": "trap",
+			"x": 22,
+			"y": 13
+		},
+		{
+			"id": "ent_varg01_066",
+			"properties": {
+				"trap_id": "spikes"
+			},
+			"type": "trap",
+			"x": 20,
+			"y": 13
+		},
+		{
+			"id": "ent_varg01_067",
+			"properties": {
+				"trap_id": "spikes"
+			},
+			"type": "trap",
+			"x": 30,
+			"y": 23
+		},
+		{
+			"id": "ent_varg01_068",
+			"properties": {
+				"trap_id": "spikes"
+			},
+			"type": "trap",
+			"x": 31,
+			"y": 25
+		},
+		{
+			"id": "ent_5eae3126",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random",
+				"variant": "weapon_rack"
+			},
+			"type": "chest",
+			"x": 1,
+			"y": 10
+		},
+		{
+			"id": "ent_c50cfffc",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton"
+			},
+			"type": "monster",
+			"x": 3,
+			"y": 5
+		},
+		{
+			"id": "ent_60ddfe10",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random",
+				"variant": "chest_gold"
+			},
+			"type": "chest",
+			"x": 3,
+			"y": 9
+		},
+		{
+			"id": "ent_cb96826b",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random"
+			},
+			"type": "chest",
+			"x": 7,
+			"y": 17
+		}
+	],
 	"height": 35,
+	"id": "map_varg_01_dead_garrison_treasury",
+	"metadata": {
+		"hero_party": {
+			"allowed_ids": [
+				"volcha"
+			],
+			"required_ids": [
+				"volcha"
+			]
+		},
+		"loot_depth": 1.0,
+		"theme": "stone_dungeon"
+	},
+	"name": "Глава I. Казна Мёртвого гарнизона",
+	"schema_version": 1,
 	"terrain": [
 		[
 			"wall",
@@ -1301,868 +2211,5 @@
 			"wall"
 		]
 	],
-	"entities": [
-		{
-			"id": "ent_varg01_001",
-			"type": "door",
-			"x": 18,
-			"y": 9,
-			"properties": {
-				"lock_id": "key_red",
-				"trap": {
-					"trap_id": "door_crossbow"
-				}
-			}
-		},
-		{
-			"id": "ent_varg01_002",
-			"type": "door",
-			"x": 27,
-			"y": 18,
-			"properties": {
-				"lock_id": "key_blue"
-			}
-		},
-		{
-			"id": "ent_varg01_003",
-			"type": "door",
-			"x": 12,
-			"y": 3,
-			"properties": {
-				"lock_id": "key_violet",
-				"trap": {
-					"trap_id": "door_crossbow"
-				}
-			}
-		},
-		{
-			"id": "ent_varg01_004",
-			"type": "player_spawn",
-			"x": 3,
-			"y": 31,
-			"properties": {}
-		},
-		{
-			"id": "ent_varg01_005",
-			"type": "chest",
-			"x": 11,
-			"y": 25,
-			"properties": {
-				"contents": [
-					"potion_health_small",
-					"potion_vision_small",
-					"gold"
-				],
-				"item_quantities": {
-					"potion_health_small": 2,
-					"potion_vision_small": 1,
-					"gold": 12
-				},
-				"loot_mode": "fixed",
-				"hidden": false,
-				"gold_amount": 12
-			}
-		},
-		{
-			"id": "ent_varg01_006",
-			"type": "message",
-			"x": 11,
-			"y": 25,
-			"properties": {
-				"text": "В мешке у стены уцелели припасы старого разведчика. На крышке выцарапано: «Вернись, пока можешь». Варг усмехнулся: «Поздновато для советов».",
-				"activation": "chest_open",
-				"target_entity_id": "ent_varg01_005"
-			}
-		},
-		{
-			"id": "ent_varg01_007",
-			"type": "monster",
-			"x": 1,
-			"y": 2,
-			"properties": {
-				"monster_id": "fallen_hero",
-				"loot_contents": [
-					"gold"
-				],
-				"loot_item_quantities": {
-					"gold": 14
-				},
-				"loot_mode": "mixed",
-				"loot_gold_amount": 14
-			}
-		},
-		{
-			"id": "ent_varg01_008",
-			"type": "message",
-			"x": 1,
-			"y": 2,
-			"properties": {
-				"text": "Капитан в проржавевшем нагруднике всё ещё держит строй. На груди болтается жетон: «Жалованье охранять до смены караула». Смены не было.",
-				"activation": "monster_encounter",
-				"target_entity_id": "ent_varg01_007"
-			}
-		},
-		{
-			"id": "ent_varg01_009",
-			"type": "chest",
-			"x": 1,
-			"y": 1,
-			"properties": {
-				"contents": [
-					"key_red",
-					"potion_health_medium",
-					"wooden_shield",
-					"gold"
-				],
-				"item_quantities": {
-					"key_red": 1,
-					"potion_health_medium": 1,
-					"wooden_shield": 1,
-					"gold": 18
-				},
-				"loot_mode": "fixed",
-				"hidden": false,
-				"gold_amount": 18
-			}
-		},
-		{
-			"id": "ent_varg01_010",
-			"type": "message",
-			"x": 1,
-			"y": 1,
-			"properties": {
-				"text": "Последний приказ капитана: «Подкрепление не пришло. Казну не отдавать никому. Даже своим». Под письмом лежит красный ключ.",
-				"activation": "chest_open",
-				"target_entity_id": "ent_varg01_009"
-			}
-		},
-		{
-			"id": "ent_varg01_011",
-			"type": "message",
-			"x": 18,
-			"y": 9,
-			"properties": {
-				"text": "Красная печать казначейства. Кто-то укрепил дверь уже после того, как солдаты погибли.",
-				"activation": "door_open",
-				"target_entity_id": "ent_varg01_001"
-			}
-		},
-		{
-			"id": "ent_varg01_012",
-			"type": "monster",
-			"x": 32,
-			"y": 7,
-			"properties": {
-				"monster_id": "skeleton",
-				"monster_ids": [
-					"skeleton"
-				],
-				"loot_contents": [
-					"gold"
-				],
-				"loot_item_quantities": {
-					"gold": 11
-				},
-				"loot_mode": "mixed",
-				"loot_gold_amount": 11
-			}
-		},
-		{
-			"id": "ent_varg01_013",
-			"type": "message",
-			"x": 32,
-			"y": 7,
-			"properties": {
-				"text": "За узкой дверной аркой слышен перестук костей. Два стража стоят плечом к плечу, хотя охранять им давно уже некого.",
-				"activation": "monster_encounter",
-				"target_entity_id": "ent_varg01_012"
-			}
-		},
-		{
-			"id": "ent_varg01_014",
-			"type": "chest",
-			"x": 31,
-			"y": 7,
-			"properties": {
-				"contents": [
-					"key_blue",
-					"potion_health_medium",
-					"gold"
-				],
-				"item_quantities": {
-					"key_blue": 1,
-					"potion_health_medium": 1,
-					"gold": 25
-				},
-				"loot_mode": "fixed",
-				"hidden": false,
-				"gold_amount": 25
-			}
-		},
-		{
-			"id": "ent_varg01_015",
-			"type": "message",
-			"x": 31,
-			"y": 7,
-			"properties": {
-				"text": "Из журнала караула: «Снизу идёт сырой холод. На камне появились борозды, которых раньше не было. Нам велели молчать». Рядом лежит голубой ключ.",
-				"activation": "chest_open",
-				"target_entity_id": "ent_varg01_014"
-			}
-		},
-		{
-			"id": "ent_varg01_016",
-			"type": "message",
-			"x": 27,
-			"y": 18,
-			"properties": {
-				"text": "За этой дверью воздух становится тяжёлым и влажным. В казармах пахло ржавчиной, здесь пахнет морем. Под землёй.",
-				"activation": "door_open",
-				"target_entity_id": "ent_varg01_002"
-			}
-		},
-		{
-			"id": "ent_varg01_017",
-			"type": "chest",
-			"x": 13,
-			"y": 21,
-			"properties": {
-				"contents": [
-					"key_violet",
-					"potion_health_small",
-					"potion_strength_small"
-				],
-				"item_quantities": {
-					"key_violet": 1,
-					"potion_health_small": 2,
-					"potion_strength_small": 1
-				},
-				"loot_mode": "fixed",
-				"hidden": false,
-				"variant": "alchemy_table"
-			}
-		},
-		{
-			"id": "ent_varg01_018",
-			"type": "message",
-			"x": 13,
-			"y": 21,
-			"properties": {
-				"text": "Рабочий журнал мастера: «Замки казны не только запирают двери. Они стягивают повреждённые каменные распорки. Не открывать все сразу». На краю стола лежит фиолетовый ключ.",
-				"activation": "chest_open",
-				"target_entity_id": "ent_varg01_017"
-			}
-		},
-		{
-			"id": "ent_varg01_019",
-			"type": "message",
-			"x": 12,
-			"y": 3,
-			"properties": {
-				"text": "На железе выбито: «Мастерская запечатана по приказу казначея». На косяке видна крохотная прорезь для тетивы.",
-				"activation": "door_open",
-				"target_entity_id": "ent_varg01_003"
-			}
-		},
-		{
-			"id": "ent_varg01_020",
-			"type": "chest",
-			"x": 16,
-			"y": 3,
-			"properties": {
-				"contents": [
-					"amulet_bone_fang",
-					"potion_health_medium",
-					"gold"
-				],
-				"item_quantities": {
-					"amulet_bone_fang": 1,
-					"potion_health_medium": 1,
-					"gold": 34
-				},
-				"loot_mode": "fixed",
-				"hidden": false,
-				"gold_amount": 34,
-				"variant": "jewelry_table"
-			}
-		},
-		{
-			"id": "ent_varg01_021",
-			"type": "message",
-			"x": 16,
-			"y": 3,
-			"properties": {
-				"text": "В закрытой кладовой обнаружилась личная шкатулка мастера. Среди инструментов лежит странный костяной амулет и записка: «Слова казначея дороже золота. А жизнь всё-таки дороже его слов».",
-				"activation": "chest_open",
-				"target_entity_id": "ent_varg01_020"
-			}
-		},
-		{
-			"id": "ent_varg01_022",
-			"type": "chest",
-			"x": 3,
-			"y": 25,
-			"properties": {
-				"contents": [
-					"gold",
-					"potion_health_small"
-				],
-				"item_quantities": {
-					"gold": 65,
-					"potion_health_small": 1
-				},
-				"loot_mode": "fixed",
-				"hidden": true,
-				"gold_amount": 65,
-				"variant": "chest_gold"
-			}
-		},
-		{
-			"id": "ent_varg01_023",
-			"type": "message",
-			"x": 3,
-			"y": 25,
-			"properties": {
-				"text": "Под плитами скрыт личный запас дезертира. Золото оказалось настоящим. А вот выход, судя по последней записи, он так и не нашёл.",
-				"activation": "chest_open",
-				"target_entity_id": "ent_varg01_022"
-			}
-		},
-		{
-			"id": "ent_varg01_024",
-			"type": "monster",
-			"x": 5,
-			"y": 14,
-			"properties": {
-				"monster_id": "fallen_hero",
-				"loot_contents": [],
-				"loot_mode": "random"
-			}
-		},
-		{
-			"id": "ent_varg01_025",
-			"type": "message",
-			"x": 5,
-			"y": 14,
-			"properties": {
-				"text": "В проломе стоит солдат с переломанным клинком. Мёртвая рука указывает на оружейную, словно он всё ещё запрещает вход.",
-				"activation": "monster_encounter",
-				"target_entity_id": "ent_varg01_024"
-			}
-		},
-		{
-			"id": "ent_varg01_026",
-			"type": "chest",
-			"x": 5,
-			"y": 15,
-			"properties": {
-				"contents": [
-					"hatchet",
-					"potion_vitality_small"
-				],
-				"item_quantities": {
-					"hatchet": 1,
-					"potion_vitality_small": 1
-				},
-				"loot_mode": "fixed",
-				"hidden": false,
-				"variant": "weapon_rack"
-			}
-		},
-		{
-			"id": "ent_varg01_027",
-			"type": "message",
-			"x": 5,
-			"y": 15,
-			"properties": {
-				"text": "Уцелевшее оружие смазано и готово к бою. Кто-то до последнего надеялся, что отсюда удастся вырваться с оружием в руках.",
-				"activation": "chest_open",
-				"target_entity_id": "ent_varg01_026"
-			}
-		},
-		{
-			"id": "ent_varg01_028",
-			"type": "chest",
-			"x": 21,
-			"y": 11,
-			"properties": {
-				"contents": [
-					"potion_health_small",
-					"gold"
-				],
-				"item_quantities": {
-					"potion_health_small": 2,
-					"gold": 19
-				},
-				"loot_mode": "fixed",
-				"hidden": false,
-				"gold_amount": 19
-			}
-		},
-		{
-			"id": "ent_varg01_029",
-			"type": "message",
-			"x": 21,
-			"y": 11,
-			"properties": {
-				"text": "В караульной нише найдены последние запасы полевой аптечки. Кому-то они уже не понадобились.",
-				"activation": "chest_open",
-				"target_entity_id": "ent_varg01_028"
-			}
-		},
-		{
-			"id": "ent_varg01_030",
-			"type": "chest",
-			"x": 31,
-			"y": 21,
-			"properties": {
-				"contents": [
-					"potion_vitality_small",
-					"potion_health_medium"
-				],
-				"item_quantities": {
-					"potion_vitality_small": 1,
-					"potion_health_medium": 1
-				},
-				"loot_mode": "fixed",
-				"hidden": false,
-				"variant": "alchemy_table"
-			}
-		},
-		{
-			"id": "ent_varg01_031",
-			"type": "message",
-			"x": 31,
-			"y": 21,
-			"properties": {
-				"text": "Колбы треснули от сырости, но несколько запечатанных склянок сохранились. На столе следы огромных когтей. Нет, скорее клешней...",
-				"activation": "chest_open",
-				"target_entity_id": "ent_varg01_030"
-			}
-		},
-		{
-			"id": "ent_varg01_032",
-			"type": "chest",
-			"x": 25,
-			"y": 30,
-			"properties": {
-				"contents": [
-					"gold",
-					"heraldic_shield",
-					"potion_strength_small",
-					"potion_health_medium"
-				],
-				"item_quantities": {
-					"gold": 110,
-					"heraldic_shield": 1,
-					"potion_strength_small": 1,
-					"potion_health_medium": 1
-				},
-				"loot_mode": "fixed",
-				"hidden": false,
-				"gold_amount": 110,
-				"variant": "chest_gold"
-			}
-		},
-		{
-			"id": "ent_varg01_033",
-			"type": "message",
-			"x": 25,
-			"y": 30,
-			"properties": {
-				"text": "Золото! Варг едва успевает набить кошель, когда в механизме казны ломается ржавая распорка. Позади грохочет свод. Пыль заполняет проход, а откуда-то впереди доносится тяжёлый скрежет...",
-				"activation": "chest_open",
-				"target_entity_id": "ent_varg01_032"
-			}
-		},
-		{
-			"id": "ent_varg01_034",
-			"type": "monster",
-			"x": 30,
-			"y": 31,
-			"properties": {
-				"monster_id": "giant_crab",
-				"loot_contents": [
-					"gold"
-				],
-				"loot_item_quantities": {
-					"gold": 35
-				},
-				"loot_mode": "mixed",
-				"loot_gold_amount": 35,
-				"loot_profile_id": "boss",
-				"loot_level": 2,
-				"hidden": false
-			}
-		},
-		{
-			"id": "ent_varg01_035",
-			"type": "message",
-			"x": 30,
-			"y": 31,
-			"properties": {
-				"text": "Из темноты выползает чудовищный Рак. На красном панцире виднеются старые железные скобы. «Вот те раз... Я, кажется, нашёл хозяина здешней казны», — процедил Варг.",
-				"activation": "monster_encounter",
-				"target_entity_id": "ent_varg01_034"
-			}
-		},
-		{
-			"id": "ent_varg01_036",
-			"type": "stairs_down",
-			"x": 33,
-			"y": 31,
-			"properties": {
-				"target_map_id": "",
-				"contents": [
-					"gold"
-				],
-				"item_quantities": {
-					"gold": 20
-				},
-				"gold_amount": 20,
-				"loot_mode": "fixed"
-			}
-		},
-		{
-			"id": "ent_varg01_037",
-			"type": "message",
-			"x": 33,
-			"y": 31,
-			"properties": {
-				"text": "За пробитой тварью стеной обнаружилась лестница в неизвестную глубину. Варг посмотрел на тяжёлый мешок золота: «Спускаться не планировал. Но теперь, похоже, планирую».",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_038",
-			"type": "monster",
-			"x": 1,
-			"y": 27,
-			"properties": {
-				"monster_id": "skeleton",
-				"loot_contents": [],
-				"loot_mode": "random",
-				"hidden": true
-			}
-		},
-		{
-			"id": "ent_varg01_039",
-			"type": "monster",
-			"x": 1,
-			"y": 13,
-			"properties": {
-				"monster_id": "skeleton",
-				"loot_contents": [],
-				"loot_mode": "random"
-			}
-		},
-		{
-			"id": "ent_varg01_040",
-			"type": "monster",
-			"x": 9,
-			"y": 15,
-			"properties": {
-				"monster_id": "skeleton",
-				"monster_ids": [
-					"fallen_hero"
-				],
-				"loot_contents": [],
-				"loot_mode": "random"
-			}
-		},
-		{
-			"id": "ent_varg01_041",
-			"type": "message",
-			"x": 9,
-			"y": 15,
-			"properties": {
-				"text": "Над узким проходом выцарапана надпись: «Казна ждёт своих хозяев». Под надписью шевелится мёртвая стража.",
-				"activation": "monster_encounter",
-				"target_entity_id": "ent_varg01_040"
-			}
-		},
-		{
-			"id": "ent_varg01_042",
-			"type": "monster",
-			"x": 33,
-			"y": 10,
-			"properties": {
-				"monster_id": "fallen_hero",
-				"loot_contents": [],
-				"loot_mode": "random"
-			}
-		},
-		{
-			"id": "ent_varg01_043",
-			"type": "message",
-			"x": 33,
-			"y": 10,
-			"properties": {
-				"text": "Над узким проходом выцарапана надпись: «Казна ждёт своих хозяев». Под надписью шевелится мёртвая стража.",
-				"activation": "monster_encounter",
-				"target_entity_id": "ent_varg01_042"
-			}
-		},
-		{
-			"id": "ent_varg01_044",
-			"type": "monster",
-			"x": 27,
-			"y": 23,
-			"properties": {
-				"monster_id": "skeleton",
-				"loot_contents": [],
-				"loot_mode": "random"
-			}
-		},
-		{
-			"id": "ent_varg01_045",
-			"type": "message",
-			"x": 13,
-			"y": 29,
-			"properties": {
-				"text": "Варг развернул мятый план гарнизона. Половины коридоров на бумаге нет. «Либо картограф был пьян, либо строители очень любили секреты».",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_046",
-			"type": "message",
-			"x": 13,
-			"y": 13,
-			"properties": {
-				"text": "Здесь когда-то спали солдаты. Под ногами хрустят осколки кубков и костяные пальцы. На стене мелом: «Нас заперли свои».",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_047",
-			"type": "message",
-			"x": 9,
-			"y": 3,
-			"properties": {
-				"text": "На полу валяется офицерская печать. Рядом выцарапано: «Ключ от казны у капитана. Он не отдаст его даже после смерти».",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_048",
-			"type": "message",
-			"x": 7,
-			"y": 10,
-			"properties": {
-				"text": "На стене остались отметки смен караула. Последняя дата зачёркнута, а рядом написано: «За дверью кто-то скребётся».",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_049",
-			"type": "message",
-			"x": 21,
-			"y": 17,
-			"properties": {
-				"text": "В старом ржавом шкафу лежит невручённое жалованье. В ведомости все имена перечёркнуты одним днём.",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_050",
-			"type": "message",
-			"x": 33,
-			"y": 16,
-			"properties": {
-				"text": "Скелет сидит перед нетронутой миской похлёбки. Смерть добралась до караулов быстрее, чем голод.",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_051",
-			"type": "message",
-			"x": 31,
-			"y": 13,
-			"properties": {
-				"text": "Варг коснулся стены. Камень покрыт влажной солью. Где-то далеко слышно глухое постукивание, похожее на удары по панцирю.",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_052",
-			"type": "message",
-			"x": 26,
-			"y": 23,
-			"properties": {
-				"text": "По стенам идут глубокие параллельные борозды. Такие следы не оставляют ни мечи, ни кирки.",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_053",
-			"type": "message",
-			"x": 33,
-			"y": 25,
-			"properties": {
-				"text": "Старинные подпорки стянуты огромными железными скобами. Кое-где они уже выдернуты из кладки.",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_054",
-			"type": "message",
-			"x": 9,
-			"y": 20,
-			"properties": {
-				"text": "На обрывке солдатского письма: «Если не вернусь, ищите мою долю там, где ход кончается глухой стеной».",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_055",
-			"type": "message",
-			"x": 13,
-			"y": 27,
-			"properties": {
-				"text": "На закопчённой пластине имя мастера-ловушечника. Ниже его рукой: «Я защищаю казну от грабителей, а не от нашей собственной жадности».",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_056",
-			"type": "message",
-			"x": 5,
-			"y": 19,
-			"properties": {
-				"text": "У погибшего писаря обнаружены слова капитана: «Запасной арсенал оставьте закрытым. Ни один меч не исправит того, что сидит глубже».",
-				"activation": "enter",
-				"target_entity_id": ""
-			}
-		},
-		{
-			"id": "ent_varg01_057",
-			"type": "trap",
-			"x": 7,
-			"y": 3,
-			"properties": {
-				"trap_id": "spikes"
-			}
-		},
-		{
-			"id": "ent_varg01_058",
-			"type": "trap",
-			"x": 32,
-			"y": 19,
-			"properties": {
-				"trap_id": "spikes"
-			}
-		},
-		{
-			"id": "ent_varg01_059",
-			"type": "trap",
-			"x": 5,
-			"y": 24,
-			"properties": {
-				"trap_id": "stone_slab"
-			}
-		},
-		{
-			"id": "ent_varg01_060",
-			"type": "trap",
-			"x": 11,
-			"y": 22,
-			"properties": {
-				"trap_id": "stone_slab"
-			}
-		},
-		{
-			"id": "ent_varg01_061",
-			"type": "trap",
-			"x": 22,
-			"y": 9,
-			"properties": {
-				"trap_id": "stone_slab"
-			}
-		},
-		{
-			"id": "ent_varg01_062",
-			"type": "trap",
-			"x": 4,
-			"y": 27,
-			"properties": {
-				"trap_id": "spikes"
-			}
-		},
-		{
-			"id": "ent_varg01_063",
-			"type": "trap",
-			"x": 11,
-			"y": 20,
-			"properties": {
-				"trap_id": "spikes"
-			}
-		},
-		{
-			"id": "ent_varg01_064",
-			"type": "trap",
-			"x": 3,
-			"y": 22,
-			"properties": {
-				"trap_id": "spikes"
-			}
-		},
-		{
-			"id": "ent_varg01_065",
-			"type": "trap",
-			"x": 22,
-			"y": 13,
-			"properties": {
-				"trap_id": "spikes"
-			}
-		},
-		{
-			"id": "ent_varg01_066",
-			"type": "trap",
-			"x": 20,
-			"y": 13,
-			"properties": {
-				"trap_id": "spikes"
-			}
-		},
-		{
-			"id": "ent_varg01_067",
-			"type": "trap",
-			"x": 30,
-			"y": 23,
-			"properties": {
-				"trap_id": "spikes"
-			}
-		},
-		{
-			"id": "ent_varg01_068",
-			"type": "trap",
-			"x": 31,
-			"y": 25,
-			"properties": {
-				"trap_id": "spikes"
-			}
-		}
-	],
-	"metadata": {
-		"theme": "stone_dungeon",
-		"loot_depth": 1,
-		"hero_party": {
-			"allowed_ids": ["volcha"],
-			"required_ids": ["volcha"]
-		}
-	},
-	"connections": []
+	"width": 35
 }

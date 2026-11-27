@@ -9,7 +9,12 @@ func _run() -> void:
 	var data := DungeonMap.create_blank(32, 32)
 	data.map_id = "map_floor_variations"
 	var atlas: TileSetAtlasSource = FloorTiles.atlas()
-	assert(atlas.get_tiles_count() == 8)
+	assert(atlas.get_tiles_count() == 20)
+	assert(atlas.texture_region_size == Vector2i(256, 256))
+	assert(atlas.texture.get_size() == Vector2(1280, 1024))
+	for y in range(4):
+		for x in range(5):
+			assert(atlas.has_tile(Vector2i(x, y)))
 	var expected: Dictionary = {}
 	for index in range(atlas.get_tiles_count()):
 		expected[atlas.get_tile_texture_region(atlas.get_tile_id(index))] = true

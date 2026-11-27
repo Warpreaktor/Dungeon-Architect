@@ -9,6 +9,10 @@ signal back_requested
 @onready var _party_bar: PartySelectionBar = %PartyBar
 @onready var _start_button: Button = %StartPartyButton
 @onready var _body: BoxContainer = $Body
+@onready var _left_column: VBoxContainer = $Body/LeftColumn
+@onready var _footer_rule: HSeparator = $Body/LeftColumn/FooterRule
+@onready var _party_row: HBoxContainer = $Body/LeftColumn/PartyRow
+@onready var _actions: HBoxContainer = $Actions
 
 var _selected_ids: Array[String] = []
 var _heroes: Dictionary = {}
@@ -54,6 +58,7 @@ func _ready() -> void:
 	_start_button.pressed.connect(_confirm_party)
 	%BackButton.pressed.connect(func() -> void: back_requested.emit())
 	resized.connect(_adapt_layout)
+	_left_column.resized.connect(_adapt_party_row)
 	get_viewport().size_changed.connect(_adapt_layout)
 	visibility_changed.connect(_on_visibility_changed)
 	var heroes: Array[HeroDefinition] = []
@@ -158,7 +163,7 @@ func _move_gesture(point: Vector2) -> void:
 
 
 func _leaves_party_row(point: Vector2) -> bool:
-	var band: Rect2 = $PartyRow.get_global_rect()
+	var band: Rect2 = _party_row.get_global_rect()
 	var leading_edge: float = _source_rect.position.y + point.y - _origin.y
 	return leading_edge < band.position.y or not band.has_point(point)
 
@@ -282,10 +287,12 @@ func _refresh_selection() -> void:
 func _adapt_layout() -> void:
 	if not is_node_ready():
 		return
-	var narrow: bool = size.x < 740.0
+	var narrow: bool = _available_width() < 740.0
 	_separate_page = narrow and size.y < 680.0
 	_body.vertical = narrow and not _separate_page
+	_place_party_row(narrow)
 	_catalog.visible = not _separate_page or not _detail_page
+	_left_column.visible = _catalog.visible
 	_preview.visible = not _separate_page or _detail_page
 	_preview.custom_minimum_size.x = 0.0 if narrow else minf(310.0, size.x * 0.36)
 	_preview.size_flags_stretch_ratio = 0.65 if _body.vertical else 1.0
@@ -294,11 +301,34 @@ func _adapt_layout() -> void:
 	_catalog.call_deferred("_layout_tiles")
 
 
+func _place_party_row(narrow: bool) -> void:
+	var destination: Container = self if narrow else _left_column
+	if _party_row.get_parent() == destination:
+		return
+	_footer_rule.reparent(destination, false)
+	_party_row.reparent(destination, false)
+	if narrow:
+		move_child(_footer_rule, _actions.get_index())
+		move_child(_party_row, _actions.get_index())
+
+
+func _available_width() -> float:
+	return minf(size.x, get_viewport_rect().size.x + offset_right - offset_left)
+
+
 func _adapt_party_row() -> void:
-	var width: float = minf(size.x, get_viewport_rect().size.x + offset_right - offset_left)
+	if not is_node_ready():
+		return
+	var width: float = _available_width()
+	if _party_row.get_parent() == _left_column:
+		var body_width: float = width - _body.get_theme_constant("separation")
+		var left_share: float = _left_column.size_flags_stretch_ratio / (_left_column.size_flags_stretch_ratio + _preview.size_flags_stretch_ratio)
+		width = minf(body_width * left_share, body_width - _preview.get_combined_minimum_size().x)
+		if _left_column.size.x > 0.0:
+			width = minf(width, _left_column.size.x)
 	var start_width: float = clampf(width * 0.16, 96.0, 160.0)
 	_start_button.custom_minimum_size = Vector2(start_width, 52.0)
-	var gap: int = $PartyRow.get_theme_constant("separation")
+	var gap: int = _party_row.get_theme_constant("separation")
 	var slot_gap: int = _party_bar.row.get_theme_constant("separation")
 	var slots: int = GameSession.MAX_PARTY_SIZE
 	var side: float = floorf((width - start_width - gap - slot_gap * (slots - 1)) / slots)

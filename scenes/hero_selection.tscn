@@ -35,51 +35,83 @@ theme = ExtResource("2_theme")
 theme_override_constants/separation = 8
 script = ExtResource("1_script")
 
-[node name="Title" type="Label" parent="."]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94, 0.79, 0.54, 1)
-theme_override_font_sizes/font_size = 24
-text = "Выбор отряда"
-
-[node name="Rule" type="HSeparator" parent="."]
-layout_mode = 2
-
 [node name="Body" type="BoxContainer" parent="."]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 12
 
-[node name="Catalog" type="VBoxContainer" parent="Body"]
-unique_name_in_owner = true
+[node name="LeftColumn" type="VBoxContainer" parent="Body"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 size_flags_stretch_ratio = 2.0
+theme_override_constants/separation = 8
+
+[node name="Catalog" type="VBoxContainer" parent="Body/LeftColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
 theme_override_constants/separation = 6
 script = ExtResource("3_catalog")
 
-[node name="Search" type="LineEdit" parent="Body/Catalog"]
+[node name="Search" type="LineEdit" parent="Body/LeftColumn/Catalog"]
 custom_minimum_size = Vector2(0, 38)
 layout_mode = 2
 placeholder_text = "Поиск героя"
 clear_button_enabled = true
 
-[node name="Count" type="Label" parent="Body/Catalog"]
+[node name="Count" type="Label" parent="Body/LeftColumn/Catalog"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.72, 0.80, 0.84, 1)
 
-[node name="Scroll" type="ScrollContainer" parent="Body/Catalog"]
+[node name="Scroll" type="ScrollContainer" parent="Body/LeftColumn/Catalog"]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 3
 follow_focus = true
 scroll_deadzone = 12
 
-[node name="Grid" type="GridContainer" parent="Body/Catalog/Scroll"]
+[node name="Grid" type="GridContainer" parent="Body/LeftColumn/Catalog/Scroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 7
 theme_override_constants/v_separation = 7
+
+[node name="FooterRule" type="HSeparator" parent="Body/LeftColumn"]
+layout_mode = 2
+
+[node name="PartyRow" type="HBoxContainer" parent="Body/LeftColumn"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="PartyBar" type="VBoxContainer" parent="Body/LeftColumn/PartyRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+script = ExtResource("5_party")
+
+[node name="Count" type="Label" parent="Body/LeftColumn/PartyRow/PartyBar"]
+layout_mode = 2
+text = "Отряд"
+
+[node name="Slots" type="HBoxContainer" parent="Body/LeftColumn/PartyRow/PartyBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="StartPartyButton" type="Button" parent="Body/LeftColumn/PartyRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 52)
+layout_mode = 2
+size_flags_vertical = 4
+disabled = true
+theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
+theme_override_styles/hover = SubResource("StyleBoxFlat_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_hover")
+text = "Начать игру"
 
 [node name="Preview" type="PanelContainer" parent="Body"]
 unique_name_in_owner = true
@@ -142,41 +174,6 @@ visible = false
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "К каталогу"
-
-[node name="FooterRule" type="HSeparator" parent="."]
-layout_mode = 2
-
-[node name="PartyRow" type="HBoxContainer" parent="."]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 12
-
-[node name="PartyBar" type="VBoxContainer" parent="PartyRow"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 5
-script = ExtResource("5_party")
-
-[node name="Count" type="Label" parent="PartyRow/PartyBar"]
-layout_mode = 2
-text = "Отряд"
-
-[node name="Slots" type="HBoxContainer" parent="PartyRow/PartyBar"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 8
-
-[node name="StartPartyButton" type="Button" parent="PartyRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 52)
-layout_mode = 2
-size_flags_vertical = 4
-disabled = true
-theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
-theme_override_styles/hover = SubResource("StyleBoxFlat_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_hover")
-text = "Начать игру"
 
 [node name="Actions" type="HBoxContainer" parent="."]
 layout_mode = 2

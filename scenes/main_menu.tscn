@@ -2,12 +2,13 @@
 
 [ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_menu"]
 [ext_resource type="Texture2D" path="res://assets/backgrounds/main_menu_camp_clean.png" id="2_back"]
-[ext_resource type="Texture2D" path="res://assets/icons/commands/test.png" id="3_play"]
-[ext_resource type="Texture2D" path="res://assets/icons/commands/editor_mode_home.png" id="4_editor"]
 
 [ext_resource type="PackedScene" path="res://scenes/hero_selection.tscn" id="5_heroes"]
 [ext_resource type="PackedScene" path="res://scenes/effects/fire_effect.tscn" id="6_fire"]
 [ext_resource type="PackedScene" path="res://scenes/effects/ground_fog.tscn" id="7_fog"]
+[ext_resource type="PackedScene" path="res://scenes/effects/campfire_particles.tscn" id="8_campfire_particles"]
+[ext_resource type="Script" path="res://scripts/ui/stone_menu_button.gd" id="9_stone_button"]
+[ext_resource type="Texture2D" path="res://assets/ui/main_menu_logo.png" id="10_logo"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
 bg_color = Color(0.090, 0.132, 0.18, 0.84)
@@ -23,26 +24,7 @@ corner_radius_bottom_left = 12
 shadow_color = Color(0, 0, 0, 0.65)
 shadow_size = 16
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_primary"]
-bg_color = Color(0.64, 0.44, 0.21, 1)
-corner_radius_top_left = 7
-corner_radius_top_right = 7
-corner_radius_bottom_right = 7
-corner_radius_bottom_left = 7
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_primary_hover"]
-bg_color = Color(0.78, 0.57, 0.28, 1)
-corner_radius_top_left = 7
-corner_radius_top_right = 7
-corner_radius_bottom_right = 7
-corner_radius_bottom_left = 7
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_secondary"]
-bg_color = Color(0.18, 0.26, 0.34, 1)
-corner_radius_top_left = 7
-corner_radius_top_right = 7
-corner_radius_bottom_right = 7
-corner_radius_bottom_left = 7
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_card"]
 
 [sub_resource type="SystemFont" id="SystemFont_campaign_names"]
 font_names = PackedStringArray("Georgia", "Times New Roman", "Noto Serif", "DejaVu Serif", "serif")
@@ -193,28 +175,23 @@ theme_override_constants/separation = 12
 
 [node name="PlayButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/HomeActions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 64)
+custom_minimum_size = Vector2(240, 56)
 layout_mode = 2
 focus_mode = 2
-theme_override_colors/font_color = Color(1, 0.94, 0.82, 1)
+script = ExtResource("9_stone_button")
+theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 22
-theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
-theme_override_styles/hover = SubResource("StyleBoxFlat_primary_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_primary_hover")
 text = "Играть"
-icon = ExtResource("3_play")
 
 [node name="EditorButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/HomeActions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 64)
+custom_minimum_size = Vector2(240, 56)
 layout_mode = 2
 focus_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.94, 0.98, 1)
+script = ExtResource("9_stone_button")
+theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 22
-theme_override_styles/normal = SubResource("StyleBoxFlat_secondary")
-theme_override_styles/hover = SubResource("StyleBoxFlat_primary")
 text = "Редактор"
-icon = ExtResource("4_editor")
 
 [node name="PlayActions" type="VBoxContainer" parent="SafeArea/Center/Card/Padding/Content"]
 unique_name_in_owner = true
@@ -225,13 +202,12 @@ theme_override_constants/separation = 12
 [node name="ContinueGameButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/PlayActions"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(240, 64)
+custom_minimum_size = Vector2(240, 56)
 layout_mode = 2
 focus_mode = 2
-theme_override_colors/font_color = Color(1, 0.94, 0.82, 1)
+script = ExtResource("9_stone_button")
+theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 22
-theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
-theme_override_styles/hover = SubResource("StyleBoxFlat_primary_hover")
 text = "Продолжить"
 
 [node name="HomeError" type="Label" parent="SafeArea/Center/Card/Padding/Content/PlayActions"]
@@ -243,39 +219,32 @@ autowrap_mode = 3
 
 [node name="CampaignButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/PlayActions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 64)
+custom_minimum_size = Vector2(240, 56)
 layout_mode = 2
 focus_mode = 2
-theme_override_colors/font_color = Color(1, 0.94, 0.82, 1)
+script = ExtResource("9_stone_button")
+theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 22
-theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
-theme_override_styles/hover = SubResource("StyleBoxFlat_primary_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_primary_hover")
 text = "Кампания"
-icon = ExtResource("3_play")
 
 [node name="PersonalMapsButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/PlayActions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 64)
+custom_minimum_size = Vector2(240, 56)
 layout_mode = 2
 focus_mode = 2
-theme_override_colors/font_color = Color(1, 0.94, 0.82, 1)
+script = ExtResource("9_stone_button")
+theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 22
-theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
-theme_override_styles/hover = SubResource("StyleBoxFlat_primary_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_primary_hover")
 text = "Свои карты"
-icon = ExtResource("3_play")
 
 [node name="PlayBackButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/PlayActions"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 48)
 layout_mode = 2
 focus_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.94, 0.98, 1)
+script = ExtResource("9_stone_button")
+theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 17
-theme_override_styles/normal = SubResource("StyleBoxFlat_secondary")
-theme_override_styles/hover = SubResource("StyleBoxFlat_primary")
 text = "Назад"
 
 [node name="Library" type="VBoxContainer" parent="SafeArea/Center/Card/Padding/Content"]
@@ -327,21 +296,22 @@ theme_override_constants/v_separation = 8
 
 [node name="BackButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryActions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(125, 48)
+custom_minimum_size = Vector2(204, 48)
 layout_mode = 2
 focus_mode = 2
+script = ExtResource("9_stone_button")
+theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 17
-theme_override_styles/normal = SubResource("StyleBoxFlat_secondary")
 text = "Назад"
 
 [node name="StartButton" type="Button" parent="SafeArea/Center/Card/Padding/Content/Library/LibraryActions"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(185, 48)
+custom_minimum_size = Vector2(204, 48)
 layout_mode = 2
 focus_mode = 2
+script = ExtResource("9_stone_button")
+theme_override_fonts/font = SubResource("SystemFont_campaign_names")
 theme_override_font_sizes/font_size = 17
-theme_override_styles/normal = SubResource("StyleBoxFlat_primary")
-theme_override_styles/hover = SubResource("StyleBoxFlat_primary_hover")
 text = "Начать"
 
 [node name="HeroSelection" parent="." instance=ExtResource("5_heroes")]

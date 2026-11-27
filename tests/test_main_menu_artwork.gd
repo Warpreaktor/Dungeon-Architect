@@ -34,6 +34,19 @@ func _run() -> void:
 	assert(torch_left.ember_amount < campfire.ember_amount and torch_left.smoke_amount < campfire.smoke_amount)
 	assert(torch_left._flame_material != torch_right._flame_material)
 	assert(torch_left._flame_material.get_shader_parameter("speed") != torch_right._flame_material.get_shader_parameter("speed"))
+	var buttons: Array[StoneMenuButton] = []
+	for button_name in ["PlayButton", "EditorButton", "ContinueGameButton", "CampaignButton", "PersonalMapsButton", "PlayBackButton", "BackButton", "StartButton"]:
+		var button := menu.get_node("%" + button_name) as StoneMenuButton
+		assert(button != null and button.icon == null)
+		assert(button._stone.texture == StoneMenuButton.STONE)
+		assert(button._stone.mouse_filter == Control.MOUSE_FILTER_IGNORE)
+		assert(button._stone.show_behind_parent)
+		assert(button._stone.stretch_mode == TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+		assert(button._sparks.local_coords)
+		assert(button._glow.shader == StoneMenuButton.GLOW_SHADER)
+		buttons.append(button)
+	assert(buttons[0]._glow != buttons[1]._glow)
+	assert(buttons[0]._sparks != buttons[1]._sparks)
 	var texture_size: Vector2 = background.texture.get_size()
 	for dimensions in [Vector2i(640, 360), Vector2i(1280, 800), Vector2i(1920, 1080), Vector2i(1024, 768), Vector2i(600, 900), Vector2i(2560, 1080)]:
 		root.size = dimensions
@@ -63,12 +76,50 @@ func _run() -> void:
 				assert(fire._embers.local_coords and artwork.z_index + fire._embers.z_index < 0)
 			if fire._smoke != null:
 				assert(fire._smoke.local_coords and artwork.z_index + fire._smoke.z_index < 0)
+		for button in buttons:
+			if not button.is_visible_in_tree():
+				continue
+			assert(button.size.y >= StoneMenuButton.MIN_TOUCH_HEIGHT)
+			assert(button._stone.size.is_equal_approx(button.size))
+			assert(button._sparks.emission_points.size() == StoneMenuButton.FRAME_POINTS.size())
+			for point in button._sparks.emission_points:
+				assert(Rect2(Vector2.ZERO, button.size).has_point(point))
 		if menu.size.x >= 900.0 and menu.size.aspect() >= 1.3:
 			var card: PanelContainer = menu.get_node("%Card")
 			assert(card.get_global_rect().get_center().x < menu.size.x * 0.5)
 			assert(not card.get_global_rect().has_point(torch_left.global_position))
 			assert(not card.get_global_rect().has_point(lantern.global_position))
+	var play: StoneMenuButton = buttons[0]
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	play._input(touch)
+	play.button_down.emit()
+	play._process(0.2)
+	assert(play._sparks.emitting and is_equal_approx(play._highlight, 1.0))
+	assert(play._glow.get_shader_parameter("pressed") == 1.0)
+	play.button_up.emit()
+	play._process(0.3)
+	assert(not play._sparks.emitting and is_zero_approx(play._highlight))
+	var key := InputEventKey.new()
+	key.pressed = true
+	key.keycode = KEY_TAB
+	play._input(key)
+	play.grab_focus()
+	play._process(0.2)
+	assert(is_equal_approx(play._highlight, 1.0))
+	play.disabled = true
+	play._process(0.3)
+	assert(not play._sparks.emitting and is_zero_approx(play._highlight))
+	assert(play._glow.get_shader_parameter("disabled") == 1.0)
+	play.disabled = false
+	play._input(touch)
+	play.button_down.emit()
+	play._process(0.2)
+	play.hide()
+	assert(not play._sparks.emitting and is_zero_approx(play._highlight) and not play.is_processing())
+	play.show()
+	assert(play.is_processing())
 	menu.queue_free()
 	await process_frame
-	print("Main menu artwork: full viewport coverage, independent fire sources, ground fog and adaptive layout OK")
+	print("Main menu artwork: full viewport coverage, independent fire sources, campfire particles, ground fog, stone buttons and adaptive layout OK")
 	quit()

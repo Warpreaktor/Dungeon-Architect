@@ -896,6 +896,162 @@
 			"type": "chest",
 			"x": 7,
 			"y": 17
+		},
+		{
+			"id": "ent_fedbe25a",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton"
+			},
+			"type": "monster",
+			"x": 1,
+			"y": 7
+		},
+		{
+			"id": "ent_f9ab4568",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random",
+				"variant": "weapon_rack"
+			},
+			"type": "chest",
+			"x": 5,
+			"y": 31
+		},
+		{
+			"id": "ent_25fa43e2",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random",
+				"variant": "armor_rack"
+			},
+			"type": "chest",
+			"x": 1,
+			"y": 31
+		},
+		{
+			"id": "ent_e0f81cb9",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random",
+				"variant": "alchemy_table"
+			},
+			"type": "chest",
+			"x": 11,
+			"y": 31
+		},
+		{
+			"id": "ent_df1e650a",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton"
+			},
+			"type": "monster",
+			"x": 8,
+			"y": 31
+		},
+		{
+			"id": "ent_39e7274c",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton"
+			},
+			"type": "monster",
+			"x": 1,
+			"y": 33
+		},
+		{
+			"id": "ent_4589203e",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton"
+			},
+			"type": "monster",
+			"x": 11,
+			"y": 33
+		},
+		{
+			"id": "ent_a0ca1a53",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton"
+			},
+			"type": "monster",
+			"x": 3,
+			"y": 29
+		},
+		{
+			"id": "ent_a776de02",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random"
+			},
+			"type": "chest",
+			"x": 1,
+			"y": 29
+		},
+		{
+			"id": "ent_5ddab375",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random",
+				"variant": "chest_gold"
+			},
+			"type": "chest",
+			"x": 2,
+			"y": 29
+		},
+		{
+			"id": "ent_e0341c72",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random"
+			},
+			"type": "chest",
+			"x": 17,
+			"y": 2
+		},
+		{
+			"id": "ent_61967199",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random"
+			},
+			"type": "chest",
+			"x": 17,
+			"y": 3
+		},
+		{
+			"id": "ent_7542833c",
+			"properties": {
+				"contents": [],
+				"loot_mode": "random",
+				"variant": "alchemy_table"
+			},
+			"type": "chest",
+			"x": 17,
+			"y": 4
+		},
+		{
+			"id": "ent_b56f4d39",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "fallen_hero",
+				"monster_ids": [
+					"skeleton",
+					"fallen_hero",
+					"skeleton"
+				]
+			},
+			"type": "monster",
+			"x": 13,
+			"y": 3
 		}
 	],
 	"height": 35,

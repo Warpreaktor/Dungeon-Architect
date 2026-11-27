@@ -64,7 +64,8 @@ func _run() -> void:
 
 	var settings_dialog := editor.get_node("MapSettingsDialog") as AcceptDialog
 	var tabs := settings_dialog.get_node("SettingsTabs") as TabContainer
-	assert(tabs.get_tab_count() == 2)
+	assert(tabs.get_tab_count() == 3)
+	assert(tabs.get_tab_title(2) == "Состав отряда")
 	assert(tabs.get_tab_title(1) == "Тестирование")
 	var test_hero_select := tabs.get_node("Тестирование/TestProperties/TestHeroSelect") as OptionButton
 	assert(test_hero_select != null and test_hero_select.item_count == HeroCatalog.list_ids().size())
@@ -110,6 +111,17 @@ func _run() -> void:
 	assert(current_map.map_id == old_id)
 	assert(not bool(editor.get("is_dirty")))
 	assert(FileAccess.file_exists(storage.directory.path_join(old_id + ".json")))
+	var party_panel: EditorPartyRulesPanel = tabs.get_node("Состав отряда") as EditorPartyRulesPanel
+	party_panel.show_rules(current_map.metadata)
+	for id in party_panel._selectors:
+		party_panel._selectors[id].select(EditorPartyRulesPanel.Access.REQUIRED if id == HeroCatalog.DEFAULT_HERO_ID else EditorPartyRulesPanel.Access.BLOCKED)
+	party_panel._apply()
+	var saved_map: DungeonMap = DungeonMap.from_dict(JSON.parse_string(FileAccess.get_file_as_string(storage.directory.path_join(old_id + ".json"))))
+	assert(HeroPartyRules.from_metadata(saved_map.metadata).required_ids == [HeroCatalog.DEFAULT_HERO_ID])
+	for selector in party_panel._selectors.values():
+		selector.select(EditorPartyRulesPanel.Access.AVAILABLE)
+	party_panel._apply()
+	assert(not current_map.metadata.has(HeroPartyRules.METADATA_KEY))
 
 	var reach_index := layers_menu.get_popup().get_item_index(1)
 	var grid_index := layers_menu.get_popup().get_item_index(2)

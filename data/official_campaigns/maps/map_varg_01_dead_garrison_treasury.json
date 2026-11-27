@@ -2158,7 +2158,11 @@
 	],
 	"metadata": {
 		"theme": "stone_dungeon",
-		"loot_depth": 1
+		"loot_depth": 1,
+		"hero_party": {
+			"allowed_ids": ["volcha"],
+			"required_ids": ["volcha"]
+		}
 	},
 	"connections": []
 }

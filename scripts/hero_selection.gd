@@ -14,6 +14,7 @@ signal back_requested
 @onready var _party_row: HBoxContainer = $Body/LeftColumn/PartyRow
 @onready var _back_button: StoneMenuButton = %BackButton
 
+var _party_rules := HeroPartyRules.new()
 var _selected_ids: Array[String] = []
 var _heroes: Dictionary = {}
 var _focused_id: String = ""
@@ -80,8 +81,14 @@ func set_heroes(heroes: Array[HeroDefinition]) -> void:
 	reset_selection()
 
 
+func configure_party_rules(rules: HeroPartyRules) -> void:
+	_party_rules = rules
+	_catalog.set_party_rules(rules)
+	reset_selection()
+
+
 func _focus_hero(hero_id: String, show_details: bool = true) -> void:
-	if not _heroes.has(hero_id):
+	if not _heroes.has(hero_id) or not _party_rules.allows(hero_id):
 		return
 	_pending_focus.stop()
 	_focused_id = hero_id
@@ -92,7 +99,7 @@ func _focus_hero(hero_id: String, show_details: bool = true) -> void:
 
 
 func _can_add_hero(hero_id: String) -> bool:
-	return _heroes.has(hero_id) and not _selected_ids.has(hero_id) and _selected_ids.size() < GameSession.MAX_PARTY_SIZE
+	return _heroes.has(hero_id) and _party_rules.allows(hero_id) and not _selected_ids.has(hero_id) and _selected_ids.size() < _party_rules.capacity()
 
 
 func _add_hero(hero_id: String, animate: bool = true) -> void:
@@ -145,7 +152,7 @@ func _move_gesture(point: Vector2) -> void:
 		var scroll_bar: VScrollBar = _catalog.scroll.get_v_scroll_bar()
 		var scrollable: bool = scroll_bar.max_value > scroll_bar.page
 		var held: bool = Time.get_ticks_msec() - _started_at >= TOUCH_HOLD_MS
-		if _gesture_from_party or (_can_add_hero(_gesture_id) and (_touch_index < 0 or not scrollable or held)):
+		if (_gesture_from_party and not _party_rules.required_ids.has(_gesture_id)) or (_can_add_hero(_gesture_id) and (_touch_index < 0 or not scrollable or held)):
 			_gesture = Gesture.DRAG
 			if not _gesture_from_party:
 				_source_rect = (_catalog.tiles[_gesture_id] as HeroCatalogTile).get_global_rect()
@@ -267,6 +274,8 @@ func _input(event: InputEvent) -> void:
 
 
 func _remove_hero(hero_id: String) -> void:
+	if _party_rules.required_ids.has(hero_id):
+		return
 	var index: int = _selected_ids.find(hero_id)
 	if index < 0:
 		return
@@ -278,9 +287,9 @@ func _remove_hero(hero_id: String) -> void:
 
 func _refresh_selection() -> void:
 	_catalog.refresh_selection(_focused_id, _selected_ids)
-	_party_bar.refresh(_selected_ids, _heroes)
+	_party_bar.refresh(_selected_ids, _heroes, _party_rules.capacity())
 	_adapt_party_row()
-	_start_button.disabled = _selected_ids.is_empty()
+	_start_button.disabled = not _party_rules.accepts_party(_selected_ids)
 	_sync_preview_portrait()
 
 
@@ -331,7 +340,7 @@ func _adapt_party_row() -> void:
 	_back_button.custom_minimum_size = Vector2(start_width, _back_button.height_for_width(start_width))
 	var gap: int = _party_row.get_theme_constant("separation")
 	var slot_gap: int = _party_bar.row.get_theme_constant("separation")
-	var slots: int = GameSession.MAX_PARTY_SIZE
+	var slots: int = _party_rules.capacity()
 	var side: float = floorf((width - start_width - gap - slot_gap * (slots - 1)) / slots)
 	var height_limit: float = minf(size.y, get_viewport_rect().size.y) * 0.19
 	_party_bar.adapt(maxf(1.0, minf(side, minf(150.0, height_limit))))
@@ -362,6 +371,8 @@ func _begin_transfer(hero_id: String, source: Rect2, point: Vector2, from_party:
 
 
 func _move_to_party(hero_id: String, index: int) -> void:
+	if not _selected_ids.has(hero_id) and not _can_add_hero(hero_id):
+		return
 	var previous: int = _selected_ids.find(hero_id)
 	if previous >= 0:
 		_selected_ids.remove_at(previous)
@@ -373,6 +384,8 @@ func _move_to_party(hero_id: String, index: int) -> void:
 
 
 func _move_to_catalog(hero_id: String) -> void:
+	if _party_rules.required_ids.has(hero_id):
+		return
 	_selected_ids.erase(hero_id)
 	if _separate_page and not _catalog.visible:
 		_show_catalog()
@@ -453,12 +466,20 @@ func reset_selection() -> void:
 	_last_tap_id = ""
 	_ignore_emulated_mouse = false
 	_selected_ids.clear()
+	for id in _party_rules.required_ids:
+		if _heroes.has(id):
+			_selected_ids.append(id)
 	_catalog.reset_filter()
 	_focused_id = ""
-	if _heroes.has(HeroCatalog.DEFAULT_HERO_ID):
+	if not _selected_ids.is_empty():
+		_focused_id = _selected_ids[0]
+	elif _heroes.has(HeroCatalog.DEFAULT_HERO_ID) and _party_rules.allows(HeroCatalog.DEFAULT_HERO_ID):
 		_focused_id = HeroCatalog.DEFAULT_HERO_ID
-	elif not _heroes.is_empty():
-		_focused_id = str(_heroes.keys()[0])
+	else:
+		for id in _heroes:
+			if _party_rules.allows(id):
+				_focused_id = id
+				break
 	_detail_page = false
 	_preview.show_hero(_heroes.get(_focused_id) as HeroDefinition)
 	_refresh_selection()
@@ -466,7 +487,7 @@ func reset_selection() -> void:
 
 
 func _confirm_party() -> void:
-	if _gesture == Gesture.DRAG or _selected_ids.is_empty() or _selected_ids.size() > GameSession.MAX_PARTY_SIZE:
+	if _gesture == Gesture.DRAG or not _party_rules.accepts_party(_selected_ids):
 		return
 	party_chosen.emit(selected_party())
 
@@ -476,3 +497,5 @@ func focus_first() -> void:
 		if (tile as HeroCatalogTile).is_visible_in_tree() and not (tile as HeroCatalogTile).disabled:
 			(tile as HeroCatalogTile).grab_focus()
 			return
+	if not _selected_ids.is_empty():
+		_party_bar.focus_member(_selected_ids[0])

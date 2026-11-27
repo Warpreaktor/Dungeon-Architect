@@ -944,4 +944,6 @@ static func from_dict(value: Variant) -> DungeonMap:
 	var raw_metadata: Variant = value.get("metadata", {"theme": "stone_dungeon"})
 	if typeof(raw_metadata) == TYPE_DICTIONARY:
 		result.metadata = raw_metadata
+	if HeroPartyRules.from_metadata(result.metadata) == null:
+		return null
 	return result

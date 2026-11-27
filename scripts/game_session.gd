@@ -5,12 +5,14 @@ extends RefCounted
 
 const VISION_RADIUS := 1
 ## Число одновременных портретов в походном интерфейсе.
-const MAX_PARTY_SIZE: int = 4
+const MAX_PARTY_SIZE: int = HeroPartyRules.MAX_PARTY_SIZE
 const INVENTORY_SLOT_COUNT: int = 40
 
 var map_data: DungeonMap
 var campaign_id: String = ""
 var _campaign_map_ids: Dictionary = {}
+var _party_rules := HeroPartyRules.new()
+var _party_start_map_id: String = ""
 var hero: HeroState
 var inventory_member: HeroState
 var party: Array[HeroState] = []
@@ -90,7 +92,7 @@ static func start_for(map_ref: DungeonMap, hero_id: String = HeroCatalog.DEFAULT
 	return start_for_party(map_ref, [hero_id], open_map, rng)
 
 
-static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_map: bool = false, rng: RandomNumberGenerator = null) -> GameSession:
+static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_map: bool = false, rng: RandomNumberGenerator = null, editor_test: bool = false) -> GameSession:
 	if hero_ids.is_empty() or hero_ids.size() > MAX_PARTY_SIZE:
 		return null
 	var unique_ids: Dictionary = {}
@@ -100,6 +102,9 @@ static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_m
 		unique_ids[hero_id] = true
 	if map_ref == null:
 		return null
+	var rules: HeroPartyRules = HeroPartyRules.new() if editor_test else HeroPartyRules.from_metadata(map_ref.metadata)
+	if rules == null or not rules.accepts_party(hero_ids):
+		return null
 	var spawn := map_ref.find_entity_position("player_spawn")
 	if spawn.x < 0 or spawn.y < 0:
 		return null
@@ -107,6 +112,9 @@ static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_m
 	LootProfileCatalog.prepare()
 	var session := GameSession.new()
 	session.map_data = map_ref
+	session._party_rules = rules
+	session._party_start_map_id = map_ref.map_id
+	session.is_editor_test = editor_test
 	for hero_id in hero_ids:
 		var member := HeroState.new(HeroCatalog.get_hero(hero_id))
 		session.party.append(member)
@@ -833,6 +841,12 @@ func abandon_pending_encounter() -> void:
 
 
 func add_party_member(hero_id: String) -> bool:
+	if _party_rules.restricted:
+		var ids: Array[String] = [hero_id]
+		for member in party + fallen_heroes:
+			ids.append(member.definition.hero_id)
+		if not _party_rules.accepts_party(ids):
+			return false
 	if not HeroCatalog.has(hero_id):
 		return false
 	if party.size() >= MAX_PARTY_SIZE or (party.is_empty() and not fallen_heroes.is_empty()):
@@ -1003,6 +1017,12 @@ func restore_party_state(snapshot: Dictionary) -> bool:
 		if fallen_member == null or fallen_member.health != 0:
 			return false
 		restored_fallen.append(fallen_member)
+	if _party_rules.restricted:
+		var ids: Array[String] = []
+		for member in restored_party + restored_fallen:
+			ids.append(member.definition.hero_id)
+		if not _party_rules.accepts_party(ids):
+			return false
 	var hero_index: int = int(snapshot.get("hero_index", -2))
 	var inventory_index: int = int(snapshot.get("inventory_member_index", -2))
 	if restored_party.is_empty():
@@ -2532,7 +2552,7 @@ func progress_snapshot() -> Dictionary:
 		var encoded: Dictionary = ProgressSnapshotCodec.encode_floor(snapshot)
 		encoded["map_signature"] = ProgressSnapshotCodec.map_signature(source_map)
 		floors_data[str(map_id)] = encoded
-	return {
+	var result: Dictionary = {
 		"version": ProgressSnapshotCodec.FORMAT_VERSION,
 		"campaign_id": campaign_id,
 		"current_map_id": map_data.map_id,
@@ -2541,6 +2561,9 @@ func progress_snapshot() -> Dictionary:
 		"ground_loot_counter": _ground_loot_counter,
 		"stairs_history": _stairs_history.duplicate(true)
 	}
+	if campaign_id.is_empty() and not _party_start_map_id.is_empty():
+		result["party_start_map_id"] = _party_start_map_id
+	return result
 
 
 static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, campaigns: Dictionary = {}) -> GameSession:
@@ -2670,6 +2693,22 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, ca
 	var session := GameSession.new()
 	var current: Dictionary = restored_floors[current_id]
 	session.map_data = current["map"]
+	var starting_id: String = current_id
+	if not saved_campaign_id.is_empty():
+		starting_id = (campaigns[saved_campaign_id] as CampaignDefinition).start_map_id
+	elif snapshot.has("party_start_map_id"):
+		if not (snapshot["party_start_map_id"] is String) or not restored_floors.has(snapshot["party_start_map_id"]):
+			return null
+		starting_id = snapshot["party_start_map_id"]
+	elif not restored_history.is_empty():
+		starting_id = str(restored_history[0]["from"])
+	var starting_map: DungeonMap = maps_by_id.get(starting_id) as DungeonMap
+	if starting_map == null:
+		return null
+	session._party_start_map_id = starting_id
+	session._party_rules = HeroPartyRules.from_metadata(starting_map.metadata)
+	if session._party_rules == null:
+		return null
 	session.player_pos = current["position"]
 	session._ground_loot_counter = int(counter_value)
 	for container in current["ground_loot"]:

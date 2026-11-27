@@ -136,6 +136,7 @@ var _layers_menu: MenuButton
 var _issues_toggle: Button
 var _settings_dialog: AcceptDialog
 var _settings_tabs: TabContainer
+var _party_rules_panel: EditorPartyRulesPanel
 var _test_hero_panel: EditorTestHeroPanel
 var _issues_dialog: PopupPanel
 var _palette_toggle: Button
@@ -764,6 +765,10 @@ func _create_dialogs() -> void:
 	_settings_tabs.add_child(_test_hero_panel)
 	_test_hero_panel.select_party(_test_party_ids)
 	_test_hero_panel.party_selected.connect(_on_test_party_selected)
+	_party_rules_panel = EditorPartyRulesPanel.new()
+	_party_rules_panel.name = "Состав отряда"
+	_settings_tabs.add_child(_party_rules_panel)
+	_party_rules_panel.rules_applied.connect(_on_party_rules_applied)
 	if DeveloperMode.is_available() and not standalone_game:
 		_developer_inventory = DeveloperInventoryDialog.new()
 		_developer_inventory.name = "DeveloperInventory"
@@ -1280,6 +1285,7 @@ func _on_settings_option_selected(id: int) -> void:
 			if map_data == null:
 				return
 			_name_input.text = map_data.display_name
+			_party_rules_panel.show_rules(map_data.metadata)
 			_refresh_stats()
 			_settings_tabs.current_tab = 0
 			_settings_dialog.popup_centered_clamped(Vector2i(490, 260))
@@ -1287,6 +1293,7 @@ func _on_settings_option_selected(id: int) -> void:
 			_open_campaign_manager()
 		SETTINGS_TEST_HERO:
 			_settings_tabs.current_tab = 1
+			_party_rules_panel.show_rules(map_data.metadata)
 			_test_hero_panel.select_party(_test_party_ids)
 			_settings_dialog.popup_centered_clamped(Vector2i(490, 440))
 		SETTINGS_DEVELOPER:
@@ -1907,6 +1914,17 @@ func _generate_map_name() -> void:
 	_name_input.text = new_name
 	_on_name_changed(new_name)
 	_flush_name_autosave()
+
+
+func _on_party_rules_applied(metadata: Dictionary) -> void:
+	if is_play_mode or standalone_game or map_data == null:
+		return
+	_canvas.finish_edit_stroke()
+	if metadata.has(HeroPartyRules.METADATA_KEY):
+		map_data.metadata[HeroPartyRules.METADATA_KEY] = metadata[HeroPartyRules.METADATA_KEY]
+	else:
+		map_data.metadata.erase(HeroPartyRules.METADATA_KEY)
+	_autosave_map()
 
 
 func _on_name_changed(value: String) -> void:
@@ -2950,10 +2968,9 @@ func _developer_session() -> GameSession:
 	if _developer_preview != null:
 		return _developer_preview
 	var temporary_map: DungeonMap = DungeonMap.from_dict(map_data.to_dict().duplicate(true))
-	var session: GameSession = GameSession.start_for_party(temporary_map, _test_party_ids)
+	var session: GameSession = GameSession.start_for_party(temporary_map, _test_party_ids, false, null, true)
 	if session == null:
 		return null
-	session.is_editor_test = true
 	var saved: Dictionary = DeveloperMode.loadout(map_data.map_id, _test_party_ids)
 	if not saved.is_empty() and not session.restore_party_state(saved):
 		_set_status("Инвентарь разработчика не удалось восстановить")
@@ -2987,9 +3004,7 @@ func _start_play_mode() -> void:
 		session = _startup_game_session if _startup_game_session != null else GameSession.start_for_party(map_data, _startup_party_ids, false)
 	else:
 		var test_map: DungeonMap = DungeonMap.from_dict(map_data.to_dict().duplicate(true))
-		session = GameSession.start_for_party(test_map, _test_party_ids, false)
-		if session != null:
-			session.is_editor_test = true
+		session = GameSession.start_for_party(test_map, _test_party_ids, false, null, true)
 	if session == null:
 		_set_status("Нельзя начать игру: на карте нет доступной точки старта героя." if standalone_game else "Нельзя начать тест: поставь на карте точку старта героя.")
 		return

@@ -17,6 +17,7 @@ var tiles: Dictionary = {}
 var _cells: Dictionary = {}
 var _heroes: Array[HeroDefinition] = []
 var _selected: Array[String] = []
+var _party_rules := HeroPartyRules.new()
 var _lifted_id := ""
 var _landing_id := ""
 var _reflow_generation := 0
@@ -135,9 +136,16 @@ func set_transfer(lifted_id: String, landing_id: String) -> void:
 			_set_landing(tiles[id] as HeroCatalogTile, id == _landing_id)
 
 
+func set_party_rules(rules: HeroPartyRules) -> void:
+	_party_rules = rules
+	_sync_visibility(false)
+
+
 func _set_landing(tile: HeroCatalogTile, landing: bool) -> void:
-	tile.modulate.a = 0.0 if landing else 1.0
-	tile.disabled = landing
+	var locked: bool = not _party_rules.allows(tile.hero.hero_id)
+	var shade: float = 0.40 if locked else 1.0
+	tile.modulate = Color(shade, shade, shade, 0.0 if landing else 1.0)
+	tile.disabled = landing or locked
 
 
 func visible_tile_rect(hero_id: String) -> Rect2:

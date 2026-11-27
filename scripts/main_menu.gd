@@ -732,7 +732,7 @@ func _start_selected() -> void:
 	_library.visible = false
 	_hero_selection.visible = true
 	_refresh_background_state()
-	_hero_selection.reset_selection()
+	_hero_selection.configure_party_rules(HeroPartyRules.from_metadata(chosen.metadata))
 	_hero_selection.focus_first()
 
 func _return_to_library() -> void:
@@ -763,6 +763,9 @@ func _launch_selected_party(hero_ids: Array[String]) -> void:
 	if _selected_campaign_id.is_empty():
 		for dungeon in unassigned_maps(_maps_by_id, campaigns):
 			if dungeon.map_id == _selected_game_map.map_id and dungeon.find_entity_position("player_spawn") != Vector2i(-1, -1):
+				if not HeroPartyRules.from_metadata(dungeon.metadata).accepts_party(hero_ids):
+					_show_changed_selection("Состав отряда больше не соответствует настройкам карты.")
+					return
 				game_requested.emit(dungeon, hero_ids.duplicate(), null)
 				return
 		_show_changed_selection("Карта больше не доступна в разделе «Свои карты». Выбери её заново.")
@@ -774,6 +777,9 @@ func _launch_selected_party(hero_ids: Array[String]) -> void:
 	var starting_map: DungeonMap = _maps_by_id.get(campaign.start_map_id) as DungeonMap
 	if starting_map == null or starting_map.find_entity_position("player_spawn") == Vector2i(-1, -1):
 		_show_changed_selection("Стартовая карта кампании недоступна.")
+		return
+	if not HeroPartyRules.from_metadata(starting_map.metadata).accepts_party(hero_ids):
+		_show_changed_selection("Состав отряда больше не соответствует настройкам кампании.")
 		return
 	game_requested.emit(starting_map, hero_ids.duplicate(), campaign)
 

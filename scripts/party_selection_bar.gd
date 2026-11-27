@@ -60,10 +60,11 @@ func _ready() -> void:
 		_highlights.append(highlight)
 
 
-func refresh(ids: Array[String], heroes: Dictionary) -> void:
+func refresh(ids: Array[String], heroes: Dictionary, capacity: int = GameSession.MAX_PARTY_SIZE) -> void:
 	_ids = ids.duplicate()
-	count.text = "Отряд: %d / %d" % [ids.size(), GameSession.MAX_PARTY_SIZE]
+	count.text = "Отряд: %d / %d" % [ids.size(), capacity]
 	for index in range(_buttons.size()):
+		_buttons[index].visible = index < capacity
 		var hero: HeroDefinition = heroes.get(ids[index]) as HeroDefinition if index < ids.size() else null
 		portraits[index].texture = hero.portrait if hero != null else null
 		portraits[index].visible = hero != null
@@ -96,7 +97,7 @@ func slot_at(point: Vector2) -> int:
 	if not is_visible_in_tree():
 		return -1
 	for index in range(_buttons.size()):
-		if target_rect(index).has_point(point):
+		if _buttons[index].is_visible_in_tree() and target_rect(index).has_point(point):
 			return index
 	return -1
 

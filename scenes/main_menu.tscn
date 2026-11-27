@@ -68,10 +68,12 @@ unique_name_in_owner = true
 unique_name_in_owner = true
 flame_size = Vector2(82, 64)
 glow_size = Vector2(180, 118)
-ember_amount = 24
-smoke_amount = 8
+ember_amount = 0
+smoke_amount = 0
 intensity = 1.0
 flicker_speed = 1.35
+
+[node name="CampfireParticles" parent="Artwork/Ambience/Campfire" instance=ExtResource("8_campfire_particles")]
 
 [node name="TorchLeft" parent="Artwork/Ambience" instance=ExtResource("6_fire")]
 scale = Vector2(0.75, 0.75)

@@ -31,7 +31,24 @@ func _run() -> void:
 	var noise_texture: NoiseTexture2D = fog_material.get_shader_parameter("noise_map") as NoiseTexture2D
 	assert(noise_texture != null and noise_texture.seamless)
 	assert(lantern._embers == null and lantern._smoke == null)
-	assert(torch_left.ember_amount < campfire.ember_amount and torch_left.smoke_amount < campfire.smoke_amount)
+	assert(campfire._embers == null and campfire._smoke == null)
+	var campfire_particles: Node2D = campfire.get_node("CampfireParticles")
+	var smoke: CPUParticles2D = campfire_particles.get_node("Smoke")
+	var sparks: CPUParticles2D = campfire_particles.get_node("Sparks")
+	var embers: CPUParticles2D = campfire_particles.get_node("Embers")
+	var emitters: Array[CPUParticles2D] = [smoke, sparks, embers]
+	assert(smoke.amount > torch_left.smoke_amount and sparks.amount > torch_left.ember_amount)
+	assert(smoke.lifetime > sparks.lifetime and embers.lifetime > sparks.lifetime)
+	assert(smoke.gravity.y < 0.0 and sparks.gravity.y < 0.0 and embers.gravity.y > 0.0)
+	assert(smoke.scale_amount_curve.sample(0.0) < smoke.scale_amount_curve.sample(1.0))
+	for emitter in emitters:
+		assert(emitter.local_coords and emitter.emitting and not emitter.one_shot)
+		assert(emitter.texture != null and emitter.color_ramp != null)
+		assert(is_zero_approx(emitter.color_ramp.sample(1.0).a))
+		assert(emitter.preprocess >= emitter.lifetime)
+		assert(artwork.z_index + emitter.z_index < 0)
+	assert(torch_left._embers != null and torch_left._smoke != null)
+	assert(torch_left.get_node_or_null("CampfireParticles") == null)
 	assert(torch_left._flame_material != torch_right._flame_material)
 	assert(torch_left._flame_material.get_shader_parameter("speed") != torch_right._flame_material.get_shader_parameter("speed"))
 	var buttons: Array[StoneMenuButton] = []
@@ -65,6 +82,9 @@ func _run() -> void:
 		assert(fog.global_position.is_equal_approx(background.to_global(texture_size * fog_bounds.position)))
 		assert(fog.size.is_equal_approx(texture_size * fog_bounds.size))
 		assert(fog.get_global_rect().size.is_equal_approx(texture_size * fog_bounds.size * expected_scale))
+		for emitter in emitters:
+			assert(emitter.global_position.is_equal_approx(campfire.to_global(emitter.position)))
+			assert(emitter.global_scale.is_equal_approx(campfire.global_scale))
 		for index in range(fires.size()):
 			var fire: FireEffect = fires[index]
 			var anchor: Vector2 = background.to_global(texture_size * anchors[index])

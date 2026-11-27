@@ -1,0 +1,106 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/effects/fire_smoke.png" id="1_smoke"]
+[ext_resource type="Texture2D" path="res://assets/effects/fire_spark.png" id="2_spark"]
+[ext_resource type="Texture2D" path="res://assets/effects/fire_ember.png" id="3_ember"]
+
+[sub_resource type="Gradient" id="Gradient_smoke"]
+offsets = PackedFloat32Array(0, 0.12, 0.32, 0.72, 1)
+colors = PackedColorArray(0.47, 0.34, 0.25, 0, 0.53, 0.47, 0.42, 0.32, 0.47, 0.49, 0.53, 0.32, 0.43, 0.47, 0.54, 0.15, 0.43, 0.47, 0.54, 0)
+
+[sub_resource type="Curve" id="Curve_smoke_size"]
+_data = [Vector2(0, 0.26), 0.0, 0.0, 0, 0, Vector2(0.4, 0.63), 0.0, 0.0, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="Gradient" id="Gradient_spark"]
+offsets = PackedFloat32Array(0, 0.07, 0.36, 0.76, 1)
+colors = PackedColorArray(1, 0.94, 0.67, 0, 1, 0.94, 0.67, 1, 1, 0.68, 0.21, 0.95, 0.96, 0.25, 0.035, 0.55, 0.7, 0.12, 0.02, 0)
+
+[sub_resource type="Curve" id="Curve_spark_size"]
+_data = [Vector2(0, 0.78), 0.0, 0.0, 0, 0, Vector2(0.22, 1), 0.0, 0.0, 0, 0, Vector2(1, 0.12), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[sub_resource type="Gradient" id="Gradient_ember"]
+offsets = PackedFloat32Array(0, 0.1, 0.4, 0.8, 1)
+colors = PackedColorArray(1, 0.76, 0.3, 0, 1, 0.65, 0.15, 0.95, 0.95, 0.32, 0.055, 0.95, 0.45, 0.09, 0.025, 0.66, 0.2, 0.07, 0.03, 0)
+
+[sub_resource type="Curve" id="Curve_ember_size"]
+_data = [Vector2(0, 0.85), 0.0, 0.0, 0, 0, Vector2(0.45, 1), 0.0, 0.0, 0, 0, Vector2(1, 0.28), 0.0, 0.0, 0, 0]
+point_count = 3
+
+[node name="CampfireParticles" type="Node2D"]
+
+[node name="Smoke" type="CPUParticles2D" parent="."]
+z_index = 2
+position = Vector2(0, -29)
+amount = 30
+lifetime = 4.2
+preprocess = 4.2
+randomness = 0.55
+lifetime_randomness = 0.28
+local_coords = true
+texture = ExtResource("1_smoke")
+emission_shape = 3
+emission_rect_extents = Vector2(13, 7)
+direction = Vector2(0.16, -1)
+spread = 13.0
+gravity = Vector2(9, -7)
+initial_velocity_min = 19.0
+initial_velocity_max = 33.0
+angular_velocity_min = -24.0
+angular_velocity_max = 24.0
+angle_min = -180.0
+angle_max = 180.0
+scale_amount_min = 0.65
+scale_amount_max = 1.05
+scale_amount_curve = SubResource("Curve_smoke_size")
+color_ramp = SubResource("Gradient_smoke")
+
+[node name="Sparks" type="CPUParticles2D" parent="."]
+z_index = 3
+position = Vector2(0, -16)
+amount = 46
+lifetime = 1.65
+preprocess = 1.65
+randomness = 0.78
+lifetime_randomness = 0.4
+local_coords = true
+texture = ExtResource("2_spark")
+emission_shape = 3
+emission_rect_extents = Vector2(25, 8)
+direction = Vector2(0.12, -1)
+spread = 26.0
+gravity = Vector2(9, -16)
+initial_velocity_min = 55.0
+initial_velocity_max = 105.0
+particle_flag_align_y = true
+scale_amount_min = 0.19
+scale_amount_max = 0.38
+scale_amount_curve = SubResource("Curve_spark_size")
+color_ramp = SubResource("Gradient_spark")
+
+[node name="Embers" type="CPUParticles2D" parent="."]
+z_index = 3
+position = Vector2(0, -6)
+amount = 16
+lifetime = 2.35
+preprocess = 2.35
+randomness = 0.72
+lifetime_randomness = 0.3
+local_coords = true
+texture = ExtResource("3_ember")
+emission_shape = 3
+emission_rect_extents = Vector2(25, 4)
+direction = Vector2(0.12, -1)
+spread = 37.0
+gravity = Vector2(7, 30)
+initial_velocity_min = 41.0
+initial_velocity_max = 65.0
+angular_velocity_min = -110.0
+angular_velocity_max = 110.0
+angle_min = -180.0
+angle_max = 180.0
+scale_amount_min = 0.15
+scale_amount_max = 0.27
+scale_amount_curve = SubResource("Curve_ember_size")
+color_ramp = SubResource("Gradient_ember")

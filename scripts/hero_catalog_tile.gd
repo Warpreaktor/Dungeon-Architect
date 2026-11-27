@@ -12,6 +12,7 @@ var _content: BoxContainer
 var _caption: Label
 var _badge: Label
 var _lock_overlay: TextureRect
+var _lock_shade: ColorRect
 var _locked: bool = false
 var _focused: bool = false
 var _party_position: int = -1
@@ -50,14 +51,25 @@ func _ready() -> void:
 	_badge.add_theme_constant_override("shadow_offset_y", 1)
 	_badge.position = Vector2(6, 4)
 	add_child(_badge)
+	_lock_shade = ColorRect.new()
+	_lock_shade.color = Color(0.06, 0.06, 0.07, 0.52)
+	_lock_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lock_shade.visible = false
+	portrait.add_child(_lock_shade)
+	_lock_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
 	_lock_overlay = TextureRect.new()
 	_lock_overlay.texture = LOCK_ICON
 	_lock_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_lock_overlay.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_lock_overlay.stretch_mode = TextureRect.STRETCH_SCALE
 	_lock_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_lock_overlay.visible = false
 	portrait.add_child(_lock_overlay)
 	_lock_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_lock_overlay.offset_left = -8
+	_lock_overlay.offset_top = -8
+	_lock_overlay.offset_right = 8
+	_lock_overlay.offset_bottom = 8
 	set_selection(false, 0)
 	set_locked(_locked)
 
@@ -94,9 +106,11 @@ func set_selection(focused: bool, party_position: int) -> void:
 
 func set_locked(value: bool) -> void:
 	_locked = value
+	if _lock_shade != null:
+		_lock_shade.visible = value
 	if _lock_overlay != null:
 		_lock_overlay.visible = value
-		_lock_overlay.modulate = Color.WHITE
+		_lock_overlay.modulate = Color(1.0, 1.0, 1.0, 0.88)
 	if portrait != null:
 		portrait.self_modulate = Color(0.40, 0.40, 0.40) if value else Color.WHITE
 	if _caption != null:

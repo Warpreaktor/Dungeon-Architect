@@ -7,6 +7,7 @@ const LOCK_OVERLAY: Texture2D = preload("res://assets/ui/lock_overlay.png")
 
 @onready var _background: TextureRect = $Background
 @onready var _frame: TextureRect = $Frame
+@onready var _lock_shade: ColorRect = $LockShade
 @onready var _lock_overlay: TextureRect = $LockOverlay
 
 var _state: State = State.NORMAL
@@ -57,9 +58,10 @@ func set_locked(value: bool) -> void:
 	_locked = value
 	if _lock_overlay == null:
 		return
+	_lock_shade.visible = value
 	_lock_overlay.texture = LOCK_OVERLAY
 	_lock_overlay.visible = value
-	_lock_overlay.modulate = Color.WHITE
+	_lock_overlay.modulate = Color(1.0, 1.0, 1.0, 0.88)
 	var shade: Color = Color(0.40, 0.40, 0.40) if value else Color.WHITE
 	self_modulate = shade
 	_frame.self_modulate = shade

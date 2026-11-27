@@ -12,6 +12,11 @@ signal continue_game_requested(session: GameSession)
 @onready var _veil: ColorRect = $Artwork/Veil
 @onready var _ambience: Node2D = $Artwork/Ambience
 @onready var _tunnel_fog: ColorRect = $Artwork/Ambience/TunnelFog
+@onready var _campaign_artwork: Node2D = $CampaignArtwork
+@onready var _campaign_background: Sprite2D = $CampaignArtwork/Background
+@onready var _campaign_veil: ColorRect = $CampaignArtwork/Veil
+@onready var _campaign_ambience: Node2D = $CampaignArtwork/Ambience
+@onready var _campaign_tunnel_fog: ColorRect = $CampaignArtwork/Ambience/TunnelFog
 @onready var _safe_area: MarginContainer = $SafeArea
 @onready var _logo: TextureRect = %Logo
 @onready var _card: PanelContainer = %Card
@@ -34,6 +39,7 @@ const ASH_STAGGER := 0.04
 const LIBRARY_CAMPAIGNS := 0
 const LIBRARY_PERSONAL := 1
 const TUNNEL_FOG_BOUNDS := Rect2(0.49, 0.46, 0.34, 0.32)
+const CAMPAIGN_TUNNEL_FOG_BOUNDS := Rect2(0.38, 0.25, 0.25, 0.58)
 const CAMPFIRE_ANCHOR := Vector2(0.44258, 0.72051)
 const FIRE_ANCHORS := {
 	"Campfire": CAMPFIRE_ANCHOR,
@@ -42,6 +48,18 @@ const FIRE_ANCHORS := {
 	"TunnelTorchNear": Vector2(0.68062, 0.44633),
 	"TunnelTorchFar": Vector2(0.71651, 0.47715),
 	"Lantern": Vector2(0.11722, 0.47184)
+}
+
+
+const CAMPAIGN_FIRE_ANCHORS := {
+	"TorchFrontLeft": Vector2(0.33074, 0.38257),
+	"TorchFrontRight": Vector2(0.66806, 0.38257),
+	"TorchMidLeftA": Vector2(0.40431, 0.46121),
+	"TorchMidRightA": Vector2(0.59330, 0.46121),
+	"TorchMidLeftB": Vector2(0.46172, 0.53454),
+	"TorchMidRightB": Vector2(0.53408, 0.53454),
+	"TorchDeepLeft": Vector2(0.48983, 0.58874),
+	"TorchDeepRight": Vector2(0.51017, 0.58874)
 }
 
 var _library_mode: int = LIBRARY_CAMPAIGNS
@@ -223,6 +241,7 @@ func _open_audio_settings() -> void:
 func _update_selection_screen() -> void:
 	$SafeArea.visible = not _hero_selection.visible
 	_apply_menu_chrome()
+	_refresh_background_state()
 
 
 func _setup_card_styles() -> void:
@@ -246,6 +265,14 @@ func _apply_menu_chrome() -> void:
 	var menu_mode: bool = _home.visible or _play_actions.visible
 	_logo.visible = menu_mode
 	_card.add_theme_stylebox_override("panel", _menu_style if menu_mode else _panel_style)
+
+
+func _refresh_background_state() -> void:
+	if not is_node_ready():
+		return
+	var use_campaign_artwork: bool = _library.visible and not _hero_selection.visible and _library_mode == LIBRARY_CAMPAIGNS
+	_artwork.visible = not use_campaign_artwork
+	_campaign_artwork.visible = use_campaign_artwork
 
 
 func _resize_layout() -> void:
@@ -308,30 +335,36 @@ func _resize_layout() -> void:
 
 
 func _layout_ambience() -> void:
-	if not is_node_ready() or _background.texture == null or size.x <= 0.0 or size.y <= 0.0:
+	_layout_artwork(_artwork, _background, _veil, _ambience, _tunnel_fog, TUNNEL_FOG_BOUNDS, FIRE_ANCHORS, true)
+	_layout_artwork(_campaign_artwork, _campaign_background, _campaign_veil, _campaign_ambience, _campaign_tunnel_fog, CAMPAIGN_TUNNEL_FOG_BOUNDS, CAMPAIGN_FIRE_ANCHORS, false)
+
+
+func _layout_artwork(artwork: Node2D, background: Sprite2D, veil: ColorRect, ambience: Node2D, tunnel_fog: ColorRect, fog_bounds: Rect2, fire_anchors: Dictionary, clamp_horizontal: bool) -> void:
+	if not is_node_ready() or background.texture == null or size.x <= 0.0 or size.y <= 0.0:
 		return
-	var texture_size: Vector2 = _background.texture.get_size()
+	var texture_size: Vector2 = background.texture.get_size()
 	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
 		return
 	var fill_scale: float = maxf(size.x / texture_size.x, size.y / texture_size.y)
 	var drawn_size: Vector2 = texture_size * fill_scale
-	_artwork.scale = Vector2.ONE * fill_scale
+	artwork.scale = Vector2.ONE * fill_scale
 	var offset: Vector2 = (size - drawn_size) * 0.5
-	var lantern_anchor: Vector2 = FIRE_ANCHORS["Lantern"]
-	var torch_anchor: Vector2 = FIRE_ANCHORS["TorchRight"]
-	var safe_left: float = maxf(0.0, lantern_anchor.x - 0.025) * drawn_size.x
-	var safe_right: float = minf(1.0, torch_anchor.x + 0.025) * drawn_size.x
-	var min_offset: float = maxf(size.x - drawn_size.x, -safe_left)
-	var max_offset: float = minf(0.0, size.x - safe_right)
-	if min_offset <= max_offset:
-		offset.x = clampf(offset.x, min_offset, max_offset)
-	_artwork.position = offset
-	_veil.size = texture_size
-	_tunnel_fog.position = texture_size * TUNNEL_FOG_BOUNDS.position
-	_tunnel_fog.size = texture_size * TUNNEL_FOG_BOUNDS.size
-	for fire_name in FIRE_ANCHORS:
-		var fire: FireEffect = _ambience.get_node(NodePath(str(fire_name))) as FireEffect
-		var anchor: Vector2 = FIRE_ANCHORS[fire_name]
+	if clamp_horizontal:
+		var lantern_anchor: Vector2 = FIRE_ANCHORS["Lantern"]
+		var torch_anchor: Vector2 = FIRE_ANCHORS["TorchRight"]
+		var safe_left: float = maxf(0.0, lantern_anchor.x - 0.025) * drawn_size.x
+		var safe_right: float = minf(1.0, torch_anchor.x + 0.025) * drawn_size.x
+		var min_offset: float = maxf(size.x - drawn_size.x, -safe_left)
+		var max_offset: float = minf(0.0, size.x - safe_right)
+		if min_offset <= max_offset:
+			offset.x = clampf(offset.x, min_offset, max_offset)
+	artwork.position = offset
+	veil.size = texture_size
+	tunnel_fog.position = texture_size * fog_bounds.position
+	tunnel_fog.size = texture_size * fog_bounds.size
+	for fire_name in fire_anchors:
+		var fire: FireEffect = ambience.get_node(NodePath(str(fire_name))) as FireEffect
+		var anchor: Vector2 = fire_anchors[fire_name]
 		fire.position = texture_size * anchor
 
 
@@ -349,6 +382,7 @@ func _open_library(mode: int = LIBRARY_CAMPAIGNS) -> void:
 	_error_message.visible = false
 	_load_saved_maps()
 	_apply_menu_chrome()
+	_refresh_background_state()
 	_resize_layout()
 	if _start_button.disabled:
 		%BackButton.grab_focus()
@@ -366,6 +400,7 @@ func _open_play_menu() -> void:
 	_refresh_continue_action()
 	_play_actions.show()
 	_apply_menu_chrome()
+	_refresh_background_state()
 	_resize_layout()
 	if _continue_game_button.visible:
 		_continue_game_button.grab_focus()
@@ -377,6 +412,7 @@ func _back_to_home() -> void:
 	_play_actions.hide()
 	_home.show()
 	_apply_menu_chrome()
+	_refresh_background_state()
 	_resize_layout()
 	%PlayButton.grab_focus()
 
@@ -508,12 +544,14 @@ func _start_selected() -> void:
 	_selected_campaign_id = selected_campaign_id
 	_library.visible = false
 	_hero_selection.visible = true
+	_refresh_background_state()
 	_hero_selection.reset_selection()
 	_hero_selection.focus_first()
 
 func _return_to_library() -> void:
 	_hero_selection.visible = false
 	_library.visible = true
+	_refresh_background_state()
 	_start_button.grab_focus()
 
 
@@ -553,6 +591,7 @@ func _launch_selected_party(hero_ids: Array[String]) -> void:
 func _show_changed_selection(message: String) -> void:
 	_hero_selection.visible = false
 	_library.visible = true
+	_refresh_background_state()
 	_load_saved_maps()
 	_error_message.text = message
 	_error_message.show()

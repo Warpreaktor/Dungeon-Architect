@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_menu"]
 [ext_resource type="Texture2D" path="res://assets/backgrounds/main_menu_camp_clean.png" id="2_back"]
@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" path="res://scenes/effects/campfire_particles.tscn" id="8_campfire_particles"]
 [ext_resource type="Script" path="res://scripts/ui/stone_menu_button.gd" id="9_stone_button"]
 [ext_resource type="Texture2D" path="res://assets/ui/main_menu_logo.png" id="10_logo"]
+[ext_resource type="Texture2D" path="res://assets/backgrounds/main_menu_campaign_tunnel.png" id="11_campaign_back"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
 bg_color = Color(0.090, 0.132, 0.18, 0.84)
@@ -125,6 +126,109 @@ intensity = 0.56
 flicker_speed = 1.05
 flame_speed = 0.84
 flame_sway = 0.10
+
+
+[node name="CampaignArtwork" type="Node2D" parent="."]
+visible = false
+z_index = -4
+
+[node name="Background" type="Sprite2D" parent="CampaignArtwork"]
+texture = ExtResource("11_campaign_back")
+centered = false
+
+[node name="Veil" type="ColorRect" parent="CampaignArtwork"]
+mouse_filter = 2
+color = Color(0.02, 0.028, 0.043, 0.2)
+
+[node name="Ambience" type="Node2D" parent="CampaignArtwork"]
+
+[node name="TunnelFog" parent="CampaignArtwork/Ambience" instance=ExtResource("7_fog")]
+
+[node name="TorchFrontLeft" parent="CampaignArtwork/Ambience" instance=ExtResource("6_fire")]
+scale = Vector2(0.72, 0.72)
+flame_size = Vector2(60, 94)
+glow_size = Vector2(320, 250)
+ember_amount = 4
+smoke_amount = 2
+intensity = 0.94
+flicker_speed = 1.5
+flame_speed = 1.22
+
+[node name="TorchFrontRight" parent="CampaignArtwork/Ambience" instance=ExtResource("6_fire")]
+scale = Vector2(0.72, 0.72)
+flame_size = Vector2(60, 94)
+glow_size = Vector2(320, 250)
+ember_amount = 4
+smoke_amount = 2
+intensity = 0.94
+flicker_speed = 1.46
+flame_speed = 1.18
+
+[node name="TorchMidLeftA" parent="CampaignArtwork/Ambience" instance=ExtResource("6_fire")]
+scale = Vector2(0.38, 0.38)
+flame_size = Vector2(56, 90)
+glow_size = Vector2(180, 150)
+ember_amount = 1
+smoke_amount = 1
+intensity = 0.72
+flicker_speed = 1.18
+flame_speed = 0.95
+flame_sway = 0.12
+
+[node name="TorchMidRightA" parent="CampaignArtwork/Ambience" instance=ExtResource("6_fire")]
+scale = Vector2(0.38, 0.38)
+flame_size = Vector2(56, 90)
+glow_size = Vector2(180, 150)
+ember_amount = 1
+smoke_amount = 1
+intensity = 0.72
+flicker_speed = 1.12
+flame_speed = 0.92
+flame_sway = 0.12
+
+[node name="TorchMidLeftB" parent="CampaignArtwork/Ambience" instance=ExtResource("6_fire")]
+scale = Vector2(0.28, 0.28)
+flame_size = Vector2(54, 88)
+glow_size = Vector2(150, 128)
+ember_amount = 1
+smoke_amount = 0
+intensity = 0.62
+flicker_speed = 1.08
+flame_speed = 0.86
+flame_sway = 0.11
+
+[node name="TorchMidRightB" parent="CampaignArtwork/Ambience" instance=ExtResource("6_fire")]
+scale = Vector2(0.28, 0.28)
+flame_size = Vector2(54, 88)
+glow_size = Vector2(150, 128)
+ember_amount = 1
+smoke_amount = 0
+intensity = 0.62
+flicker_speed = 1.03
+flame_speed = 0.84
+flame_sway = 0.11
+
+[node name="TorchDeepLeft" parent="CampaignArtwork/Ambience" instance=ExtResource("6_fire")]
+scale = Vector2(0.2, 0.2)
+flame_size = Vector2(52, 84)
+glow_size = Vector2(130, 112)
+ember_amount = 0
+smoke_amount = 0
+intensity = 0.5
+flicker_speed = 0.96
+flame_speed = 0.78
+flame_sway = 0.08
+
+[node name="TorchDeepRight" parent="CampaignArtwork/Ambience" instance=ExtResource("6_fire")]
+scale = Vector2(0.2, 0.2)
+flame_size = Vector2(52, 84)
+glow_size = Vector2(130, 112)
+ember_amount = 0
+smoke_amount = 0
+intensity = 0.5
+flicker_speed = 0.94
+flame_speed = 0.76
+flame_sway = 0.08
 
 [node name="SafeArea" type="MarginContainer" parent="."]
 layout_mode = 1

@@ -363,6 +363,31 @@ static func chest_is_random(chest: Dictionary) -> bool:
 	return str(properties.get("reward", "")).is_empty()
 
 
+static func loot_level(entity: Dictionary) -> int:
+	var raw: Variant = entity.get("properties", {}).get("loot_level", 1)
+	if typeof(raw) not in [TYPE_INT, TYPE_FLOAT]:
+		return 1
+	return LootProfile.normalize_level(int(raw))
+
+
+func set_loot_level(entity_id: String, level: int) -> bool:
+	if level != LootProfile.normalize_level(level):
+		return false
+	for entity in _entities:
+		if str(entity.get("id", "")) != entity_id or str(entity.get("type", "")) not in ["chest", "monster", "stairs_down"]:
+			continue
+		if loot_level(entity) == level:
+			return false
+		var properties: Dictionary = entity.get("properties", {}).duplicate(true)
+		if level == 1:
+			properties.erase("loot_level")
+		else:
+			properties["loot_level"] = level
+		entity["properties"] = properties
+		return true
+	return false
+
+
 func set_loot_profile(entity_id: String, profile_id: String) -> bool:
 	if not profile_id.is_empty() and LootProfileCatalog.get_profile(profile_id) == null:
 		return false

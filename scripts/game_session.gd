@@ -2115,16 +2115,19 @@ func _resolve_source_rewards(source: Dictionary) -> Array[Dictionary]:
 
 func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: int, quantities: Dictionary = {}, source: Dictionary = {}) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
+	var level: int = DungeonMap.loot_level(source)
+	var rules: LootRewardLevel = LootProfile.level_rules(level)
 	if random_mode:
 		var profile: LootProfile = LootProfileCatalog.for_source(source)
 		if profile != null:
-			rewards = profile.roll(trap_random, loot_victories, loot_depth())
+			rewards = profile.roll(trap_random, loot_victories, loot_depth(), level)
 		else:
-			var stage: int = ItemCatalog.LOOT_TABLE.stage_for_progress(loot_victories, loot_depth())
+			var stage: int = rules.stage_for(ItemCatalog.LOOT_TABLE, loot_victories, loot_depth())
 			var reward: Dictionary = ItemCatalog.roll_loot(trap_random, ItemCatalog.LOOT_TABLE, stage)
 			if not reward.is_empty():
 				if bool(reward.get("roll_magic", false)):
 					reward["loot_stage"] = stage
+				rules.apply_quantity(reward)
 				rewards.append(reward)
 	else:
 		for item_id in contents:
@@ -2136,6 +2139,7 @@ func _resolve_rewards(contents: Array[String], random_mode: bool, gold_amount: i
 			var reward: Dictionary = {"item_id": item_id, "quantity": quantity}
 			if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
 				reward["roll_magic"] = true
+				reward["loot_stage"] = maxi(ItemCatalog.LOOT_TABLE.stage_for_victories(loot_victories), rules.minimum_stage)
 			rewards.append(reward)
 	for index in range(rewards.size()):
 		rewards[index] = _materialize_reward(rewards[index], trap_random)

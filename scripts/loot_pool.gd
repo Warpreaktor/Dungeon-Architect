@@ -57,6 +57,15 @@ func _range_value(bounds: Vector2i, rng: RandomNumberGenerator, minimum: int) ->
 	return low if low == high else rng.randi_range(low, high)
 
 
+func possible_item_ids(stage: int) -> Array[String]:
+	var ids: Array[String] = []
+	if maxi(roll_count.x, roll_count.y) <= 0:
+		return ids
+	for item_id in _weights(stage):
+		ids.append(str(item_id))
+	return ids
+
+
 func roll(rng: RandomNumberGenerator, stage: int) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
 	if table == null or rng == null:

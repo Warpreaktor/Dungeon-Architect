@@ -77,6 +77,15 @@ static func quantity_for_entity(entity: Dictionary) -> int:
 	return maxi(1, int(properties.get("quantity", definition.default_quantity)))
 
 
+static func possible_loot_ids(stage: int) -> Array[String]:
+	var ids: Array[String] = []
+	var weights: Dictionary = _prepared_loot_weights(stage)
+	for item_id in weights:
+		if int(weights[item_id]) > 0:
+			ids.append(str(item_id))
+	return ids
+
+
 static func roll_loot(rng: RandomNumberGenerator, table: WeightedLootTable = LOOT_TABLE, stage: int = 0) -> Dictionary:
 	if rng == null:
 		return {}

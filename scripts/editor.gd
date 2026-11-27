@@ -1786,16 +1786,18 @@ func _on_chest_tapped(chest_id: String) -> void:
 	_canvas.finish_edit_stroke()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == chest_id and str(entity.get("type", "")) == "chest":
-			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity), false, DungeonMap.chest_is_random(entity), bool(entity.get("properties", {}).get("hidden", false)), DungeonMap.chest_item_quantities(entity))
+			_chest_popup.configure(chest_id, DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity), false, DungeonMap.chest_is_random(entity), bool(entity.get("properties", {}).get("hidden", false)), DungeonMap.chest_item_quantities(entity), [], entity)
 			_chest_popup.popup_centered_clamped(Vector2i(470, 530), 0.9)
 			return
 
 
-func _on_chest_contents_changed(chest_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary) -> void:
+func _on_chest_contents_changed(chest_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary, reward_level: int = 1) -> void:
 	if is_play_mode:
 		return
 	var before := _canvas.capture_edit_state()
-	if map_data.set_chest_contents(chest_id, contents, gold_amount, random_mode, hidden, quantities):
+	var changed: bool = map_data.set_chest_contents(chest_id, contents, gold_amount, random_mode, hidden, quantities)
+	changed = map_data.set_loot_level(chest_id, reward_level) or changed
+	if changed:
 		_on_canvas_edited()
 		_on_edit_action_committed(before, _canvas.capture_edit_state())
 		_canvas.queue_redraw()
@@ -1807,17 +1809,18 @@ func _on_monster_tapped(monster_entity_id: String) -> void:
 	_canvas.finish_edit_stroke()
 	for entity in map_data.entities:
 		if str(entity.get("id", "")) == monster_entity_id and str(entity.get("type", "")) == "monster":
-			_monster_loot_popup.configure(monster_entity_id, DungeonMap.monster_loot_contents(entity), DungeonMap.monster_gold_amount(entity), true, DungeonMap.monster_loot_is_random(entity), bool(entity.get("properties", {}).get("hidden", false)), DungeonMap.monster_item_quantities(entity), DungeonMap.monster_party_ids(entity))
+			_monster_loot_popup.configure(monster_entity_id, DungeonMap.monster_loot_contents(entity), DungeonMap.monster_gold_amount(entity), true, DungeonMap.monster_loot_is_random(entity), bool(entity.get("properties", {}).get("hidden", false)), DungeonMap.monster_item_quantities(entity), DungeonMap.monster_party_ids(entity), entity)
 			_monster_loot_popup.popup_centered_clamped(Vector2i(470, 630), 0.9)
 			return
 
 
-func _on_monster_configuration_changed(monster_entity_id: String, party: Array[String], contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary) -> void:
+func _on_monster_configuration_changed(monster_entity_id: String, party: Array[String], contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary, reward_level: int = 1) -> void:
 	if is_play_mode or not DungeonMap.valid_monster_party(party):
 		return
 	var before := _canvas.capture_edit_state()
 	var changed: bool = map_data.set_monster_party(monster_entity_id, party)
 	changed = map_data.set_monster_loot(monster_entity_id, contents, gold_amount, random_mode, hidden, quantities) or changed
+	changed = map_data.set_loot_level(monster_entity_id, reward_level) or changed
 	if changed:
 		_on_canvas_edited()
 		_on_edit_action_committed(before, _canvas.capture_edit_state())

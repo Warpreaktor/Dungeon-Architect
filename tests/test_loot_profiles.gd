@@ -2,6 +2,7 @@ extends SceneTree
 
 
 func _initialize() -> void:
+	_test_reward_levels()
 	_test_profile_pools()
 	_test_source_selection()
 	_test_depth_and_rarity()
@@ -13,6 +14,65 @@ func _initialize() -> void:
 	_test_encounter_rewards()
 	print("Loot profiles: sources, depth, rarity, fixed rewards and persistence OK")
 	quit()
+
+
+func _test_reward_levels() -> void:
+	var chest: LootProfile = LootProfileCatalog.get_profile("chest")
+	var purse: LootProfile = LootProfileCatalog.get_profile("coin_purse")
+	var rng := RandomNumberGenerator.new()
+	var replay := RandomNumberGenerator.new()
+	for level in range(1, LootProfile.REWARD_LEVELS.size() + 1):
+		var rules: LootRewardLevel = LootProfile.level_rules(level)
+		assert(rules.stage_for(ItemCatalog.LOOT_TABLE, 3, 2) == 2)
+		rng.seed = 614
+		replay.seed = 614
+		var possible: Array[String] = chest.possible_item_ids(level)
+		for index in range(20):
+			var rewards: Array[Dictionary] = chest.roll(rng, 0, 0, level)
+			assert(rewards == chest.roll(replay, 0, 0, level))
+			assert(rng.state == replay.state)
+			for reward in rewards:
+				assert(str(reward["item_id"]) in possible)
+				if reward.has("loot_stage"):
+					assert(int(reward["loot_stage"]) == rules.minimum_stage)
+		rng.seed = 615
+		replay.seed = 615
+		var baseline: Array[Dictionary] = purse.roll(rng, 0, 0)
+		var adjusted: Array[Dictionary] = purse.roll(replay, 0, 0, level)
+		assert(baseline[0]["item_id"] == adjusted[0]["item_id"] and rng.state == replay.state)
+		assert(int(adjusted[0]["quantity"]) == ceili(int(baseline[0]["quantity"]) * rules.stack_quantity_multiplier))
+	var dungeon := DungeonMap.create_blank(8, 8)
+	assert(dungeon.place_entity("player_spawn", 2, 2))
+	assert(dungeon.place_entity("chest", 3, 2))
+	var entity: Dictionary = dungeon.entities_at(3, 2)[0]
+	var id: String = str(entity["id"])
+	assert(DungeonMap.loot_level(entity) == 1)
+	assert(not dungeon.set_loot_level(id, 0) and not dungeon.set_loot_level(id, 4))
+	assert(dungeon.set_loot_level(id, 3))
+	assert(not dungeon.set_loot_level(id, 3))
+	assert(LootProfileCatalog.for_source(entity) == chest)
+	assert(dungeon.set_chest_contents(id, ["gold", "ring_copper_wire"], 17, false, false, {"gold": 17, "ring_copper_wire": 3}))
+	var json: String = JSON.stringify(dungeon.to_dict())
+	var loaded: DungeonMap = DungeonMap.from_dict(JSON.parse_string(json))
+	assert(DungeonMap.loot_level(loaded.entities_at(3, 2)[0]) == 3)
+	var session: GameSession = _seeded_session(loaded, 616)
+	assert(session.move_by(1, 0))
+	var rewards: Array = session.take_message_events()[0]["loot"]
+	assert(rewards[0] == {"item_id": "gold", "quantity": 17})
+	assert(rewards[1]["quantity"] == 3 and rewards[1]["instances"].size() == 3)
+	assert(JSON.stringify(loaded.to_dict()) == json)
+	assert(loaded.set_loot_level(id, 1))
+	assert(not loaded.entities_at(3, 2)[0]["properties"].has("loot_level"))
+	assert(loaded.set_chest_contents(id, [], 5, true))
+	assert(loaded.set_loot_level(id, 3))
+	var random_session: GameSession = _seeded_session(loaded, 617)
+	var random_replay: GameSession = _seeded_session(loaded, 617)
+	assert(random_session.move_by(1, 0) and random_replay.move_by(1, 0))
+	assert(random_session.take_message_events() == random_replay.take_message_events())
+	assert(random_session.trap_random.state == random_replay.trap_random.state)
+	var state: int = random_session.trap_random.state
+	random_session._open_chest(loaded.entities_at(3, 2)[0])
+	assert(random_session.trap_random.state == state and random_session.take_message_events().is_empty())
 
 
 func _test_profile_pools() -> void:

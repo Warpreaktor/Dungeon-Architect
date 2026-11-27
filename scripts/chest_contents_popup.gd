@@ -2,11 +2,13 @@ class_name ChestContentsPopup
 extends MobileKeyboardPopup
 
 ## Редактор количества наград для сундуков и монстров. Карта хранит ID и количества.
-signal contents_changed(entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary)
-signal monster_configuration_changed(entity_id: String, party: Array[String], contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary)
+signal contents_changed(entity_id: String, contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary, reward_level: int)
+signal monster_configuration_changed(entity_id: String, party: Array[String], contents: Array[String], gold_amount: int, random_mode: bool, hidden: bool, quantities: Dictionary, reward_level: int)
 
 @onready var _title: Label = %Title
 @onready var _random_check: CheckBox = %RandomCheck
+@onready var _reward_level: OptionButton = %RewardLevel
+@onready var _loot_preview: Label = %LootPreview
 @onready var _hidden_check: CheckBox = %HiddenCheck
 @onready var _rows: VBoxContainer = %LootRows
 @onready var _scroll: ScrollContainer = %LootScroll
@@ -32,6 +34,7 @@ const AMOUNT_WIDTH := 94.0
 
 var _entity_id: String = ""
 var _editing_monster: bool = false
+var _source: Dictionary = {}
 var _monster_slot_ids: Array[String] = []
 var _monster_slot_buttons: Array[Button] = []
 var _item_checks: Dictionary = {} # id -> CheckBox
@@ -48,6 +51,9 @@ func _ready() -> void:
 	%KeyboardDoneButton.pressed.connect(_finish_amount)
 	%KeyboardDoneButton.visible = false
 	_random_check.toggled.connect(_refresh_enabled)
+	for level in range(1, LootProfile.REWARD_LEVELS.size() + 1):
+		_reward_level.add_item("Уровень награды %d" % level, level)
+	_reward_level.item_selected.connect(func(_index: int) -> void: _refresh_preview())
 	_build_monster_slots()
 	_build_item_rows()
 
@@ -122,6 +128,7 @@ func _on_monster_slot_choice(item_id: int, slot_index: int) -> void:
 		return
 	_monster_slot_ids[slot_index] = monster_id
 	_refresh_monster_slots()
+	_refresh_preview()
 
 
 func _selected_monster_party() -> Array[String]:
@@ -257,11 +264,15 @@ func _toggle_group(category: String) -> void:
 	header.text = ("▾  " if body.visible else "▸  ") + category
 
 
-func configure(entity_id: String, contents: Array[String], gold_amount: int = 5, is_monster: bool = false, random_mode: bool = true, hidden: bool = false, quantities: Dictionary = {}, monster_ids: Array[String] = []) -> void:
+func configure(entity_id: String, contents: Array[String], gold_amount: int = 5, is_monster: bool = false, random_mode: bool = true, hidden: bool = false, quantities: Dictionary = {}, monster_ids: Array[String] = [], source: Dictionary = {}) -> void:
 	_random_check.show()
 	_hidden_check.show()
 	_entity_id = entity_id
 	_editing_monster = is_monster
+	_source = source.duplicate(true)
+	if _source.is_empty():
+		_source = {"type": "monster" if is_monster else "chest", "properties": {}}
+	_reward_level.select(DungeonMap.loot_level(_source) - 1)
 	_title.text = "Настройки монстров" if is_monster else "Содержимое сундука"
 	_monster_party.visible = is_monster
 	if is_monster:
@@ -297,6 +308,65 @@ func _refresh_enabled(_pressed: bool = false) -> void:
 		var check: CheckBox = _item_checks[item_id]
 		check.disabled = is_random
 		(_item_amounts[item_id] as SpinBox).editable = not is_random and check.button_pressed
+	_refresh_preview()
+
+
+func reward_level() -> int:
+	return LootProfile.normalize_level(_reward_level.get_selected_id())
+
+
+func _preview_source() -> Dictionary:
+	var source: Dictionary = _source.duplicate(true)
+	if _editing_monster:
+		var party: Array[String] = _selected_monster_party()
+		if not party.is_empty():
+			var properties: Dictionary = source.get("properties", {})
+			properties["monster_id"] = party[0]
+			properties["monster_ids"] = party.slice(1)
+			source["properties"] = properties
+	return source
+
+
+func _refresh_preview() -> void:
+	_loot_preview.visible = _random_check.button_pressed
+	if not _loot_preview.visible:
+		return
+	var profile: LootProfile = LootProfileCatalog.for_source(_preview_source())
+	var level: int = reward_level()
+	var rules: LootRewardLevel = LootProfile.level_rules(level)
+	var ids: Array[String] = profile.possible_item_ids(level) if profile != null else ItemCatalog.possible_loot_ids(rules.stage_for(ItemCatalog.LOOT_TABLE, 0, 0))
+	var categories: PackedStringArray = []
+	for item_id in ids:
+		var item: ItemDefinition = ItemCatalog.get_item(item_id)
+		if item == null:
+			continue
+		var category: String = _preview_category(item)
+		if not categories.has(category):
+			categories.append(category)
+	var profile_name: String = profile.display_name if profile != null else "Обычная добыча"
+	_loot_preview.text = "%s\nВозможная добыча (без учёта прогресса): %s" % [profile_name, ", ".join(categories)]
+
+
+func _preview_category(item: ItemDefinition) -> String:
+	match item.category:
+		ItemDefinition.Category.CURRENCY:
+			return "Золото"
+		ItemDefinition.Category.CONSUMABLE:
+			return "Зелья"
+		ItemDefinition.Category.QUEST:
+			return "Ключи"
+		ItemDefinition.Category.EQUIPMENT:
+			match item.equipment_slot:
+				ItemDefinition.EquipmentSlot.WEAPON: return "Оружие"
+				ItemDefinition.EquipmentSlot.SHIELD: return "Щиты"
+				ItemDefinition.EquipmentSlot.HEAD: return "Шлемы"
+				ItemDefinition.EquipmentSlot.BODY: return "Броня"
+				ItemDefinition.EquipmentSlot.GLOVES: return "Перчатки"
+				ItemDefinition.EquipmentSlot.BOOTS: return "Сапоги"
+				ItemDefinition.EquipmentSlot.BELT: return "Пояса"
+				ItemDefinition.EquipmentSlot.NECK: return "Амулеты"
+				ItemDefinition.EquipmentSlot.RING: return "Кольца"
+	return "Прочее"
 
 
 func _on_amount_focused(amount: SpinBox) -> void:
@@ -340,14 +410,13 @@ func _save() -> void:
 		var party: Array[String] = _selected_monster_party()
 		if not DungeonMap.valid_monster_party(party):
 			return
-		monster_configuration_changed.emit(_entity_id, party, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities)
+		monster_configuration_changed.emit(_entity_id, party, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities, reward_level())
 	else:
-		contents_changed.emit(_entity_id, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities)
+		contents_changed.emit(_entity_id, contents, gold_amount, _random_check.button_pressed, _hidden_check.button_pressed, quantities, reward_level())
 	hide()
 
 
 func configure_exit(entity: Dictionary) -> void:
-	configure(str(entity["id"]), DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity), false, false, false, DungeonMap.chest_item_quantities(entity))
+	configure(str(entity["id"]), DungeonMap.chest_contents(entity), DungeonMap.chest_gold_amount(entity), false, DungeonMap.chest_is_random(entity), false, DungeonMap.chest_item_quantities(entity), [], entity)
 	_title.text = "Награда за прохождение"
-	_random_check.hide()
 	_hidden_check.hide()

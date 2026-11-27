@@ -70,6 +70,16 @@ layout_mode = 2
 text = "Случайно"
 icon = ExtResource("2_dice")
 
+[node name="RewardLevel" type="OptionButton" parent="ContentMargin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 44)
+
+[node name="LootPreview" type="Label" parent="ContentMargin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2
+
 [node name="HiddenCheck" type="CheckBox" parent="ContentMargin/Content"]
 unique_name_in_owner = true
 layout_mode = 2

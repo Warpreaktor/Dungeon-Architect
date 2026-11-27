@@ -20,7 +20,7 @@ func _run() -> void:
 	root.add_child(popup)
 	await process_frame
 	var saved: Array = []
-	popup.monster_configuration_changed.connect(func(_id: String, party: Array[String], loot: Array[String], _gold: int, _random: bool, _hidden: bool, quantities: Dictionary) -> void:
+	popup.monster_configuration_changed.connect(func(_id: String, party: Array[String], loot: Array[String], _gold: int, _random: bool, _hidden: bool, quantities: Dictionary, _reward_level: int) -> void:
 		saved.append({"party": party, "loot": loot, "quantities": quantities}))
 	popup.configure("monster", ["gold"], 17, true, false, true, {"gold": 17}, ["skeleton", "hunter"])
 	assert(popup._monster_party.visible)
@@ -67,6 +67,13 @@ func _run() -> void:
 		assert(popup._selected_monster_party() == [monster_id])
 	popup.configure("chest", [], 1)
 	assert(not popup._monster_party.visible)
+	assert(popup._loot_preview.visible and popup._loot_preview.text.contains("Золото"))
+	popup.configure("chest", [], 1, false, true, false, {}, [], {"type": "chest", "properties": {"loot_profile_id": "weapon_rack", "loot_level": 2}})
+	assert(popup.reward_level() == 2)
+	assert(popup._loot_preview.text.contains("Оружие") and not popup._loot_preview.text.contains("Золото"))
+	popup.configure_exit({"id": "exit", "type": "stairs_down", "properties": {"loot_mode": "random", "loot_level": 3}})
+	assert(popup.reward_level() == 3 and popup._random_check.button_pressed)
+	assert(not popup._hidden_check.visible and popup._loot_preview.visible)
 	popup.queue_free()
 	await process_frame
 	await _test_editor_history()
@@ -96,15 +103,19 @@ func _test_editor_history() -> void:
 	_choose(popup, 2, "skeleton")
 	_choose(popup, 3, "lobar")
 	assert(dungeon.to_dict() == before and editor.get("_undo_stack").is_empty())
+	popup._reward_level.select(2)
 	popup.get_node("%CancelButton").pressed.emit()
 	assert(dungeon.to_dict() == before and editor.get("_undo_stack").is_empty())
 	editor.call("_on_monster_tapped", entity_id)
 	assert(popup._selected_monster_party() == ["skeleton"])
+	assert(popup.reward_level() == 1)
+	popup._reward_level.select(2)
 	_choose(popup, 1, "hunter")
 	_choose(popup, 2, "skeleton")
 	_choose(popup, 3, "lobar")
 	popup.get_node("%SaveButton").pressed.emit()
 	var after: Dictionary = dungeon.to_dict().duplicate(true)
+	assert(DungeonMap.loot_level(dungeon.entities_at(3, 2)[0]) == 3)
 	assert(DungeonMap.monster_party_ids(dungeon.entities_at(3, 2)[0]) == ["skeleton", "hunter", "skeleton", "lobar"])
 	assert(dungeon.entities_at(3, 2).size() == 1)
 	assert(DungeonMap.monster_item_quantities(dungeon.entities_at(3, 2)[0]) == {"gold": 17})
@@ -113,6 +124,7 @@ func _test_editor_history() -> void:
 	_assert_saved(editor, path, after)
 	editor.call("_on_monster_tapped", entity_id)
 	assert(popup._selected_monster_party() == ["skeleton", "hunter", "skeleton", "lobar"])
+	assert(popup.reward_level() == 3)
 	popup.get_node("%SaveButton").pressed.emit()
 	assert(editor.get("_undo_stack").size() == 1)
 	editor.call("_undo_edit")
@@ -124,6 +136,7 @@ func _test_editor_history() -> void:
 	var reloaded: DungeonMap = DungeonMap.from_dict(JSON.parse_string(FileAccess.get_file_as_string(path)))
 	assert(reloaded != null and DungeonMap.monster_party_ids(reloaded.entities_at(3, 2)[0]) == ["skeleton", "hunter", "skeleton", "lobar"])
 	assert(DungeonMap.monster_item_quantities(reloaded.entities_at(3, 2)[0]) == {"gold": 17})
+	assert(DungeonMap.loot_level(reloaded.entities_at(3, 2)[0]) == 3)
 	editor.queue_free()
 	await process_frame
 	storage.cleanup()

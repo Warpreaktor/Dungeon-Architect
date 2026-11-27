@@ -138,7 +138,7 @@ func _test_editor_and_legacy_rewards() -> void:
 		assert(popup._item_checks.has(item_id))
 	assert(not popup._item_checks.has("cloth_belt"))
 	var captured: Dictionary = {}
-	popup.contents_changed.connect(func(_entity_id: String, contents: Array[String], _gold: int, _random: bool, _hidden: bool, quantities: Dictionary) -> void:
+	popup.contents_changed.connect(func(_entity_id: String, contents: Array[String], _gold: int, _random: bool, _hidden: bool, quantities: Dictionary, _reward_level: int) -> void:
 		captured["items"] = contents.duplicate()
 		captured["quantities"] = quantities.duplicate()
 	)

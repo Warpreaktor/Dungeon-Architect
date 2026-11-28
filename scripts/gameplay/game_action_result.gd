@@ -10,6 +10,7 @@ var position: Vector2i
 var moved: bool = false
 var terrain_changes: Dictionary = {}
 var discovered_trap: bool = false
+var stop_movement: bool = false
 var interaction_id: int = 0
 var opened_chest_ids: Array[String] = []
 var messages: Array[Dictionary] = []

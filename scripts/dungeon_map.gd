@@ -370,7 +370,7 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 		if not TrapCatalog.has(trap_id):
 			trap_id = TrapCatalog.DEFAULT_TRAP_ID
 		var trap_definition: TrapDefinition = TrapCatalog.get_trap(trap_id)
-		if not trap_definition.can_attach_to("floor") or not trap_placement_error(trap_definition, Vector2i(x, y)).is_empty():
+		if trap_id == SlidingPlates.TRIGGER or not trap_definition.can_attach_to("floor") or not trap_placement_error(trap_definition, Vector2i(x, y)).is_empty():
 			return false
 		properties = {"trap_id": trap_id}
 		properties.merge(TrapCatalog.settings_overrides(trap_definition, options), true)
@@ -392,14 +392,16 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 
 static func is_entity_hidden(entity: Dictionary) -> bool:
 	var kind := str(entity.get("type", ""))
-	if kind not in ["monster", "chest", "trap"]:
+	if kind not in ["monster", "chest"] and not TrapCatalog.is_floor_entity(entity):
 		return false
-	if kind == "trap":
+	if TrapCatalog.is_floor_entity(entity):
 		return bool(TrapCatalog.settings(entity).get("hidden", true))
 	return bool(entity.get("properties", {}).get("hidden", false))
 
 
 static func trap_id(entity: Dictionary) -> String:
+	if entity.get("type") == SlidingPlates.TRIGGER:
+		return SlidingPlates.TRIGGER
 	var properties: Dictionary = entity.get("properties", {})
 	return TrapCatalog.resolve_id(str(properties.get("trap_id", TrapCatalog.DEFAULT_TRAP_ID)))
 
@@ -1126,6 +1128,8 @@ static func from_dict(value: Variant) -> DungeonMap:
 		seen_ids[entity_id] = true
 		var properties: Dictionary = props.duplicate(true)
 		if kind == "trap":
+			if properties.get("trap_id") == SlidingPlates.TRIGGER:
+				return null
 			TrapCatalog.remove_legacy_overrides(properties)
 		elif kind == "door" and properties.get("trap") is Dictionary:
 			TrapCatalog.remove_legacy_overrides(properties["trap"])

@@ -574,7 +574,7 @@ func _build_interface() -> void:
 
 	var traps_section := _palette_section(palette, "Traps", "ЛОВУШКИ")
 	for placement in ["floor", "door"]:
-		var trap_ids: Array[String] = TrapCatalog.list_ids(placement)
+		var trap_ids: Array[String] = TrapCatalog.list_ids(placement, false)
 		if trap_ids.is_empty():
 			continue
 		var trap_tools := _palette_tool_group(traps_section, "FloorTraps" if placement == "floor" else "DoorTraps", "НАПОЛЬНЫЕ" if placement == "floor" else "ДВЕРНЫЕ")
@@ -3536,7 +3536,7 @@ func _present_action_result(moving_session: GameSession, result: GameActionResul
 		return
 	_pending_game_messages.append_array(result.messages)
 	_canvas.set_deferred_chest_visuals(result.opened_chest_ids)
-	if result.discovered_trap:
+	if result.discovered_trap or result.stop_movement:
 		_clear_held_movement()
 	var played_effect: bool = not result.trap_visuals.is_empty() and _canvas.play_trap_visuals(result.trap_visuals, result.position)
 	if played_effect:

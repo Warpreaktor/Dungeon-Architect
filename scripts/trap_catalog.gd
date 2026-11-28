@@ -6,14 +6,17 @@ const LEGACY_OVERRIDE_FIELDS := ["detection_difficulty", "avoidance_difficulty",
 const DEFINITIONS := {
 	"spikes": preload("res://traps/spikes.tres"),
 	"stone_slab": preload("res://traps/stone_slab.tres"),
-	"door_crossbow": preload("res://traps/door_crossbow.tres")
+	"door_crossbow": preload("res://traps/door_crossbow.tres"),
+	SlidingPlates.TRIGGER: preload("res://traps/sliding_plates.tres")
 }
 
 
-static func list_ids(placement: String = "") -> Array[String]:
+static func list_ids(placement: String = "", include_dedicated: bool = true) -> Array[String]:
 	var ids: Array[String] = []
 	for trap_id in DEFINITIONS:
 		var trap: TrapDefinition = DEFINITIONS[trap_id] as TrapDefinition
+		if not include_dedicated and trap_id == SlidingPlates.TRIGGER:
+			continue
 		if placement.is_empty() or trap.can_attach_to(placement):
 			ids.append(str(trap_id))
 	ids.sort()
@@ -34,11 +37,11 @@ static func get_trap(trap_id: String) -> TrapDefinition:
 
 static func settings(entity: Dictionary) -> Dictionary:
 	var kind: String = str(entity.get("type", ""))
-	if kind not in ["door", "trap"]:
+	if kind != "door" and not is_floor_entity(entity):
 		return {}
 	var properties: Dictionary = entity.get("properties", {})
 	var is_door: bool = kind == "door"
-	var trap_id: String = DungeonMap.door_trap_id(entity) if is_door else str(properties.get("trap_id", DEFAULT_TRAP_ID))
+	var trap_id: String = DungeonMap.door_trap_id(entity) if is_door else DungeonMap.trap_id(entity)
 	if is_door and trap_id.is_empty():
 		return {}
 	var definition: TrapDefinition = get_trap(trap_id)
@@ -63,10 +66,16 @@ static func remove_legacy_overrides(properties: Dictionary) -> void:
 		properties.erase(field)
 
 
+static func is_floor_entity(entity: Dictionary) -> bool:
+	return str(entity.get("type", "")) in ["trap", SlidingPlates.TRIGGER]
+
+
 static func from_entity(entity: Dictionary) -> TrapDefinition:
-	if str(entity.get("type", "")) != "trap":
+	if not is_floor_entity(entity):
 		return null
 	var definition: TrapDefinition = get_trap(DungeonMap.trap_id(entity))
+	if definition.trap_id == SlidingPlates.TRIGGER and entity.get("type") != SlidingPlates.TRIGGER:
+		return null
 	return definition if definition.can_attach_to("floor") else null
 
 

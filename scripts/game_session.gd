@@ -44,6 +44,7 @@ var pending_interaction: PendingInteraction
 var _next_interaction_id: int = 0
 var _trap_result_messages: Array[String] = []
 var _trap_visual_events: Array[Dictionary] = []
+var _terrain_changes: Dictionary = {}
 var activated_triggers: Dictionary = {} # ID сработавших триггеров; обнуляется с новой сессией.
 var shown_messages: Dictionary = {} # Авторские сообщения показываются один раз за прохождение.
 var _message_events: Array[Dictionary] = []
@@ -74,6 +75,7 @@ var _pending_return_exit: Dictionary = {}
 
 
 func execute(action: GameAction) -> GameActionResult:
+	_terrain_changes.clear()
 	return GameActionResolver.execute(self, action)
 
 
@@ -1502,7 +1504,7 @@ func is_chest_open(entity: Dictionary) -> bool:
 
 
 func is_entity_hidden_from_hero(entity: Dictionary) -> bool:
-	if str(entity.get("type", "")) == "trap" and is_trap_revealed(entity):
+	if TrapCatalog.is_floor_entity(entity) and is_trap_revealed(entity):
 		return false
 	return DungeonMap.is_entity_hidden(entity) and (hero == null or not hero.has_vision_effect())
 
@@ -1510,7 +1512,9 @@ func is_entity_hidden_from_hero(entity: Dictionary) -> bool:
 func trap_state(entity: Dictionary) -> String:
 	var entity_id: String = str(entity.get("id", ""))
 	if disarmed_traps.has(entity_id):
-		return "discharged" if discharged_traps.has(entity_id) else "disarmed"
+		if discharged_traps.has(entity_id):
+			return "discharged"
+		return "controlled" if entity.get("type") == SlidingPlates.TRIGGER else "disarmed"
 	return "armed"
 
 
@@ -1564,7 +1568,7 @@ func _discover_trap(entity: Dictionary, trap: TrapDefinition, hidden: bool) -> b
 func _discover_floor_traps(cell: Vector2i) -> bool:
 	var discovered: bool = false
 	for entity in map_data.entities_at(cell.x, cell.y):
-		if str(entity.get("type", "")) != "trap":
+		if not TrapCatalog.is_floor_entity(entity):
 			continue
 		var trap: TrapDefinition = TrapCatalog.from_entity(entity)
 		if trap != null and trap.can_attach_to("floor"):
@@ -1768,13 +1772,74 @@ func _apply_trap_effects(trap: TrapDefinition, target: HeroState) -> void:
 	])
 
 
-func _activate_traps_at(cell: Vector2i) -> void:
+func _floor_trap_at(cell: Vector2i) -> Dictionary:
 	for entity in map_data.entities_at(cell.x, cell.y):
-		if str(entity.get("type", "")) != "trap" or is_trap_disarmed(entity):
+		if TrapCatalog.is_floor_entity(entity) and not is_entity_removed(entity):
+			return entity
+	return {}
+
+
+func _activate_traps_at(cell: Vector2i, accepted: Array[String] = []) -> void:
+	for entity in map_data.entities_at(cell.x, cell.y):
+		if not TrapCatalog.is_floor_entity(entity) or is_entity_removed(entity):
 			continue
 		var trap: TrapDefinition = TrapCatalog.from_entity(entity)
-		if trap != null and trap.can_attach_to("floor"):
+		if trap == null:
+			continue
+		if entity.get("type") == SlidingPlates.TRIGGER:
+			_activate_sliding_plates(entity, trap, accepted.has(str(entity["id"])))
+		elif not is_trap_disarmed(entity):
 			_activate_trap(trap, str(entity.get("id", "")))
+
+
+func _activate_sliding_plates(entity: Dictionary, trap: TrapDefinition, deliberate_crossing: bool) -> bool:
+	var state: String = trap_state(entity)
+	if state == "discharged":
+		return false
+	var entity_id: String = str(entity["id"])
+	if state == "armed" and deliberate_crossing:
+		var all_avoided: bool = true
+		for member in _living_party_members():
+			if not trap.check(member, trap_random):
+				all_avoided = false
+		if all_avoided:
+			_append_trap_result("Ловушка «%s» преодолена." % trap.display_name)
+			return false
+	revealed_traps[entity_id] = true
+	var changes: Dictionary = switch_sliding_plates(entity_id)
+	if changes.is_empty():
+		_append_trap_result("Сдвигающиеся плиты заблокированы.")
+		return false
+	_terrain_changes = changes
+	if state == "armed":
+		disarmed_traps[entity_id] = true
+		discharged_traps[entity_id] = true
+	_append_trap_result("Стены лабиринта сдвинулись.")
+	return true
+
+
+func take_terrain_changes() -> Dictionary:
+	var changes: Dictionary = _terrain_changes.duplicate()
+	_terrain_changes.clear()
+	return changes
+
+
+func is_on_controlled_sliding_plates() -> bool:
+	if map_data == null:
+		return false
+	var entity: Dictionary = _find_active_entity(player_pos, SlidingPlates.TRIGGER)
+	return not entity.is_empty() and trap_state(entity) == "controlled"
+
+
+func activate_controlled_sliding_plates(trigger_id: String) -> bool:
+	last_event_message = ""
+	_trap_result_messages.clear()
+	if map_data == null or is_party_defeated() or is_completed or pending_interaction != null or has_pending_encounter():
+		return false
+	var entity: Dictionary = _find_active_entity(player_pos, SlidingPlates.TRIGGER)
+	if entity.is_empty() or str(entity["id"]) != trigger_id or trap_state(entity) != "controlled":
+		return false
+	return _activate_sliding_plates(entity, TrapCatalog.from_entity(entity), false)
 
 
 func has_pending_trap_choice() -> bool:
@@ -1948,7 +2013,8 @@ func resolve_pending_trap_choice(choice: String, actor_index: int = -1) -> bool:
 		failed_trap_disarms[entity_id] = true
 		revealed_traps[entity_id] = true
 		_append_trap_result("%s: не удалось обезвредить ловушку «%s»." % [actor.definition.display_name, trap.display_name])
-		_apply_trap_effects(trap, actor)
+		if kind != SlidingPlates.TRIGGER:
+			_apply_trap_effects(trap, actor)
 		record_casualties()
 		_refresh_visibility()
 		return false
@@ -2070,7 +2136,7 @@ func _move_by(dx: int, dy: int, accepted: Array[String], opener: HeroState, reso
 		return false
 
 	if resolved_door_id.is_empty():
-		var floor_trap: Dictionary = _find_active_entity(target, "trap")
+		var floor_trap: Dictionary = _floor_trap_at(target)
 		if not floor_trap.is_empty() and not is_trap_disarmed(floor_trap) and not is_entity_hidden_from_hero(floor_trap) and not accepted.has(str(floor_trap["id"])):
 			var definition: TrapDefinition = TrapCatalog.from_entity(floor_trap)
 			if definition != null:
@@ -2096,7 +2162,7 @@ func _move_by(dx: int, dy: int, accepted: Array[String], opener: HeroState, reso
 		last_event_message = "Ключ использован. Дверь открыта!"
 
 	if absi(dx) + absi(dy) == 1:
-		var hidden_trap: Dictionary = _find_active_entity(target, "trap")
+		var hidden_trap: Dictionary = _floor_trap_at(target)
 		if not hidden_trap.is_empty() and not is_trap_disarmed(hidden_trap) and not accepted.has(str(hidden_trap["id"])) and is_entity_hidden_from_hero(hidden_trap):
 			var hidden_definition: TrapDefinition = TrapCatalog.from_entity(hidden_trap)
 			if hidden_definition != null and hidden_definition.hidden_entry_reaction == "directional_escape":
@@ -2110,7 +2176,7 @@ func _move_by(dx: int, dy: int, accepted: Array[String], opener: HeroState, reso
 	player_pos = target
 	_advance_movement_effects()
 	if not is_party_defeated():
-		_activate_traps_at(target)
+		_activate_traps_at(target, accepted)
 	record_casualties()
 	if is_party_defeated():
 		_refresh_visibility()

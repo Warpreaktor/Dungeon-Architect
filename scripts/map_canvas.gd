@@ -554,7 +554,7 @@ func _draw() -> void:
 		_draw_player(_player_visual_cell * TILE_SIZE)
 		if _player_visual_cell.distance_to(Vector2(game_session.player_pos)) < 0.01:
 			for entity in map_data.entities_at(game_session.player_pos.x, game_session.player_pos.y):
-				if str(entity.get("type", "")) == "trap" and game_session.is_trap_revealed(entity):
+				if TrapCatalog.is_floor_entity(entity) and game_session.is_trap_revealed(entity):
 					_draw_triggered_trap_marker(_player_visual_cell * TILE_SIZE, entity)
 
 	if _collapse_progress >= 0.0:
@@ -766,7 +766,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 		var kind := str(entity["type"])
 		if mode == "play" and (game_session.is_entity_hidden_from_hero(entity) if game_session != null else DungeonMap.is_entity_hidden(entity)):
 			continue
-		if mode == "play" and kind in ["player_spawn", "trigger", "message", SlidingPlates.TRIGGER]:
+		if mode == "play" and kind in ["player_spawn", "trigger", "message"]:
 			continue
 		drawable_entities += 1
 		var origin := Vector2(x, y) * TILE_SIZE
@@ -777,7 +777,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 			var icon: Texture2D = _monster_icons.get(monster_id, _monster_icons.get(MonsterCatalog.DEFAULT_MONSTER_ID))
 			if icon != null:
 				draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
-		elif kind == "trap":
+		elif kind == "trap" or (mode == "play" and kind == SlidingPlates.TRIGGER):
 			_draw_trap(origin, entity, mode == "play" and game_session != null and game_session.is_trap_disarmed(entity))
 			if mode == "play" and game_session != null and not game_session.is_trap_disarmed(entity):
 				visible_floor_trap = entity
@@ -872,7 +872,7 @@ func _draw_player(origin: Vector2) -> void:
 
 
 func _trap_icon(entity: Dictionary) -> Texture2D:
-	var trap_id := str(entity.get("properties", {}).get("trap_id", TrapCatalog.DEFAULT_TRAP_ID))
+	var trap_id := DungeonMap.trap_id(entity)
 	return _trap_icons.get(trap_id, _trap_icons.get(TrapCatalog.DEFAULT_TRAP_ID))
 
 
@@ -899,6 +899,8 @@ func _draw_trap(origin: Vector2, entity: Dictionary, disarmed: bool) -> void:
 		draw_rect(overlay, Color(0.05, 0.08, 0.12, 0.22))
 		draw_line(overlay.position + Vector2(6, 34), overlay.position + Vector2(34, 6), Color("#9fb2c8"), 2.2)
 		draw_line(overlay.position + Vector2(8, 36), overlay.position + Vector2(36, 8), Color("#1d2631"), 1.0)
+		if entity.get("type") == SlidingPlates.TRIGGER and game_session != null and game_session.trap_state(entity) == "controlled":
+			draw_rect(overlay, Color("#62e0aa"), false, 2.0)
 
 
 func _draw_open_chest(origin: Vector2, entity: Dictionary = {}) -> void:

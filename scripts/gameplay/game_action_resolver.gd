@@ -49,8 +49,9 @@ static func execute(session: GameSession, action: GameAction) -> GameActionResul
 			session.cancel_exit_transition()
 			result.accepted = true
 		GameAction.Kind.SWITCH_SLIDING_PLATES:
-			result.terrain_changes = session.switch_sliding_plates(action.target_id)
-			result.accepted = not result.terrain_changes.is_empty()
+			result.accepted = session.activate_controlled_sliding_plates(action.target_id)
+			if not result.accepted and session.last_event_message.is_empty():
+				return result
 		GameAction.Kind.USE_ITEM:
 			result.item_result = session.use_item(action.item_id, action.recipient, action.bag_index)
 			result.accepted = bool(result.item_result.get("used", false))
@@ -61,7 +62,7 @@ static func execute(session: GameSession, action: GameAction) -> GameActionResul
 		GameAction.Kind.TAKE_LOOT:
 			result.amount = session.take_ground_loot(action.container_id, action.entry_index)
 			result.accepted = result.amount > 0
-	if action.kind in [GameAction.Kind.MOVE, GameAction.Kind.CHOOSE, GameAction.Kind.ENTER_FLOOR]:
+	if action.kind in [GameAction.Kind.MOVE, GameAction.Kind.CHOOSE, GameAction.Kind.ENTER_FLOOR, GameAction.Kind.SWITCH_SLIDING_PLATES]:
 		_collect_exploration_result(session, result, previous_chests if action.kind != GameAction.Kind.ENTER_FLOOR else session.opened_chests)
 	else:
 		_set_status(session, result)
@@ -73,6 +74,8 @@ static func _collect_exploration_result(session: GameSession, result: GameAction
 		if not previous_chests.has(chest_id):
 			result.opened_chest_ids.append(str(chest_id))
 	result.position = session.player_pos
+	result.terrain_changes = session.take_terrain_changes()
+	result.stop_movement = not result.terrain_changes.is_empty() or (result.moved and session.is_on_controlled_sliding_plates())
 	result.messages = session.take_message_events()
 	result.triggers = session.take_trigger_events()
 	result.trap_visuals = session.take_trap_visual_events()

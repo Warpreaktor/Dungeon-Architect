@@ -37,8 +37,8 @@ func _assert_geometry(session: GameSession, shifted: bool) -> void:
 	assert(session.can_enter(TRIGGER_CELL))
 
 
-func _switch(session: GameSession) -> GameActionResult:
-	return session.execute(GameAction.switch_sliding_plates(session.map_data.sliding_plates_trigger_id()))
+func _switch(session: GameSession) -> Dictionary:
+	return session.switch_sliding_plates(session.map_data.sliding_plates_trigger_id())
 
 
 func _test_switching_and_isolation() -> void:
@@ -54,10 +54,9 @@ func _test_switching_and_isolation() -> void:
 	for index in range(100):
 		var shifted: bool = index % 2 == 0
 		var result := _switch(session)
-		assert(result.accepted and result.status == GameActionResult.Status.COMPLETED)
-		assert(not result.moved and result.terrain_changes.size() == 4)
-		assert(result.terrain_changes[MOVING_WALL] == ("floor" if shifted else "wall"))
-		result.terrain_changes.clear()
+		assert(result.size() == 4)
+		assert(result[MOVING_WALL] == ("floor" if shifted else "wall"))
+		result.clear()
 		_assert_geometry(session, shifted)
 		_assert_geometry(other, false)
 		assert(JSON.stringify(data.to_dict()) == original)
@@ -69,7 +68,7 @@ func _test_switching_and_isolation() -> void:
 	assert(not data.sliding_plates_is_shifted())
 	var reach_a: Dictionary = DungeonReachability.analyze(session.map_data)["reachable"]
 	assert(reach_a.has(WALL_TARGET) and not reach_a.has(MOVING_WALL))
-	assert(_switch(session).accepted)
+	assert(not _switch(session).is_empty())
 	var reach_b: Dictionary = DungeonReachability.analyze(session.map_data)["reachable"]
 	assert(not reach_b.has(WALL_TARGET) and reach_b.has(MOVING_WALL))
 	session.player_pos = Vector2i(3, 2)
@@ -84,14 +83,14 @@ func _test_blocked_transaction() -> void:
 	session.player_pos = WALL_TARGET
 	var before := session.floor_state_snapshot()
 	var blocked := _switch(session)
-	assert(not blocked.accepted and blocked.terrain_changes.is_empty())
+	assert(blocked.is_empty())
 	assert(session.floor_state_snapshot() == before)
 	_assert_geometry(session, false)
 	session.player_pos = TRIGGER_CELL
 	var loot: Array[Dictionary] = [{"item_id": "gold", "quantity": 5}]
 	session._append_ground_loot(APPEARING_WALL, loot)
 	before = session.floor_state_snapshot()
-	assert(not _switch(session).accepted)
+	assert(_switch(session).is_empty())
 	assert(session.floor_state_snapshot() == before)
 	var container := session.ground_container_at(APPEARING_WALL)
 	session.player_pos = APPEARING_WALL
@@ -100,24 +99,24 @@ func _test_blocked_transaction() -> void:
 	for kind in ["monster", "chest", "door"]:
 		var entity := {"id": "occupant_" + kind, "type": kind, "x": WALL_TARGET.x, "y": WALL_TARGET.y, "properties": {}}
 		session.map_data._append_entity(entity)
-		assert(not _switch(session).accepted)
+		assert(_switch(session).is_empty())
 		_assert_geometry(session, false)
 		session.map_data._remove_entity(entity)
-	assert(_switch(session).accepted)
+	assert(not _switch(session).is_empty())
 	_assert_geometry(session, true)
 	session.player_pos = VANISHING_WALL
 	before = session.floor_state_snapshot()
-	assert(not _switch(session).accepted)
+	assert(_switch(session).is_empty())
 	assert(session.floor_state_snapshot() == before)
 	_assert_geometry(session, true)
 	session.player_pos = TRIGGER_CELL
 	session._append_ground_loot(MOVING_WALL, loot)
-	assert(not _switch(session).accepted)
+	assert(_switch(session).is_empty())
 	container = session.ground_container_at(MOVING_WALL)
 	session.player_pos = MOVING_WALL
 	assert(session.take_ground_loot(str(container["id"]), 0) == 5)
 	session.player_pos = TRIGGER_CELL
-	assert(_switch(session).accepted)
+	assert(not _switch(session).is_empty())
 	_assert_geometry(session, false)
 
 
@@ -133,7 +132,7 @@ func _test_floor_state_and_save() -> void:
 	var legacy := GameSession.from_progress_snapshot(old_save, maps)
 	assert(legacy != null)
 	_assert_geometry(legacy, false)
-	assert(_switch(session).accepted)
+	assert(not _switch(session).is_empty())
 	session.player_pos = MOVING_WALL
 	session._refresh_visibility()
 	var loot: Array[Dictionary] = [{"item_id": "gold", "quantity": 3}]
@@ -143,18 +142,18 @@ func _test_floor_state_and_save() -> void:
 	var restored := GameSession.from_progress_snapshot(snapshot, maps)
 	assert(restored != null and restored.player_pos == MOVING_WALL)
 	_assert_geometry(restored, true)
-	assert(not _switch(restored).accepted)
+	assert(_switch(restored).is_empty())
 	assert(restored.enter_map(second))
 	var visited_snapshot: Dictionary = JSON.parse_string(JSON.stringify(restored.progress_snapshot()))
 	var loaded := GameSession.from_progress_snapshot(visited_snapshot, maps)
 	assert(loaded != null and loaded.enter_map(first))
 	_assert_geometry(loaded, true)
-	assert(not _switch(loaded).accepted)
+	assert(_switch(loaded).is_empty())
 	var container := loaded.ground_container_at(VANISHING_WALL)
 	loaded.player_pos = VANISHING_WALL
 	assert(loaded.take_ground_loot(str(container["id"]), 0) == 3)
 	loaded.player_pos = TRIGGER_CELL
-	assert(_switch(loaded).accepted)
+	assert(not _switch(loaded).is_empty())
 	_assert_geometry(loaded, false)
 	var invalid := snapshot.duplicate(true)
 	invalid["floors"][first.map_id]["position"] = [WALL_TARGET.x, WALL_TARGET.y]

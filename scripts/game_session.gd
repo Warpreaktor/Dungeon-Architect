@@ -951,6 +951,7 @@ func _capture_floor_state() -> Dictionary:
 	return {
 		"map_id": map_data.map_id,
 		"sliding_plates_shifted": map_data.sliding_plates_is_shifted(),
+		"sliding_plates_trigger_id": map_data.sliding_plates_trigger_id(),
 		"position": player_pos,
 		"ground_loot": _ground_loot_containers.duplicate(true),
 		"exit_rewards": claimed_exit_rewards.duplicate(true),
@@ -1347,6 +1348,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	last_move_detected_trap = false
 	_trap_result_messages.clear()
 	_trap_visual_events.clear()
+	_terrain_changes.clear()
 	activated_triggers = saved.get("triggers", {}).duplicate(true)
 	shown_messages = saved.get("messages", {}).duplicate(true)
 	encounter_monster_id = ""
@@ -1811,6 +1813,17 @@ func _activate_sliding_plates(entity: Dictionary, trap: TrapDefinition, delibera
 		_append_trap_result("Сдвигающиеся плиты заблокированы.")
 		return false
 	_terrain_changes = changes
+	var movements: Array[Dictionary] = []
+	var shifted: bool = map_data.sliding_plates_is_shifted()
+	for mark in map_data.sliding_plates_marks():
+		var cell: Vector2i = SlidingPlates.mark_cell(mark)
+		var operation: String = mark["operation"]
+		if operation == SlidingPlates.TOGGLE:
+			movements.append({"from": cell, "to": cell, "appearing": changes[cell] == "wall"})
+		else:
+			var target: Vector2i = cell + SlidingPlates.DIRECTIONS[operation]
+			movements.append({"from": cell if shifted else target, "to": target if shifted else cell})
+	_trap_visual_events.append({"effect": trap.trigger_visual, "cell": player_pos, "changes": changes.duplicate(), "movements": movements})
 	if state == "armed":
 		disarmed_traps[entity_id] = true
 		discharged_traps[entity_id] = true

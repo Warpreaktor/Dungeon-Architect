@@ -9,6 +9,7 @@ trap_id = "sliding_plates_trigger"
 display_name = "Сдвигающиеся плиты"
 description = "Нажимная плита меняет расположение стен. Обезвреженный механизм позволяет переключать стены повторно."
 icon_art = ExtResource("2_icon")
+trigger_visual = "sliding_plates"
 detection_difficulty = 8
 avoidance_difficulty = 15
 disarm_difficulty = 16

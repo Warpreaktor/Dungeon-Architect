@@ -28,6 +28,9 @@ static func encode_floor(state: Dictionary) -> Dictionary:
 	}
 	for field in FLOOR_FLAGS:
 		result[field] = state.get(field, {}).duplicate(true)
+	var trigger_id: String = str(state.get("sliding_plates_trigger_id", ""))
+	if not trigger_id.is_empty():
+		result["sliding_plates_trigger_id"] = trigger_id
 	if bool(state.get("sliding_plates_shifted", false)):
 		result["sliding_plates_shifted"] = true
 	return result
@@ -35,6 +38,9 @@ static func encode_floor(state: Dictionary) -> Dictionary:
 
 static func decode_floor(data: Variant, map_ref: DungeonMap) -> Dictionary:
 	if not (data is Dictionary) or map_ref == null or str(data.get("map_id", "")) != map_ref.map_id:
+		return {}
+	var trigger_id: String = map_ref.sliding_plates_trigger_id()
+	if data.has("sliding_plates_trigger_id") and (typeof(data["sliding_plates_trigger_id"]) != TYPE_STRING or data["sliding_plates_trigger_id"] != trigger_id or trigger_id.is_empty()):
 		return {}
 	var shifted: Variant = data.get("sliding_plates_shifted", false)
 	if typeof(shifted) != TYPE_BOOL or shifted != map_ref.sliding_plates_is_shifted():
@@ -101,6 +107,7 @@ static func decode_floor(data: Variant, map_ref: DungeonMap) -> Dictionary:
 	var restored: Dictionary = {
 		"map_id": map_ref.map_id,
 		"sliding_plates_shifted": map_ref.sliding_plates_is_shifted(),
+		"sliding_plates_trigger_id": trigger_id,
 		"position": position,
 		"ground_loot": raw_ground.duplicate(true),
 		"revealed": raw_revealed.duplicate(true)

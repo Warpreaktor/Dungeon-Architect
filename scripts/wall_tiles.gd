@@ -13,23 +13,23 @@ static func atlas() -> TileSetAtlasSource:
 	return TILE_SET.get_source(SOURCE_ID) as TileSetAtlasSource
 
 
-static func connection_mask(data: DungeonMap, cell: Vector2i) -> int:
+static func connection_mask(data: DungeonMap, cell: Vector2i, terrain_overrides: Dictionary = {}) -> int:
 	var mask: int = 0
 	for index in range(SIDES.size()):
 		var neighbor: Vector2i = cell + SIDES[index]
-		if data.contains(neighbor.x, neighbor.y) and data.get_terrain(neighbor.x, neighbor.y) == "wall":
+		if data.contains(neighbor.x, neighbor.y) and terrain_overrides.get(neighbor, data.get_terrain(neighbor.x, neighbor.y)) == "wall":
 			mask |= 1 << index
 	return mask
 
 
-static func atlas_coords(data: DungeonMap, cell: Vector2i) -> Vector2i:
+static func atlas_coords(data: DungeonMap, cell: Vector2i, terrain_overrides: Dictionary = {}) -> Vector2i:
 	if _tiles_by_mask.is_empty():
 		_index_tiles()
-	return _tiles_by_mask[connection_mask(data, cell)]
+	return _tiles_by_mask[connection_mask(data, cell, terrain_overrides)]
 
 
-static func texture_region(data: DungeonMap, cell: Vector2i) -> Rect2i:
-	return atlas().get_tile_texture_region(atlas_coords(data, cell))
+static func texture_region(data: DungeonMap, cell: Vector2i, terrain_overrides: Dictionary = {}) -> Rect2i:
+	return atlas().get_tile_texture_region(atlas_coords(data, cell, terrain_overrides))
 
 
 static func _index_tiles() -> void:

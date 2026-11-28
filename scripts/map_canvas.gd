@@ -18,6 +18,8 @@ signal ground_loot_tapped(container_id: String)
 const TILE_SIZE := 48.0
 const FOG_SHADER: Shader = preload("res://shaders/map_fog.gdshader")
 const FOG_COLOR := Color("#05080c")
+const SLIDING_PLATES_SOUND: AudioStream = preload("res://assets/audio/traps/sliding_plates.wav")
+const SLIDING_PLATES_SECONDS := 0.72
 const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.png")
 var _portal_texture: Texture2D = ImageAsset.texture("res://assets/icons/portals/portal_gateway.png")
 var _stairs_up_texture: Texture2D = ImageAsset.texture("res://assets/icons/map_objects/stairs_up.png")
@@ -80,6 +82,11 @@ var _crossbow_source := Vector2i.ZERO
 var _crossbow_target := Vector2i.ZERO
 var _crossbow_avoided: bool = false
 var _trap_playback_destination := Vector2i.ZERO
+var _sliding_progress: float = -1.0
+var _sliding_changes: Dictionary = {}
+var _sliding_previous_terrain: Dictionary = {}
+var _sliding_movements: Array = []
+var _sliding_sound: AudioStreamPlayer
 
 var _hovered := Vector2i(-1, -1)
 var _painting: bool = false
@@ -362,6 +369,8 @@ func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool
 		var effect: String = str(event.get("effect", ""))
 		if effect in ["falling_slab", "spike_burst"] and event.get("cell") is Vector2i:
 			playback_events.append({"effect": effect, "cell": event["cell"]})
+		elif effect == "sliding_plates" and event.get("cell") is Vector2i and event.get("changes") is Dictionary and event.get("movements") is Array:
+			playback_events.append(event)
 		elif effect == "crossbow_shot" and event.get("cell") is Vector2i and event.get("opener_cell") is Vector2i and event["cell"] != event["opener_cell"]:
 			playback_events.append(event)
 	if playback_events.is_empty():
@@ -369,6 +378,14 @@ func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool
 	_cancel_player_step()
 	_trap_playback_destination = destination
 	_trap_playback = create_tween()
+	for event in playback_events:
+		if event["effect"] == "sliding_plates":
+			_sliding_changes = event["changes"].duplicate()
+			for cell in _sliding_changes:
+				_sliding_previous_terrain[cell] = "floor" if _sliding_changes[cell] == "wall" else "wall"
+			_sliding_movements = event["movements"].duplicate(true)
+			_update_sliding_plates(0.0)
+			break
 	var visual_cell: Vector2 = _player_visual_cell
 	for event in playback_events:
 		var cell: Vector2i = event["opener_cell"] if event["effect"] == "crossbow_shot" else event["cell"]
@@ -383,6 +400,10 @@ func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool
 				_trap_playback.tween_callback(_begin_crossbow_shot.bind(event["cell"], cell, bool(event.get("avoided", false))))
 				_trap_playback.tween_method(_update_crossbow_shot, 0.0, 1.0, 0.46)
 				_trap_playback.tween_callback(_clear_crossbow_shot)
+			"sliding_plates":
+				_trap_playback.tween_callback(_play_sliding_plates_sound)
+				_trap_playback.tween_method(_update_sliding_plates, 0.0, 1.0, SLIDING_PLATES_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+				_trap_playback.tween_callback(_clear_sliding_plates)
 			"spike_burst":
 				_trap_playback.tween_callback(_begin_spike_burst.bind(cell))
 				_trap_playback.tween_method(_update_spike_burst, 0.0, 1.0, 0.58)
@@ -442,6 +463,30 @@ func _clear_crossbow_shot() -> void:
 	queue_redraw()
 
 
+func _play_sliding_plates_sound() -> void:
+	if _sliding_sound == null:
+		_sliding_sound = AudioStreamPlayer.new()
+		_sliding_sound.bus = &"SFX"
+		_sliding_sound.stream = SLIDING_PLATES_SOUND
+		add_child(_sliding_sound)
+	_sliding_sound.play()
+
+
+func _update_sliding_plates(progress: float) -> void:
+	_sliding_progress = progress
+	queue_redraw()
+
+
+func _clear_sliding_plates() -> void:
+	_sliding_progress = -1.0
+	_sliding_changes.clear()
+	_sliding_previous_terrain.clear()
+	_sliding_movements.clear()
+	if _sliding_sound != null:
+		_sliding_sound.stop()
+	queue_redraw()
+
+
 func skip_trap_playback() -> void:
 	if _trap_playback != null:
 		_trap_playback.kill()
@@ -454,6 +499,7 @@ func _finish_trap_playback() -> void:
 	_clear_collapse()
 	_clear_spike_burst()
 	_clear_crossbow_shot()
+	_clear_sliding_plates()
 	_update_player_visual_cell(Vector2(_trap_playback_destination))
 	trap_playback_finished.emit()
 
@@ -467,6 +513,7 @@ func _cancel_trap_playback() -> bool:
 	_clear_collapse()
 	_clear_spike_burst()
 	_clear_crossbow_shot()
+	_clear_sliding_plates()
 	return interrupted
 
 
@@ -547,6 +594,8 @@ func _draw() -> void:
 		for x in range(min_x, max_x):
 			_draw_cell(x, y, stairs_up_cell)
 
+	if _sliding_progress >= 0.0:
+		_draw_sliding_plates_transition()
 	if mode == "edit":
 		_draw_sliding_plates_marks(Rect2i(min_x, min_y, max_x - min_x, max_y - min_y))
 
@@ -584,6 +633,37 @@ func _draw() -> void:
 	if not fog_enabled:
 		draw_rect(Rect2(0, 0, map_data.width * TILE_SIZE, map_data.height * TILE_SIZE), Color("#9da5ab"), false, 2.0 / zoom)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_sliding_plates_transition() -> void:
+	for movement in _sliding_movements:
+		var origin: Vector2i = movement["from"]
+		var target: Vector2i = movement["to"]
+		var from_revealed: bool = game_session.is_revealed(origin.x, origin.y)
+		var to_revealed: bool = game_session.is_revealed(target.x, target.y)
+		if not from_revealed and not to_revealed:
+			continue
+		var position: Vector2 = Vector2(origin).lerp(Vector2(target), _sliding_progress)
+		var scale_factor: float = 1.0
+		if origin == target:
+			scale_factor = _sliding_progress if movement["appearing"] else 1.0 - _sliding_progress
+		elif not from_revealed or not to_revealed:
+			position = Vector2(origin if from_revealed else target)
+			scale_factor = 1.0 - _sliding_progress if from_revealed else _sliding_progress
+		if scale_factor <= 0.0:
+			continue
+		var extent: Vector2 = Vector2.ONE * TILE_SIZE * scale_factor
+		var rect := Rect2(position * TILE_SIZE + (Vector2.ONE * TILE_SIZE - extent) * 0.5, extent)
+		var texture: Texture2D = WallTiles.atlas().texture
+		var destination_region: Rect2i = WallTiles.texture_region(map_data, target)
+		if origin == target and movement["appearing"]:
+			draw_texture_rect_region(texture, rect, Rect2(destination_region))
+		else:
+			var source_region: Rect2i = WallTiles.texture_region(map_data, origin, _sliding_previous_terrain)
+			draw_texture_rect_region(texture, rect, Rect2(source_region))
+			if origin != target and source_region != destination_region:
+				var blend: float = smoothstep(0.65, 1.0, _sliding_progress)
+				draw_texture_rect_region(texture, rect, Rect2(destination_region), Color(1.0, 1.0, 1.0, blend))
 
 
 func _draw_sliding_plates_marks(visible_cells: Rect2i) -> void:
@@ -742,7 +822,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 	var is_wall := map_data.get_terrain(x, y) == "wall"
 	var floor_region: Rect2i = FloorTiles.texture_region(map_data, Vector2i(x, y))
 	draw_texture_rect_region(FloorTiles.atlas().texture, rect, Rect2(floor_region))
-	if is_wall:
+	if is_wall and not _sliding_changes.has(Vector2i(x, y)):
 		var source: Rect2i = WallTiles.texture_region(map_data, Vector2i(x, y))
 		draw_texture_rect_region(WallTiles.atlas().texture, rect, Rect2(source))
 	# Полупрозрачный слой анализа виден только автору, не игроку.

@@ -129,6 +129,7 @@ func _test_floor_state_and_save() -> void:
 	assert(session != null)
 	var old_save := session.progress_snapshot()
 	assert(not old_save["floors"][first.map_id].has("sliding_plates_shifted"))
+	old_save["floors"][first.map_id].erase("sliding_plates_trigger_id")
 	var legacy := GameSession.from_progress_snapshot(old_save, maps)
 	assert(legacy != null)
 	_assert_geometry(legacy, false)

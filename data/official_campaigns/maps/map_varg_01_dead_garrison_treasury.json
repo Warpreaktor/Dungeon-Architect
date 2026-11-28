@@ -1096,31 +1096,6 @@
 			"type": "player_spawn",
 			"x": 7,
 			"y": 31
-		},
-		{
-			"id": "ent_857e7c16",
-			"properties": {
-				"walls": [
-					{
-						"operation": "down",
-						"x": 8.0,
-						"y": 32.0
-					},
-					{
-						"operation": "up",
-						"x": 9.0,
-						"y": 32.0
-					},
-					{
-						"operation": "up",
-						"x": 6,
-						"y": 32
-					}
-				]
-			},
-			"type": "sliding_plates_trigger",
-			"x": 7,
-			"y": 33
 		}
 	],
 	"height": 35,

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://clkmt82yg75l"
-path="res://.godot/imported/map_walk.png-ff387d121d3c8da8d05d16bdcce63ba3.ctex"
+uid="uid://b5enjfc6crafk"
+path="res://.godot/imported/near_thigh.png-52531eb81d54750d1ae96b1e64da05d7.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/heroes/volcha/map_walk.png"
-dest_files=["res://.godot/imported/map_walk.png-ff387d121d3c8da8d05d16bdcce63ba3.ctex"]
+source_file="res://assets/heroes/volcha/rig/near_thigh.png"
+dest_files=["res://.godot/imported/near_thigh.png-52531eb81d54750d1ae96b1e64da05d7.ctex"]
 
 [params]
 

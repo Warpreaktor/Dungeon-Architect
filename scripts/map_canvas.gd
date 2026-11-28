@@ -61,6 +61,9 @@ var zoom: float = 1.0
 var _player_visual_cell := Vector2.ZERO
 var _deferred_chest_visuals: Array[String] = []
 var _player_animation := HeroMapAnimation.new()
+var _player_rig_scene: PackedScene
+var _player_rig_viewport: SubViewport
+var _player_rig: HeroMapRig
 var _player_step_tween: Tween
 var _player_flash_tween: Tween
 var _player_flash_color: Color = Color.WHITE
@@ -144,6 +147,7 @@ func _on_canvas_resized() -> void:
 
 
 func set_map(value: DungeonMap) -> void:
+	_clear_player_rig()
 	_player_animation = HeroMapAnimation.new()
 	var interrupted: bool = _cancel_trap_playback()
 	_cancel_player_step()
@@ -197,6 +201,7 @@ func _reset_pointer_state() -> void:
 
 
 func set_game_session(value: GameSession) -> void:
+	_clear_player_rig()
 	_deferred_chest_visuals.clear()
 	var interrupted: bool = _cancel_trap_playback()
 	_cancel_player_step()
@@ -268,33 +273,67 @@ func _update_player_visual_cell(cell: Vector2) -> void:
 
 func _finish_player_step(cell: Vector2) -> void:
 	_player_step_tween = null
-	_player_animation.stop_walk()
+	_stop_player_walk()
 	_update_player_visual_cell(cell)
 	player_step_finished.emit()
 
 
 func _cancel_player_step() -> void:
-	_player_animation.stop_walk()
+	_stop_player_walk()
 	if _player_step_tween != null:
 		_player_step_tween.kill()
 		_player_step_tween = null
 
 
 func _sync_player_animation() -> bool:
-	var frames: SpriteFrames = null
-	if game_session != null and game_session.hero != null and game_session.hero.definition != null:
-		frames = game_session.hero.definition.map_sprite_frames
-	return _player_animation.configure(frames)
+	var definition: HeroDefinition = null
+	if game_session != null and game_session.hero != null:
+		definition = game_session.hero.definition
+	var scene: PackedScene = definition.map_rig_scene if definition != null else null
+	var changed := scene != _player_rig_scene
+	if changed:
+		_clear_player_rig()
+		_player_rig_scene = scene
+		if scene != null:
+			var instance := scene.instantiate()
+			if instance is HeroMapRig:
+				_player_rig = instance as HeroMapRig
+				_player_rig_viewport = SubViewport.new()
+				_player_rig_viewport.name = "HeroRigViewport"
+				_player_rig_viewport.size = _player_rig.render_size
+				_player_rig_viewport.transparent_bg = true
+				_player_rig_viewport.world_2d = World2D.new()
+				_player_rig_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
+				_player_rig_viewport.gui_disable_input = true
+				add_child(_player_rig_viewport)
+				_player_rig_viewport.add_child(_player_rig)
+			else:
+				instance.free()
+	var frames: SpriteFrames = definition.map_sprite_frames if definition != null and not is_instance_valid(_player_rig) else null
+	return _player_animation.configure(frames) or changed
 
 
-func _start_player_walk(direction: Vector2) -> void:
+func _clear_player_rig() -> void:
+	if is_instance_valid(_player_rig_viewport):
+		remove_child(_player_rig_viewport)
+		_player_rig_viewport.queue_free()
+	_player_rig_viewport = null
+	_player_rig = null
+	_player_rig_scene = null
+
+
+func _start_player_walk(direction: Vector2, duration: float = PLAYER_STEP_SECONDS) -> void:
 	_sync_player_animation()
 	_player_animation.start_walk(direction)
+	if is_instance_valid(_player_rig):
+		_player_rig.start_walk(direction, duration)
 	queue_redraw()
 
 
 func _stop_player_walk() -> void:
 	_player_animation.stop_walk()
+	if is_instance_valid(_player_rig):
+		_player_rig.stop_walk()
 	queue_redraw()
 
 
@@ -307,7 +346,7 @@ func _process(delta: float) -> void:
 
 
 func _append_trap_walk(from_cell: Vector2, to_cell: Vector2) -> void:
-	_trap_playback.tween_callback(_start_player_walk.bind(to_cell - from_cell))
+	_trap_playback.tween_callback(_start_player_walk.bind(to_cell - from_cell, PLAYER_STEP_SECONDS * 0.65))
 	_trap_playback.tween_method(_update_player_visual_cell, from_cell, to_cell, PLAYER_STEP_SECONDS * 0.65)
 	_trap_playback.tween_callback(_stop_player_walk)
 
@@ -408,7 +447,7 @@ func skip_trap_playback() -> void:
 
 func _finish_trap_playback() -> void:
 	_trap_playback = null
-	_player_animation.stop_walk()
+	_stop_player_walk()
 	_clear_collapse()
 	_clear_spike_burst()
 	_clear_crossbow_shot()
@@ -417,7 +456,7 @@ func _finish_trap_playback() -> void:
 
 
 func _cancel_trap_playback() -> bool:
-	_player_animation.stop_walk()
+	_stop_player_walk()
 	var interrupted: bool = _trap_playback != null
 	if interrupted:
 		_trap_playback.kill()
@@ -787,7 +826,9 @@ func _draw_door_trap_marker(origin: Vector2, door: Dictionary) -> void:
 
 
 func _draw_player(origin: Vector2) -> void:
-	_sync_player_animation()
+	if is_instance_valid(_player_rig_viewport):
+		draw_texture_rect(_player_rig_viewport.get_texture(), Rect2(origin, Vector2.ONE * TILE_SIZE), false, _player_flash_color)
+		return
 	var frame: Texture2D = _player_animation.texture()
 	if frame != null:
 		if _player_animation.mirrored:

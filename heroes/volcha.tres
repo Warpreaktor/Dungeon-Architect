@@ -5,7 +5,7 @@
 
 [ext_resource type="Texture2D" path="res://assets/heroes/volcha_map.png" id="3_map"]
 
-[ext_resource type="SpriteFrames" path="res://assets/heroes/volcha/map_frames.tres" id="4_frames"]
+[ext_resource type="PackedScene" path="res://scenes/varg_rig.tscn" id="4_rig"]
 
 [resource]
 script = ExtResource("1_script")
@@ -13,7 +13,7 @@ hero_id = "volcha"
 display_name = "Варг"
 portrait = ExtResource("2_portrait")
 map_icon = ExtResource("3_map")
-map_sprite_frames = ExtResource("4_frames")
+map_rig_scene = ExtResource("4_rig")
 max_health = 24
 strength = 6
 agility = 6

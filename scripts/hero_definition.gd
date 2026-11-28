@@ -7,6 +7,7 @@ extends Resource
 @export var portrait: Texture2D
 @export var map_icon: Texture2D
 @export var map_sprite_frames: SpriteFrames
+@export var map_rig_scene: PackedScene
 @export var personal_ability_ids: Array[String] = []
 @export_range(0, 128, 1, "or_greater") var unlocked_personal_ability_count: int = 1
 @export var starting_weapon_id: String = ""

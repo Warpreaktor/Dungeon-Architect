@@ -59,7 +59,6 @@ var show_grid: bool = true
 var camera_offset := Vector2.ZERO
 var zoom: float = 1.0
 var _player_visual_cell := Vector2.ZERO
-var _player_animation := HeroMapAnimation.new()
 var _player_step_tween: Tween
 var _player_flash_tween: Tween
 var _player_flash_color: Color = Color.WHITE
@@ -143,7 +142,6 @@ func _on_canvas_resized() -> void:
 
 
 func set_map(value: DungeonMap) -> void:
-	_player_animation = HeroMapAnimation.new()
 	var interrupted: bool = _cancel_trap_playback()
 	_cancel_player_step()
 	_cancel_player_flash()
@@ -203,8 +201,6 @@ func set_game_session(value: GameSession) -> void:
 	cancel_move_selection()
 	_reset_pointer_state()
 	game_session = value
-	_player_animation = HeroMapAnimation.new()
-	_sync_player_animation()
 	if _fog_layer != null:
 		_fog_layer.hide()
 	if value != null:
@@ -245,7 +241,6 @@ func animate_player_step(from_cell: Vector2i, to_cell: Vector2i) -> void:
 		_player_step_tween.finished.connect(_finish_player_step.bind(Vector2(to_cell)))
 		return
 	_player_visual_cell = Vector2(from_cell)
-	_start_player_walk(Vector2(to_cell - from_cell))
 	_player_step_tween = create_tween()
 	_player_step_tween.set_trans(Tween.TRANS_LINEAR)
 	_player_step_tween.tween_method(_update_player_visual_cell, Vector2(from_cell), Vector2(to_cell), PLAYER_STEP_SECONDS)
@@ -261,48 +256,14 @@ func _update_player_visual_cell(cell: Vector2) -> void:
 
 func _finish_player_step(cell: Vector2) -> void:
 	_player_step_tween = null
-	_player_animation.stop_walk()
 	_update_player_visual_cell(cell)
 	player_step_finished.emit()
 
 
 func _cancel_player_step() -> void:
-	_player_animation.stop_walk()
 	if _player_step_tween != null:
 		_player_step_tween.kill()
 		_player_step_tween = null
-
-
-func _sync_player_animation() -> bool:
-	var frames: SpriteFrames = null
-	if game_session != null and game_session.hero != null and game_session.hero.definition != null:
-		frames = game_session.hero.definition.map_sprite_frames
-	return _player_animation.configure(frames)
-
-
-func _start_player_walk(direction: Vector2) -> void:
-	_sync_player_animation()
-	_player_animation.start_walk(direction)
-	queue_redraw()
-
-
-func _stop_player_walk() -> void:
-	_player_animation.stop_walk()
-	queue_redraw()
-
-
-func _process(delta: float) -> void:
-	if mode != "play" or game_session == null:
-		return
-	var changed := _sync_player_animation()
-	if _player_animation.advance(delta) or changed:
-		queue_redraw()
-
-
-func _append_trap_walk(from_cell: Vector2, to_cell: Vector2) -> void:
-	_trap_playback.tween_callback(_start_player_walk.bind(to_cell - from_cell))
-	_trap_playback.tween_method(_update_player_visual_cell, from_cell, to_cell, PLAYER_STEP_SECONDS * 0.65)
-	_trap_playback.tween_callback(_stop_player_walk)
 
 
 func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool:
@@ -324,7 +285,7 @@ func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool
 	for event in playback_events:
 		var cell: Vector2i = event["opener_cell"] if event["effect"] == "crossbow_shot" else event["cell"]
 		if visual_cell != Vector2(cell):
-			_append_trap_walk(visual_cell, Vector2(cell))
+			_trap_playback.tween_method(_update_player_visual_cell, visual_cell, Vector2(cell), PLAYER_STEP_SECONDS * 0.65)
 		match str(event["effect"]):
 			"falling_slab":
 				_trap_playback.tween_callback(_begin_collapse.bind(cell))
@@ -340,7 +301,7 @@ func play_trap_visuals(events: Array[Dictionary], destination: Vector2i) -> bool
 				_trap_playback.tween_callback(_clear_spike_burst)
 		visual_cell = Vector2(cell)
 	if visual_cell != Vector2(destination):
-		_append_trap_walk(visual_cell, Vector2(destination))
+		_trap_playback.tween_method(_update_player_visual_cell, visual_cell, Vector2(destination), PLAYER_STEP_SECONDS * 0.65)
 	_trap_playback.finished.connect(_finish_trap_playback)
 	return true
 
@@ -401,7 +362,6 @@ func skip_trap_playback() -> void:
 
 func _finish_trap_playback() -> void:
 	_trap_playback = null
-	_player_animation.stop_walk()
 	_clear_collapse()
 	_clear_spike_burst()
 	_clear_crossbow_shot()
@@ -410,7 +370,6 @@ func _finish_trap_playback() -> void:
 
 
 func _cancel_trap_playback() -> bool:
-	_player_animation.stop_walk()
 	var interrupted: bool = _trap_playback != null
 	if interrupted:
 		_trap_playback.kill()
@@ -780,16 +739,6 @@ func _draw_door_trap_marker(origin: Vector2, door: Dictionary) -> void:
 
 
 func _draw_player(origin: Vector2) -> void:
-	_sync_player_animation()
-	var frame: Texture2D = _player_animation.texture()
-	if frame != null:
-		if _player_animation.mirrored:
-			draw_set_transform(camera_offset + (origin + Vector2(TILE_SIZE, 0.0)) * zoom, 0.0, Vector2(-zoom, zoom))
-			draw_texture_rect(frame, Rect2(Vector2.ZERO, Vector2.ONE * TILE_SIZE), false, _player_flash_color)
-			draw_set_transform(camera_offset, 0.0, Vector2.ONE * zoom)
-		else:
-			draw_texture_rect(frame, Rect2(origin, Vector2.ONE * TILE_SIZE), false, _player_flash_color)
-		return
 	var icon: Texture2D = game_session.hero.definition.map_icon if game_session != null and game_session.hero != null and game_session.hero.definition != null else null
 	if icon != null:
 		draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false, _player_flash_color)

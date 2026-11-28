@@ -12,6 +12,7 @@ enum Rank { COMMON, ELITE, BOSS }
 @export var combat_visual_profile: CombatVisualProfile
 @export var portrait_flip_h: bool = false
 @export var icon: Texture2D
+@export var map_rig_scene: PackedScene
 @export var battle_bond: BattleBondDefinition
 @export var fury_rules: MonsterFuryRules
 @export var personal_ability_ids: Array[String] = []

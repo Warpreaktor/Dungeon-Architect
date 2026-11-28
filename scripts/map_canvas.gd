@@ -24,7 +24,7 @@ const HIDDEN_MARKER: Texture2D = preload("res://assets/icons/traps/blind_shroud.
 var _portal_texture: Texture2D = ImageAsset.texture("res://assets/icons/portals/portal_gateway.png")
 var _stairs_up_texture: Texture2D = ImageAsset.texture("res://assets/icons/map_objects/stairs_up.png")
 var _local_portal_textures: Dictionary = {}
-var _monster_icons: Dictionary = {}
+var _monster_rig_viewports: Dictionary = {}
 var _trap_icons: Dictionary = {}
 var _door_trap_icons: Dictionary = {}
 var _fog_layer: ColorRect
@@ -115,10 +115,6 @@ var _settings_tool_pressed_id: String = ""
 
 
 func _ready() -> void:
-	for monster_id in MonsterCatalog.list_ids():
-		_monster_icons[monster_id] = MonsterCatalog.get_monster(monster_id).icon
-	for legacy_id in MonsterCatalog.LEGACY_IDS:
-		_monster_icons[legacy_id] = _monster_icons[MonsterCatalog.resolve_id(legacy_id)]
 	for trap_id in TrapCatalog.list_ids():
 		var trap: TrapDefinition = TrapCatalog.get_trap(trap_id)
 		_trap_icons[trap_id] = trap.icon
@@ -157,6 +153,7 @@ func _on_canvas_resized() -> void:
 
 
 func set_map(value: DungeonMap) -> void:
+	_clear_monster_rigs()
 	_clear_player_rig()
 	_player_animation = HeroMapAnimation.new()
 	var interrupted: bool = _cancel_trap_playback()
@@ -211,6 +208,7 @@ func _reset_pointer_state() -> void:
 
 
 func set_game_session(value: GameSession) -> void:
+	_clear_monster_rigs()
 	_clear_player_rig()
 	_deferred_chest_visuals.clear()
 	var interrupted: bool = _cancel_trap_playback()
@@ -228,6 +226,7 @@ func set_game_session(value: GameSession) -> void:
 		map_data = value.map_data
 		_player_visual_cell = Vector2(value.player_pos)
 		mode = "play"
+		_sync_monster_rigs()
 	else:
 		mode = "edit"
 	queue_redraw()
@@ -308,19 +307,51 @@ func _sync_player_animation() -> bool:
 			var instance := scene.instantiate()
 			if instance is HeroMapRig:
 				_player_rig = instance as HeroMapRig
-				_player_rig_viewport = SubViewport.new()
+				_player_rig_viewport = MapCharacterRig.create_viewport(_player_rig)
 				_player_rig_viewport.name = "HeroRigViewport"
-				_player_rig_viewport.size = _player_rig.render_size
-				_player_rig_viewport.transparent_bg = true
-				_player_rig_viewport.world_2d = World2D.new()
-				_player_rig_viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
-				_player_rig_viewport.gui_disable_input = true
 				add_child(_player_rig_viewport)
 				_player_rig_viewport.add_child(_player_rig)
 			else:
 				instance.free()
 	var frames: SpriteFrames = definition.map_sprite_frames if definition != null and not is_instance_valid(_player_rig) else null
 	return _player_animation.configure(frames) or changed
+
+
+func _sync_monster_rigs() -> void:
+	if game_session == null or map_data == null:
+		return
+	for entity in map_data.entities:
+		if entity.get("type") != "monster" or game_session.is_entity_removed(entity):
+			continue
+		var definition := MonsterCatalog.from_entity(entity)
+		var scene := definition.map_rig_scene
+		if scene == null or _monster_rig_viewports.has(scene):
+			continue
+		var instance := scene.instantiate()
+		if not instance is MapCharacterRig:
+			instance.free()
+			continue
+		var rig := instance as MapCharacterRig
+		var viewport := MapCharacterRig.create_viewport(rig)
+		add_child(viewport)
+		viewport.add_child(rig)
+		_monster_rig_viewports[scene] = viewport
+
+
+func _clear_monster_rigs() -> void:
+	for viewport in _monster_rig_viewports.values():
+		remove_child(viewport)
+		viewport.queue_free()
+	_monster_rig_viewports.clear()
+
+
+func _monster_map_texture(entity: Dictionary) -> Texture2D:
+	var definition := MonsterCatalog.from_entity(entity)
+	if mode == "play" and definition.map_rig_scene != null:
+		var viewport: SubViewport = _monster_rig_viewports.get(definition.map_rig_scene)
+		if is_instance_valid(viewport):
+			return viewport.get_texture()
+	return definition.icon
 
 
 func _clear_player_rig() -> void:
@@ -853,8 +884,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 		if kind == "chest" and ((mode == "play" and game_session != null and game_session.is_chest_open(entity) and not _deferred_chest_visuals.has(str(entity["id"]))) or (not DungeonMap.chest_is_random(entity) and DungeonMap.chest_contents(entity).is_empty())):
 			_draw_open_chest(origin, entity)
 		elif kind == "monster":
-			var monster_id := str(entity.get("properties", {}).get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))
-			var icon: Texture2D = _monster_icons.get(monster_id, _monster_icons.get(MonsterCatalog.DEFAULT_MONSTER_ID))
+			var icon := _monster_map_texture(entity)
 			if icon != null:
 				draw_texture_rect(icon, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		elif kind == "trap" or (mode == "play" and kind == SlidingPlates.TRIGGER):

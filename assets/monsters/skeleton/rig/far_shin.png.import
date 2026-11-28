@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dreniio7nkfig"
-path="res://.godot/imported/frame.png-f1f05b21f61897f79c6f96f7b0d78423.ctex"
+uid="uid://i1ueheihqu3k"
+path="res://.godot/imported/far_shin.png-aa221fe39b7b033efcc7135bf5bde359.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/heroes/volcha/rig/frame.png"
-dest_files=["res://.godot/imported/frame.png-f1f05b21f61897f79c6f96f7b0d78423.ctex"]
+source_file="res://assets/monsters/skeleton/rig/far_shin.png"
+dest_files=["res://.godot/imported/far_shin.png-aa221fe39b7b033efcc7135bf5bde359.ctex"]
 
 [params]
 

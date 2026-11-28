@@ -9,6 +9,8 @@
 
 [ext_resource type="Resource" path="res://combat_visuals/skeleton.tres" id="5_visual"]
 
+[ext_resource type="PackedScene" path="res://scenes/skeleton_map_rig.tscn" id="6_map_rig"]
+
 [resource]
 script = ExtResource("1_script")
 monster_id = "skeleton"
@@ -16,6 +18,7 @@ display_name = "Скелет"
 portrait = ExtResource("2_portrait")
 combat_visual_profile = ExtResource("5_visual")
 icon = ExtResource("3_icon")
+map_rig_scene = ExtResource("6_map_rig")
 personal_ability_ids = Array[String](["skeleton_rusty_slash", "skeleton_bone_kick", "skeleton_bone_ram", "skeleton_grave_howl"])
 ai_profiles = Array[ExtResource("1_h25de")]([ExtResource("4_profile")])
 weapon_spawn_chance_percent = 50

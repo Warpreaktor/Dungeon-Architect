@@ -1,0 +1,52 @@
+[gd_resource type="Resource" script_class="CombatVisualProfile" load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat_visual_profile.gd" id="1_profile"]
+[ext_resource type="Script" path="res://scripts/combat_visual_pose.gd" id="2_pose"]
+[ext_resource type="Texture2D" path="res://assets/combat_poses/skeleton/idle.png" id="3_idle"]
+[ext_resource type="Texture2D" path="res://assets/combat_poses/skeleton/wind_up.png" id="4_wind_up"]
+[ext_resource type="Texture2D" path="res://assets/combat_poses/skeleton/strike.png" id="5_strike"]
+[ext_resource type="Texture2D" path="res://assets/combat_poses/skeleton/hurt.png" id="6_hurt"]
+
+[sub_resource type="Resource" id="Pose_idle"]
+script = ExtResource("2_pose")
+texture = ExtResource("3_idle")
+ground_anchor = Vector2(0.55, 0.975)
+hit_anchor = Vector2(0.56, 0.43)
+effect_anchor = Vector2(0.04, 0.25)
+height_scale = 1.00000
+embedded_slash = false
+
+[sub_resource type="Resource" id="Pose_wind_up"]
+script = ExtResource("2_pose")
+texture = ExtResource("4_wind_up")
+ground_anchor = Vector2(0.52, 0.96)
+hit_anchor = Vector2(0.58, 0.48)
+effect_anchor = Vector2(0.28, 0.02)
+height_scale = 0.98857
+embedded_slash = false
+
+[sub_resource type="Resource" id="Pose_strike"]
+script = ExtResource("2_pose")
+texture = ExtResource("5_strike")
+ground_anchor = Vector2(0.65, 0.95)
+hit_anchor = Vector2(0.49, 0.53)
+effect_anchor = Vector2(0.22, 0.91)
+height_scale = 0.91387
+embedded_slash = true
+
+[sub_resource type="Resource" id="Pose_hurt"]
+script = ExtResource("2_pose")
+texture = ExtResource("6_hurt")
+ground_anchor = Vector2(0.49, 0.96)
+hit_anchor = Vector2(0.58, 0.4)
+effect_anchor = Vector2(0.5, 0.4)
+height_scale = 0.96265
+embedded_slash = false
+
+[resource]
+script = ExtResource("1_profile")
+faces_right = false
+idle = SubResource("Pose_idle")
+wind_up = SubResource("Pose_wind_up")
+strike = SubResource("Pose_strike")
+hurt = SubResource("Pose_hurt")

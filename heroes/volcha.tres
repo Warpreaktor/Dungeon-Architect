@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="HeroDefinition" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="HeroDefinition" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/hero_definition.gd" id="1_script"]
 [ext_resource type="Texture2D" path="res://assets/heroes/volcha_portrait.png" id="2_portrait"]
@@ -7,11 +7,14 @@
 
 [ext_resource type="PackedScene" path="res://scenes/varg_rig.tscn" id="4_rig"]
 
+[ext_resource type="Resource" path="res://combat_visuals/varg.tres" id="5_visual"]
+
 [resource]
 script = ExtResource("1_script")
 hero_id = "volcha"
 display_name = "Варг"
 portrait = ExtResource("2_portrait")
+combat_visual_profile = ExtResource("5_visual")
 map_icon = ExtResource("3_map")
 map_rig_scene = ExtResource("4_rig")
 max_health = 24

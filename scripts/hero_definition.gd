@@ -5,6 +5,7 @@ extends Resource
 @export var hero_id: String = ""
 @export var display_name: String = ""
 @export var portrait: Texture2D
+@export var combat_visual_profile: CombatVisualProfile
 @export var map_icon: Texture2D
 @export var map_sprite_frames: SpriteFrames
 @export var map_rig_scene: PackedScene

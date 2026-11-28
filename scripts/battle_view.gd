@@ -82,6 +82,8 @@ var _mounted_details: Label
 var _mounted_commander_energy: String = ""
 var _visible_energy: Dictionary = {}
 var _impact_originals: Dictionary = {}
+var _figure_profiles: Dictionary = {}
+var _impact_field_rect: Rect2
 var _touch_info: TouchInfoOverlay
 var _visible_hero_hp: int = 0
 var _visible_enemy_hp: int = 0
@@ -211,7 +213,9 @@ func _ready() -> void:
 	_enemy_health_meter.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
 	_hero_health_meter.get_node("HealthColumn/HealthBar").custom_minimum_size.x = 0.0
 	_battlefield.resized.connect(_layout_party_cards)
+	($OuterMargin/Main/BottomPanel as Control).resized.connect(_layout_party_cards)
 	resized.connect(_layout_party_cards)
+	visibility_changed.connect(_layout_party_cards)
 	_layout_party_cards()
 	_result_text.text = ""
 	modulate.a = 0.0
@@ -300,8 +304,13 @@ func _equalize_hero_cards() -> void:
 
 
 func _layout_party_cards() -> void:
+	var figures: bool = _has_combat_figures()
+	for party in [_hero_party, _enemy_party]:
+		(party.get_parent() as VBoxContainer).alignment = BoxContainer.ALIGNMENT_BEGIN if figures else BoxContainer.ALIGNMENT_CENTER
 	_equalize_hero_cards()
 	_equalize_enemy_cards()
+	if is_instance_valid(_impact_layer):
+		_fit_impact_layer()
 
 
 func _fit_party_cards(party: HBoxContainer, portrait: TextureRect, actor_name: Label, health: HealthMeter, energy: Label) -> void:
@@ -318,10 +327,21 @@ func _fit_party_cards(party: HBoxContainer, portrait: TextureRect, actor_name: L
 	var width: float = clampf(floorf((available - gap * (count - 1)) / count), 1.0, 202.0)
 	var height: float = maxf(_battlefield.size.y, 1.0)
 	var side: float = maxf(1.0, minf(160.0, minf(width - 12.0, height * 0.48)))
+	var figures: bool = _has_combat_figures()
+	if figures:
+		var largest_team: int = maxi(_visible_card_count(_hero_party), _visible_card_count(_enemy_party))
+		var shared_gap: float = 6.0 if largest_team > 2 else 12.0
+		var field_budget: float = _available_figure_height()
+		side = BattleFigureLayout.slot_side(available, field_budget, largest_team, shared_gap)
+		side = minf(side, maxf(1.0, floorf(field_budget - _figure_hud_height() - 2.0)))
+		if largest_team > 1:
+			side = minf(side, 202.0 - BattleFigureLayout.CARD_INSET)
+		width = maxf(width, side + BattleFigureLayout.CARD_INSET)
 	var font_size: int = clampi(floori(width / 8.0), 9, 15)
 	for child in party.get_children():
 		var card: PanelContainer = child as PanelContainer
 		card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		card.size_flags_vertical = Control.SIZE_SHRINK_BEGIN if figures else Control.SIZE_SHRINK_CENTER
 		card.custom_minimum_size = Vector2(width, 0)
 		var margin: MarginContainer = card.get_child(0) as MarginContainer
 		if margin != null:
@@ -340,6 +360,62 @@ func _fit_party_cards(party: HBoxContainer, portrait: TextureRect, actor_name: L
 		_mounted_details.clip_text = true
 		_mounted_details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_mounted_details.add_theme_font_size_override("font_size", font_size)
+
+
+func _available_figure_height() -> float:
+	var margins: MarginContainer = $OuterMargin
+	var main: VBoxContainer = $OuterMargin/Main
+	var height: float = size.y - margins.get_theme_constant("margin_top") - margins.get_theme_constant("margin_bottom")
+	for child in main.get_children():
+		if child != _battlefield and child.visible:
+			height -= child.get_combined_minimum_size().y + main.get_theme_constant("separation")
+	return maxf(height, 1.0)
+
+
+func _figure_hud_height() -> float:
+	var result: float = 0.0
+	for party in [_hero_party, _enemy_party]:
+		for card in party.get_children():
+			if not card.visible:
+				continue
+			var portrait: TextureRect
+			if card is BattleSupportEnemyView:
+				portrait = (card as BattleSupportEnemyView).portrait_node()
+			else:
+				portrait = _hero_portrait if party == _hero_party else _enemy_portrait
+			result = maxf(result, card.get_combined_minimum_size().y - portrait.get_combined_minimum_size().y)
+	return result
+
+
+func _visible_card_count(party: HBoxContainer) -> int:
+	var count: int = 0
+	for card in party.get_children():
+		if card.visible:
+			count += 1
+	return count
+
+
+func _has_combat_figures() -> bool:
+	for portrait in _figure_profiles:
+		if is_instance_valid(portrait) and (portrait as TextureRect).is_visible_in_tree():
+			return true
+	return false
+
+
+func _set_combat_figure(portrait: TextureRect, profile: CombatVisualProfile, faces_right: bool) -> void:
+	_figure_profiles.erase(portrait)
+	portrait.remove_meta(&"combat_figure")
+	var texture: AtlasTexture = BattleFigureLayout.idle_texture(profile)
+	if texture != null:
+		portrait.texture = texture
+		portrait.flip_h = profile.should_flip(faces_right)
+		portrait.set_meta(&"combat_figure", true)
+		_figure_profiles[portrait] = profile
+	for collection in [_turn_frame_overlays, _target_outlines]:
+		for marker in collection.values():
+			var panel: Panel = marker as Panel
+			if panel != null and panel.get_parent() == portrait:
+				BattleFigureLayout.configure_marker(panel, texture != null, collection == _turn_frame_overlays)
 
 
 func _fit_meter(health: HealthMeter, font_size: int) -> void:
@@ -516,6 +592,7 @@ func _configure_enemy_cards() -> void:
 		var definition: MonsterDefinition = state.enemy_definition_for(actor_id)
 		view.configure(actor, _enemy_texture(definition) if definition != null else null,
 			_enemy_name_for_id(actor_id), definition.portrait_flip_h if definition != null else false)
+		_set_combat_figure(view.portrait_node(), definition.combat_visual_profile if definition != null else null, false)
 		view.hide_action_slots()
 		if actor != null:
 			_extra_enemy_hp[actor_id] = actor.health
@@ -534,6 +611,7 @@ func _sync_enemy_formation() -> void:
 	_enemy_health_meter.tooltip_text = primary.display_name if _mounted_display else ""
 	_enemy_portrait.texture = _enemy_texture(visual)
 	_enemy_portrait.flip_h = visual.portrait_flip_h
+	_set_combat_figure(_enemy_portrait, visual.combat_visual_profile, false)
 	for actor_id in _extra_enemy_views:
 		var card: BattleSupportEnemyView = _extra_enemy_views[actor_id]
 		var actor: BattleParticipant = state.get_participant(actor_id)
@@ -544,6 +622,7 @@ func _sync_enemy_formation() -> void:
 		if commander != null:
 			if state.battle_bond.commander_separated_portrait != null:
 				card.portrait_node().texture = state.battle_bond.commander_separated_portrait
+				_set_combat_figure(card.portrait_node(), null, false)
 			_status_presenter.move_markers(state.bond_commander_id, _enemy_portrait if _mounted_display else card.portrait_node(), _mounted_display)
 			_mounted_commander_energy = "Эн. %d/%d" % [commander.current_energy(), commander.max_energy]
 	_main_enemy_card.visible = true
@@ -585,6 +664,7 @@ func begin(combat: CombatSession, hero: HeroState, session: GameSession = null) 
 	_action_session = session
 	_completion_result = null
 	_combat = combat
+	_figure_profiles.clear()
 	_manual_started = false
 	_selected_manual_slot = -2
 	_round_mode = true
@@ -595,7 +675,9 @@ func begin(combat: CombatSession, hero: HeroState, session: GameSession = null) 
 	_extra_hero_hp.clear()
 	_extra_hero_max.clear()
 	for card in _extra_hero_views.values():
-		(card as Control).hide()
+		var extra: BattleSupportEnemyView = card as BattleSupportEnemyView
+		extra.hide()
+		_set_combat_figure(extra.portrait_node(), null, true)
 	for extra_id in combat.battle_state.hero_ids():
 		if extra_id == "hero" or not _extra_hero_views.has(extra_id):
 			continue
@@ -604,13 +686,16 @@ func begin(combat: CombatSession, hero: HeroState, session: GameSession = null) 
 		var extra_view: BattleSupportEnemyView = _extra_hero_views[extra_id] as BattleSupportEnemyView
 		var texture: Texture2D = extra_member.definition.portrait if extra_member != null and extra_member.definition != null else null
 		extra_view.configure(extra_actor, texture, _hero_name_for_id(extra_id))
+		_set_combat_figure(extra_view.portrait_node(), extra_member.definition.combat_visual_profile if extra_member != null and extra_member.definition != null else null, true)
 		extra_view.reveal_all()
 		_extra_hero_hp[extra_id] = extra_actor.health
 		_extra_hero_max[extra_id] = extra_actor.max_health
-	call_deferred("_equalize_hero_cards")
+	call_deferred("_layout_party_cards")
 	if hero.definition != null:
 		_hero_name.text = hero.definition.display_name
 		_hero_portrait.texture = hero.definition.portrait
+		_hero_portrait.flip_h = false
+		_set_combat_figure(_hero_portrait, hero.definition.combat_visual_profile, true)
 	_defense_idle_color = Color(0.55, 0.60, 0.67, 0.65)
 	_hero_attack_value.text = str(_basic_strike_damage(_combat.battle_state.get_hero()))
 	_hero_strength_value.text = "%d" % _combat.battle_state.get_hero().effective_strength()
@@ -624,6 +709,7 @@ func begin(combat: CombatSession, hero: HeroState, session: GameSession = null) 
 	_enemy_agility_value.text = "%d" % _combat.battle_state.get_enemy().effective_agility()
 	_set_block_display("enemy", _combat.battle_state.get_enemy().block_armor)
 	_enemy_portrait.modulate = Color.WHITE
+	_hero_portrait.modulate = Color.WHITE
 	_hero_health_meter.set_health(hero.health, hero.effective_max_health())
 	_refresh_energy_labels()
 	_enemy_health_meter.set_health(combat.enemy_health, combat.enemy_max_health)
@@ -996,8 +1082,9 @@ func _create_impact_layer() -> void:
 	_impact_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_impact_layer.z_index = 15
 	add_child(_impact_layer)
-	_impact_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_impact_layer.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	_impact_layer.size = size
+	_impact_field_rect = Rect2(_battlefield.global_position - global_position, _battlefield.size)
 	_impact_portraits.clear()
 	_impact_origin.clear()
 	_impact_idle.clear()
@@ -1024,6 +1111,8 @@ func _create_impact_layer() -> void:
 		portrait.texture = original.texture
 		portrait.material = original.material
 		portrait.flip_h = original.flip_h
+		if original.has_meta(&"combat_figure"):
+			portrait.set_meta(&"combat_figure", true)
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1057,6 +1146,15 @@ func _create_impact_layer() -> void:
 		_status_presenter.attach_impact(actor_id, portrait)
 		# Не hide(): скрытый узел изменил бы расчёт VBoxContainer и сдвинул HUD.
 		original.modulate.a = 0.0
+
+
+func _fit_impact_layer() -> void:
+	if not is_instance_valid(_impact_layer) or _impact_field_rect.size.x <= 0.0 or _impact_field_rect.size.y <= 0.0:
+		return
+	var field: Rect2 = Rect2(_battlefield.global_position - global_position, _battlefield.size)
+	var factor: float = minf(field.size.x / _impact_field_rect.size.x, field.size.y / _impact_field_rect.size.y)
+	_impact_layer.scale = Vector2.ONE * factor
+	_impact_layer.position = field.position + Vector2((field.size.x - _impact_field_rect.size.x * factor) * 0.5, 0.0) - _impact_field_rect.position * factor
 
 
 func _clear_impact_layer() -> void:
@@ -1149,9 +1247,14 @@ func _queue_single_attack(event: Dictionary) -> void:
 	var target_origin: Vector2 = _impact_origin[target_id]
 	var delta: Vector2 = target_origin + target.size * 0.5 - origin - attacker.size * 0.5
 	var windup: Vector2 = origin - delta.normalized() * attacker.size.x * clash_recoil_fraction
-	var contact: Vector2 = BattleClashGeometry.contact_positions(_impact_origin,
-		{actor_id: attacker.size, target_id: target.size}, {actor_id: target_id}, clash_contact_overlap_fraction)[actor_id]
-	_playback.tween_callback(_set_attack_layer.bind(attacker, true))
+	var attacker_rect: Rect2 = BattleFigureLayout.visual_rect(attacker)
+	var target_rect: Rect2 = BattleFigureLayout.visual_rect(target)
+	var contact: Vector2 = BattleClashGeometry.contact_positions(
+		{actor_id: origin + attacker_rect.position, target_id: target_origin + target_rect.position},
+		{actor_id: attacker_rect.size, target_id: target_rect.size}, {actor_id: target_id}, clash_contact_overlap_fraction)[actor_id] - attacker_rect.position
+	if attacker.has_meta(&"combat_figure") and target.has_meta(&"combat_figure"):
+		contact.y = origin.y
+	_playback.tween_callback(_set_attack_layers.bind(attacker, target, true))
 	_playback.tween_property(attacker, "position", windup, clash_windup_seconds)
 	var approach: float = clampf(BattleClashGeometry.approach_seconds(clash_impact_seconds,
 		{actor_id: windup}, {actor_id: contact}, {actor_id: attacker.size}), clash_impact_seconds, maxf(clash_impact_seconds, 0.48))
@@ -1160,11 +1263,12 @@ func _queue_single_attack(event: Dictionary) -> void:
 	_playback.tween_interval(clash_hold_seconds)
 	_playback.tween_property(attacker, "position", origin, clash_recover_seconds)
 	_playback.parallel().tween_property(target, "modulate", Color.WHITE, clash_recover_seconds)
-	_playback.tween_callback(_set_attack_layer.bind(attacker, false))
+	_playback.tween_callback(_set_attack_layers.bind(attacker, target, false))
 
 
-func _set_attack_layer(portrait: TextureRect, attacking: bool) -> void:
-	portrait.z_index = 1 if attacking else 0
+func _set_attack_layers(attacker: TextureRect, target: TextureRect, attacking: bool) -> void:
+	attacker.z_index = 2 if attacking else 0
+	target.z_index = 1 if attacking else 0
 
 
 func _show_clash_ability(event: Dictionary) -> void:

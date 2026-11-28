@@ -61,6 +61,8 @@ var _is_playing_back: bool = false
 ## Зафиксированная раскладка слотов, включая пропуски между приёмами.
 var _committed_slots: Array[String] = []
 var _items_session: GameSession
+var _action_session: GameSession
+var _completion_result: GameActionResult
 var _item_picker: BattleItemPicker
 ## Временные портреты поверх поля: движение не меняет настоящие UI-узлы.
 var _impact_layer: Control
@@ -441,7 +443,11 @@ func _refresh_round_controls() -> void:
 func _execute_round_turn(target_id: String = "", ability_id: String = "") -> void:
 	if _is_playing_back or _combat == null or _combat.is_victory or _combat.is_defeat:
 		return
-	var result: Dictionary = _combat.play_round_turn(target_id, ability_id)
+	var result: Dictionary = _run_session_action(GameAction.battle_turn(target_id, ability_id)).battle_result if _action_session != null else _combat.play_round_turn(target_id, ability_id)
+	if _completion_result != null and not bool(result.get("success", false)):
+		_is_playing_back = true
+		_play_phase_events(_combat.battle_state.events.slice(_round_event_cursor))
+		return
 	if not bool(result.get("success", false)):
 		_result_text.text = str(result.get("reason", ""))
 		return
@@ -456,7 +462,7 @@ func _continue_round() -> void:
 		return
 	var actor_id: String = _round_next_actor()
 	if not (_combat.is_victory or _combat.is_defeat):
-		actor_id = _combat.battle_state.prepare_next_round()
+		actor_id = _run_session_action(GameAction.new(GameAction.Kind.BATTLE_NEXT)).battle_next_actor if _action_session != null else _combat.battle_state.prepare_next_round()
 	if _combat.is_victory or _combat.is_defeat:
 		_is_playing_back = true
 		_play_phase_events(_combat.battle_state.events.slice(_round_event_cursor))
@@ -575,7 +581,9 @@ func _basic_strike_damage(actor: BattleParticipant) -> int:
 	return actor.melee_attack() if actor != null else 0
 
 
-func begin(combat: CombatSession, hero: HeroState) -> void:
+func begin(combat: CombatSession, hero: HeroState, session: GameSession = null) -> void:
+	_action_session = session
+	_completion_result = null
 	_combat = combat
 	_manual_started = false
 	_selected_manual_slot = -2
@@ -638,7 +646,7 @@ func begin(combat: CombatSession, hero: HeroState) -> void:
 
 
 func _start_round_combat() -> void:
-	var prepared: Dictionary = _combat.prepare_round_combat()
+	var prepared: Dictionary = _run_session_action(GameAction.new(GameAction.Kind.BATTLE_PREPARE)).battle_result if _action_session != null else _combat.prepare_round_combat()
 	if not bool(prepared.get("success", false)):
 		_result_text.text = str(prepared.get("reason", "Не удалось подготовить бой"))
 		return
@@ -780,6 +788,17 @@ func current_battle_state() -> BattleState:
 	return _combat.battle_state if _combat != null else null
 
 
+func _run_session_action(action: GameAction) -> GameActionResult:
+	var result: GameActionResult = _action_session.execute(action)
+	if result.battle_finished:
+		_completion_result = result
+	return result
+
+
+func completion_result() -> GameActionResult:
+	return _completion_result
+
+
 func bind_combat_items(session: GameSession) -> void:
 	_items_session = session
 	_refresh_combat_items_button()
@@ -918,7 +937,7 @@ func _input(event: InputEvent) -> void:
 func _start_prepared_combat() -> void:
 	if _combat == null or _manual_started:
 		return
-	var prepared: Dictionary = _combat.prepare_manual_combat(_hero_chain)
+	var prepared: Dictionary = _run_session_action(GameAction.battle_manual_prepare(_hero_chain)).battle_result if _action_session != null else _combat.prepare_manual_combat(_hero_chain)
 	if not bool(prepared.get("success", false)):
 		_result_text.text = str(prepared.get("reason", "Не удалось подготовить бой"))
 		return
@@ -938,7 +957,7 @@ func _play_selected_manual_action(target_id: String) -> void:
 		if not _combat.battle_state.create_context().target_ids("hero", ability).has(target_id):
 			return
 	_hide_combat_item_picker()
-	var result: Dictionary = _combat.play_manual_tick(_selected_manual_slot, target_id)
+	var result: Dictionary = _run_session_action(GameAction.battle_manual_tick(_selected_manual_slot, target_id)).battle_result if _action_session != null else _combat.play_manual_tick(_selected_manual_slot, target_id)
 	if not bool(result.get("success", false)):
 		_result_text.text = str(result.get("reason", "Такт недоступен"))
 		_refresh_phase_controls()
@@ -1461,7 +1480,7 @@ func _after_phase_playback() -> void:
 	# Берём ID из событий, а не из состояния последнего попадания.
 	for event in _combat.battle_state.last_phase_events:
 		var broken_id: String = str(event.get("shield_broken", ""))
-		if not broken_id.is_empty():
+		if _action_session == null and not broken_id.is_empty():
 			_combat.hero.last_shield_broken = broken_id
 			_set_block_display("hero", _combat.battle_state.get_hero().block_armor)
 			shield_broken.emit(broken_id, _combat.hero)
@@ -1520,7 +1539,7 @@ func _after_round_playback() -> void:
 		if broken_id.is_empty():
 			continue
 		var source: HeroState = _combat.hero_sources.get(str(event.get("target_id", ""))) as HeroState
-		if source != null and source.last_shield_broken == broken_id:
+		if _action_session == null and source != null and source.last_shield_broken == broken_id:
 			shield_broken.emit(broken_id, source)
 			source.last_shield_broken = ""
 	_round_event_cursor = state.events.size()

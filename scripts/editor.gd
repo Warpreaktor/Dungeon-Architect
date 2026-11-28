@@ -1494,10 +1494,8 @@ func _on_party_status_info_requested(title: String, description: String) -> void
 	_touch_info.show_info(title, description)
 
 
-func _flash_party_damage() -> void:
-	if game_session == null:
-		return
-	for event in game_session.take_party_damage_events():
+func _flash_damage_events(events: Array[Dictionary]) -> void:
+	for event in events:
 		var member: HeroState = event.get("member") as HeroState
 		var member_index: int = game_session.party_members().find(member)
 		if member_index >= 0:
@@ -2968,7 +2966,7 @@ func _close_game_system_menu() -> void:
 
 
 func _can_save_progress() -> bool:
-	if _trap_playback_active or not standalone_game or not is_play_mode or game_session == null:
+	if _canvas.is_player_moving() or _trap_playback_active or not standalone_game or not is_play_mode or game_session == null:
 		return false
 	if _combat_active or _victory_view != null or game_session.is_party_defeated():
 		return false
@@ -3199,7 +3197,7 @@ func _open_character(member: HeroState) -> void:
 		return
 	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
 		return
-	_arsenal_view.open_for(member)
+	_arsenal_view.open_for(member, null, false, game_session)
 	_game_command_bar.visible = false
 	_dpad.visible = false
 
@@ -3264,7 +3262,7 @@ func _on_inventory_use_requested(item_id: String, bag_index: int) -> void:
 	if not is_play_mode or game_session == null or not _inventory_view.visible:
 		return
 	var previous_vision: int = game_session.hero.vision_bonus if game_session.hero != null and game_session.hero.has_vision_effect() else 0
-	var result: Dictionary = game_session.use_item(item_id, game_session._inventory_equipment_member(), bag_index)
+	var result: Dictionary = game_session.execute(GameAction.use_item(item_id, game_session._inventory_equipment_member(), bag_index)).item_result
 	_inventory_view.show_use_result(item_id, str(result.get("message", "")))
 	if bool(result.get("used", false)):
 		_refresh_stats()
@@ -3303,52 +3301,29 @@ func _show_next_game_message() -> void:
 
 
 func _on_game_choice_selected(choice: String, actor_index: int) -> void:
-	var activation: String = str(_active_game_message.get("activation", ""))
+	var interaction_id: int = int(_active_game_message.get("interaction_id", 0))
 	_active_game_message = {}
-	if not is_play_mode or game_session == null:
-		return
-	if activation == "portal_choice" and game_session.has_pending_portal_choice():
-		_clear_held_movement()
-		var previous: Vector2i = game_session.player_pos
-		var moved_through_portal: bool = game_session.resolve_pending_portal_choice(choice)
-		_canvas.grab_focus()
-		_complete_player_move(game_session, previous, moved_through_portal, true)
-		return
-	if not game_session.has_pending_trap_choice():
+	if not is_play_mode or game_session == null or interaction_id == 0:
 		return
 	_clear_held_movement()
-	var moving_session: GameSession = game_session
-	var previous_pos: Vector2i = moving_session.player_pos
-	var moved: bool = moving_session.resolve_pending_trap_choice(choice, actor_index, true)
-	if choice in ["back", "forward"]:
-		_canvas.grab_focus()
-		_complete_player_move(moving_session, previous_pos, moved, true)
-		return
-	if choice == "cancel":
-		_canvas.grab_focus()
-		_show_next_game_message()
-		return
-	if moving_session.has_pending_door_trap() or moving_session.has_pending_trap_choice():
-		_collect_game_messages()
-		return
+	var result: GameActionResult = game_session.execute(GameAction.choose(interaction_id, choice, actor_index))
 	_canvas.grab_focus()
-	_complete_player_move(moving_session, previous_pos, moved)
+	_present_action_result(game_session, result)
 
 
 func _on_game_dialogue_closed() -> void:
 	var closed_event: Dictionary = _active_game_message
 	_active_game_message = {}
 	if str(closed_event.get("activation", "")) == "door_trap" and is_play_mode and game_session != null:
-		var moving_session: GameSession = game_session
-		var previous_pos: Vector2i = moving_session.player_pos
-		var shot := AudioStreamPlayer.new()
-		shot.bus = &"SFX"
-		shot.stream = DOOR_CROSSBOW_SOUND
-		add_child(shot)
-		shot.finished.connect(shot.queue_free)
-		shot.play()
-		var moved: bool = moving_session.resolve_pending_door_trap()
-		_complete_player_move(moving_session, previous_pos, moved, true)
+		var result: GameActionResult = game_session.execute(GameAction.choose(int(closed_event.get("interaction_id", 0)), "continue"))
+		if result.accepted:
+			var shot := AudioStreamPlayer.new()
+			shot.bus = &"SFX"
+			shot.stream = DOOR_CROSSBOW_SOUND
+			add_child(shot)
+			shot.finished.connect(shot.queue_free)
+			shot.play()
+		_present_action_result(game_session, result)
 		return
 	if not _pending_game_messages.is_empty():
 		_show_next_game_message()
@@ -3359,13 +3334,16 @@ func _on_game_dialogue_closed() -> void:
 	elif is_play_mode:
 		_canvas.grab_focus()
 
-
 ## Триггеры пока отправляют события только в консоль разработчика.
 ## Авторские сообщения выводятся отдельно, только по указанию автора.
 func _log_trigger_events() -> void:
 	if game_session == null:
 		return
-	for event in game_session.take_trigger_events():
+	_log_events(game_session.take_trigger_events())
+
+
+func _log_events(events: Array[Dictionary]) -> void:
+	for event in events:
 		var cell: Vector2i = event["position"]
 		var event_id := str(event["event_id"])
 		if event_id.is_empty():
@@ -3375,34 +3353,29 @@ func _log_trigger_events() -> void:
 
 
 func _try_move_player(dx: int, dy: int) -> void:
-	if _trap_playback_active:
+	if not _movement_input_allowed() or _ground_loot_view.visible or _canvas.is_player_moving():
 		return
-	if not is_play_mode or game_session == null or _combat_active or _victory_view != null or _game_dialogue.visible or _inventory_view.visible or _ground_loot_view.visible or _game_system_menu.visible or _map_screen.visible:
+	var result: GameActionResult = game_session.execute(GameAction.move(Vector2i(dx, dy)))
+	_present_action_result(game_session, result)
+
+
+func _present_action_result(moving_session: GameSession, result: GameActionResult) -> void:
+	if not result.accepted and result.message.is_empty() and result.messages.is_empty():
+		# Повторно показать ещё актуальное взаимодействие после отклонённого ответа.
+		if moving_session.pending_interaction != null and not _game_dialogue.visible:
+			var pending: PendingInteraction = moving_session.pending_interaction
+			for message in _pending_game_messages:
+				if int(message.get("interaction_id", 0)) == pending.id:
+					_show_next_game_message()
+					return
+			_pending_game_messages.append(pending.presentation.duplicate(true))
+			_show_next_game_message()
 		return
-	if _canvas.is_player_moving():
-		return
-	var previous_pos: Vector2i = game_session.player_pos
-	var moving_session: GameSession = game_session
-	var moved := moving_session.move_by(dx, dy, true)
-	if moving_session.last_move_detected_trap:
+	_pending_game_messages.append_array(result.messages)
+	_canvas.set_deferred_chest_visuals(result.opened_chest_ids)
+	if result.discovered_trap:
 		_clear_held_movement()
-		_canvas.queue_redraw()
-		_refresh_map_overlays()
-		return
-	if game_session.has_pending_encounter():
-		_collect_game_messages()
-		if not _game_dialogue.visible:
-			_start_combat()
-		return
-	if game_session.has_pending_door_trap() or game_session.has_pending_trap_choice():
-		_collect_game_messages()
-		return
-	_complete_player_move(moving_session, previous_pos, moved)
-
-
-func _complete_player_move(moving_session: GameSession, previous_pos: Vector2i, moved: bool, wait_until_arrival: bool = false) -> void:
-	var visuals: Array[Dictionary] = moving_session.take_trap_visual_events()
-	var played_effect: bool = _canvas.play_trap_visuals(visuals, moving_session.player_pos) if not visuals.is_empty() else false
+	var played_effect: bool = not result.trap_visuals.is_empty() and _canvas.play_trap_visuals(result.trap_visuals, result.position)
 	if played_effect:
 		_trap_playback_active = true
 		_clear_held_movement()
@@ -3410,53 +3383,39 @@ func _complete_player_move(moving_session: GameSession, previous_pos: Vector2i, 
 		if not _trap_playback_active or not is_play_mode or game_session != moving_session:
 			return
 		_trap_playback_active = false
-		if not moving_session.pending_chest_id.is_empty() and not moving_session.is_party_defeated():
-			moving_session.open_pending_chest()
-	elif moved:
-		if (game_session.hero == null or not game_session.hero.has_vision_effect()) and _canvas.zoom < DungeonCanvas.PLAY_MIN_ZOOM:
+	elif result.moved and result.previous_position != result.position:
+		if (moving_session.hero == null or not moving_session.hero.has_vision_effect()) and _canvas.zoom < DungeonCanvas.PLAY_MIN_ZOOM:
 			_canvas.zoom = DungeonCanvas.PLAY_MIN_ZOOM
-		_canvas.animate_player_step(previous_pos, moving_session.player_pos)
-		if not moving_session.pending_chest_id.is_empty():
-			# Лишь после завершения шага появляется открытый сундук и награда.
-			await _canvas.player_step_finished
-			if not is_play_mode or game_session != moving_session:
-				return
-			if not moving_session.is_party_defeated():
-				moving_session.open_pending_chest()
-		elif wait_until_arrival or moving_session.has_pending_portal_choice() or moving_session.has_party_damage_events():
-			await _canvas.player_step_finished
-			if not is_play_mode or game_session != moving_session:
-				return
-		elif not moving_session.ground_container_at(moving_session.player_pos).is_empty():
-			await _canvas.player_step_finished
-			if not is_play_mode or game_session != moving_session:
-				return
-	# Теперь сундук обновляется после прибытия, не во время движения.
+		_canvas.animate_player_step(result.previous_position, result.position)
+		await _canvas.player_step_finished
+		if not is_play_mode or game_session != moving_session:
+			return
+	_canvas.set_deferred_chest_visuals([])
 	_canvas.queue_redraw()
 	_refresh_map_overlays()
 	_refresh_stats()
-	_flash_party_damage()
-	var trap_result: String = game_session.take_trap_result_message()
-	if not trap_result.is_empty():
-		_game_notice.show_message(trap_result)
-	var casualties: Array[HeroState] = game_session.take_casualty_events()
-	if not casualties.is_empty():
-		_show_defeat_view(casualties)
+	_flash_damage_events(result.damage)
+	if not result.trap_result.is_empty():
+		_game_notice.show_message(result.trap_result)
+	_log_events(result.triggers)
+	if not result.casualties.is_empty():
+		_show_defeat_view(result.casualties)
 		return
-	_log_trigger_events()
-	_collect_game_messages()
+	_show_next_game_message()
 	if _game_dialogue.visible:
 		return
-	if game_session.is_completed:
+	if result.status == GameActionResult.Status.BATTLE_STARTED:
+		_start_combat()
+		return
+	if result.status in [GameActionResult.Status.FLOOR_EXIT, GameActionResult.Status.SESSION_COMPLETED]:
 		_show_victory_view()
 		return
-	var ground: Dictionary = game_session.ground_container_at(game_session.player_pos)
-	if not ground.is_empty():
+	var ground: Dictionary = moving_session.ground_container_at(moving_session.player_pos)
+	if not ground.is_empty() and moving_session.pending_interaction == null:
 		_open_ground_loot(str(ground["id"]))
 		return
-	if not game_session.last_event_message.is_empty():
-		_show_game_event(game_session.last_event_message)
-
+	if not result.message.is_empty():
+		_show_game_event(result.message)
 
 ## При встрече камера приближается к противнику, затем открывается
 ## отдельная сцена боя поверх карты. Исследование остаётся в памяти.
@@ -3487,7 +3446,7 @@ func _animate_combat_camera(progress: float, from_zoom: float, to_zoom: float, f
 
 
 func _show_combat_view() -> void:
-	if not _combat_active or game_session == null:
+	if not _combat_active or game_session == null or game_session.active_combat == null:
 		return
 	_battle_view = BATTLE_VIEW_SCENE.instantiate() as BattleView
 	_canvas_host.add_child(_battle_view)
@@ -3495,13 +3454,9 @@ func _show_combat_view() -> void:
 		_add_battle_menu_button()
 	_battle_view.battle_won.connect(_finish_combat)
 	_battle_view.battle_lost.connect(_lose_combat)
-	_battle_view.shield_broken.connect(_on_battle_shield_broken)
 	_battle_view.combat_log_line.connect(_append_combat_log)
 	_battle_view.item_use_requested.connect(_on_battle_item_requested)
-	var monsters: Array[MonsterDefinition] = game_session.pending_monster_definitions()
-	var combat: CombatSession = CombatSession.for_encounter(MonsterCatalog.normalize_legacy_encounter(monsters),
-		game_session.hero, game_session.trap_random.randi(), game_session.party)
-	_battle_view.begin(combat, game_session.hero)
+	_battle_view.begin(game_session.active_combat, game_session.hero, game_session)
 	_battle_view.bind_combat_items(game_session)
 
 
@@ -3528,7 +3483,7 @@ func _add_battle_menu_button() -> void:
 func _on_battle_item_requested(item_id: String) -> void:
 	if game_session == null or _battle_view == null or not _combat_active:
 		return
-	var outcome: Dictionary = game_session.use_combat_item(item_id, _battle_view.current_battle_state())
+	var outcome: Dictionary = game_session.execute(GameAction.battle_item(item_id)).item_result
 	_battle_view.show_combat_item_result(outcome, game_session)
 	if bool(outcome.get("used", false)):
 		_append_combat_log("    %s: %s · HP %d/%d" % [game_session.hero.definition.display_name,
@@ -3537,26 +3492,17 @@ func _on_battle_item_requested(item_id: String) -> void:
 		_refresh_stats()
 
 
-func _on_battle_shield_broken(_item_id: String, member: HeroState) -> void:
-	if game_session != null:
-		game_session.resolve_broken_shield(member)
-		_update_hero_hud()
-
-
 func _finish_combat() -> void:
 	if not _combat_active or game_session == null or _battle_view == null:
 		return
 	var battle: BattleState = _battle_view.current_battle_state()
 	if battle == null or not battle.is_victory:
 		return
-	# Победа двигает игровую позицию, а визуальное перемещение надо запускать отдельно.
-	var previous_pos: Vector2i = game_session.player_pos
-	var moved: bool = game_session.win_pending_encounter(battle)
-	if game_session.last_move_detected_trap:
-		_clear_held_movement()
-	if _battle_view != null:
-		_battle_view.queue_free()
-		_battle_view = null
+	var result: GameActionResult = _battle_view.completion_result()
+	if result == null or not result.accepted:
+		return
+	_battle_view.queue_free()
+	_battle_view = null
 	_combat_active = false
 	_canvas.zoom = _pre_combat_zoom
 	_game_command_bar.visible = true
@@ -3564,51 +3510,21 @@ func _finish_combat() -> void:
 	_mini_map.visible = _minimap_enabled
 	_hero_hud.visible = true
 	_canvas.grab_focus()
-	if game_session.has_trap_visual_events() or game_session.has_pending_portal_choice():
-		_complete_player_move(game_session, previous_pos, moved, true)
-		return
-	if moved:
-		_canvas.animate_player_step(previous_pos, game_session.player_pos)
-	else:
-		_canvas.center_on_cell(game_session.player_pos)
-	_canvas.queue_redraw()
-	_refresh_map_overlays()
-	_refresh_stats()
-	_flash_party_damage()
-	var trap_result: String = game_session.take_trap_result_message()
-	if not trap_result.is_empty():
-		_game_notice.show_message(trap_result)
-	var casualties: Array[HeroState] = game_session.take_casualty_events()
-	if not casualties.is_empty():
-		_show_defeat_view(casualties)
-		return
-	_log_trigger_events()
-	_collect_game_messages()
-	if _game_dialogue.visible:
-		return
-	if game_session.is_completed:
-		_show_victory_view()
-		return
-	if not game_session.last_event_message.is_empty():
-		_show_game_event(game_session.last_event_message)
-	elif not moved and not game_session.last_move_detected_trap:
-		_set_status("Монстр побеждён, но клетка пока недоступна.")
+	_present_action_result(game_session, result)
 
 
 func _lose_combat() -> void:
-	if not _combat_active or game_session == null:
+	if not _combat_active or game_session == null or _battle_view == null:
 		return
-	if _battle_view != null:
-		_battle_view.queue_free()
-		_battle_view = null
+	var result: GameActionResult = _battle_view.completion_result()
+	if result == null or not result.accepted:
+		return
+	_battle_view.queue_free()
+	_battle_view = null
 	_combat_active = false
 	_canvas.zoom = _pre_combat_zoom
-	game_session.record_casualties()
-	game_session.abandon_pending_encounter()
 	_canvas.center_on_cell(game_session.player_pos)
-	_canvas.queue_redraw()
-	_refresh_stats()
-	_show_defeat_view(game_session.take_casualty_events())
+	_present_action_result(game_session, result)
 
 
 func _show_defeat_view(casualties: Array[HeroState]) -> void:
@@ -3648,6 +3564,9 @@ func _continue_after_defeat() -> void:
 	_collect_game_messages()
 	if _game_dialogue.visible:
 		return
+	if game_session.has_pending_encounter():
+		_start_combat()
+		return
 	if game_session.is_completed:
 		_show_victory_view()
 		return
@@ -3679,7 +3598,7 @@ func _show_victory_view() -> void:
 	var target_id: String = game_session.next_map_id()
 	if not target_id.is_empty():
 		if not _campaign_transition_allowed(target_id):
-			game_session.cancel_exit_transition()
+			game_session.execute(GameAction.cancel_exit())
 			_game_notice.show_message("Переход за пределы кампании запрещён")
 			_set_status("Целевая карта не принадлежит текущей кампании.")
 			return
@@ -3687,13 +3606,13 @@ func _show_victory_view() -> void:
 		if linked == null:
 			linked = _find_linked_map(target_id)
 		if linked == null:
-			game_session.cancel_exit_transition()
+			game_session.execute(GameAction.cancel_exit())
 			_game_notice.show_message("Подземелье для перехода не найдено")
 			_set_status("Связанное подземелье не найдено. Проверь выбор карты у выхода.")
 			return
 		if not game_session.can_enter_next_map(linked):
 			var is_return: bool = str(game_session.current_exit().get("type", "")) == "stairs_up"
-			game_session.cancel_exit_transition()
+			game_session.execute(GameAction.cancel_exit())
 			_game_notice.show_message("Место подъёма недоступно" if is_return else "Точка появления героя недоступна")
 			_set_status("Переход невозможен: проверь лестницу на предыдущем этаже." if is_return else "Переход невозможен: проверь точку старта на целевой карте.")
 			return
@@ -3723,8 +3642,9 @@ func _enter_next_floor() -> void:
 	if game_session == null or _pending_next_map == null:
 		return
 	var next_map: DungeonMap = _pending_next_map
-	if not _campaign_transition_allowed(next_map.map_id) or not game_session.enter_map(next_map):
-		game_session.cancel_exit_transition()
+	var result: GameActionResult = game_session.execute(GameAction.enter_floor(next_map)) if _campaign_transition_allowed(next_map.map_id) else GameActionResult.new()
+	if not result.accepted:
+		game_session.execute(GameAction.cancel_exit())
 		_pending_next_map = null
 		_remove_victory_view()
 		_dpad.visible = true
@@ -3750,7 +3670,9 @@ func _enter_next_floor() -> void:
 	_canvas.queue_redraw()
 	_refresh_stats()
 	_refresh_map_overlays()
-	_collect_game_messages()
+	_pending_game_messages.append_array(result.messages)
+	_log_events(result.triggers)
+	_show_next_game_message()
 	_set_status("Ты вошёл в «%s»." % game_session.map_data.display_name)
 
 

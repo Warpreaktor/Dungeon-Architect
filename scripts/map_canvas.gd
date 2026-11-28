@@ -59,6 +59,7 @@ var show_grid: bool = true
 var camera_offset := Vector2.ZERO
 var zoom: float = 1.0
 var _player_visual_cell := Vector2.ZERO
+var _deferred_chest_visuals: Array[String] = []
 var _player_animation := HeroMapAnimation.new()
 var _player_step_tween: Tween
 var _player_flash_tween: Tween
@@ -196,6 +197,7 @@ func _reset_pointer_state() -> void:
 
 
 func set_game_session(value: GameSession) -> void:
+	_deferred_chest_visuals.clear()
 	var interrupted: bool = _cancel_trap_playback()
 	_cancel_player_step()
 	_cancel_player_flash()
@@ -231,6 +233,11 @@ func _fit_after_layout() -> void:
 ## Во время Tween новые команды перемещения не принимаются редактором.
 func is_player_moving() -> bool:
 	return (_player_step_tween != null and _player_step_tween.is_running()) or _trap_playback != null
+
+
+func set_deferred_chest_visuals(chest_ids: Array[String]) -> void:
+	_deferred_chest_visuals = chest_ids.duplicate()
+	queue_redraw()
 
 
 func animate_player_step(from_cell: Vector2i, to_cell: Vector2i) -> void:
@@ -702,7 +709,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 			continue
 		drawable_entities += 1
 		var origin := Vector2(x, y) * TILE_SIZE
-		if kind == "chest" and ((mode == "play" and game_session != null and game_session.is_chest_open(entity)) or (not DungeonMap.chest_is_random(entity) and DungeonMap.chest_contents(entity).is_empty())):
+		if kind == "chest" and ((mode == "play" and game_session != null and game_session.is_chest_open(entity) and not _deferred_chest_visuals.has(str(entity["id"]))) or (not DungeonMap.chest_is_random(entity) and DungeonMap.chest_contents(entity).is_empty())):
 			_draw_open_chest(origin, entity)
 		elif kind == "monster":
 			var monster_id := str(entity.get("properties", {}).get("monster_id", MonsterCatalog.DEFAULT_MONSTER_ID))

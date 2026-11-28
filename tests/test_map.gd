@@ -169,31 +169,15 @@ func _initialize() -> void:
 	assert(DungeonMap.chest_item_quantities(legacy_quantities)["potion"] == ItemCatalog.get_item("potion").default_quantity)
 	assert(DungeonMap.chest_item_quantities(legacy_quantities)["gold"] == 29)
 
-	# При анимированном шаге награда выдаётся только после прибытия героя.
-	var delayed_session := GameSession.start_for(loot_map)
-	assert(delayed_session.move_by(0, 1, true))
-	assert(delayed_session.player_pos == Vector2i(2, 3))
-	assert(not delayed_session.is_chest_open(packed_chest))
-	assert(delayed_session.keys == 0 and delayed_session.potions == 0)
-	assert(not delayed_session.move_by(0, -1)) # Нельзя уйти до окончания открытия.
-	assert(delayed_session.open_pending_chest())
-	assert(delayed_session.is_chest_open(packed_chest))
-	assert(delayed_session.keys == 1 and delayed_session.potions == 1)
-	assert(not delayed_session.open_pending_chest()) # Двойная выдача невозможна.
-	assert(delayed_session.move_by(0, -1))
-
-	# При анимированном шаге награда выдаётся только после прибытия героя.
-	var delayed_session := GameSession.start_for(loot_map)
-	assert(delayed_session.move_by(0, 1, true))
-	assert(delayed_session.player_pos == Vector2i(2, 3))
-	assert(not delayed_session.is_chest_open(packed_chest))
-	assert(delayed_session.keys == 0 and delayed_session.potions == 0)
-	assert(not delayed_session.move_by(0, -1)) # Нельзя уйти до окончания открытия.
-	assert(delayed_session.open_pending_chest())
-	assert(delayed_session.is_chest_open(packed_chest))
-	assert(delayed_session.keys == 1 and delayed_session.potions == 1)
-	assert(not delayed_session.open_pending_chest()) # Двойная выдача невозможна.
-	assert(delayed_session.move_by(0, -1))
+	var immediate_session := GameSession.start_for(loot_map)
+	var arrival: GameActionResult = immediate_session.execute(GameAction.move(Vector2i.DOWN))
+	assert(arrival.accepted and arrival.moved)
+	assert(immediate_session.player_pos == Vector2i(2, 3))
+	assert(immediate_session.is_chest_open(packed_chest))
+	assert(immediate_session.keys == 1 and immediate_session.potions == 1)
+	assert(immediate_session.execute(GameAction.move(Vector2i.UP)).accepted)
+	assert(immediate_session.execute(GameAction.move(Vector2i.DOWN)).accepted)
+	assert(immediate_session.keys == 1 and immediate_session.potions == 1)
 
 	# Выбор вида монстра в палитре сразу задаёт свойства созданной сущности.
 	var monster_palette_map := DungeonMap.create_blank(8, 8)

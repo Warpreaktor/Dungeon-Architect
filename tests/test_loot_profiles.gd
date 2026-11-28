@@ -307,10 +307,8 @@ func _test_resolved_reward_replay() -> void:
 	for seed_value in range(611, 627):
 		var first: GameSession = _seeded_session(dungeon, seed_value)
 		var replay: GameSession = _seeded_session(dungeon, seed_value)
-		assert(first.move_by(1, 0, true) and replay.move_by(1, 0, true))
-		assert(first.take_message_events().is_empty())
+		assert(first.move_by(1, 0) and replay.move_by(1, 0))
 		assert(first.trap_random.state == replay.trap_random.state)
-		assert(first.open_pending_chest() and replay.open_pending_chest())
 		var chest_events: Array[Dictionary] = first.take_message_events()
 		assert(chest_events == replay.take_message_events())
 		assert(chest_events[0]["loot"][0]["instances"].size() == 1)
@@ -319,7 +317,6 @@ func _test_resolved_reward_replay() -> void:
 		assert(restored != null and first.trap_random.state == restored.trap_random.state)
 		for session in [first, replay, restored]:
 			var before: int = session.trap_random.state
-			assert(not session.open_pending_chest())
 			assert(session.move_by(-1, 0) and session.move_by(1, 0))
 			assert(session.take_message_events().is_empty())
 			assert(session.trap_random.state == before)
@@ -417,7 +414,7 @@ func _test_author_rewards_and_legacy_maps() -> void:
 	session.hero.vision_bonus = 1
 	session.hero.vision_phases = 3
 	assert(not session.is_entity_hidden_from_hero(legacy))
-	assert(session.move_by(1, 0, true) and session.open_pending_chest())
+	assert(session.move_by(1, 0))
 	assert(session.keys == 2 and session.is_chest_open(legacy))
 	assert(session.take_message_events()[0]["loot"] == [{"item_id": "key", "quantity": 2}])
 	assert(session.move_by(1, 0))

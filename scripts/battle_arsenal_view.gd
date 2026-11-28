@@ -7,6 +7,7 @@ signal closed
 const SLOT_SCENE: PackedScene = preload("res://scenes/battle_ability_slot.tscn")
 
 var _hero: HeroState
+var _session: GameSession
 var _actor: BattleParticipant
 var _read_only: bool = false
 var _skills_grid: GridContainer
@@ -25,10 +26,11 @@ func _ready() -> void:
 	_build_interface()
 
 
-func open_for(hero: HeroState, actor: BattleParticipant = null, read_only: bool = false) -> void:
+func open_for(hero: HeroState, actor: BattleParticipant = null, read_only: bool = false, session: GameSession = null) -> void:
 	if hero == null:
 		return
 	_hero = hero
+	_session = session
 	_actor = actor if actor != null else BattleParticipant.from_hero(hero)
 	_read_only = read_only
 	_arsenal_content.visible = not _read_only
@@ -245,7 +247,8 @@ func _toggle_ability(ability_id: String) -> void:
 		active.append(ability_id)
 	while active.size() < _hero.action_slot_capacity():
 		active.append("")
-	if _hero.save_action_slots(active):
+	var accepted: bool = _session.execute(GameAction.save_arsenal(_hero, active)).accepted if _session != null else _hero.save_action_slots(active)
+	if accepted:
 		_refresh()
 		saved.emit(active.duplicate())
 

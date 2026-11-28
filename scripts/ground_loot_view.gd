@@ -100,7 +100,7 @@ func _refresh() -> void:
 
 
 func _take(index: int) -> void:
-	if _session == null or _session.take_ground_loot(_container_id, index) <= 0:
+	if _session == null or not _session.execute(GameAction.take_loot(_container_id, index)).accepted:
 		return
 	loot_changed.emit()
 	_refresh()

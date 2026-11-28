@@ -33,7 +33,7 @@ func _assert_stopped(session: GameSession, entity: Dictionary) -> void:
 	assert(session.is_trap_revealed(entity))
 	assert(not session.is_trap_disarmed(entity))
 	assert(not session.has_pending_door_trap())
-	assert(session.pending_chest_id.is_empty())
+	assert(session.pending_interaction == null)
 	assert(session.take_party_damage_events().is_empty())
 	assert(session.take_message_events().is_empty())
 	for index in range(hp.size()):

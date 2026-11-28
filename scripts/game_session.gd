@@ -40,15 +40,8 @@ var revealed_traps: Dictionary = {}
 var discharged_traps: Dictionary = {}
 var failed_trap_disarms: Dictionary = {}
 var last_move_detected_trap: bool = false
-var pending_chest_id: String = "" # Ожидает завершения анимации шага до открытия сундука.
-var pending_door_trap_id: String = ""
-var pending_door_trap_cell := Vector2i(-1, -1)
-var _pending_door_opener: HeroState
-var _pending_door_accepted: Array[String] = []
-var _pending_trap_choice: Dictionary = {}
-var _pending_trap_actors: Array[HeroState] = []
-var _pending_trap_accepted: Array[String] = []
-var _pending_trap_opener: HeroState
+var pending_interaction: PendingInteraction
+var _next_interaction_id: int = 0
 var _trap_result_messages: Array[String] = []
 var _trap_visual_events: Array[Dictionary] = []
 var activated_triggers: Dictionary = {} # ID сработавших триггеров; обнуляется с новой сессией.
@@ -56,6 +49,7 @@ var shown_messages: Dictionary = {} # Авторские сообщения по
 var _message_events: Array[Dictionary] = []
 var _trigger_events: Array[Dictionary] = [] # События последнего хода для игрового контроллера.
 var last_event_message: String = ""
+var active_combat: CombatSession
 var encounter_monster_id: String = ""
 var encounter_target := Vector2i(-1, -1)
 var debug_open_map: bool = false # Только для теста редактора, никогда не сериализуется.
@@ -76,8 +70,22 @@ var claimed_exit_rewards: Dictionary = {}
 var _floor_states: Dictionary = {} # Состояние посещённых карт только в памяти этого прохождения.
 var _stairs_history: Array[Dictionary] = []
 var _pending_return_exit: Dictionary = {}
-var _pending_portal: Dictionary = {}
 
+
+
+func execute(action: GameAction) -> GameActionResult:
+	return GameActionResolver.execute(self, action)
+
+
+func _begin_interaction(kind: PendingInteraction.Kind, context: Dictionary) -> void:
+	_next_interaction_id += 1
+	pending_interaction = PendingInteraction.new(_next_interaction_id, kind, context)
+
+
+func _publish_interaction(event: Dictionary) -> void:
+	event["interaction_id"] = pending_interaction.id
+	pending_interaction.presentation = event.duplicate(true)
+	_message_events.append(event)
 
 
 func _init() -> void:
@@ -865,6 +873,7 @@ func take_ground_loot(container_id: String, entry_index: int) -> int:
 
 
 func abandon_pending_encounter() -> void:
+	active_combat = null
 	encounter_monster_id = ""
 	encounter_target = Vector2i(-1, -1)
 
@@ -1274,7 +1283,7 @@ func _valid_snapshot_inventory(counts: Dictionary, bag: Array, members: Array[He
 
 
 func enter_map(next_map: DungeonMap) -> bool:
-	if has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_portal_choice() or has_pending_trap_choice() or has_pending_door_trap() or is_party_defeated() or next_map == null or next_map.map_id.is_empty() or not is_map_in_campaign(next_map.map_id):
+	if has_pending_encounter() or pending_interaction != null or is_party_defeated() or next_map == null or next_map.map_id.is_empty() or not is_map_in_campaign(next_map.map_id):
 		return false
 	var source_exit: Dictionary = current_exit()
 	var source_id: String = map_data.map_id if map_data != null else ""
@@ -1311,7 +1320,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	elif source_kind == "stairs_up" and not _stairs_history.is_empty():
 		_stairs_history.pop_back()
 	_pending_return_exit.clear()
-	_pending_portal.clear()
+	pending_interaction = null
 	map_data = destination
 	_floor_states.erase(destination.map_id)
 	_ground_loot_containers.clear()
@@ -1328,12 +1337,6 @@ func enter_map(next_map: DungeonMap) -> bool:
 	discharged_traps = saved.get("discharged_traps", {}).duplicate(true)
 	failed_trap_disarms = saved.get("failed_trap_disarms", {}).duplicate(true)
 	last_move_detected_trap = false
-	pending_chest_id = ""
-	pending_door_trap_id = ""
-	pending_door_trap_cell = Vector2i(-1, -1)
-	_pending_door_opener = null
-	_pending_door_accepted.clear()
-	_clear_trap_choice()
 	_trap_result_messages.clear()
 	_trap_visual_events.clear()
 	activated_triggers = saved.get("triggers", {}).duplicate(true)
@@ -1614,6 +1617,7 @@ func win_pending_encounter(battle: BattleState = null) -> bool:
 		if str(entity.get("id", "")) == defeated_id and str(entity.get("type", "")) == "monster":
 			defeated = entity
 			break
+	active_combat = null
 	encounter_monster_id = ""
 	encounter_target = Vector2i(-1, -1)
 	if defeated.is_empty() or is_entity_removed(defeated):
@@ -1765,34 +1769,31 @@ func _activate_traps_at(cell: Vector2i) -> void:
 
 
 func has_pending_trap_choice() -> bool:
-	return not _pending_trap_choice.is_empty()
+	return pending_interaction != null and pending_interaction.kind in [PendingInteraction.Kind.TRAP_CHOICE, PendingInteraction.Kind.TRAP_REACTION]
 
 
 func _clear_trap_choice() -> void:
-	_pending_trap_choice.clear()
-	_pending_trap_actors.clear()
-	_pending_trap_accepted.clear()
-	_pending_trap_opener = null
+	pending_interaction = null
 
 
 func _request_trap_choice(entity: Dictionary, trap: TrapDefinition, cell: Vector2i, accepted: Array[String], opener: HeroState) -> void:
-	_pending_trap_choice = {"entity_id": str(entity["id"]), "kind": str(entity["type"]), "cell": cell}
-	_pending_trap_accepted = accepted.duplicate()
-	_pending_trap_opener = opener
-	_pending_trap_actors = _living_party_members()
+	_begin_interaction(PendingInteraction.Kind.TRAP_CHOICE, {"entity_id": str(entity["id"]), "kind": str(entity["type"]), "cell": cell})
+	pending_interaction.accepted = accepted.duplicate()
+	pending_interaction.opener = opener
+	pending_interaction.actors = _living_party_members()
 	var actors: Array[Dictionary] = []
-	for member in _pending_trap_actors:
+	for member in pending_interaction.actors:
 		actors.append({
 			"name": member.definition.display_name,
 			"portrait": member.definition.portrait,
 			"summary": "%d/%d HP" % [member.health, member.effective_max_health()]
 		})
-	var selected: int = _pending_trap_actors.find(opener)
+	var selected: int = pending_interaction.actors.find(opener)
 	var can_disarm: bool = can_disarm_trap(entity)
 	var choices: Dictionary = {"cancel": "Нет" if can_disarm else "Отмена", "avoid": "Проскочить (%s)" % trap.avoidance_stat_label()}
 	if can_disarm:
 		choices["disarm"] = "Да"
-	_message_events.append({
+	_publish_interaction({
 		"activation": "trap_choice", "entity_id": entity["id"],
 		"text": "%s. Обезвредить ловушку?" % trap.display_name if can_disarm else "%s. Преодолеть ловушку?" % trap.display_name,
 		"icon_type": "trap", "icon_id": trap.trap_id,
@@ -1817,14 +1818,14 @@ func _request_trap_reaction(entity: Dictionary, trap: TrapDefinition, cell: Vect
 	var direction: Vector2i = cell - player_pos
 	var forward: Vector2i = cell + direction
 	var forward_available: bool = _escape_cell_available(forward)
-	_pending_trap_choice = {
+	_begin_interaction(PendingInteraction.Kind.TRAP_REACTION, {
 		"entity_id": str(entity["id"]), "kind": "reaction", "cell": cell,
 		"origin": player_pos, "forward": forward, "forward_available": forward_available,
 		"opened_door_id": opened_door_id
-	}
+	})
 	revealed_traps[str(entity["id"])] = true
 	var stat_label: String = trap.avoidance_stat_label()
-	_message_events.append({
+	_publish_interaction({
 		"activation": "trap_reaction", "entity_id": entity["id"],
 		"title": "%s!" % trap.display_name, "text": trap.trigger_message,
 		"prompt": "Куда броситься?", "icon_type": "trap", "icon_id": trap.trap_id,
@@ -1833,10 +1834,10 @@ func _request_trap_reaction(entity: Dictionary, trap: TrapDefinition, cell: Vect
 	})
 
 
-func _resolve_trap_reaction(choice: String, defer_chest_open: bool) -> bool:
+func _resolve_trap_reaction(choice: String) -> bool:
 	if choice not in ["back", "forward"]:
 		return false
-	var pending: Dictionary = _pending_trap_choice.duplicate()
+	var pending: Dictionary = pending_interaction.context.duplicate()
 	var cell: Vector2i = pending["cell"]
 	var origin: Vector2i = pending["origin"]
 	var forward: Vector2i = pending["forward"]
@@ -1870,12 +1871,12 @@ func _resolve_trap_reaction(choice: String, defer_chest_open: bool) -> bool:
 		var event_message: String = last_event_message
 		var delta: Vector2i = forward - cell
 		var accepted: Array[String] = []
-		var moved: bool = _move_by(delta.x, delta.y, defer_chest_open, accepted, null)
+		var moved: bool = _move_by(delta.x, delta.y, accepted, null)
 		if not moved:
 			_advance_movement_effects()
 			record_casualties()
 			if is_party_defeated() and has_pending_trap_choice():
-				var pending_id: String = str(_pending_trap_choice["entity_id"])
+				var pending_id: String = str(pending_interaction.context["entity_id"])
 				_discard_message_event("trap_choice", pending_id)
 				_discard_message_event("trap_reaction", pending_id)
 				_clear_trap_choice()
@@ -1892,23 +1893,23 @@ func _resolve_trap_reaction(choice: String, defer_chest_open: bool) -> bool:
 	return player_pos != origin
 
 
-func resolve_pending_trap_choice(choice: String, actor_index: int = -1, defer_chest_open: bool = false) -> bool:
+func resolve_pending_trap_choice(choice: String, actor_index: int = -1) -> bool:
 	if not has_pending_trap_choice():
 		return false
-	if _pending_trap_choice.get("kind") == "reaction":
-		return _resolve_trap_reaction(choice, defer_chest_open)
+	if pending_interaction.context.get("kind") == "reaction":
+		return _resolve_trap_reaction(choice)
 	if choice not in ["disarm", "cancel", "avoid"]:
 		return false
-	if choice == "disarm" and failed_trap_disarms.has(str(_pending_trap_choice["entity_id"])):
+	if choice == "disarm" and failed_trap_disarms.has(str(pending_interaction.context["entity_id"])):
 		return false
-	var pending: Dictionary = _pending_trap_choice.duplicate()
-	var accepted: Array[String] = _pending_trap_accepted.duplicate()
-	var opener: HeroState = _pending_trap_opener
+	var pending: Dictionary = pending_interaction.context.duplicate()
+	var accepted: Array[String] = pending_interaction.accepted.duplicate()
+	var opener: HeroState = pending_interaction.opener
 	var actor: HeroState = _door_opener(opener)
 	if actor_index >= 0:
-		if actor_index >= _pending_trap_actors.size():
+		if actor_index >= pending_interaction.actors.size():
 			return false
-		actor = _pending_trap_actors[actor_index]
+		actor = pending_interaction.actors[actor_index]
 	_clear_trap_choice()
 	_discard_message_event("trap_choice", str(pending["entity_id"]))
 	if choice == "cancel" or actor == null or actor.health <= 0 or not party.has(actor):
@@ -1947,27 +1948,24 @@ func resolve_pending_trap_choice(choice: String, actor_index: int = -1, defer_ch
 	accepted.append(entity_id)
 	var prefix: String = last_event_message
 	var delta: Vector2i = cell - player_pos
-	var moved: bool = _move_by(delta.x, delta.y, defer_chest_open, accepted, opener)
+	var moved: bool = _move_by(delta.x, delta.y, accepted, opener)
 	if not prefix.is_empty():
 		_append_trap_result(prefix)
 	return moved
 
 
 func has_pending_door_trap() -> bool:
-	return not pending_door_trap_id.is_empty()
+	return pending_interaction != null and pending_interaction.kind == PendingInteraction.Kind.DOOR_TRAP
 
 
 func resolve_pending_door_trap() -> bool:
 	if not has_pending_door_trap():
 		return false
-	var door_id: String = pending_door_trap_id
-	var cell: Vector2i = pending_door_trap_cell
-	var opener: HeroState = _pending_door_opener
-	var accepted: Array[String] = _pending_door_accepted.duplicate()
-	pending_door_trap_id = ""
-	pending_door_trap_cell = Vector2i(-1, -1)
-	_pending_door_opener = null
-	_pending_door_accepted.clear()
+	var door_id: String = pending_interaction.context["entity_id"]
+	var cell: Vector2i = pending_interaction.context["cell"]
+	var opener: HeroState = pending_interaction.opener
+	var accepted: Array[String] = pending_interaction.accepted.duplicate()
+	pending_interaction = null
 	_discard_message_event("door_trap", door_id)
 	var door: Dictionary = _find_active_entity(cell, "door")
 	if door.is_empty() or str(door.get("id", "")) != door_id or not can_enter(cell) or int(carried_items.get(LockCatalog.required_key(door), 0)) <= 0:
@@ -1984,7 +1982,7 @@ func resolve_pending_door_trap() -> bool:
 	var trap_message: String = last_event_message
 	var outcome: String = take_trap_result_message()
 	var delta: Vector2i = cell - player_pos
-	var moved: bool = _move_by(delta.x, delta.y, true, accepted, opener, door_id)
+	var moved: bool = _move_by(delta.x, delta.y, accepted, opener, door_id)
 	trap_damage.append_array(_party_damage_events)
 	_party_damage_events = trap_damage
 	if not trap_message.is_empty():
@@ -2005,13 +2003,13 @@ func can_enter(cell: Vector2i) -> bool:
 	return contains(cell.x, cell.y) and map_data.get_terrain(cell.x, cell.y) != "wall"
 
 
-func move_by(dx: int, dy: int, defer_chest_open: bool = false, opener: HeroState = null) -> bool:
+func move_by(dx: int, dy: int, opener: HeroState = null) -> bool:
 	var accepted: Array[String] = []
-	return _move_by(dx, dy, defer_chest_open, accepted, opener)
+	return _move_by(dx, dy, accepted, opener)
 
 
-func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String], opener: HeroState, resolved_door_id: String = "") -> bool:
-	if is_party_defeated() or has_pending_encounter() or is_completed or not pending_chest_id.is_empty() or has_pending_door_trap() or has_pending_trap_choice() or has_pending_portal_choice():
+func _move_by(dx: int, dy: int, accepted: Array[String], opener: HeroState, resolved_door_id: String = "") -> bool:
+	if is_party_defeated() or has_pending_encounter() or is_completed or pending_interaction != null:
 		return false
 	last_move_detected_trap = false
 	last_event_message = ""
@@ -2059,12 +2057,11 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 			if is_door_trap_visible(door) and not accepted.has(str(door["id"])):
 				_request_trap_choice(door, door_trap, target, accepted, opener)
 				return false
-			_pending_door_opener = _door_opener(opener)
-			_pending_door_accepted = accepted.duplicate()
-			pending_door_trap_id = str(door["id"])
-			pending_door_trap_cell = target
-			_message_events.append({
-				"activation": "door_trap", "entity_id": pending_door_trap_id,
+			_begin_interaction(PendingInteraction.Kind.DOOR_TRAP, {"entity_id": str(door["id"]), "cell": target})
+			pending_interaction.opener = _door_opener(opener)
+			pending_interaction.accepted = accepted.duplicate()
+			_publish_interaction({
+				"activation": "door_trap", "entity_id": str(door["id"]),
 				"text": DungeonMap.door_trap_message(door), "loot": [],
 				"icon_type": "trap", "icon_id": door_trap.trap_id
 			})
@@ -2084,8 +2081,7 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 
 	# Проверка сундука после двери: нельзя получить добычу через замок.
 	var chest := _find_active_entity(target, "chest")
-	if not chest.is_empty() and not is_chest_open(chest):
-		pending_chest_id = str(chest["id"])
+	var opens_chest: bool = not chest.is_empty() and not is_chest_open(chest)
 
 	player_pos = target
 	_advance_movement_effects()
@@ -2093,14 +2089,13 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 		_activate_traps_at(target)
 	record_casualties()
 	if is_party_defeated():
-		pending_chest_id = ""
 		_refresh_visibility()
 		return true
 	_collect_pickups_at(target)
 	_activate_triggers_at(target)
 	if not opened_door_id.is_empty():
 		_activate_message_at(target, "door_open", opened_door_id)
-	elif pending_chest_id.is_empty():
+	elif not opens_chest:
 		_activate_message_at(target, "enter")
 	_refresh_visibility()
 	var stairs: Dictionary = _find_active_entity(target, "stairs_down")
@@ -2115,13 +2110,13 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 		is_completed = true
 	else:
 		_request_portal_choice(target)
-	if not defer_chest_open and not pending_chest_id.is_empty():
-		open_pending_chest()
+	if opens_chest:
+		_open_chest(chest)
 	return true
 
 
 func has_pending_portal_choice() -> bool:
-	return not _pending_portal.is_empty()
+	return pending_interaction != null and pending_interaction.kind == PendingInteraction.Kind.PORTAL
 
 
 func _request_portal_choice(cell: Vector2i) -> void:
@@ -2136,8 +2131,8 @@ func _request_portal_choice(cell: Vector2i) -> void:
 		portal = _find_active_entity(cell, "portal")
 		if portal.is_empty() or DungeonMap.exit_target_id(portal).is_empty():
 			return
-	_pending_portal = {"entity_id": str(portal["id"]), "kind": str(portal["type"]), "cell": cell}
-	_message_events.append({
+	_begin_interaction(PendingInteraction.Kind.PORTAL, {"entity_id": str(portal["id"]), "kind": str(portal["type"]), "cell": cell})
+	_publish_interaction({
 		"activation": "portal_choice", "entity_id": portal["id"],
 		"title": "ПОРТАЛ", "text": "Войти в портал?",
 		"icon_type": "portal", "icon_id": icon_id,
@@ -2149,8 +2144,8 @@ func _request_portal_choice(cell: Vector2i) -> void:
 func resolve_pending_portal_choice(choice: String) -> bool:
 	if not has_pending_portal_choice() or choice not in ["enter_portal", "cancel"]:
 		return false
-	var pending: Dictionary = _pending_portal.duplicate()
-	_pending_portal.clear()
+	var pending: Dictionary = pending_interaction.context.duplicate()
+	pending_interaction = null
 	_discard_message_event("portal_choice", str(pending["entity_id"]))
 	if choice == "cancel" or is_party_defeated() or player_pos != pending["cell"]:
 		return false
@@ -2190,19 +2185,6 @@ func _advance_movement_effects() -> void:
 			if amount > 0:
 				_record_party_damage(member, amount, str(status_event.get("status_id", "")))
 				_append_event_message("%s: %s, -%d HP" % [member.definition.display_name, label, amount])
-
-
-## Завершает открытие сундука только после визуального прибытия героя.
-func open_pending_chest() -> bool:
-	if pending_chest_id.is_empty():
-		return false
-	var chest_id := pending_chest_id
-	pending_chest_id = ""
-	var chest := _find_active_entity(player_pos, "chest")
-	if chest.is_empty() or str(chest.get("id", "")) != chest_id or is_chest_open(chest):
-		return false
-	_open_chest(chest)
-	return is_chest_open(chest)
 
 
 func loot_depth() -> int:
@@ -2621,7 +2603,7 @@ func _claim_exit_reward(stairs: Dictionary) -> void:
 
 
 func progress_snapshot() -> Dictionary:
-	if is_editor_test or map_data == null or is_party_defeated() or has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_door_trap() or has_pending_trap_choice() or has_pending_portal_choice() or is_completed:
+	if is_editor_test or map_data == null or is_party_defeated() or has_pending_encounter() or pending_interaction != null or is_completed:
 		return {}
 	var party_data: Dictionary = party_state_snapshot()
 	if party_data.is_empty():

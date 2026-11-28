@@ -279,7 +279,7 @@ func _first_occupied_slot() -> int:
 
 
 func _transfer_item(from_kind: String, from_slot: Variant, to_kind: String, to_slot: Variant) -> void:
-	if _session == null or not _session.transfer_inventory_item(from_kind, from_slot, to_kind, to_slot):
+	if _session == null or not _session.execute(GameAction.transfer_item(from_kind, from_slot, to_kind, to_slot)).accepted:
 		return
 	_reset_selection()
 	_selected_index = int(to_slot) if to_kind == "bag" else -1

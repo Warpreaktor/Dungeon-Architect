@@ -156,28 +156,25 @@ func _test_pending_rewards_and_lethal_step() -> void:
 	assert(first.place_entity("chest", 3, 2))
 	var chest: Dictionary = first.entities_at(3, 2)[0]
 	assert(first.set_chest_contents(str(chest["id"]), ["gold"], 9))
-	for defer in [false, true]:
-		var session := GameSession.start_for_party(first, ["petushan", "volcha"])
-		var fallen: HeroState = session.hero
-		fallen.health = 1
-		assert(fallen.apply_overworld_status("bleeding", "Кровотечение", 3, 1, 1))
-		assert(session.move_by(1, 0, defer))
-		assert(session.party.size() == 1 and fallen.gold == 0)
-		if defer:
-			assert(not session.enter_map(second))
-			assert(session.progress_snapshot().is_empty())
-			assert(session.open_pending_chest())
-		assert(session.hero.gold == 9 and session.is_chest_open(chest))
-		assert(session.ground_loot_containers.is_empty())
-		assert(not session.open_pending_chest())
-		assert(session.enter_map(second))
-		assert(session.enter_map(first))
-		assert(session.move_by(1, 0))
-		assert(session.hero.gold == 9)
-		var doomed := GameSession.start_for(first)
-		doomed.hero.health = 1
-		assert(doomed.hero.apply_overworld_status("bleeding", "Кровотечение", 3, 1, 1))
-		assert(doomed.move_by(1, 0, defer))
-		assert(doomed.is_party_defeated() and not doomed.is_chest_open(chest))
-		assert(doomed.pending_chest_id.is_empty())
-		assert(doomed.ground_loot_containers.is_empty())
+	var session := GameSession.start_for_party(first, ["petushan", "volcha"])
+	var fallen: HeroState = session.hero
+	fallen.health = 1
+	assert(fallen.apply_overworld_status("bleeding", "Кровотечение", 3, 1, 1))
+	var result: GameActionResult = session.execute(GameAction.move(Vector2i.RIGHT))
+	assert(result.accepted and result.moved and result.casualties == [fallen])
+	assert(session.party.size() == 1 and fallen.gold == 0)
+	assert(session.hero.gold == 9 and session.is_chest_open(chest))
+	assert(session.ground_loot_containers.is_empty())
+	assert(not session.progress_snapshot().is_empty())
+	assert(session.enter_map(second))
+	assert(session.enter_map(first))
+	assert(session.execute(GameAction.move(Vector2i.RIGHT)).accepted)
+	assert(session.hero.gold == 9)
+	var doomed := GameSession.start_for(first)
+	doomed.hero.health = 1
+	assert(doomed.hero.apply_overworld_status("bleeding", "Кровотечение", 3, 1, 1))
+	var death: GameActionResult = doomed.execute(GameAction.move(Vector2i.RIGHT))
+	assert(death.status == GameActionResult.Status.SESSION_DEFEATED)
+	assert(doomed.is_party_defeated() and not doomed.is_chest_open(chest))
+	assert(doomed.pending_interaction == null)
+	assert(doomed.ground_loot_containers.is_empty())

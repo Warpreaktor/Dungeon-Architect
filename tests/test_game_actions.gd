@@ -4,6 +4,7 @@ extends SceneTree
 func _initialize() -> void:
 	_test_portal_and_floor()
 	_test_battle_completion()
+	_test_battle_completion(true)
 	_test_trap_choices()
 	print("Game actions: exploration, choices, combat and save boundaries OK")
 	quit()
@@ -65,11 +66,17 @@ func _test_portal_and_floor() -> void:
 	assert(restored.floor_state_snapshot(dungeon.map_id)["chests"].has(str(chest["id"])))
 
 
-func _test_battle_completion() -> void:
+func _test_battle_completion(empty_reward: bool = false) -> void:
 	var dungeon := _map()
 	assert(dungeon.place_entity("monster", 3, 2, {"monster_id": "skeleton"}))
 	var monster: Dictionary = dungeon.entities_at(3, 2)[0]
-	assert(dungeon.set_monster_loot(str(monster["id"]), ["gold"], 17, false))
+	var profile: LootProfile = LootProfileCatalog.for_source(monster)
+	var original_chance: int = profile.no_drop_chance
+	if empty_reward:
+		profile.no_drop_chance = 100
+	else:
+		assert(dungeon.set_monster_loot(str(monster["id"]), ["gold"], 17, false))
+	var expected_gold: int = 0 if empty_reward else 17
 	var session := _session(dungeon)
 	assert(session._receive_item("sword", 1) == 1)
 	session.hero.strength = 200
@@ -93,10 +100,20 @@ func _test_battle_completion() -> void:
 			break
 	assert(completion != null and combat.is_victory)
 	assert(session.active_combat == null and not session.has_pending_encounter())
-	assert(session.is_entity_removed(monster) and session.hero.gold == 17)
+	assert(session.is_entity_removed(monster) and session.hero.gold == expected_gold)
 	assert(session.player_pos == Vector2i(3, 2) and session.loot_victories == 1)
 	assert(not session.execute(GameAction.battle_turn("enemy", ability)).accepted)
-	assert(session.hero.gold == 17 and session.loot_victories == 1)
+	assert(session.hero.gold == expected_gold and session.loot_victories == 1)
+	if empty_reward:
+		assert(completion.messages.is_empty() and session.ground_loot_containers.is_empty())
+		var snapshot: Dictionary = JSON.parse_string(JSON.stringify(session.progress_snapshot()))
+		var restored: GameSession = GameSession.from_progress_snapshot(snapshot, {dungeon.map_id: dungeon})
+		assert(restored != null and restored.is_entity_removed(monster))
+		assert(restored.execute(GameAction.move(Vector2i.LEFT)).accepted)
+		assert(restored.execute(GameAction.move(Vector2i.RIGHT)).accepted)
+		assert(restored.hero.gold == 0 and restored.loot_victories == 1)
+		assert(restored.ground_loot_containers.is_empty())
+	profile.no_drop_chance = original_chance
 
 
 func _test_trap_choices() -> void:

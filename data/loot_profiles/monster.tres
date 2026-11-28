@@ -13,3 +13,4 @@ script = ExtResource("1_profile")
 display_name = "Обычный противник"
 progression = ExtResource("3_table")
 pools = Array[ExtResource("2_pool")]([SubResource("Pool_0")])
+no_drop_chance = 30

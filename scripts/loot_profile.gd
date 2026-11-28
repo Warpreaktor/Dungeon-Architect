@@ -11,6 +11,7 @@ const REWARD_LEVELS = [
 @export var progression: WeightedLootTable
 @export var pools: Array[LootPool] = []
 @export var rarity_weights: Dictionary = {}
+@export_range(0, 100, 1, "suffix:%") var no_drop_chance: int = 0
 
 
 func prepare() -> void:
@@ -29,6 +30,8 @@ static func level_rules(level: int) -> LootRewardLevel:
 
 func possible_item_ids(level: int = 1) -> Array[String]:
 	var ids: Array[String] = []
+	if no_drop_chance >= 100:
+		return ids
 	var stage: int = level_rules(level).stage_for(progression, 0, 0)
 	for pool in pools:
 		if pool == null:
@@ -41,6 +44,10 @@ func possible_item_ids(level: int = 1) -> Array[String]:
 
 func roll(rng: RandomNumberGenerator, victories: int, depth: int, level: int = 1) -> Array[Dictionary]:
 	var rewards: Array[Dictionary] = []
+	if rng == null or no_drop_chance >= 100:
+		return rewards
+	if no_drop_chance > 0 and rng.randi_range(1, 100) <= no_drop_chance:
+		return rewards
 	var rules: LootRewardLevel = level_rules(level)
 	var stage: int = rules.stage_for(progression, victories, depth)
 	for pool in pools:

@@ -5,6 +5,7 @@ func _initialize() -> void:
 	_test_reward_levels()
 	_test_mixed_rewards()
 	_test_profile_pools()
+	_test_no_drop_chance()
 	_test_source_selection()
 	_test_container_variants()
 	_test_depth_and_rarity()
@@ -134,7 +135,14 @@ func _test_mixed_rewards() -> void:
 	assert(loaded.set_monster_loot(str(monster["id"]), ["key_red"], 5, true))
 	assert(DungeonMap.monster_loot_is_random(monster))
 	var monster_rewards: Array[Dictionary] = _seeded_session(loaded, 619)._resolve_source_rewards(monster)
-	assert(monster_rewards.size() > 1 and monster_rewards.back() == {"item_id": "key_red", "quantity": 1})
+	assert(not monster_rewards.is_empty() and monster_rewards.back() == {"item_id": "key_red", "quantity": 1})
+	var monster_profile: LootProfile = LootProfileCatalog.for_source(monster)
+	var chance: int = monster_profile.no_drop_chance
+	monster_profile.no_drop_chance = 100
+	assert(_seeded_session(loaded, 619)._resolve_source_rewards(monster) == [{"item_id": "key_red", "quantity": 1}])
+	monster_profile.no_drop_chance = 0
+	assert(_seeded_session(loaded, 619)._resolve_source_rewards(monster).size() > 1)
+	monster_profile.no_drop_chance = chance
 	assert(loaded.place_entity("stairs_down", 5, 2))
 	var stairs: Dictionary = loaded.entities_at(5, 2)[0]
 	assert(loaded.set_chest_contents(str(stairs["id"]), ["key_red"], 5, true))
@@ -156,7 +164,10 @@ func _test_profile_pools() -> void:
 			for index in range(50):
 				var rewards: Array[Dictionary] = profile.roll(rng, 0, depth)
 				assert(rewards == profile.roll(replay, 0, depth))
-				assert(rng.state == replay.state and not rewards.is_empty())
+				assert(rng.state == replay.state)
+				if rewards.is_empty():
+					assert(profile.no_drop_chance > 0)
+					continue
 				var equipment_count: int = 0
 				for reward in rewards:
 					var item: ItemDefinition = ItemCatalog.get_item(str(reward["item_id"]))
@@ -182,6 +193,34 @@ func _test_profile_pools() -> void:
 					assert(rewards[1]["item_id"] == "gold")
 				elif profile_id == "boss":
 					assert(equipment_count == 2 and rewards.size() in [4, 5])
+
+
+func _test_no_drop_chance() -> void:
+	for profile_id in ["monster", "elite"]:
+		var profile: LootProfile = LootProfileCatalog.get_profile(profile_id)
+		assert(profile.no_drop_chance > 0 and profile.no_drop_chance < 100)
+		for level in range(1, LootProfile.REWARD_LEVELS.size() + 1):
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 621
+			var empty_count: int = 0
+			for index in range(2000):
+				if profile.roll(rng, 0, 0, level).is_empty():
+					empty_count += 1
+			assert(absf(float(empty_count) / 2000.0 - float(profile.no_drop_chance) / 100.0) < 0.05)
+		var original: int = profile.no_drop_chance
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 622
+		profile.no_drop_chance = 100
+		assert(profile.possible_item_ids().is_empty())
+		var before: int = rng.state
+		assert(profile.roll(rng, 0, 0).is_empty() and rng.state == before)
+		profile.no_drop_chance = 0
+		assert(not profile.possible_item_ids().is_empty())
+		assert(not profile.roll(rng, 0, 0).is_empty())
+		profile.no_drop_chance = original
+	for profile_id in LootProfileCatalog.list_ids():
+		if profile_id not in ["monster", "elite"]:
+			assert(LootProfileCatalog.get_profile(profile_id).no_drop_chance == 0)
 
 
 func _test_source_selection() -> void:

@@ -6,7 +6,10 @@ extends Resource
 @export var trap_id: String = ""
 @export var display_name: String = ""
 @export_multiline var description: String = ""
-@export var icon: Texture2D
+@export var icon_art: Texture2D
+var icon: Texture2D:
+	get:
+		return FramedIcon.compose(icon_art)
 @export_enum("floor", "door") var placement: String = "floor"
 @export_enum("any", "narrow_passage") var placement_constraint: String = "any"
 @export_multiline var trigger_message: String = ""

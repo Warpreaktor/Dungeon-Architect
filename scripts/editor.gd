@@ -614,7 +614,7 @@ func _build_interface() -> void:
 	_floating_console.set_game_controls_visible(is_play_mode or standalone_game)
 
 
-func _palette_section(parent: VBoxContainer, section_id: String, title: String, expanded: bool = true) -> VBoxContainer:
+func _palette_section(parent: VBoxContainer, section_id: String, title: String, expanded: bool = false) -> VBoxContainer:
 	if parent.get_child_count() > 0:
 		parent.add_child(HSeparator.new())
 	var section := VBoxContainer.new()

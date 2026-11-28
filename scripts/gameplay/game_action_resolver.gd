@@ -48,6 +48,9 @@ static func execute(session: GameSession, action: GameAction) -> GameActionResul
 				return result
 			session.cancel_exit_transition()
 			result.accepted = true
+		GameAction.Kind.SWITCH_SLIDING_PLATES:
+			result.terrain_changes = session.switch_sliding_plates(action.target_id)
+			result.accepted = not result.terrain_changes.is_empty()
 		GameAction.Kind.USE_ITEM:
 			result.item_result = session.use_item(action.item_id, action.recipient, action.bag_index)
 			result.accepted = bool(result.item_result.get("used", false))

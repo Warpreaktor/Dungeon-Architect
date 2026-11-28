@@ -35,13 +35,6 @@
 			"y": 3
 		},
 		{
-			"id": "ent_varg01_004",
-			"properties": {},
-			"type": "player_spawn",
-			"x": 3,
-			"y": 31
-		},
-		{
 			"id": "ent_varg01_005",
 			"properties": {
 				"contents": [
@@ -1098,13 +1091,20 @@
 			"y": 28
 		},
 		{
-			"id": "ent_41668670",
+			"id": "ent_9b685d82",
+			"properties": {},
+			"type": "player_spawn",
+			"x": 7,
+			"y": 31
+		},
+		{
+			"id": "ent_857e7c16",
 			"properties": {
 				"walls": [
 					{
-						"operation": "toggle",
+						"operation": "down",
 						"x": 8,
-						"y": 33
+						"y": 32
 					}
 				]
 			},

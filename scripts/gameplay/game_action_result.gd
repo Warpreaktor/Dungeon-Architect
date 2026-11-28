@@ -8,6 +8,7 @@ var accepted: bool = false
 var previous_position: Vector2i
 var position: Vector2i
 var moved: bool = false
+var terrain_changes: Dictionary = {}
 var discovered_trap: bool = false
 var interaction_id: int = 0
 var opened_chest_ids: Array[String] = []

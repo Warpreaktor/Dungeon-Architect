@@ -1,7 +1,7 @@
 class_name GameAction
 extends RefCounted
 
-enum Kind { MOVE, CHOOSE, ENTER_FLOOR, CANCEL_EXIT, USE_ITEM, TRANSFER_ITEM, TAKE_LOOT, SAVE_ARSENAL, BATTLE_PREPARE, BATTLE_NEXT, BATTLE_TURN, BATTLE_MANUAL_PREPARE, BATTLE_MANUAL_TICK, BATTLE_ITEM }
+enum Kind { MOVE, CHOOSE, ENTER_FLOOR, CANCEL_EXIT, USE_ITEM, TRANSFER_ITEM, TAKE_LOOT, SAVE_ARSENAL, BATTLE_PREPARE, BATTLE_NEXT, BATTLE_TURN, BATTLE_MANUAL_PREPARE, BATTLE_MANUAL_TICK, BATTLE_ITEM, SWITCH_SLIDING_PLATES }
 
 var kind: Kind
 var direction: Vector2i
@@ -22,6 +22,12 @@ var target_id: String
 var ability_id: String
 var chain: Array[String] = []
 var slot_index: int
+
+
+static func switch_sliding_plates(trigger_id: String) -> GameAction:
+	var action := GameAction.new(Kind.SWITCH_SLIDING_PLATES)
+	action.target_id = trigger_id
+	return action
 
 
 func _init(action_kind: Kind) -> void:

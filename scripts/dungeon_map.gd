@@ -54,6 +54,9 @@ var entities: Array:
 		_entities = value.duplicate()
 		_rebuild_entity_index()
 var metadata: Dictionary = {"theme": "stone_dungeon"}
+var _sliding_plates_a: Dictionary = {}
+var _sliding_plates_b: Dictionary = {}
+var _sliding_plates_shifted: bool = false
 
 
 ## Генератор названий для новых карт и кнопки с кубиком.
@@ -87,7 +90,8 @@ func contains(x: int, y: int) -> bool:
 func get_terrain(x: int, y: int) -> String:
 	if not contains(x, y):
 		return "wall"
-	return str(terrain[y][x])
+	var configuration: Dictionary = _sliding_plates_b if _sliding_plates_shifted else _sliding_plates_a
+	return str(configuration.get(Vector2i(x, y), terrain[y][x]))
 
 
 func narrow_passage_axis(cell: Vector2i) -> Vector2i:
@@ -201,6 +205,52 @@ func sliding_plates_configuration(marks: Variant) -> Dictionary:
 		changes[cell] = "floor"
 		changes[target] = "wall"
 	return {"error": "", "changes": changes}
+
+
+func copy_for_play() -> DungeonMap:
+	if not has_sliding_plates_trigger():
+		return self
+	var copy := DungeonMap.new()
+	copy.map_id = map_id
+	copy.display_name = display_name
+	copy.width = width
+	copy.height = height
+	copy.terrain = terrain.duplicate(true)
+	copy.entities = entities.duplicate(true)
+	copy.metadata = metadata.duplicate(true)
+	var configuration: Dictionary = copy.sliding_plates_configuration(copy.sliding_plates_marks())
+	if not str(configuration["error"]).is_empty():
+		return null
+	copy._sliding_plates_b = configuration["changes"]
+	for cell: Vector2i in copy._sliding_plates_b:
+		copy._sliding_plates_a[cell] = copy.get_terrain(cell.x, cell.y)
+	return copy
+
+
+func sliding_plates_is_shifted() -> bool:
+	return _sliding_plates_shifted
+
+
+func was_possible_floor(cell: Vector2i) -> bool:
+	return contains(cell.x, cell.y) and (terrain[cell.y][cell.x] == "floor" or _sliding_plates_b.get(cell) == "floor")
+
+
+func sliding_plates_trigger_id() -> String:
+	return str(_sliding_plates_trigger().get("id", ""))
+
+
+func switch_sliding_plates(occupied: Dictionary) -> Dictionary:
+	if _sliding_plates_b.is_empty():
+		return {}
+	var current: Dictionary = _sliding_plates_b if _sliding_plates_shifted else _sliding_plates_a
+	var target: Dictionary = _sliding_plates_a if _sliding_plates_shifted else _sliding_plates_b
+	for cell: Vector2i in target:
+		if get_terrain(cell.x, cell.y) != current[cell]:
+			return {}
+		if target[cell] == "wall" and occupied.has(cell):
+			return {}
+	_sliding_plates_shifted = not _sliding_plates_shifted
+	return target.duplicate()
 
 
 func cycle_sliding_plates_mark(cell: Vector2i) -> String:

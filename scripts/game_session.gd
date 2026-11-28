@@ -120,7 +120,9 @@ static func start_for_party(map_ref: DungeonMap, hero_ids: Array[String], open_m
 	ItemCatalog.prepare()
 	LootProfileCatalog.prepare()
 	var session := GameSession.new()
-	session.map_data = map_ref
+	session.map_data = map_ref.copy_for_play()
+	if session.map_data == null:
+		return null
 	session._party_rules = rules
 	session._party_start_map_id = map_ref.map_id
 	session.is_editor_test = editor_test
@@ -946,6 +948,7 @@ func _capture_floor_state() -> Dictionary:
 		visited_cells = _revealed_before_debug_open_map
 	return {
 		"map_id": map_data.map_id,
+		"sliding_plates_shifted": map_data.sliding_plates_is_shifted(),
 		"position": player_pos,
 		"ground_loot": _ground_loot_containers.duplicate(true),
 		"exit_rewards": claimed_exit_rewards.duplicate(true),
@@ -1293,8 +1296,11 @@ func enter_map(next_map: DungeonMap) -> bool:
 	if map_data != null and map_data.map_id == next_map.map_id:
 		saved = _capture_floor_state()
 		destination = map_data
-	elif is_editor_test and saved.is_empty():
-		destination = DungeonMap.from_dict(next_map.to_dict().duplicate(true))
+	elif saved.is_empty():
+		if is_editor_test and not next_map.has_sliding_plates_trigger():
+			destination = DungeonMap.from_dict(next_map.to_dict().duplicate(true))
+		else:
+			destination = next_map.copy_for_play()
 		if destination == null:
 			return false
 	var arrival: Vector2i = destination.find_entity_position("player_spawn")
@@ -1445,6 +1451,9 @@ func next_arrival_cell(destination: DungeonMap) -> Vector2i:
 func can_enter_next_map(destination: DungeonMap) -> bool:
 	if destination == null or destination.map_id != next_map_id() or not is_map_in_campaign(destination.map_id):
 		return false
+	var visited: DungeonMap = known_map(destination.map_id)
+	if visited != null:
+		destination = visited
 	var arrival: Vector2i = next_arrival_cell(destination)
 	if str(current_exit().get("type", "")) == "stairs_up":
 		return arrival.x >= 0
@@ -1997,6 +2006,21 @@ func resolve_pending_door_trap() -> bool:
 		if not combined and trap != null:
 			_message_events.append({"activation": "trap_result", "text": outcome, "icon_type": "trap", "icon_id": trap.trap_id})
 	return moved
+
+
+func switch_sliding_plates(trigger_id: String) -> Dictionary:
+	if map_data == null or trigger_id.is_empty() or trigger_id != map_data.sliding_plates_trigger_id() or is_party_defeated():
+		return {}
+	var occupied: Dictionary = {player_pos: true}
+	for entity in map_data.entities:
+		if not is_entity_removed(entity):
+			occupied[Vector2i(int(entity["x"]), int(entity["y"]))] = true
+	for cell in _ground_by_cell:
+		occupied[cell] = true
+	var changes: Dictionary = map_data.switch_sliding_plates(occupied)
+	if not changes.is_empty():
+		_refresh_visibility()
+	return changes
 
 
 func can_enter(cell: Vector2i) -> bool:
@@ -2722,10 +2746,15 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, ca
 		if raw_floor.has("map_signature"):
 			if typeof(raw_floor["map_signature"]) != TYPE_STRING or str(raw_floor["map_signature"]) != ProgressSnapshotCodec.map_signature(map_ref):
 				return null
-		var floor_data: Dictionary = ProgressSnapshotCodec.decode_floor(raw_floor, map_ref)
+		var runtime_map: DungeonMap = map_ref.copy_for_play()
+		if runtime_map == null or typeof(raw_floor.get("sliding_plates_shifted", false)) != TYPE_BOOL:
+			return null
+		if bool(raw_floor.get("sliding_plates_shifted", false)) and runtime_map.switch_sliding_plates({}).is_empty():
+			return null
+		var floor_data: Dictionary = ProgressSnapshotCodec.decode_floor(raw_floor, runtime_map)
 		if floor_data.is_empty():
 			return null
-		floor_data["map"] = map_ref
+		floor_data["map"] = runtime_map
 		restored_floors[raw_map_id] = floor_data
 	for record in restored_history:
 		if not restored_floors.has(record["from"]) or not restored_floors.has(record["to"]):
@@ -2806,7 +2835,7 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, ca
 			return null
 		var floor_map: DungeonMap = restored_floors[floor_id]["map"]
 		var cell: Vector2i = location["position"]
-		if not floor_map.contains(cell.x, cell.y) or floor_map.get_terrain(cell.x, cell.y) != "floor":
+		if not floor_map.was_possible_floor(cell):
 			return null
 	session._floor_states = restored_floors.duplicate()
 	session._floor_states.erase(current_id)

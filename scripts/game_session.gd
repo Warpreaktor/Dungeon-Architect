@@ -559,19 +559,48 @@ func _clear_member_equipment(member: HeroState) -> void:
 	member._recalculate_equipment_stats()
 
 
+func _ground_instance_ids() -> Dictionary:
+	var ids: Dictionary = {}
+	var containers: Array = _ground_loot_containers.duplicate()
+	for floor_id in _floor_states:
+		if map_data == null or floor_id != map_data.map_id:
+			containers.append_array(_floor_states[floor_id].get("ground_loot", []))
+	for container in containers:
+		for entry in container["loot"]:
+			for record in entry.get("instances", []):
+				ids[str(record["instance_id"])] = true
+	return ids
+
+
+func _materialize_legacy_ground_entry(entry: Dictionary) -> void:
+	var item: ItemDefinition = ItemCatalog.get_item(str(entry["item_id"]))
+	if item == null or item.category != ItemDefinition.Category.EQUIPMENT or item.stackable or entry.has("instances"):
+		return
+	var records: Array[Dictionary] = []
+	var durabilities: Array = entry.get("durabilities", [])
+	for index in range(int(entry["quantity"])):
+		var durability: int = int(durabilities[index]) if index < durabilities.size() else -1
+		var instance: ItemInstance = _allocate_item_instance(item, durability)
+		records.append(instance.to_dict())
+	entry["instances"] = records
+
+
 func _append_ground_loot(cell: Vector2i, entries: Array[Dictionary]) -> void:
 	if entries.is_empty():
 		return
+	var resolved: Array[Dictionary] = entries.duplicate(true)
+	for entry in resolved:
+		_materialize_legacy_ground_entry(entry)
 	var container: Dictionary = _ground_container_at(cell)
 	if not container.is_empty():
 		var contents: Array = container["loot"]
-		contents.append_array(entries.duplicate(true))
+		contents.append_array(resolved)
 		return
 	_ground_loot_counter += 1
 	_add_ground_container({
 		"id": "ground_%d" % _ground_loot_counter,
 		"x": cell.x, "y": cell.y,
-		"loot": entries.duplicate(true)
+		"loot": resolved
 	})
 
 
@@ -749,6 +778,8 @@ func record_casualties() -> Array[HeroState]:
 	potions = int(carried_items.get("potion", 0))
 	_append_ground_loot(player_pos, ground)
 	hero = survivor
+	if not party.has(inventory_member):
+		inventory_member = null
 	_casualty_events.append_array(casualties)
 	return casualties
 
@@ -800,17 +831,14 @@ func take_ground_loot(container_id: String, entry_index: int) -> int:
 			return 0
 		var restored: ItemInstance = null
 		if item.category == ItemDefinition.Category.EQUIPMENT and not item.stackable:
-			if entry.has("instances"):
-				var saved_instances: Array = entry["instances"]
-				if saved_instances.is_empty():
-					return 0
-				restored = ItemInstance.from_dict(saved_instances.front())
-				if restored == null or restored.item_id != item_id or _item_instances.has(restored.instance_id):
-					return 0
-				saved_instances.pop_front()
-				_item_instances[restored.instance_id] = restored
-			else:
-				restored = _create_item_instance(item_id)
+			var saved_instances: Array = entry.get("instances", [])
+			if saved_instances.is_empty():
+				return 0
+			restored = ItemInstance.from_dict(saved_instances.front())
+			if restored == null or restored.item_id != item_id or _item_instances.has(restored.instance_id):
+				return 0
+			saved_instances.pop_front()
+			_item_instances[restored.instance_id] = restored
 			_bag_instance_ids[free] = restored.instance_id
 		bag[free] = item_id
 		_bag_quantities[free] = 1
@@ -818,9 +846,9 @@ func take_ground_loot(container_id: String, entry_index: int) -> int:
 			var durabilities: Array = entry.get("durabilities", [])
 			var shield_instance: ItemInstance = item_instance(_bag_instance_ids[free])
 			var durability: int = shield_instance.durability if shield_instance != null else _new_shield_durability(item_id)
-			shield_layout["bag:%d" % free] = int(durabilities.pop_front()) if not durabilities.is_empty() else durability
-			if entry.has("durabilities"):
-				entry["durabilities"] = durabilities
+			shield_layout["bag:%d" % free] = durability
+			if not durabilities.is_empty():
+				durabilities.pop_front()
 		_inventory_order = bag
 		carried_items[item_id] = int(carried_items.get(item_id, 0)) + amount
 		if _is_shield(item_id):
@@ -1015,8 +1043,11 @@ func restore_party_state(snapshot: Dictionary) -> bool:
 		if not (fallen_snapshot is Dictionary):
 			return false
 		var fallen_member: HeroState = HeroState.from_snapshot(fallen_snapshot)
-		if fallen_member == null or fallen_member.health != 0:
+		if fallen_member == null or fallen_member.health != 0 or fallen_member.gold != 0 or not fallen_member.equipped_instance_ids.is_empty():
 			return false
+		for slot_id in EquipmentSlotRules.SLOT_IDS:
+			if not _member_equipment_id(fallen_member, slot_id).is_empty():
+				return false
 		restored_fallen.append(fallen_member)
 	if _party_rules.restricted:
 		var ids: Array[String] = []
@@ -1243,7 +1274,7 @@ func _valid_snapshot_inventory(counts: Dictionary, bag: Array, members: Array[He
 
 
 func enter_map(next_map: DungeonMap) -> bool:
-	if has_pending_portal_choice() or has_pending_trap_choice() or has_pending_door_trap() or is_party_defeated() or next_map == null or next_map.map_id.is_empty() or not is_map_in_campaign(next_map.map_id):
+	if has_pending_encounter() or not pending_chest_id.is_empty() or has_pending_portal_choice() or has_pending_trap_choice() or has_pending_door_trap() or is_party_defeated() or next_map == null or next_map.map_id.is_empty() or not is_map_in_campaign(next_map.map_id):
 		return false
 	var source_exit: Dictionary = current_exit()
 	var source_id: String = map_data.map_id if map_data != null else ""
@@ -1282,6 +1313,7 @@ func enter_map(next_map: DungeonMap) -> bool:
 	_pending_return_exit.clear()
 	_pending_portal.clear()
 	map_data = destination
+	_floor_states.erase(destination.map_id)
 	_ground_loot_containers.clear()
 	_ground_by_cell.clear()
 	_ground_by_id.clear()
@@ -2053,10 +2085,7 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 	# Проверка сундука после двери: нельзя получить добычу через замок.
 	var chest := _find_active_entity(target, "chest")
 	if not chest.is_empty() and not is_chest_open(chest):
-		if defer_chest_open:
-			pending_chest_id = str(chest["id"])
-		else:
-			_open_chest(chest)
+		pending_chest_id = str(chest["id"])
 
 	player_pos = target
 	_advance_movement_effects()
@@ -2064,13 +2093,14 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 		_activate_traps_at(target)
 	record_casualties()
 	if is_party_defeated():
+		pending_chest_id = ""
 		_refresh_visibility()
 		return true
 	_collect_pickups_at(target)
 	_activate_triggers_at(target)
 	if not opened_door_id.is_empty():
 		_activate_message_at(target, "door_open", opened_door_id)
-	else:
+	elif pending_chest_id.is_empty():
 		_activate_message_at(target, "enter")
 	_refresh_visibility()
 	var stairs: Dictionary = _find_active_entity(target, "stairs_down")
@@ -2085,6 +2115,8 @@ func _move_by(dx: int, dy: int, defer_chest_open: bool, accepted: Array[String],
 		is_completed = true
 	else:
 		_request_portal_choice(target)
+	if not defer_chest_open and not pending_chest_id.is_empty():
+		open_pending_chest()
 	return true
 
 
@@ -2282,7 +2314,7 @@ func _receive_reward(reward: Dictionary, drop_cell: Vector2i) -> int:
 		var records: Array = reward.get("instances", [])
 		if records.size() != quantity:
 			return 0
-		var seen: Dictionary = {}
+		var seen: Dictionary = _ground_instance_ids()
 		for record in records:
 			var instance: ItemInstance = ItemInstance.from_dict(record)
 			if instance == null or instance.item_id != item_id or seen.has(instance.instance_id) or _item_instances.has(instance.instance_id):
@@ -2769,17 +2801,31 @@ static func from_progress_snapshot(snapshot: Variant, maps_by_id: Dictionary, ca
 	var known_instance_ids: Dictionary = {}
 	for instance_id in session._item_instances:
 		known_instance_ids[instance_id] = true
-	for restored_floor in restored_floors.values():
-		for container in restored_floor["ground_loot"]:
-			for entry in container["loot"]:
-				for raw_instance in entry.get("instances", []):
-					var instance: ItemInstance = ItemInstance.from_dict(raw_instance)
-					if instance == null or known_instance_ids.has(instance.instance_id):
-						return null
-					var number_text: String = instance.instance_id.trim_prefix("item_")
-					if not instance.instance_id.begins_with("item_") or not number_text.is_valid_int() or int(number_text) > session._next_item_instance_number:
-						return null
-					known_instance_ids[instance.instance_id] = true
+	var all_ground: Array = session._ground_loot_containers.duplicate()
+	for floor_id in restored_floors:
+		if floor_id != current_id:
+			all_ground.append_array(restored_floors[floor_id]["ground_loot"])
+	for container in all_ground:
+		for entry in container["loot"]:
+			for raw_instance in entry.get("instances", []):
+				var instance: ItemInstance = ItemInstance.from_dict(raw_instance)
+				if instance == null or known_instance_ids.has(instance.instance_id):
+					return null
+				var number_text: String = instance.instance_id.trim_prefix("item_")
+				if not instance.instance_id.begins_with("item_") or not number_text.is_valid_int() or int(number_text) < 1 or int(number_text) > session._next_item_instance_number:
+					return null
+				known_instance_ids[instance.instance_id] = true
+	for container in all_ground:
+		for entry in container["loot"]:
+			session._materialize_legacy_ground_entry(entry)
+	for location in session.fallen_hero_locations:
+		var floor_id: String = location["map_id"]
+		if not restored_floors.has(floor_id):
+			return null
+		var floor_map: DungeonMap = restored_floors[floor_id]["map"]
+		var cell: Vector2i = location["position"]
+		if not floor_map.contains(cell.x, cell.y) or floor_map.get_terrain(cell.x, cell.y) != "floor":
+			return null
 	session._floor_states = restored_floors.duplicate()
 	session._floor_states.erase(current_id)
 	session._stairs_history = restored_history

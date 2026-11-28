@@ -68,7 +68,7 @@ static func decode_floor(data: Variant, map_ref: DungeonMap) -> Dictionary:
 		var y: int = int(container["y"])
 		if not map_ref.contains(x, y) or map_ref.get_terrain(x, y) != "floor":
 			return {}
-		if not (container.get("loot") is Array):
+		if not (container.get("loot") is Array) or container["loot"].is_empty():
 			return {}
 		for item in container["loot"]:
 			if not (item is Dictionary) or typeof(item.get("item_id")) != TYPE_STRING:
@@ -87,8 +87,11 @@ static func decode_floor(data: Variant, map_ref: DungeonMap) -> Dictionary:
 			if item.has("durabilities"):
 				if not (item["durabilities"] is Array) or item["durabilities"].size() != int(item["quantity"]):
 					return {}
-				for durability in item["durabilities"]:
+				for index in range(item["durabilities"].size()):
+					var durability: Variant = item["durabilities"][index]
 					if not _is_integer(durability) or int(durability) < 0:
+						return {}
+					if item.has("instances") and int(item["instances"][index]["durability"]) != int(durability):
 						return {}
 	var restored: Dictionary = {
 		"map_id": map_ref.map_id,

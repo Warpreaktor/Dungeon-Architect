@@ -20,7 +20,7 @@ const NAME_SECRETS := [
 	"древнего пророчества", "разбитой звезды", "погасших факелов", "тайного ордена"
 ]
 const PORTAL_COLORS := ["blue", "cyan", "green", "orange", "pink", "purple", "red", "yellow"]
-const ENTITY_TYPES := ["door", "chest", "monster", "trap", "stairs_down", "portal", "portal_local", "key", "potion", "gold", "trigger", "player_spawn", "message"]
+const ENTITY_TYPES := ["door", "chest", "monster", "trap", "stairs_down", "portal", "portal_local", "key", "potion", "gold", "trigger", "player_spawn", "message", SlidingPlates.TRIGGER]
 static var CHEST_REWARDS: Array = ItemCatalog.list_ids() + ItemCatalog.LEGACY_UNLISTED_EQUIPMENT_IDS
 const CHEST_VARIANT_NAMES := {
 	"chest": "Сундук",
@@ -127,11 +127,45 @@ func set_terrain(x: int, y: int, kind: String) -> bool:
 	return true
 
 
+static func other_floor_has_sliding_plates(current_id: String, maps_by_id: Dictionary, related_ids: Array[String]) -> bool:
+	for map_id in related_ids:
+		if map_id == current_id:
+			continue
+		var candidate: DungeonMap = maps_by_id.get(map_id) as DungeonMap
+		if candidate != null and candidate.has_sliding_plates_trigger():
+			return true
+	return false
+
+
+func has_sliding_plates_trigger() -> bool:
+	return not _entities_by_kind.get(SlidingPlates.TRIGGER, []).is_empty()
+
+
+func sliding_plates_trigger_error(cell: Vector2i) -> String:
+	if not contains(cell.x, cell.y) or get_terrain(cell.x, cell.y) != "floor" or not entities_at(cell.x, cell.y).is_empty():
+		return SlidingPlates.CELL_ERROR
+	if has_sliding_plates_trigger():
+		return SlidingPlates.DUPLICATE_ERROR
+	return ""
+
+
+func _has_sliding_plates_trigger_at(cell: Vector2i) -> bool:
+	for entity in entities_at(cell.x, cell.y):
+		if str(entity.get("type", "")) == SlidingPlates.TRIGGER:
+			return true
+	return false
+
+
 func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> bool:
 	if not contains(x, y) or kind not in ENTITY_TYPES:
 		return false
 	# Не ставим монстра или сундук внутрь стены.
 	if get_terrain(x, y) == "wall":
+		return false
+	if kind == SlidingPlates.TRIGGER:
+		if not sliding_plates_trigger_error(Vector2i(x, y)).is_empty():
+			return false
+	elif _has_sliding_plates_trigger_at(Vector2i(x, y)):
 		return false
 	if kind == "portal_local":
 		var color: String = str(options.get("color", ""))
@@ -180,6 +214,8 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 			return false
 		properties = {"trap_id": trap_id}
 		properties.merge(TrapCatalog.settings_overrides(trap_definition, options), true)
+	elif kind == SlidingPlates.TRIGGER:
+		properties = {"walls": []}
 	elif kind == "trigger":
 		properties = {"event_id": ""}
 	elif kind == "message":
@@ -761,6 +797,8 @@ func move_existing(kind: String, entity_id: String, source: Vector2i, target: Ve
 			break
 	if moving.is_empty():
 		return false
+	if _has_sliding_plates_trigger_at(target) or (kind == SlidingPlates.TRIGGER and not entities_at(target.x, target.y).is_empty()):
+		return false
 	var trap: TrapDefinition = TrapCatalog.from_entity(moving)
 	if trap != null and not trap_placement_error(trap, target).is_empty():
 		return false
@@ -941,6 +979,15 @@ static func from_dict(value: Variant) -> DungeonMap:
 			else:
 				properties["variant"] = variant
 		result._append_entity({"id": entity_id, "type": kind, "x": x, "y": y, "properties": properties})
+	var sliding_triggers: Array = result._entities_by_kind.get(SlidingPlates.TRIGGER, [])
+	if sliding_triggers.size() > 1:
+		return null
+	if not sliding_triggers.is_empty():
+		var trigger: Dictionary = sliding_triggers[0]
+		var tx: int = int(trigger["x"])
+		var ty: int = int(trigger["y"])
+		if result.get_terrain(tx, ty) != "floor" or result.entities_at(tx, ty).size() != 1:
+			return null
 	var raw_metadata: Variant = value.get("metadata", {"theme": "stone_dungeon"})
 	if typeof(raw_metadata) == TYPE_DICTIONARY:
 		result.metadata = raw_metadata

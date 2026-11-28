@@ -1,0 +1,22 @@
+From 43b09515e0ba06aefea3d561479a0a4bcb108120 Mon Sep 17 00:00:00 2001
+From: Dungeon Architect <developer@dungeon-architect.local>
+Date: Sat, 28 Nov 2026 11:21:05 +0000
+Subject: [PATCH] Сворачивать разделы палитры по умолчанию
+
+---
+ scripts/editor.gd | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/editor.gd b/scripts/editor.gd
+index 99f7c5e..e282d29 100644
+--- a/scripts/editor.gd
++++ b/scripts/editor.gd
+@@ -602,7 +602,7 @@ func _build_interface() -> void:
+ 	_floating_console.set_game_controls_visible(is_play_mode or standalone_game)
+ 
+ 
+-func _palette_section(parent: VBoxContainer, section_id: String, title: String, expanded: bool = true) -> VBoxContainer:
++func _palette_section(parent: VBoxContainer, section_id: String, title: String, expanded: bool = false) -> VBoxContainer:
+ 	if parent.get_child_count() > 0:
+ 		parent.add_child(HSeparator.new())
+ 	var section := VBoxContainer.new()

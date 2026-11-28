@@ -163,6 +163,7 @@ var _name_input: LineEdit
 var _last_log_message: String = ""
 var _stats_label: Label
 var _palette_buttons: Dictionary = {}
+var _sliding_plates_menu: PopupMenu
 var _touch_info: TouchInfoOverlay
 var _chest_popup: ChestContentsPopup
 var _monster_loot_popup: ChestContentsPopup
@@ -437,6 +438,7 @@ func _build_interface() -> void:
 	_canvas.move_selection_changed.connect(_on_move_selection_changed)
 	_canvas.move_failed.connect(_on_move_failed)
 	_canvas.placement_rejected.connect(_on_placement_rejected)
+	_canvas.sliding_plates_scope_error = _sliding_plates_scope_error
 	_canvas.configurable_entity_tapped.connect(_on_configurable_entity_tapped)
 	_canvas.developer_interaction_enabled = DeveloperMode.is_enabled() and not standalone_game
 	_canvas.message_cell_tapped.connect(_on_message_cell_tapped)
@@ -580,6 +582,21 @@ func _build_interface() -> void:
 				"hint": trap.get_description() if not trap.get_description().is_empty() else "Ловушка: %s" % trap.display_name,
 				"icon": trap.icon
 			})
+
+	var sliding_tools := _palette_tool_group(traps_section, "SlidingPlates", "СДВИГАЮЩИЕСЯ ПЛИТЫ")
+	_add_tool_button(sliding_tools, {
+		"id": SlidingPlates.TOOL,
+		"label": "Сдвигающиеся плиты",
+		"icon": FramedIcon.compose(SlidingPlates.ICON_ART)
+	})
+	_sliding_plates_menu = PopupMenu.new()
+	_sliding_plates_menu.name = "SlidingPlatesMenu"
+	_sliding_plates_menu.add_theme_constant_override("v_separation", 12)
+	_sliding_plates_menu.add_theme_constant_override("icon_max_width", 48)
+	_sliding_plates_menu.add_icon_item(FramedIcon.compose(SlidingPlates.TRIGGER_TOOL_ART), "Установочный триггер", 0)
+	_sliding_plates_menu.add_icon_item(FramedIcon.compose(SlidingPlates.WALLS_TOOL_ART), "Сдвигающиеся стены", 1)
+	_sliding_plates_menu.id_pressed.connect(_on_sliding_plates_tool_selected)
+	add_child(_sliding_plates_menu)
 
 	# Перестановка дочернего Control в HBoxContainer меняет порядок панелей
 	# без переподключения сигналов и пересоздания палитры.
@@ -1888,7 +1905,52 @@ func _on_monster_configuration_changed(monster_entity_id: String, party: Array[S
 func _on_tool_button_pressed(button: Button, kind: String) -> void:
 	if _touch_info.consume_long_press(button):
 		return
+	if kind == SlidingPlates.TOOL:
+		if not is_play_mode and _sliding_plates_menu != null:
+			_sliding_plates_menu.reset_size()
+			_sliding_plates_menu.position = Vector2i(button.get_screen_position() + Vector2(0, button.size.y))
+			_sliding_plates_menu.popup()
+		return
 	_set_tool(kind)
+
+
+func _on_sliding_plates_tool_selected(id: int) -> void:
+	if is_play_mode:
+		return
+	if id == 0:
+		_set_tool(SlidingPlates.TRIGGER)
+	elif id == 1:
+		_set_tool(SlidingPlates.WALLS_TOOL)
+
+
+func _sliding_plates_scope_error() -> String:
+	if map_data == null:
+		return SlidingPlates.CELL_ERROR
+	var maps: Dictionary = {}
+	var related_ids: Array[String] = []
+	if not _official_source_path.is_empty():
+		var official: CampaignDefinition = OfficialCampaignLibrary.source_campaign(map_data.map_id)
+		if official == null:
+			return "Не удалось проверить состав официальной кампании."
+		related_ids.assign(official.map_ids)
+		for map_id in related_ids:
+			if map_id == map_data.map_id:
+				continue
+			var other: DungeonMap = _read_map(OfficialCampaignLibrary.source_path(map_id))
+			if other == null:
+				return "Не удалось проверить этаж %s." % map_id
+			maps[map_id] = other
+	else:
+		maps = SavedMapLibrary.load_all(_maps_dir())
+		maps[map_data.map_id] = map_data
+		var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
+		if not _campaign_library.last_error.is_empty():
+			return _campaign_library.last_error
+		if campaign != null:
+			related_ids.assign(campaign.map_ids)
+		else:
+			related_ids = _campaign_library.legacy_linked_maps(map_data.map_id, maps)
+	return SlidingPlates.DUPLICATE_ERROR if DungeonMap.other_floor_has_sliding_plates(map_data.map_id, maps, related_ids) else ""
 
 
 func _set_tool(kind: String) -> void:
@@ -1896,7 +1958,14 @@ func _set_tool(kind: String) -> void:
 	_canvas.set_selected_tool(kind)
 	for key in _palette_buttons.keys():
 		var button: Button = _palette_buttons[key]
-		var active: bool = key == kind
+		var active: bool = key == kind or (key == SlidingPlates.TOOL and kind in [SlidingPlates.TRIGGER, SlidingPlates.WALLS_TOOL])
+		if key == SlidingPlates.TOOL:
+			var art: Texture2D = SlidingPlates.ICON_ART
+			if kind == SlidingPlates.TRIGGER:
+				art = SlidingPlates.TRIGGER_TOOL_ART
+			elif kind == SlidingPlates.WALLS_TOOL:
+				art = SlidingPlates.WALLS_TOOL_ART
+			button.icon = FramedIcon.compose(art)
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color("#476b74") if active else Color("#2a3a48")
 		style.border_width_left = 3 if active else 1

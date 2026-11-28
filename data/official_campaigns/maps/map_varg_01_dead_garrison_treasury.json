@@ -916,7 +916,7 @@
 				],
 				"hidden": false,
 				"item_quantities": {
-					"dagger": 1
+					"dagger": 1.0
 				},
 				"loot_mode": "fixed",
 				"variant": "weapon_rack"
@@ -933,7 +933,7 @@
 				],
 				"hidden": false,
 				"item_quantities": {
-					"wooden_shield": 1
+					"wooden_shield": 1.0
 				},
 				"loot_mode": "mixed",
 				"variant": "armor_rack"
@@ -1096,6 +1096,15 @@
 			"type": "monster",
 			"x": 17,
 			"y": 28
+		},
+		{
+			"id": "ent_41668670",
+			"properties": {
+				"walls": []
+			},
+			"type": "sliding_plates_trigger",
+			"x": 7,
+			"y": 33
 		}
 	],
 	"height": 35,

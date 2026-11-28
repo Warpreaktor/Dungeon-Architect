@@ -54,6 +54,8 @@ var game_session: GameSession
 var mode: String = "edit" # edit | play
 var reachability_result: Dictionary = {}
 var selected_tool: String = "wall"
+var sliding_plates_scope_error: Callable
+var _sliding_plates_marker: Texture2D
 var developer_interaction_enabled: bool = false
 var show_grid: bool = true
 var camera_offset := Vector2.ZERO
@@ -744,7 +746,7 @@ func _draw_cell(x: int, y: int, stairs_up_cell: Vector2i) -> void:
 		var kind := str(entity["type"])
 		if mode == "play" and (game_session.is_entity_hidden_from_hero(entity) if game_session != null else DungeonMap.is_entity_hidden(entity)):
 			continue
-		if mode == "play" and kind in ["player_spawn", "trigger", "message"]:
+		if mode == "play" and kind in ["player_spawn", "trigger", "message", SlidingPlates.TRIGGER]:
 			continue
 		drawable_entities += 1
 		var origin := Vector2(x, y) * TILE_SIZE
@@ -924,6 +926,10 @@ func _draw_entity(kind: String, origin: Vector2, entity: Dictionary = {}) -> voi
 			draw_rect(Rect2(origin + Vector2(29, 3), Vector2(16, 13)), Color("#ffdd93"))
 			draw_rect(Rect2(origin + Vector2(31, 5), Vector2(12, 9)), Color("#47352b"))
 			draw_colored_polygon(PackedVector2Array([origin + Vector2(32, 16), origin + Vector2(36, 16), origin + Vector2(32, 20)]), Color("#ffdd93"))
+		SlidingPlates.TRIGGER:
+			if _sliding_plates_marker == null:
+				_sliding_plates_marker = FramedIcon.compose(SlidingPlates.TRIGGER_PLATE_ART)
+			draw_texture_rect(_sliding_plates_marker, Rect2(origin, Vector2.ONE * TILE_SIZE), false)
 		"trigger":
 			draw_circle(center, 16.0, Color("#c8a4f2"), false, 2.5)
 			draw_circle(center, 7.0, Color("#a47acf"), false, 2.0)
@@ -1143,6 +1149,16 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 	var modified := false
 	if erase or selected_tool == "erase":
 		modified = map_data.erase_at(cell.x, cell.y)
+	elif selected_tool == SlidingPlates.TRIGGER:
+		var error: String = map_data.sliding_plates_trigger_error(cell)
+		if error.is_empty() and sliding_plates_scope_error.is_valid():
+			error = str(sliding_plates_scope_error.call())
+		if not error.is_empty():
+			placement_rejected.emit(error)
+			return
+		modified = map_data.place_entity(SlidingPlates.TRIGGER, cell.x, cell.y)
+	elif selected_tool == SlidingPlates.WALLS_TOOL:
+		return
 	elif selected_tool in ["floor", "wall"]:
 		modified = map_data.set_terrain(cell.x, cell.y, selected_tool)
 	elif selected_tool == "chest":
@@ -1271,7 +1287,7 @@ func _gui_input(event: InputEvent) -> void:
 					_cancel_pending_settings_tap()
 			camera_offset += event.relative
 			queue_redraw()
-		elif mode == "edit" and selected_tool != "hand" and (_painting or _erasing):
+		elif mode == "edit" and selected_tool != "hand" and (_erasing or (_painting and selected_tool != SlidingPlates.TRIGGER)):
 			_edit_at(event.position, _erasing)
 		_update_hover(event.position)
 	elif event is InputEventScreenTouch:
@@ -1346,7 +1362,7 @@ func _gui_input(event: InputEvent) -> void:
 						zoom_at(old_center, new_a.distance_to(new_b) / old_distance)
 					camera_offset += new_center - old_center
 					queue_redraw()
-			elif mode == "edit" and selected_tool != "message" and not _touch_blocked and _touch_positions.size() == 1:
+			elif mode == "edit" and selected_tool not in ["message", SlidingPlates.TRIGGER] and not _touch_blocked and _touch_positions.size() == 1:
 				_edit_at(event.position, false)
 		_update_hover(event.position)
 		accept_event()

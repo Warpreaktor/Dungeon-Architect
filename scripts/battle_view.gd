@@ -66,6 +66,9 @@ var _completion_result: GameActionResult
 var _item_picker: BattleItemPicker
 ## Временные портреты поверх поля: движение не меняет настоящие UI-узлы.
 var _impact_layer: Control
+var _active_impact_effect: BattleImpactEffect
+var _impact_shake: Vector2 = Vector2.ZERO
+var _impact_reference_height: float = 0.0
 var _action_emblem: BattleActionEmblem
 var _impact_portraits: Dictionary = {}
 var _impact_animators: Dictionary = {}
@@ -127,6 +130,7 @@ const SHIELD_FLASH_START_SCALE: float = 0.25
 const SHIELD_FLASH_PEAK_SCALE: float = 1.08
 const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 
+@export var impact_profile: BattleImpactProfile = preload("res://combat_visuals/impact.tres")
 @export var melee_choreography: BattleMeleeChoreography = preload("res://combat_visuals/melee_choreography.tres")
 @export_range(0.0, 2.0, 0.01) var clash_tick_seconds: float = 0.20
 @export_range(0.0, 2.0, 0.01) var clash_action_start_seconds: float = 0.08
@@ -1162,10 +1166,11 @@ func _fit_impact_layer() -> void:
 	var field: Rect2 = Rect2(_battlefield.global_position - global_position, _battlefield.size)
 	var factor: float = minf(field.size.x / _impact_field_rect.size.x, field.size.y / _impact_field_rect.size.y)
 	_impact_layer.scale = Vector2.ONE * factor
-	_impact_layer.position = field.position + Vector2((field.size.x - _impact_field_rect.size.x * factor) * 0.5, 0.0) - _impact_field_rect.position * factor
+	_impact_layer.position = field.position + Vector2((field.size.x - _impact_field_rect.size.x * factor) * 0.5, 0.0) - _impact_field_rect.position * factor + _impact_shake * factor
 
 
 func _clear_impact_layer() -> void:
+	_end_attack_impact()
 	_clear_action_emblem()
 	for animator in _impact_animators.values():
 		(animator as BattleFigureAnimator).reset()
@@ -1270,9 +1275,13 @@ func _queue_single_attack(event: Dictionary) -> void:
 	var animator: BattleFigureAnimator = _impact_animators[actor_id]
 	var target_animator: BattleFigureAnimator = _impact_animators[target_id]
 	var ability: AbilityDefinition = AbilityCatalog.get_ability(str(event.get("ability_id", "")))
+	var config: BattleImpactProfile = ability.impact_profile if ability != null and ability.impact_profile != null else impact_profile
+	var is_melee: bool = ability == null or ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE
+	var impact: Callable = _begin_attack_impact.bind(event, config, is_melee or (ability != null and ability.impact_profile != null))
+	var pause: float = config.contact_pause(event) if config != null else 0.0
 	if ability == null or ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE:
 		var choreography: BattleMeleeChoreography = ability.melee_choreography if ability != null and ability.melee_choreography != null else melee_choreography
-		if animator.queue_melee(_playback, target_animator, event, choreography, _impact.bind(event)):
+		if animator.queue_melee(_playback, target_animator, event, choreography, impact, pause, _advance_attack_impact, _end_attack_impact):
 			return
 	var origin: Vector2 = _impact_origin[actor_id]
 	var target_origin: Vector2 = _impact_origin[target_id]
@@ -1288,7 +1297,46 @@ func _queue_single_attack(event: Dictionary) -> void:
 	var approach: float = clampf(BattleClashGeometry.approach_seconds(clash_impact_seconds,
 		{actor_id: windup}, {actor_id: contact}, {actor_id: attacker.size}), clash_impact_seconds, maxf(clash_impact_seconds, 0.48))
 	animator.queue_attack(_playback, target_animator, event, contact, windup, clash_windup_seconds,
-		approach, clash_hold_seconds, clash_recover_seconds, clash_hurt_recoil_fraction, clash_strike_scale, _impact.bind(event))
+		approach, clash_hold_seconds, clash_recover_seconds, clash_hurt_recoil_fraction, clash_strike_scale, impact, clash_impact_seconds, pause, _advance_attack_impact, _end_attack_impact)
+
+
+func _begin_attack_impact(event: Dictionary, config: BattleImpactProfile, allow_slash: bool) -> void:
+	_end_attack_impact()
+	_impact(event)
+	if config == null or not is_instance_valid(_impact_layer):
+		return
+	var actor: BattleFigureAnimator = _impact_animators.get(str(event.get("actor_id", "")))
+	var target: BattleFigureAnimator = _impact_animators.get(str(event.get("target_id", "")))
+	if actor == null or target == null:
+		return
+	var target_pose: CombatVisualPose = target.current_pose
+	var attack_pose: CombatVisualPose = actor.current_pose
+	var point: Vector2 = target.visible_point(target_pose.hit_anchor if target_pose != null else Vector2(0.5, 0.5))
+	if BattleImpactProfile.is_miss(event):
+		point = actor.visible_point(attack_pose.contact_anchor if attack_pose != null and attack_pose.has_contact_anchor() else Vector2(0.5, 0.5))
+	_impact_reference_height = target.reference_height if target.reference_height > 0.0 else target.figure.size.y
+	_active_impact_effect = BattleImpactEffect.new()
+	_impact_layer.add_child(_active_impact_effect)
+	_active_impact_effect.configure(config, event, point, signf(target.home.x - actor.home.x), _impact_reference_height,
+		allow_slash and (attack_pose == null or not attack_pose.embedded_slash))
+
+
+func _advance_attack_impact(seconds: float) -> void:
+	if not is_instance_valid(_active_impact_effect):
+		return
+	_active_impact_effect.advance(seconds)
+	_impact_shake = _active_impact_effect.shake_offset(_impact_reference_height)
+	_fit_impact_layer()
+
+
+func _end_attack_impact() -> void:
+	if is_instance_valid(_active_impact_effect):
+		_active_impact_effect.stop_sound()
+		_active_impact_effect.hide()
+		_active_impact_effect.queue_free()
+	_active_impact_effect = null
+	_impact_shake = Vector2.ZERO
+	_fit_impact_layer()
 
 
 func _show_clash_ability(event: Dictionary) -> void:
@@ -1485,7 +1533,7 @@ func _impact(event: Dictionary) -> void:
 		_spawn_number(target_id, "−%d" % shield_damage, Color("#67c8ff"), -12)
 	if hp_damage > 0:
 		_spawn_number(target_id, "−%d" % hp_damage, Color("#ff6969"), 18)
-	if hp_damage == 0 and shield_damage == 0 and not bool(event.get("dodged", false)):
+	if hp_damage == 0 and shield_damage == 0 and not BattleImpactProfile.is_miss(event):
 		_spawn_number(target_id, "0", Color("#c1cad2"))
 	if target_id == "hero":
 		_visible_hero_hp = int(event.get("hp_after", _visible_hero_hp - hp_damage))
@@ -1502,12 +1550,13 @@ func _impact(event: Dictionary) -> void:
 		_set_extra_enemy_health(target_id, int(event.get("hp_after", int(_extra_enemy_hp.get(target_id, 0)) - hp_damage)), int(event.get("hp_max", _extra_enemy_max.get(target_id, 0))))
 	if target == null:
 		return
-	if hp_damage > 0:
-		target.modulate = Color("#ff6464")
-	elif shield_damage > 0:
-		target.modulate = Color("#81c9ff")
-	else:
-		target.modulate = Color("#d0d5de")
+	if not BattleImpactProfile.is_miss(event):
+		if hp_damage > 0:
+			target.modulate = Color("#ff6464")
+		elif shield_damage > 0:
+			target.modulate = Color("#81c9ff")
+		else:
+			target.modulate = Color("#d0d5de")
 	if bool(event.get("dodged", false)):
 		_spawn_number(target_id, "УКЛОНЕНИЕ", Color("#83e7bb"))
 	_set_accuracy_and_dodge_from_event(event)
@@ -1572,6 +1621,9 @@ func _spawn_number(actor_id: String, number: String, ink: Color, x_offset: float
 
 
 func _exit_tree() -> void:
+	if is_instance_valid(_active_impact_effect):
+		_active_impact_effect.stop_sound()
+	_active_impact_effect = null
 	if _playback != null and _playback.is_valid():
 		_playback.kill()
 	_impact_animators.clear()

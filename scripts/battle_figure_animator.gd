@@ -90,7 +90,7 @@ func strike(target: BattleFigureAnimator, event: Dictionary, strike_scale: float
 
 
 static func receives_hurt(event: Dictionary) -> bool:
-	return not bool(event.get("dodged", false)) and int(event.get("hp_damage", event.get("damage", 0))) > 0
+	return not BattleImpactProfile.is_miss(event) and int(event.get("hp_damage", event.get("damage", 0))) > 0
 
 
 func pose_point_at_home(pose: CombatVisualPose, point: Vector2, scale_multiplier: float = 1.0) -> Vector2:
@@ -109,14 +109,15 @@ func melee_contact(target: BattleFigureAnimator, event: Dictionary, choreography
 	var target_point: Vector2 = target.pose_point_at_home(target_pose, target_anchor)
 	var weapon_point: Vector2 = pose_point_at_home(attack_pose, attack_pose.contact_anchor, choreography.strike_scale)
 	var destination: Vector2 = home + target_point - weapon_point
-	if bool(event.get("dodged", false)):
+	if BattleImpactProfile.is_miss(event):
 		var direction: float = signf(target.home.x - home.x)
 		destination.x -= direction * reference_height * choreography.dodge_gap_fraction
 	return destination
 
 
 func queue_melee(tween: Tween, target: BattleFigureAnimator, event: Dictionary,
-		choreography: BattleMeleeChoreography, impact: Callable) -> bool:
+		choreography: BattleMeleeChoreography, impact: Callable, hit_stop: float = 0.0,
+		effect_advance: Callable = Callable(), effect_finish: Callable = Callable()) -> bool:
 	if profile == null or choreography == null:
 		return false
 	var pose: CombatVisualPose = profile.resolve_pose(STRIKE, str(event.get("ability_id", "")))
@@ -128,31 +129,50 @@ func queue_melee(tween: Tween, target: BattleFigureAnimator, event: Dictionary,
 	var approach: float = choreography.approach_duration(windup.distance_to(contact), reference_height)
 	queue_attack(tween, target, event, contact, windup, choreography.windup_seconds,
 		approach, choreography.contact_seconds + choreography.hold_seconds, choreography.recover_seconds,
-		choreography.hurt_recoil_fraction, choreography.strike_scale, impact, choreography.contact_seconds)
+		choreography.hurt_recoil_fraction, choreography.strike_scale, impact, choreography.contact_seconds, hit_stop, effect_advance, effect_finish)
 	return true
 
 
 func queue_attack(tween: Tween, target: BattleFigureAnimator, event: Dictionary,
 		contact: Vector2, windup: Vector2, windup_seconds: float, approach_seconds: float,
 		hold_seconds: float, recover_seconds: float, recoil_fraction: float, strike_scale: float,
-		impact: Callable, contact_seconds: float = 0.09) -> void:
+		impact: Callable, contact_seconds: float = 0.09, hit_stop: float = 0.0,
+		effect_advance: Callable = Callable(), effect_finish: Callable = Callable()) -> void:
 	tween.tween_callback(prepare_attack.bind(target, str(event.get("ability_id", ""))))
 	tween.tween_property(figure, "position", windup, windup_seconds).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(figure, "position", contact, approach_seconds).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
 	tween.tween_callback(strike.bind(target, event, strike_scale))
 	tween.tween_callback(impact)
+	if hit_stop > 0.0:
+		if effect_advance.is_valid():
+			tween.tween_method(effect_advance, 0.0, hit_stop, hit_stop).set_trans(Tween.TRANS_LINEAR)
+		else:
+			tween.tween_interval(hit_stop)
+	tween.tween_interval(hold_seconds)
 	if target.profile != null and receives_hurt(event):
 		var direction: Vector2 = (target.home - home).normalized()
 		var recoil: Vector2 = target.home + direction * target.figure.size.x * recoil_fraction
-		var recoil_seconds: float = minf(contact_seconds, hold_seconds)
-		tween.tween_property(target.figure, "position", recoil, recoil_seconds)
-		tween.tween_interval(hold_seconds - recoil_seconds)
-	else:
-		tween.tween_interval(hold_seconds)
+		tween.parallel().tween_property(target.figure, "position", recoil, minf(contact_seconds, hold_seconds))
+	if effect_advance.is_valid():
+		tween.parallel().tween_method(effect_advance, hit_stop, hit_stop + hold_seconds, hold_seconds).set_trans(Tween.TRANS_LINEAR)
 	tween.tween_callback(set_pose.bind(IDLE, ""))
 	tween.tween_property(figure, "position", home, recover_seconds).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.parallel().tween_property(figure, "scale", _idle_scale, recover_seconds)
 	tween.parallel().tween_property(target.figure, "position", target.home, recover_seconds)
 	tween.parallel().tween_property(target.figure, "modulate", target._idle_modulate, recover_seconds)
+	if effect_advance.is_valid():
+		tween.parallel().tween_method(effect_advance, hit_stop + hold_seconds, hit_stop + hold_seconds + recover_seconds, recover_seconds).set_trans(Tween.TRANS_LINEAR)
+	if effect_finish.is_valid():
+		tween.tween_callback(effect_finish)
 	tween.tween_callback(reset)
 	tween.tween_callback(target.reset)
+
+
+func visible_point(point: Vector2) -> Vector2:
+	var local: Vector2
+	if profile == null or current_pose == null:
+		local = figure.size * point
+	else:
+		var pose_size: Vector2 = current_pose.rendered_size(reference_height)
+		local = ground + CombatVisualPose.point_offset(point, pose_size, figure.flip_h) - CombatVisualPose.point_offset(current_pose.ground_anchor, pose_size, figure.flip_h)
+	return figure.get_transform() * local

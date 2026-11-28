@@ -7,20 +7,20 @@ const STATE_LIMIT := 1500
 const DIRECTIONS := [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 
 
-static func analyze(map_data: DungeonMap) -> Dictionary:
+static func analyze(map_data: DungeonMap, watch_cell: Vector2i = Vector2i(-1, -1)) -> Dictionary:
 	var start: Vector2i = map_data.find_entity_position("player_spawn")
 	if not map_data.contains(start.x, start.y):
 		return {"reachable": {}, "possible": {}, "complete": true, "has_spawn": false}
 	var certain: Dictionary = _explore(map_data, start, false)
-	var possible: Dictionary = _explore(map_data, start, true)
+	var possible: Dictionary = _explore(map_data, start, true, {}, watch_cell)
 	return {
 		"reachable": certain["cells"], "possible": possible["cells"],
 		"complete": bool(certain["complete"]) and bool(possible["complete"]),
-		"has_spawn": true
+		"has_spawn": true, "watched": possible["watched"]
 	}
 
 
-static func _explore(map_data: DungeonMap, start: Vector2i, with_conditions: bool) -> Dictionary:
+static func _explore(map_data: DungeonMap, start: Vector2i, with_conditions: bool, initial_state: Dictionary = {}, watch_cell: Vector2i = Vector2i(-1, -1), limit: int = STATE_LIMIT) -> Dictionary:
 	var entities_by_cell: Dictionary = {}
 	for entity in map_data.entities:
 		var pos := Vector2i(int(entity["x"]), int(entity["y"]))
@@ -28,11 +28,12 @@ static func _explore(map_data: DungeonMap, start: Vector2i, with_conditions: boo
 			entities_by_cell[pos] = []
 		entities_by_cell[pos].append(entity)
 
-	var frontier: Array[Dictionary] = [{"opened": {}, "claimed": {}, "keys": {}}]
+	var frontier: Array[Dictionary] = [{"opened": {}, "claimed": {}, "keys": {}} if initial_state.is_empty() else initial_state.duplicate(true)]
+	var watched: Array[Dictionary] = []
 	var seen: Dictionary = {}
 	var overall: Dictionary = {}
 	var expansions := 0
-	while not frontier.is_empty() and expansions < STATE_LIMIT:
+	while not frontier.is_empty() and expansions < limit:
 		var state: Dictionary = frontier.pop_back()
 		expansions += 1
 		# Любая достижимая награда автоматически забирается только один раз.
@@ -68,6 +69,8 @@ static func _explore(map_data: DungeonMap, start: Vector2i, with_conditions: boo
 		if seen.has(fingerprint):
 			continue
 		seen[fingerprint] = true
+		if reachable.has(watch_cell):
+			watched.append(state.duplicate(true))
 		for door_id in doors_on_edge:
 			var door: Dictionary = doors_on_edge[door_id]
 			var required: String = LockCatalog.required_key(door)
@@ -82,10 +85,12 @@ static func _explore(map_data: DungeonMap, start: Vector2i, with_conditions: boo
 			next["keys"][required] = int(next["keys"][required]) - 1
 			if not seen.has(_signature(next)):
 				frontier.append(next)
-	return {"cells": overall, "complete": frontier.is_empty()}
+	return {"cells": overall, "complete": frontier.is_empty(), "watched": watched, "expansions": expansions}
 
 
 static func _flood(map_data: DungeonMap, start: Vector2i, opened: Dictionary, entities_by_cell: Dictionary, with_conditions: bool) -> Dictionary:
+	if map_data.get_terrain(start.x, start.y) != "floor":
+		return {"cells": {}, "doors": {}}
 	var cells: Dictionary = {start: true}
 	var doors: Dictionary = {}
 	var pending: Array[Vector2i] = [start]
@@ -93,8 +98,15 @@ static func _flood(map_data: DungeonMap, start: Vector2i, opened: Dictionary, en
 	while head < pending.size():
 		var here: Vector2i = pending[head]
 		head += 1
+		var neighbors: Array[Vector2i] = []
 		for direction in DIRECTIONS:
-			var target: Vector2i = here + direction
+			neighbors.append(here + direction)
+		for entity in entities_by_cell.get(here, []):
+			if str(entity["type"]) == "portal_local":
+				var paired: Vector2i = map_data.local_portal_destination(str(entity["id"]))
+				if DungeonMap.valid_arrival_cell(map_data, paired):
+					neighbors.append(paired)
+		for target in neighbors:
 			if cells.has(target) or map_data.get_terrain(target.x, target.y) == "wall":
 				continue
 			var blocked := false
@@ -139,3 +151,37 @@ static func _signature(state: Dictionary) -> String:
 	for key_id in keys:
 		counts.append("%s=%d" % [key_id, int(state["keys"][key_id])])
 	return "%s|%s|%s" % [str(opened), str(claimed), ",".join(counts)]
+
+
+static func escape_region(map_data: DungeonMap, exits: Array[Vector2i]) -> Dictionary:
+	var entities_by_cell: Dictionary = {}
+	var opened: Dictionary = {}
+	for entity in map_data.entities:
+		var cell := Vector2i(int(entity["x"]), int(entity["y"]))
+		if not entities_by_cell.has(cell):
+			entities_by_cell[cell] = []
+		entities_by_cell[cell].append(entity)
+		if entity["type"] == "door":
+			opened[str(entity["id"])] = true
+	var cells: Dictionary = {}
+	for cell in exits:
+		if not cells.has(cell):
+			cells.merge(_flood(map_data, cell, opened, entities_by_cell, true)["cells"])
+	return cells
+
+
+static func switching_escape(before: Dictionary, target: DungeonMap, trigger: Vector2i, exits: Array[Vector2i]) -> Dictionary:
+	var budget: int = STATE_LIMIT
+	for state in before["watched"]:
+		if budget <= 0:
+			return {"safe": false, "complete": false}
+		var after: Dictionary = _explore(target, trigger, true, state, Vector2i(-1, -1), budget)
+		budget -= int(after["expansions"])
+		var can_exit := false
+		for cell in exits:
+			if after["cells"].has(cell):
+				can_exit = true
+				break
+		if not can_exit:
+			return {"safe": false, "complete": bool(after["complete"])}
+	return {"safe": not before["watched"].is_empty(), "complete": bool(before["complete"])}

@@ -766,6 +766,10 @@ func _launch_selected_party(hero_ids: Array[String]) -> void:
 				if not HeroPartyRules.from_metadata(dungeon.metadata).accepts_party(hero_ids):
 					_show_changed_selection("Состав отряда больше не соответствует настройкам карты.")
 					return
+				var mechanism_error: String = SlidingPlatesDiagnostics.launch_error(dungeon.map_id, _maps_by_id, campaigns)
+				if not mechanism_error.is_empty():
+					_show_changed_selection(mechanism_error)
+					return
 				game_requested.emit(dungeon, hero_ids.duplicate(), null)
 				return
 		_show_changed_selection("Карта больше не доступна в разделе «Свои карты». Выбери её заново.")
@@ -780,6 +784,10 @@ func _launch_selected_party(hero_ids: Array[String]) -> void:
 		return
 	if not HeroPartyRules.from_metadata(starting_map.metadata).accepts_party(hero_ids):
 		_show_changed_selection("Состав отряда больше не соответствует настройкам кампании.")
+		return
+	var mechanism_error: String = SlidingPlatesDiagnostics.launch_error(starting_map.map_id, _maps_by_id, campaigns)
+	if not mechanism_error.is_empty():
+		_show_changed_selection(mechanism_error)
 		return
 	game_requested.emit(starting_map, hero_ids.duplicate(), campaign)
 

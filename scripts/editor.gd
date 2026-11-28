@@ -1409,7 +1409,17 @@ func _update_issues_caption() -> void:
 	_issues_toggle.tooltip_text = caption + ". Показать список диагностики"
 
 
-func _focus_issue(cell: Vector2i) -> void:
+func _focus_issue(cell: Vector2i, map_id: String = "") -> void:
+	if map_data != null and not map_id.is_empty() and map_id != map_data.map_id:
+		var path: String = OfficialCampaignLibrary.source_path(map_id) if not _official_source_path.is_empty() else _campaign_map_path(map_id)
+		if not path.is_empty():
+			_issues_dialog.hide()
+			_confirm_if_dirty(func() -> void:
+				_load_from_path_confirmed(path)
+				if map_data.map_id == map_id:
+					_canvas.center_on_cell(cell)
+			)
+		return
 	if map_data != null and map_data.contains(cell.x, cell.y):
 		_issues_dialog.hide()
 		_canvas.center_on_cell(cell)
@@ -1417,6 +1427,13 @@ func _focus_issue(cell: Vector2i) -> void:
 
 func _show_reachability_issues(result: Dictionary) -> void:
 	var issues: Array[Dictionary] = DungeonDiagnostics.analyze(map_data, result)
+	var scope: Dictionary = _sliding_plates_scope(map_data, _official_source_path)
+	if scope["error"].is_empty():
+		for issue in SlidingPlatesDiagnostics.scope_issues(map_data.map_id, scope["maps"], scope["campaigns"], map_data.map_id):
+			if not issues.has(issue):
+				issues.append(issue)
+	elif map_data.has_sliding_plates_trigger():
+		issues.append({"severity": "error", "message": scope["error"], "icon": "wall", "cell": map_data.find_entity_position(SlidingPlates.TRIGGER)})
 	_current_issue_count = issues.size()
 	_update_issues_caption()
 	for child in _issues_list.get_children():
@@ -1427,7 +1444,13 @@ func _show_reachability_issues(result: Dictionary) -> void:
 	for issue in issues:
 		var severity: String = str(issue["severity"])
 		var prefix := "✕ " if severity == "error" else ("⚠ " if severity == "warning" else "ⓘ ")
-		var item := _button(prefix + str(issue["message"]), "Показать место на карте", func() -> void: _focus_issue(issue["cell"]))
+		var issue_map: String = str(issue.get("map_id", map_data.map_id))
+		var message: String = str(issue["message"])
+		if issue_map != map_data.map_id and scope["error"].is_empty():
+			var other: DungeonMap = scope["maps"].get(issue_map) as DungeonMap
+			if other != null:
+				message = "%s (%s): %s" % [other.display_name, str(issue["cell"]), message]
+		var item := _button(prefix + message, "Показать место на карте", func() -> void: _focus_issue(issue["cell"], issue_map))
 		item.icon = TOOL_ICONS.get(str(issue["icon"]), TOOL_ICONS["hand"])
 		item.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		item.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -1764,6 +1787,12 @@ func _apply_exit_link(destination: DungeonMap) -> void:
 	if campaign == null or not campaign.map_ids.has(destination.map_id):
 		_set_status("Переход разрешён только между картами одной кампании.")
 		return
+	var proposed: DungeonMap = DungeonMap.from_dict(map_data.to_dict().duplicate(true))
+	if proposed != null and proposed.set_exit_target(_linking_exit_id, destination.map_id):
+		var duplicate: String = _sliding_plates_candidate_error(proposed, _official_source_path)
+		if not duplicate.is_empty():
+			_on_placement_rejected(duplicate)
+			return
 	var before: Dictionary = _canvas.capture_edit_state()
 	if map_data.set_exit_target(_linking_exit_id, destination.map_id):
 		_on_canvas_edited()
@@ -1927,34 +1956,59 @@ func _on_sliding_plates_tool_selected(id: int) -> void:
 		_set_tool(SlidingPlates.WALLS_TOOL)
 
 
-func _sliding_plates_scope_error() -> String:
-	if map_data == null:
-		return SlidingPlates.CELL_ERROR
+func _sliding_plates_scope(candidate: DungeonMap, source_path: String = "") -> Dictionary:
 	var maps: Dictionary = {}
-	var related_ids: Array[String] = []
-	if not _official_source_path.is_empty():
-		var official: CampaignDefinition = OfficialCampaignLibrary.source_campaign(map_data.map_id)
+	var campaigns: Dictionary = {}
+	if OfficialCampaignLibrary.is_packaged_path(source_path):
+		var official: CampaignDefinition = OfficialCampaignLibrary.source_campaign(candidate.map_id)
 		if official == null:
-			return "Не удалось проверить состав официальной кампании."
-		related_ids.assign(official.map_ids)
-		for map_id in related_ids:
-			if map_id == map_data.map_id:
+			return {"error": "Не удалось проверить состав официальной кампании."}
+		for map_id in official.map_ids:
+			if map_id == candidate.map_id:
 				continue
 			var other: DungeonMap = _read_map(OfficialCampaignLibrary.source_path(map_id))
 			if other == null:
-				return "Не удалось проверить этаж %s." % map_id
+				return {"error": "Не удалось проверить этаж %s." % map_id}
 			maps[map_id] = other
+		campaigns[official.campaign_id] = official
 	else:
 		maps = SavedMapLibrary.load_all(_maps_dir())
-		maps[map_data.map_id] = map_data
-		var campaign: CampaignDefinition = _campaign_library.campaign_for_map(map_data.map_id, maps)
+		maps[candidate.map_id] = candidate
+		campaigns = _campaign_library.load_all(maps)
 		if not _campaign_library.last_error.is_empty():
-			return _campaign_library.last_error
-		if campaign != null:
-			related_ids.assign(campaign.map_ids)
-		else:
-			related_ids = _campaign_library.legacy_linked_maps(map_data.map_id, maps)
-	return SlidingPlates.DUPLICATE_ERROR if DungeonMap.other_floor_has_sliding_plates(map_data.map_id, maps, related_ids) else ""
+			return {"error": _campaign_library.last_error, "maps": maps, "campaigns": {}}
+	maps[candidate.map_id] = candidate
+	return {"error": "", "maps": maps, "campaigns": campaigns}
+
+
+func _sliding_plates_scope_error() -> String:
+	if map_data == null:
+		return SlidingPlates.CELL_ERROR
+	var scope: Dictionary = _sliding_plates_scope(map_data, _official_source_path)
+	if not scope["error"].is_empty():
+		return scope["error"]
+	var ids: Array[String] = SlidingPlatesDiagnostics.scope_ids(map_data.map_id, scope["maps"], scope["campaigns"])
+	return SlidingPlates.DUPLICATE_ERROR if DungeonMap.other_floor_has_sliding_plates(map_data.map_id, scope["maps"], ids) else ""
+
+
+func _sliding_plates_candidate_error(candidate: DungeonMap, source_path: String = "") -> String:
+	var scope: Dictionary = _sliding_plates_scope(candidate, source_path)
+	if not scope["error"].is_empty():
+		if candidate.has_sliding_plates_trigger() or OfficialCampaignLibrary.is_packaged_path(source_path):
+			return scope["error"]
+		var known_maps: Dictionary = scope.get("maps", {})
+		var known_ids: Array[String] = SlidingPlatesDiagnostics.scope_ids(candidate.map_id, known_maps, {})
+		return scope["error"] if DungeonMap.other_floor_has_sliding_plates(candidate.map_id, known_maps, known_ids) else ""
+	var ids: Array[String] = SlidingPlatesDiagnostics.scope_ids(candidate.map_id, scope["maps"], scope["campaigns"])
+	return SlidingPlatesDiagnostics.duplicate_error(ids, scope["maps"])
+
+
+func _sliding_plates_history_error(state: Dictionary) -> String:
+	var raw: Dictionary = map_data.to_dict().duplicate(true)
+	raw["terrain"] = state["terrain"]
+	raw["entities"] = state["entities"]
+	var candidate: DungeonMap = DungeonMap.from_dict(raw)
+	return SlidingPlates.CELL_ERROR if candidate == null else _sliding_plates_candidate_error(candidate, _official_source_path)
 
 
 func _set_tool(kind: String) -> void:
@@ -2088,7 +2142,12 @@ func _undo_edit() -> void:
 	_canvas.finish_edit_stroke()
 	if _undo_stack.is_empty():
 		return
-	var action: Dictionary = _undo_stack.pop_back()
+	var action: Dictionary = _undo_stack.back()
+	var duplicate: String = _sliding_plates_history_error(action["before"])
+	if not duplicate.is_empty():
+		_on_placement_rejected(duplicate)
+		return
+	_undo_stack.pop_back()
 	_canvas.restore_edit_state(action["before"])
 	_redo_stack.append(action)
 	_update_history_buttons()
@@ -2103,7 +2162,12 @@ func _redo_edit() -> void:
 	_canvas.finish_edit_stroke()
 	if _redo_stack.is_empty():
 		return
-	var action: Dictionary = _redo_stack.pop_back()
+	var action: Dictionary = _redo_stack.back()
+	var duplicate: String = _sliding_plates_history_error(action["after"])
+	if not duplicate.is_empty():
+		_on_placement_rejected(duplicate)
+		return
+	_redo_stack.pop_back()
 	_canvas.restore_edit_state(action["after"])
 	_undo_stack.append(action)
 	_update_history_buttons()
@@ -2251,6 +2315,11 @@ func _write_map_data(saved: DungeonMap, path: String) -> bool:
 		return false
 	if DirAccess.dir_exists_absolute(path):
 		_set_status("Ошибка записи: путь занят папкой")
+		return false
+	var scope_path: String = _official_source_path if saved == map_data and not _official_source_path.is_empty() else path
+	var duplicate: String = _sliding_plates_candidate_error(saved, scope_path)
+	if not duplicate.is_empty():
+		_on_placement_rejected(duplicate)
 		return false
 	var temp_path: String = path + ".tmp"
 	if DirAccess.dir_exists_absolute(temp_path):
@@ -2573,6 +2642,14 @@ func _load_from_path(path: String) -> void:
 
 func _load_from_path_confirmed(path: String) -> void:
 	var loaded_map := _read_map(path)
+	if loaded_map != null:
+		var library_path: String = _campaign_map_path(loaded_map.map_id)
+		var is_library: bool = not library_path.is_empty() and ProjectSettings.globalize_path(path).simplify_path() == ProjectSettings.globalize_path(library_path).simplify_path()
+		if not is_library and not OfficialCampaignLibrary.is_packaged_path(path):
+			var duplicate: String = _sliding_plates_candidate_error(loaded_map, path)
+			if not duplicate.is_empty():
+				_on_placement_rejected(duplicate)
+				return
 	if loaded_map == null:
 		_set_status("Официальные карты доступны только в режиме разработчика." if OfficialCampaignLibrary.is_packaged_path(path) and not DeveloperMode.is_enabled() else "Ошибка чтения карты: " + path)
 		return
@@ -3148,6 +3225,19 @@ func _on_developer_loadout_changed() -> void:
 
 func _start_play_mode() -> void:
 	_flush_pending_map_edits()
+	if not standalone_game:
+		var scope: Dictionary = _sliding_plates_scope(map_data, _official_source_path)
+		var error: String = _sliding_plates_candidate_error(map_data, _official_source_path) if not scope["error"].is_empty() else ""
+		if scope["error"].is_empty():
+			error = SlidingPlatesDiagnostics.launch_error(map_data.map_id, scope["maps"], scope["campaigns"])
+		if not error.is_empty():
+			if not _reachability_enabled:
+				_toggle_reachability()
+			else:
+				_refresh_reachability()
+			_on_placement_rejected(error)
+			_open_issues_dialog()
+			return
 	_clear_held_movement()
 	_settings_dialog.hide()
 	_clear_reachability()

@@ -51,6 +51,12 @@ func save_campaign(campaign: CampaignDefinition, maps_by_id: Dictionary) -> bool
 				last_error = "Карта %s уже принадлежит кампании %s." % [map_id, other.display_name]
 				return false
 
+	existing[campaign.campaign_id] = campaign
+	var scope: Array[String] = SlidingPlatesDiagnostics.scope_ids(campaign.start_map_id, maps_by_id, existing)
+	last_error = SlidingPlatesDiagnostics.duplicate_error(scope, maps_by_id)
+	if not last_error.is_empty():
+		return false
+
 	if not DirAccess.dir_exists_absolute(directory):
 		var mkdir_result: int = DirAccess.make_dir_recursive_absolute(directory)
 		if mkdir_result != OK:

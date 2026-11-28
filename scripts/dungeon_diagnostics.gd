@@ -1,7 +1,7 @@
 class_name DungeonDiagnostics
 extends RefCounted
 
-## Статическая диагностика: не изменяет карту и не блокирует сохранение или тест.
+## Статическая диагностика не изменяет карту.
 ## Предупреждения о ключах не доказывают непроходимость при случайной добыче.
 
 static func analyze(map_data: DungeonMap, result: Dictionary) -> Array[Dictionary]:
@@ -74,6 +74,7 @@ static func analyze(map_data: DungeonMap, result: Dictionary) -> Array[Dictionar
 				can_reach_source = true
 		if has_spawn and complete and not can_reach_source:
 			issues.append(_issue("warning", "Ключ для замка недоступен (проверь цепочку дверей): %s" % LockCatalog.label(needed), "door", _position(door)))
+	issues.append_array(SlidingPlatesDiagnostics.analyze_map(map_data))
 	return issues
 
 

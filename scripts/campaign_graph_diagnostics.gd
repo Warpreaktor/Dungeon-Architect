@@ -23,6 +23,9 @@ static func analyze(campaigns: Dictionary, maps_by_id: Dictionary) -> Array[Dict
 			_add(issues, "error", campaign_id, campaign.start_map_id, "Стартовая карта не входит в кампанию.")
 	for campaign_id in campaign_ids:
 		var campaign: CampaignDefinition = campaigns[campaign_id]
+		for issue in SlidingPlatesDiagnostics.scope_issues(campaign.start_map_id, maps_by_id, campaigns):
+			var cell: Vector2i = issue["cell"]
+			_add(issues, issue["severity"], campaign_id, issue["map_id"], "(%d, %d): %s" % [cell.x, cell.y, issue["message"]])
 		var adjacency: Dictionary = {}
 		for map_id in campaign.map_ids:
 			adjacency[map_id] = []

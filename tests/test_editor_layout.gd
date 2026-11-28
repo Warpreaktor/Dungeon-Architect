@@ -39,9 +39,14 @@ func _run() -> void:
 	assert(workspace.get_child(0) == map_view)
 	assert(workspace.get_child(1) == palette)
 	assert(map_view.get_node("ViewportActions") != null)
-	var palette_content := palette.get_node("PaletteScroll/PaletteContent") as VBoxContainer
-	assert(palette_content != null)
-	assert(palette_content.get_node("ToolsSection/Header") != null)
+	var palette_layout := palette.get_node("PaletteLayout") as VBoxContainer
+	var tools_grid := palette_layout.get_node("ToolsGrid") as GridContainer
+	var palette_scroll := palette_layout.get_node("PaletteScroll") as ScrollContainer
+	var palette_content := palette_scroll.get_node("PaletteContent") as VBoxContainer
+	assert(palette_content != null and tools_grid != null)
+	assert(tools_grid.get_index() < palette_scroll.get_index())
+	assert(not palette_content.has_node("ToolsSection"))
+	assert(tools_grid.is_visible_in_tree())
 	assert(palette_content.get_node("MonstersSection/Header") != null)
 	var boss_grid := palette_content.get_node("BossesSection/Content/BossesGrid") as GridContainer
 	assert(boss_grid != null)
@@ -51,16 +56,30 @@ func _run() -> void:
 			expected_bosses += 1
 	assert(boss_grid.get_child_count() == expected_bosses)
 	var palette_buttons: Dictionary = editor.get("_palette_buttons")
+	assert((palette_buttons["hand"] as Button).get_parent() == tools_grid)
+	assert((palette_buttons["erase"] as Button).get_parent() == tools_grid)
+	palette_content.custom_minimum_size.y = palette_scroll.size.y + 300.0
+	await process_frame
+	await process_frame
+	var tools_position := tools_grid.global_position
+	palette_scroll.scroll_vertical = 200
+	await process_frame
+	assert(palette_scroll.scroll_vertical > 0)
+	assert(tools_grid.global_position.is_equal_approx(tools_position))
+	assert(tools_grid.is_visible_in_tree())
+	palette_scroll.scroll_vertical = 0
+	palette_content.custom_minimum_size.y = 0.0
 	assert((palette_buttons["monster:kadavr"] as Button).get_parent() == boss_grid)
 	assert((palette_buttons["monster:rabbit_symbiont"] as Button).get_parent() == boss_grid)
 	assert(not palette_buttons.has("monster:rabbit_cadaver"))
 	assert((palette_buttons["monster:kadavr"] as Button).icon == MonsterCatalog.get_monster("kadavr").icon)
 	var bosses_header := palette_content.get_node("BossesSection/Header") as Button
 	var bosses_content := palette_content.get_node("BossesSection/Content") as Control
-	bosses_header.pressed.emit()
 	assert(not bosses_content.visible)
 	bosses_header.pressed.emit()
 	assert(bosses_content.visible)
+	bosses_header.pressed.emit()
+	assert(not bosses_content.visible)
 
 	var settings_dialog := editor.get_node("MapSettingsDialog") as AcceptDialog
 	var tabs := settings_dialog.get_node("SettingsTabs") as TabContainer

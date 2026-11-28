@@ -412,12 +412,20 @@ func _build_interface() -> void:
 	_palette_panel.name = "PalettePanel"
 	_palette_panel.custom_minimum_size.x = PALETTE_WIDTH
 	workspace.add_child(_palette_panel)
+	var palette_layout := VBoxContainer.new()
+	palette_layout.name = "PaletteLayout"
+	palette_layout.add_theme_constant_override("separation", 10)
+	_palette_panel.add_child(palette_layout)
+	var control_tools := _tool_grid()
+	control_tools.name = "ToolsGrid"
+	palette_layout.add_child(control_tools)
+	palette_layout.add_child(HSeparator.new())
 	var palette_scroll := ScrollContainer.new()
 	palette_scroll.name = "PaletteScroll"
 	palette_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	palette_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	palette_scroll.scroll_deadzone = 12
-	_palette_panel.add_child(palette_scroll)
+	palette_layout.add_child(palette_scroll)
 	var palette := VBoxContainer.new()
 	palette.name = "PaletteContent"
 	palette.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -512,10 +520,6 @@ func _build_interface() -> void:
 	_game_dialogue.choice_selected.connect(_on_game_choice_selected)
 	add_child(_game_dialogue)
 
-	var tools_section := _palette_section(palette, "Tools", "ИНСТРУМЕНТЫ")
-	var control_tools := _tool_grid()
-	control_tools.name = "ToolsGrid"
-	tools_section.add_child(control_tools)
 	for tool in TOOLS:
 		if str(tool["id"]) in ["hand", "erase"]:
 			_add_tool_button(control_tools, tool)

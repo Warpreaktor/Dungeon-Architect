@@ -1,0 +1,119 @@
+class_name BattleFigureAnimator
+extends RefCounted
+
+const IDLE: StringName = &"idle"
+const WIND_UP: StringName = &"wind_up"
+const STRIKE: StringName = &"strike"
+const HURT: StringName = &"hurt"
+
+var figure: TextureRect
+var profile: CombatVisualProfile
+var state: StringName = IDLE
+var current_pose: CombatVisualPose
+var home: Vector2
+var ground: Vector2
+var reference_height: float
+var _pose_sprite: TextureRect
+var _idle_self_modulate: Color
+var _idle_modulate: Color
+var _idle_scale: Vector2
+var _idle_z_index: int
+
+
+func _init(node: TextureRect, visual_profile: CombatVisualProfile = null) -> void:
+	figure = node
+	profile = visual_profile
+	home = figure.position
+	_idle_self_modulate = figure.self_modulate
+	_idle_modulate = figure.modulate
+	_idle_scale = figure.scale
+	_idle_z_index = figure.z_index
+	if profile == null or profile.resolve_pose(IDLE) == null:
+		profile = null
+		return
+	current_pose = profile.resolve_pose(IDLE)
+	var idle_rect: Rect2 = BattleFigureLayout.visual_rect(figure)
+	ground = idle_rect.position + CombatVisualPose.point_offset(current_pose.ground_anchor, idle_rect.size, figure.flip_h)
+	reference_height = idle_rect.size.y / current_pose.height_scale
+	figure.pivot_offset = ground
+	_pose_sprite = TextureRect.new()
+	_pose_sprite.name = "CombatPose"
+	_pose_sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_pose_sprite.stretch_mode = TextureRect.STRETCH_SCALE
+	_pose_sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pose_sprite.flip_h = figure.flip_h
+	_pose_sprite.material = figure.material
+	_pose_sprite.hide()
+	figure.add_child(_pose_sprite)
+	figure.move_child(_pose_sprite, 0)
+
+
+func set_pose(next_state: StringName, ability_id: String = "") -> void:
+	state = next_state
+	if profile == null:
+		return
+	current_pose = profile.resolve_pose(next_state, ability_id)
+	if current_pose == profile.resolve_pose(IDLE):
+		_pose_sprite.hide()
+		figure.self_modulate = _idle_self_modulate
+		return
+	_pose_sprite.texture = current_pose.texture
+	_pose_sprite.size = current_pose.rendered_size(reference_height)
+	_pose_sprite.position = ground - CombatVisualPose.point_offset(current_pose.ground_anchor, _pose_sprite.size, figure.flip_h)
+	_pose_sprite.self_modulate = _idle_self_modulate
+	figure.self_modulate.a = 0.0
+	_pose_sprite.show()
+
+
+func reset() -> void:
+	if not is_instance_valid(figure):
+		return
+	set_pose(IDLE)
+	figure.position = home
+	figure.scale = _idle_scale
+	figure.modulate = _idle_modulate
+	figure.z_index = _idle_z_index
+
+
+func prepare_attack(target: BattleFigureAnimator, ability_id: String) -> void:
+	figure.z_index = 2
+	target.figure.z_index = 1
+	set_pose(WIND_UP, ability_id)
+
+
+func strike(target: BattleFigureAnimator, event: Dictionary, strike_scale: float) -> void:
+	set_pose(STRIKE, str(event.get("ability_id", "")))
+	if profile != null:
+		figure.scale = _idle_scale * strike_scale
+	if receives_hurt(event):
+		target.set_pose(HURT)
+
+
+static func receives_hurt(event: Dictionary) -> bool:
+	return not bool(event.get("dodged", false)) and int(event.get("hp_damage", event.get("damage", 0))) > 0
+
+
+func queue_attack(tween: Tween, target: BattleFigureAnimator, event: Dictionary,
+		contact: Vector2, windup: Vector2, windup_seconds: float, approach_seconds: float,
+		hold_seconds: float, recover_seconds: float, recoil_fraction: float, strike_scale: float,
+		impact: Callable) -> void:
+	tween.tween_callback(prepare_attack.bind(target, str(event.get("ability_id", ""))))
+	tween.tween_property(figure, "position", windup, windup_seconds)
+	tween.tween_property(figure, "position", contact, approach_seconds).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
+	tween.tween_callback(strike.bind(target, event, strike_scale))
+	tween.tween_callback(impact)
+	if target.profile != null and receives_hurt(event):
+		var direction: Vector2 = (target.home - home).normalized()
+		var recoil: Vector2 = target.home + direction * target.figure.size.x * recoil_fraction
+		var recoil_seconds: float = minf(0.09, hold_seconds)
+		tween.tween_property(target.figure, "position", recoil, recoil_seconds)
+		tween.tween_interval(hold_seconds - recoil_seconds)
+	else:
+		tween.tween_interval(hold_seconds)
+	tween.tween_callback(set_pose.bind(IDLE, ""))
+	tween.tween_property(figure, "position", home, recover_seconds)
+	tween.parallel().tween_property(figure, "scale", _idle_scale, recover_seconds)
+	tween.parallel().tween_property(target.figure, "position", target.home, recover_seconds)
+	tween.parallel().tween_property(target.figure, "modulate", target._idle_modulate, recover_seconds)
+	tween.tween_callback(reset)
+	tween.tween_callback(target.reset)

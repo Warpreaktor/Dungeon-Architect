@@ -68,6 +68,7 @@ var _item_picker: BattleItemPicker
 var _impact_layer: Control
 var _action_emblem: BattleActionEmblem
 var _impact_portraits: Dictionary = {}
+var _impact_animators: Dictionary = {}
 var _impact_idle: Dictionary = {}
 var _impact_origin: Dictionary = {}
 var _impact_shields: Dictionary = {}
@@ -136,6 +137,8 @@ const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 @export_range(0.0, 2.0, 0.01) var clash_idle_seconds: float = 0.40
 @export_range(0.0, 1.0, 0.01) var clash_recoil_fraction: float = 0.18
 @export_range(0.0, 1.0, 0.01) var clash_contact_overlap_fraction: float = 0.14
+@export_range(0.0, 0.5, 0.01) var clash_hurt_recoil_fraction: float = 0.06
+@export_range(1.0, 1.2, 0.01) var clash_strike_scale: float = 1.03
 
 
 
@@ -661,6 +664,7 @@ func _basic_strike_damage(actor: BattleParticipant) -> int:
 
 
 func begin(combat: CombatSession, hero: HeroState, session: GameSession = null) -> void:
+	_cancel_playback()
 	_action_session = session
 	_completion_result = null
 	_combat = combat
@@ -1086,6 +1090,7 @@ func _create_impact_layer() -> void:
 	_impact_layer.size = size
 	_impact_field_rect = Rect2(_battlefield.global_position - global_position, _battlefield.size)
 	_impact_portraits.clear()
+	_impact_animators.clear()
 	_impact_origin.clear()
 	_impact_idle.clear()
 	_impact_shields.clear()
@@ -1101,6 +1106,7 @@ func _create_impact_layer() -> void:
 		if _impact_portraits.has(visual_id):
 			var existing: TextureRect = _impact_portraits[visual_id]
 			_impact_portraits[actor_id] = existing
+			_impact_animators[actor_id] = _impact_animators[visual_id]
 			_impact_origin[actor_id] = existing.position
 			_impact_idle[actor_id] = existing.position
 			_impact_shields[actor_id] = _impact_shields[visual_id]
@@ -1125,6 +1131,7 @@ func _create_impact_layer() -> void:
 		_impact_originals[original] = original.modulate
 		_impact_layer.add_child(portrait)
 		_impact_portraits[actor_id] = portrait
+		_impact_animators[actor_id] = BattleFigureAnimator.new(portrait, _figure_profiles.get(original) as CombatVisualProfile)
 		var turn_frame: Control = _turn_frame_overlays.get(visual_id) as Control
 		if turn_frame != null and turn_frame.visible:
 			var frame: Control = turn_frame.duplicate() as Control
@@ -1159,6 +1166,9 @@ func _fit_impact_layer() -> void:
 
 func _clear_impact_layer() -> void:
 	_clear_action_emblem()
+	for animator in _impact_animators.values():
+		(animator as BattleFigureAnimator).reset()
+	_impact_animators.clear()
 	for flash in _shield_flash_tweens.values():
 		var tween: Tween = flash as Tween
 		if tween != null and tween.is_valid():
@@ -1171,14 +1181,27 @@ func _clear_impact_layer() -> void:
 	_impact_layer = null
 	_impact_portraits.clear()
 	_impact_shields.clear()
-	for original in _impact_originals:
-		if is_instance_valid(original):
-			(original as TextureRect).modulate = _impact_originals[original]
-	_impact_originals.clear()
+	_restore_impact_originals()
 	if _round_mode:
 		_highlight_round_action()
 	else:
 		_highlight_next_actions()
+
+
+func _restore_impact_originals() -> void:
+	for original in _impact_originals:
+		if is_instance_valid(original):
+			(original as TextureRect).modulate = _impact_originals[original]
+	_impact_originals.clear()
+
+
+func _cancel_playback() -> void:
+	if _playback != null and _playback.is_valid():
+		_playback.kill()
+	_playback = null
+	if is_instance_valid(_impact_layer):
+		_clear_impact_layer()
+	_is_playing_back = false
 
 
 func _play_phase_events(phase_events: Array) -> void:
@@ -1254,21 +1277,12 @@ func _queue_single_attack(event: Dictionary) -> void:
 		{actor_id: attacker_rect.size, target_id: target_rect.size}, {actor_id: target_id}, clash_contact_overlap_fraction)[actor_id] - attacker_rect.position
 	if attacker.has_meta(&"combat_figure") and target.has_meta(&"combat_figure"):
 		contact.y = origin.y
-	_playback.tween_callback(_set_attack_layers.bind(attacker, target, true))
-	_playback.tween_property(attacker, "position", windup, clash_windup_seconds)
 	var approach: float = clampf(BattleClashGeometry.approach_seconds(clash_impact_seconds,
 		{actor_id: windup}, {actor_id: contact}, {actor_id: attacker.size}), clash_impact_seconds, maxf(clash_impact_seconds, 0.48))
-	_playback.tween_property(attacker, "position", contact, approach).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
-	_playback.tween_callback(_impact.bind(event))
-	_playback.tween_interval(clash_hold_seconds)
-	_playback.tween_property(attacker, "position", origin, clash_recover_seconds)
-	_playback.parallel().tween_property(target, "modulate", Color.WHITE, clash_recover_seconds)
-	_playback.tween_callback(_set_attack_layers.bind(attacker, target, false))
-
-
-func _set_attack_layers(attacker: TextureRect, target: TextureRect, attacking: bool) -> void:
-	attacker.z_index = 2 if attacking else 0
-	target.z_index = 1 if attacking else 0
+	var animator: BattleFigureAnimator = _impact_animators[actor_id]
+	var target_animator: BattleFigureAnimator = _impact_animators[target_id]
+	animator.queue_attack(_playback, target_animator, event, contact, windup, clash_windup_seconds,
+		approach, clash_hold_seconds, clash_recover_seconds, clash_hurt_recoil_fraction, clash_strike_scale, _impact.bind(event))
 
 
 func _show_clash_ability(event: Dictionary) -> void:
@@ -1554,10 +1568,18 @@ func _spawn_number(actor_id: String, number: String, ink: Color, x_offset: float
 func _exit_tree() -> void:
 	if _playback != null and _playback.is_valid():
 		_playback.kill()
+	_impact_animators.clear()
+	_restore_impact_originals()
 	if _status_presenter != null:
 		_status_presenter.clear_impact()
 	if _impact_layer != null and is_instance_valid(_impact_layer):
 		_impact_layer.free()
+	_impact_layer = null
+	_impact_portraits.clear()
+	_impact_shields.clear()
+	_is_playing_back = false
+
+
 func _after_phase_playback() -> void:
 	_is_playing_back = false
 	if _round_mode:

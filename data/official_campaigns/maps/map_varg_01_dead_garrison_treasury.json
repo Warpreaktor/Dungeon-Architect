@@ -911,8 +911,14 @@
 		{
 			"id": "ent_f9ab4568",
 			"properties": {
-				"contents": [],
-				"loot_mode": "random",
+				"contents": [
+					"dagger"
+				],
+				"hidden": false,
+				"item_quantities": {
+					"dagger": 1
+				},
+				"loot_mode": "fixed",
 				"variant": "weapon_rack"
 			},
 			"type": "chest",
@@ -922,8 +928,14 @@
 		{
 			"id": "ent_25fa43e2",
 			"properties": {
-				"contents": [],
-				"loot_mode": "random",
+				"contents": [
+					"wooden_shield"
+				],
+				"hidden": false,
+				"item_quantities": {
+					"wooden_shield": 1
+				},
+				"loot_mode": "mixed",
 				"variant": "armor_rack"
 			},
 			"type": "chest",
@@ -1052,6 +1064,38 @@
 			"type": "monster",
 			"x": 13,
 			"y": 3
+		},
+		{
+			"id": "ent_0592d153",
+			"properties": {
+				"trap_id": "stone_slab"
+			},
+			"type": "trap",
+			"x": 16,
+			"y": 31
+		},
+		{
+			"id": "ent_617107ca",
+			"properties": {
+				"trap_id": "spikes"
+			},
+			"type": "trap",
+			"x": 17,
+			"y": 27
+		},
+		{
+			"id": "ent_8bdb72c5",
+			"properties": {
+				"loot_contents": [],
+				"loot_mode": "random",
+				"monster_id": "skeleton",
+				"monster_ids": [
+					"skeleton"
+				]
+			},
+			"type": "monster",
+			"x": 17,
+			"y": 28
 		}
 	],
 	"height": 35,

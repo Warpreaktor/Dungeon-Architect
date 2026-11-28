@@ -1100,7 +1100,13 @@
 		{
 			"id": "ent_41668670",
 			"properties": {
-				"walls": []
+				"walls": [
+					{
+						"operation": "toggle",
+						"x": 8,
+						"y": 33
+					}
+				]
 			},
 			"type": "sliding_plates_trigger",
 			"x": 7,

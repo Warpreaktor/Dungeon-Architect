@@ -115,7 +115,7 @@ func trap_placement_error(definition: TrapDefinition, cell: Vector2i) -> String:
 func set_terrain(x: int, y: int, kind: String) -> bool:
 	if not contains(x, y) or kind not in ["floor", "wall"]:
 		return false
-	if get_terrain(x, y) == kind:
+	if get_terrain(x, y) == kind or sliding_plates_reserves(Vector2i(x, y)):
 		return false
 	terrain[y][x] = kind
 	if kind == "wall":
@@ -141,8 +141,118 @@ func has_sliding_plates_trigger() -> bool:
 	return not _entities_by_kind.get(SlidingPlates.TRIGGER, []).is_empty()
 
 
+func _sliding_plates_trigger() -> Dictionary:
+	var triggers: Array = _entities_by_kind.get(SlidingPlates.TRIGGER, [])
+	return {} if triggers.is_empty() else triggers[0]
+
+
+func sliding_plates_marks() -> Array:
+	var trigger: Dictionary = _sliding_plates_trigger()
+	return trigger.get("properties", {}).get("walls", []).duplicate(true)
+
+
+func sliding_plates_reserves(cell: Vector2i) -> bool:
+	var trigger: Dictionary = _sliding_plates_trigger()
+	for mark in trigger.get("properties", {}).get("walls", []):
+		var source: Vector2i = SlidingPlates.mark_cell(mark)
+		if source == cell:
+			return true
+		var direction: Vector2i = SlidingPlates.DIRECTIONS.get(mark["operation"], Vector2i.ZERO)
+		if direction != Vector2i.ZERO and source + direction == cell:
+			return true
+	return false
+
+
+func sliding_plates_configuration(marks: Variant) -> Dictionary:
+	if not marks is Array:
+		return {"error": SlidingPlates.MARK_CELL_ERROR}
+	var changes: Dictionary = {}
+	var sources: Dictionary = {}
+	for raw in marks:
+		if not raw is Dictionary:
+			return {"error": SlidingPlates.MARK_CELL_ERROR}
+		for axis in ["x", "y"]:
+			var coordinate: Variant = raw.get(axis)
+			if not (coordinate is int or coordinate is float) or not is_finite(float(coordinate)) or float(coordinate) != floor(float(coordinate)) or float(coordinate) < 0 or float(coordinate) >= MAX_SIZE:
+				return {"error": SlidingPlates.MARK_CELL_ERROR}
+		var cell: Vector2i = SlidingPlates.mark_cell(raw)
+		if not contains(cell.x, cell.y) or not entities_at(cell.x, cell.y).is_empty():
+			return {"error": SlidingPlates.MARK_CELL_ERROR}
+		if sources.has(cell):
+			return {"error": SlidingPlates.MARK_CONFLICT_ERROR}
+		var operation: Variant = raw.get("operation")
+		if not operation is String or operation not in SlidingPlates.MARK_CYCLE:
+			return {"error": SlidingPlates.MARK_CELL_ERROR}
+		sources[cell] = operation
+	for cell: Vector2i in sources:
+		var operation: String = sources[cell]
+		var original: String = get_terrain(cell.x, cell.y)
+		if operation == SlidingPlates.TOGGLE:
+			changes[cell] = "wall" if original == "floor" else "floor"
+			continue
+		if original != "wall":
+			return {"error": SlidingPlates.MARK_CELL_ERROR}
+		var direction: Vector2i = SlidingPlates.DIRECTIONS[operation]
+		var target: Vector2i = cell + direction
+		if not contains(target.x, target.y) or get_terrain(target.x, target.y) != "floor" or not entities_at(target.x, target.y).is_empty():
+			return {"error": SlidingPlates.MARK_TARGET_ERROR}
+		if sources.has(target) or changes.has(target):
+			return {"error": SlidingPlates.MARK_CONFLICT_ERROR}
+		changes[cell] = "floor"
+		changes[target] = "wall"
+	return {"error": "", "changes": changes}
+
+
+func cycle_sliding_plates_mark(cell: Vector2i) -> String:
+	var trigger: Dictionary = _sliding_plates_trigger()
+	if trigger.is_empty():
+		return SlidingPlates.MARK_TRIGGER_ERROR
+	if not contains(cell.x, cell.y) or not entities_at(cell.x, cell.y).is_empty():
+		return SlidingPlates.MARK_CELL_ERROR
+	var marks: Array = sliding_plates_marks()
+	var previous: String = ""
+	for index in range(marks.size()):
+		if SlidingPlates.mark_cell(marks[index]) == cell:
+			previous = marks[index]["operation"]
+			marks.remove_at(index)
+			break
+	if get_terrain(cell.x, cell.y) == "floor" and not previous.is_empty():
+		trigger["properties"]["walls"] = marks
+		return ""
+	var candidates: Array = [SlidingPlates.TOGGLE]
+	if get_terrain(cell.x, cell.y) == "wall":
+		candidates = SlidingPlates.MARK_CYCLE
+	var error: String = SlidingPlates.MARK_TARGET_ERROR
+	var start: int = candidates.find(previous) + 1
+	for offset in range(candidates.size()):
+		var operation: String = candidates[(start + offset) % candidates.size()]
+		if operation == previous:
+			break
+		var proposed: Array = marks.duplicate(true)
+		proposed.append({"x": cell.x, "y": cell.y, "operation": operation})
+		var configuration: Dictionary = sliding_plates_configuration(proposed)
+		error = configuration["error"]
+		if error.is_empty():
+			trigger["properties"]["walls"] = proposed
+			return ""
+	return error
+
+
+func erase_sliding_plates_mark(cell: Vector2i) -> bool:
+	var trigger: Dictionary = _sliding_plates_trigger()
+	if trigger.is_empty():
+		return false
+	var marks: Array = sliding_plates_marks()
+	for index in range(marks.size()):
+		if SlidingPlates.mark_cell(marks[index]) == cell:
+			marks.remove_at(index)
+			trigger["properties"]["walls"] = marks
+			return true
+	return false
+
+
 func sliding_plates_trigger_error(cell: Vector2i) -> String:
-	if not contains(cell.x, cell.y) or get_terrain(cell.x, cell.y) != "floor" or not entities_at(cell.x, cell.y).is_empty():
+	if not contains(cell.x, cell.y) or get_terrain(cell.x, cell.y) != "floor" or not entities_at(cell.x, cell.y).is_empty() or sliding_plates_reserves(cell):
 		return SlidingPlates.CELL_ERROR
 	if has_sliding_plates_trigger():
 		return SlidingPlates.DUPLICATE_ERROR
@@ -160,7 +270,7 @@ func place_entity(kind: String, x: int, y: int, options: Dictionary = {}) -> boo
 	if not contains(x, y) or kind not in ENTITY_TYPES:
 		return false
 	# Не ставим монстра или сундук внутрь стены.
-	if get_terrain(x, y) == "wall":
+	if get_terrain(x, y) == "wall" or sliding_plates_reserves(Vector2i(x, y)):
 		return false
 	if kind == SlidingPlates.TRIGGER:
 		if not sliding_plates_trigger_error(Vector2i(x, y)).is_empty():
@@ -780,7 +890,11 @@ func set_message_at(x: int, y: int, text: String) -> bool:
 func move_existing(kind: String, entity_id: String, source: Vector2i, target: Vector2i) -> bool:
 	if source == target or not contains(source.x, source.y) or not contains(target.x, target.y):
 		return false
+	if sliding_plates_reserves(target):
+		return false
 	if kind == "wall":
+		if sliding_plates_reserves(source):
+			return false
 		if get_terrain(source.x, source.y) != "wall" or get_terrain(target.x, target.y) != "floor":
 			return false
 		if not entities_at(target.x, target.y).is_empty():
@@ -837,6 +951,8 @@ func move_existing(kind: String, entity_id: String, source: Vector2i, target: Ve
 func erase_at(x: int, y: int) -> bool:
 	if not contains(x, y):
 		return false
+	if erase_sliding_plates_mark(Vector2i(x, y)):
+		return true
 	var here: Array = _entities_by_cell.get(Vector2i(x, y), [])
 	if not here.is_empty():
 		_remove_entity(here.back())
@@ -988,6 +1104,10 @@ static func from_dict(value: Variant) -> DungeonMap:
 		var ty: int = int(trigger["y"])
 		if result.get_terrain(tx, ty) != "floor" or result.entities_at(tx, ty).size() != 1:
 			return null
+		var marks: Variant = trigger["properties"].get("walls", [])
+		if not str(result.sliding_plates_configuration(marks)["error"]).is_empty():
+			return null
+		trigger["properties"]["walls"] = marks
 	var raw_metadata: Variant = value.get("metadata", {"theme": "stone_dungeon"})
 	if typeof(raw_metadata) == TYPE_DICTIONARY:
 		result.metadata = raw_metadata

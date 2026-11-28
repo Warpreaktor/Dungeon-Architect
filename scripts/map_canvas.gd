@@ -99,6 +99,7 @@ var _moving_kind: String = ""
 var _moving_id: String = ""
 var _moving_from := Vector2i(-1, -1)
 var _stroke_before: Dictionary = {}
+var _stroke_erased_plate_marks: Dictionary = {}
 var _settings_tap_timer: Timer
 var _pending_settings_id: String = ""
 var _pending_settings_kind: String = ""
@@ -546,6 +547,9 @@ func _draw() -> void:
 		for x in range(min_x, max_x):
 			_draw_cell(x, y, stairs_up_cell)
 
+	if mode == "edit":
+		_draw_sliding_plates_marks(Rect2i(min_x, min_y, max_x - min_x, max_y - min_y))
+
 	if mode == "play" and game_session != null and map_data.contains(game_session.player_pos.x, game_session.player_pos.y):
 		_draw_player(_player_visual_cell * TILE_SIZE)
 		if _player_visual_cell.distance_to(Vector2(game_session.player_pos)) < 0.01:
@@ -580,6 +584,22 @@ func _draw() -> void:
 	if not fog_enabled:
 		draw_rect(Rect2(0, 0, map_data.width * TILE_SIZE, map_data.height * TILE_SIZE), Color("#9da5ab"), false, 2.0 / zoom)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_sliding_plates_marks(visible_cells: Rect2i) -> void:
+	for mark in map_data.sliding_plates_marks():
+		var cell: Vector2i = SlidingPlates.mark_cell(mark)
+		if not visible_cells.has_point(cell):
+			continue
+		var operation: String = mark["operation"]
+		var center: Vector2 = (Vector2(cell) + Vector2.ONE * 0.5) * TILE_SIZE
+		var arrow: Texture2D = SlidingPlates.FOUR_ARROWS_ART if operation == SlidingPlates.TOGGLE else SlidingPlates.DIRECTION_ARROW_ART
+		var direction: Vector2i = SlidingPlates.DIRECTIONS.get(operation, Vector2i.RIGHT)
+		var angle: float = Vector2(direction).angle()
+		draw_set_transform(camera_offset + center * zoom, angle, Vector2.ONE * zoom)
+		var extent: Vector2 = Vector2.ONE * TILE_SIZE
+		draw_texture_rect(arrow, Rect2(-extent * 0.5, extent), false)
+	draw_set_transform(camera_offset, 0.0, Vector2.ONE * zoom)
 
 
 func _draw_collapse() -> void:
@@ -975,6 +995,7 @@ func restore_edit_state(state: Dictionary) -> void:
 func _begin_edit_stroke() -> void:
 	if mode == "edit" and selected_tool != "hand" and map_data != null and _stroke_before.is_empty():
 		_stroke_before = capture_edit_state()
+		_stroke_erased_plate_marks.clear()
 
 
 func has_edit_stroke() -> bool:
@@ -1148,7 +1169,13 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 	_begin_edit_stroke()
 	var modified := false
 	if erase or selected_tool == "erase":
-		modified = map_data.erase_at(cell.x, cell.y)
+		if _stroke_erased_plate_marks.has(cell):
+			return
+		if map_data.erase_sliding_plates_mark(cell):
+			_stroke_erased_plate_marks[cell] = true
+			modified = true
+		else:
+			modified = map_data.erase_at(cell.x, cell.y)
 	elif selected_tool == SlidingPlates.TRIGGER:
 		var error: String = map_data.sliding_plates_trigger_error(cell)
 		if error.is_empty() and sliding_plates_scope_error.is_valid():
@@ -1158,6 +1185,13 @@ func _edit_at(point: Vector2, erase: bool) -> void:
 			return
 		modified = map_data.place_entity(SlidingPlates.TRIGGER, cell.x, cell.y)
 	elif selected_tool == SlidingPlates.WALLS_TOOL:
+		var error: String = map_data.cycle_sliding_plates_mark(cell)
+		if not error.is_empty():
+			placement_rejected.emit(error)
+			return
+		modified = true
+	elif map_data.sliding_plates_reserves(cell):
+		placement_rejected.emit(SlidingPlates.MARK_RESERVED_ERROR)
 		return
 	elif selected_tool in ["floor", "wall"]:
 		modified = map_data.set_terrain(cell.x, cell.y, selected_tool)
@@ -1287,7 +1321,7 @@ func _gui_input(event: InputEvent) -> void:
 					_cancel_pending_settings_tap()
 			camera_offset += event.relative
 			queue_redraw()
-		elif mode == "edit" and selected_tool != "hand" and (_erasing or (_painting and selected_tool != SlidingPlates.TRIGGER)):
+		elif mode == "edit" and selected_tool != "hand" and (_erasing or (_painting and selected_tool not in [SlidingPlates.TRIGGER, SlidingPlates.WALLS_TOOL])):
 			_edit_at(event.position, _erasing)
 		_update_hover(event.position)
 	elif event is InputEventScreenTouch:
@@ -1300,7 +1334,7 @@ func _gui_input(event: InputEvent) -> void:
 				_touch_invalid_tap = true
 				_settings_tool_pressed_id = ""
 				_cancel_pending_settings_tap()
-			if mode == "edit" and selected_tool not in ["hand", "message"]:
+			if mode == "edit" and selected_tool not in ["hand", "message", SlidingPlates.WALLS_TOOL]:
 				if _touch_positions.size() == 1 and not _touch_blocked:
 					_begin_edit_stroke()
 					_edit_at(event.position, false)
@@ -1317,6 +1351,8 @@ func _gui_input(event: InputEvent) -> void:
 				_remember_touch_tap(event.position)
 			if mode == "edit" and selected_tool == "message" and tap_valid and _touch_positions.is_empty():
 				_request_message_at(event.position)
+			if mode == "edit" and selected_tool == SlidingPlates.WALLS_TOOL and tap_valid and not _touch_blocked and _touch_positions.is_empty():
+				_edit_at(event.position, false)
 			if mode == "edit" and _selected_tool_has_properties() and tap_valid and not _settings_tool_pressed_id.is_empty() and _touch_positions.is_empty():
 				configurable_entity_tapped.emit(_settings_tool_kind(), _settings_tool_pressed_id)
 			if _touch_positions.is_empty():
@@ -1362,7 +1398,7 @@ func _gui_input(event: InputEvent) -> void:
 						zoom_at(old_center, new_a.distance_to(new_b) / old_distance)
 					camera_offset += new_center - old_center
 					queue_redraw()
-			elif mode == "edit" and selected_tool not in ["message", SlidingPlates.TRIGGER] and not _touch_blocked and _touch_positions.size() == 1:
+			elif mode == "edit" and selected_tool not in ["message", SlidingPlates.TRIGGER, SlidingPlates.WALLS_TOOL] and not _touch_blocked and _touch_positions.size() == 1:
 				_edit_at(event.position, false)
 		_update_hover(event.position)
 		accept_event()

@@ -593,7 +593,7 @@ func _build_interface() -> void:
 	_sliding_plates_menu.name = "SlidingPlatesMenu"
 	_sliding_plates_menu.add_theme_constant_override("v_separation", 12)
 	_sliding_plates_menu.add_theme_constant_override("icon_max_width", 48)
-	_sliding_plates_menu.add_icon_item(FramedIcon.compose(SlidingPlates.TRIGGER_TOOL_ART), "Установочный триггер", 0)
+	_sliding_plates_menu.add_icon_item(FramedIcon.compose(SlidingPlates.TRIGGER_PLATE_ART), "Установочный триггер", 0)
 	_sliding_plates_menu.add_icon_item(FramedIcon.compose(SlidingPlates.WALLS_TOOL_ART), "Сдвигающиеся стены", 1)
 	_sliding_plates_menu.id_pressed.connect(_on_sliding_plates_tool_selected)
 	add_child(_sliding_plates_menu)
@@ -1962,7 +1962,7 @@ func _set_tool(kind: String) -> void:
 		if key == SlidingPlates.TOOL:
 			var art: Texture2D = SlidingPlates.ICON_ART
 			if kind == SlidingPlates.TRIGGER:
-				art = SlidingPlates.TRIGGER_TOOL_ART
+				art = SlidingPlates.TRIGGER_PLATE_ART
 			elif kind == SlidingPlates.WALLS_TOOL:
 				art = SlidingPlates.WALLS_TOOL_ART
 			button.icon = FramedIcon.compose(art)

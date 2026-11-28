@@ -1103,7 +1103,17 @@
 				"walls": [
 					{
 						"operation": "down",
-						"x": 8,
+						"x": 8.0,
+						"y": 32.0
+					},
+					{
+						"operation": "up",
+						"x": 9.0,
+						"y": 32.0
+					},
+					{
+						"operation": "up",
+						"x": 6,
 						"y": 32
 					}
 				]

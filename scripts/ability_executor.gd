@@ -297,8 +297,9 @@ static func apply_damage(actor: BattleParticipant, target: BattleParticipant, am
 		"hp_max": target.max_health, "armor_after": target.effective_defense(),
 		"active_block_after": target.block_armor,
 		"shield_durability_after": shield_durability_after,
-		"shield_blocked": target.last_shield_blocked, "block_absorbed": target.last_block_absorbed,
-		"shield_broken": target.last_shield_broken}
+		"shield_blocked": 0 if dodged else target.last_shield_blocked,
+		"block_absorbed": 0 if dodged else target.last_block_absorbed,
+		"shield_broken": "" if dodged else target.last_shield_broken}
 
 
 static func resolve_stance_reaction(actor: BattleParticipant, recipient: BattleParticipant,

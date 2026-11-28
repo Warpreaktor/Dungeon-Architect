@@ -5,6 +5,7 @@ const IDLE: StringName = &"idle"
 const WIND_UP: StringName = &"wind_up"
 const STRIKE: StringName = &"strike"
 const HURT: StringName = &"hurt"
+const DEFEATED_MODULATE: Color = Color("#87909c")
 
 var figure: TextureRect
 var profile: CombatVisualProfile
@@ -89,8 +90,13 @@ func strike(target: BattleFigureAnimator, event: Dictionary, strike_scale: float
 		target.set_pose(HURT)
 
 
+func mark_defeated() -> void:
+	_idle_modulate = DEFEATED_MODULATE
+	reset()
+
+
 static func receives_hurt(event: Dictionary) -> bool:
-	return not BattleImpactProfile.is_miss(event) and int(event.get("hp_damage", event.get("damage", 0))) > 0
+	return BattleImpactProfile.hp_damage(event) > 0
 
 
 func pose_point_at_home(pose: CombatVisualPose, point: Vector2, scale_multiplier: float = 1.0) -> Vector2:
@@ -117,7 +123,7 @@ func melee_contact(target: BattleFigureAnimator, event: Dictionary, choreography
 
 func queue_melee(tween: Tween, target: BattleFigureAnimator, event: Dictionary,
 		choreography: BattleMeleeChoreography, impact: Callable, hit_stop: float = 0.0,
-		effect_advance: Callable = Callable(), effect_finish: Callable = Callable()) -> bool:
+		effect_advance: Callable = Callable(), effect_finish: Callable = Callable(), dodge_recoil: float = 0.0) -> bool:
 	if profile == null or choreography == null:
 		return false
 	var pose: CombatVisualPose = profile.resolve_pose(STRIKE, str(event.get("ability_id", "")))
@@ -129,7 +135,7 @@ func queue_melee(tween: Tween, target: BattleFigureAnimator, event: Dictionary,
 	var approach: float = choreography.approach_duration(windup.distance_to(contact), reference_height)
 	queue_attack(tween, target, event, contact, windup, choreography.windup_seconds,
 		approach, choreography.contact_seconds + choreography.hold_seconds, choreography.recover_seconds,
-		choreography.hurt_recoil_fraction, choreography.strike_scale, impact, choreography.contact_seconds, hit_stop, effect_advance, effect_finish)
+		choreography.hurt_recoil_fraction, choreography.strike_scale, impact, choreography.contact_seconds, hit_stop, effect_advance, effect_finish, dodge_recoil)
 	return true
 
 
@@ -137,7 +143,7 @@ func queue_attack(tween: Tween, target: BattleFigureAnimator, event: Dictionary,
 		contact: Vector2, windup: Vector2, windup_seconds: float, approach_seconds: float,
 		hold_seconds: float, recover_seconds: float, recoil_fraction: float, strike_scale: float,
 		impact: Callable, contact_seconds: float = 0.09, hit_stop: float = 0.0,
-		effect_advance: Callable = Callable(), effect_finish: Callable = Callable()) -> void:
+		effect_advance: Callable = Callable(), effect_finish: Callable = Callable(), dodge_recoil: float = 0.0) -> void:
 	tween.tween_callback(prepare_attack.bind(target, str(event.get("ability_id", ""))))
 	tween.tween_property(figure, "position", windup, windup_seconds).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(figure, "position", contact, approach_seconds).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
@@ -149,10 +155,13 @@ func queue_attack(tween: Tween, target: BattleFigureAnimator, event: Dictionary,
 		else:
 			tween.tween_interval(hit_stop)
 	tween.tween_interval(hold_seconds)
+	var direction: Vector2 = (target.home - home).normalized()
 	if target.profile != null and receives_hurt(event):
-		var direction: Vector2 = (target.home - home).normalized()
 		var recoil: Vector2 = target.home + direction * target.figure.size.x * recoil_fraction
 		tween.parallel().tween_property(target.figure, "position", recoil, minf(contact_seconds, hold_seconds))
+	elif bool(event.get("dodged", false)) and dodge_recoil > 0.0:
+		var evade: Vector2 = target.home + direction * target.figure.size.x * dodge_recoil
+		tween.parallel().tween_property(target.figure, "position", evade, minf(contact_seconds, hold_seconds)).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
 	if effect_advance.is_valid():
 		tween.parallel().tween_method(effect_advance, hit_stop, hit_stop + hold_seconds, hold_seconds).set_trans(Tween.TRANS_LINEAR)
 	tween.tween_callback(set_pose.bind(IDLE, ""))

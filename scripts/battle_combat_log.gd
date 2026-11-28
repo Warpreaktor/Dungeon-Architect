@@ -43,13 +43,15 @@ static func format_event(event: Dictionary, hero_name: String, enemy_name: Strin
 		"tick":
 			return "  Такт %d" % int(event.get("tick", 0))
 		"attack", "counter":
-			if bool(event.get("dodged", false)):
-				return "    %s → %s: %s, уклонение" % [actor, target,
-					ability_name(str(event.get("ability_id", "")))]
+			if BattleImpactProfile.is_miss(event):
+				return "    %s → %s: %s, %s" % [actor, target,
+					ability_name(str(event.get("ability_id", ""))), "уклонение" if bool(event.get("dodged", false)) else "промах"]
 			var parts: Array[String] = []
-			parts.append("HP −%d (%d/%d)" % [int(event.get("damage", 0)),
+			parts.append("HP −%d (%d/%d)" % [BattleImpactProfile.hp_damage(event),
 				int(event.get("hp_after", 0)), int(event.get("hp_max", 0))])
-			var absorbed: int = int(event.get("block_absorbed", 0))
+			if BattleImpactProfile.is_critical(event):
+				parts.append("критический удар")
+			var absorbed: int = BattleImpactProfile.block_damage(event)
 			if absorbed > 0:
 				parts.append("блок −%d" % absorbed)
 			var armor: int = int(event.get("armor_after", 0))

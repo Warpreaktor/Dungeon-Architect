@@ -8,6 +8,9 @@ var direction: float
 var show_slash: bool
 var missed: bool
 var blocked: bool
+var penetrated: bool
+var critical: bool
+var intensity: float
 var _sound: AudioStreamPlayer
 
 
@@ -16,10 +19,13 @@ func configure(config: BattleImpactProfile, event: Dictionary, point: Vector2, s
 	profile = config
 	position = point
 	z_index = 5
-	radius = maxf(1.0, reference_height * profile.radius_fraction)
+	intensity = profile.intensity_for(event)
+	radius = maxf(1.0, reference_height * profile.radius_fraction * intensity)
 	direction = -1.0 if slash_direction < 0.0 else 1.0
 	missed = BattleImpactProfile.is_miss(event)
-	blocked = BattleImpactProfile.is_block(event) and not missed
+	blocked = BattleImpactProfile.is_block(event)
+	penetrated = blocked and BattleImpactProfile.hp_damage(event) > 0
+	critical = BattleImpactProfile.is_critical(event)
 	show_slash = allow_slash and profile.slash_enabled
 	var stream: AudioStream = profile.sound_for(event)
 	if stream != null:
@@ -43,7 +49,7 @@ func shake_offset(reference_height: float) -> Vector2:
 		return Vector2.ZERO
 	var progress: float = clampf(elapsed / profile.effect_seconds, 0.0, 1.0)
 	var envelope: float = pow(1.0 - progress, 2.0)
-	return Vector2(sin(progress * TAU * 3.0), sin(progress * TAU * 4.0)) * reference_height * profile.shake_fraction * envelope
+	return Vector2(sin(progress * TAU * 3.0), sin(progress * TAU * 4.0)) * reference_height * profile.shake_fraction * intensity * envelope
 
 
 func stop_sound() -> void:
@@ -62,19 +68,38 @@ func _draw() -> void:
 		_draw_slash(t)
 	if missed:
 		return
-	var ink: Color = profile.block_color if blocked else profile.hit_color
+	if blocked:
+		_draw_guard(t)
+	var ink: Color = profile.critical_color if critical else profile.hit_color
+	if blocked and not penetrated:
+		ink = profile.block_color
 	var flash: float = pow(1.0 - t, 3.0)
 	var center_size: float = radius * (0.12 + 0.22 * t)
 	draw_circle(Vector2.ZERO, center_size * 1.7, Color(ink, flash * 0.24))
 	draw_circle(Vector2.ZERO, center_size, Color(ink.lerp(Color.WHITE, 0.8), flash * 0.9))
 	draw_arc(Vector2.ZERO, radius * (0.18 + 0.58 * t), 0.0, TAU, 32, Color(ink, flash * 0.75), maxf(1.0, radius * 0.035), true)
-	for i in range(profile.particle_count):
+	for i in range(roundi(profile.particle_count * intensity)):
 		var angle: float = float(i) * 2.399963 + 0.35
 		var vector := Vector2(cos(angle), sin(angle))
 		var speed: float = 0.55 + float((i * 7) % 11) / 12.0
 		var distance: float = radius * (0.18 + t * speed)
 		var tail: float = radius * (0.11 + 0.12 * speed) * (1.0 - t)
 		draw_line(vector * maxf(0.0, distance - tail), vector * distance, Color(ink.lerp(Color.WHITE, 0.45), (1.0 - t) * 0.95), maxf(1.0, radius * 0.045 * (1.0 - t)), true)
+
+
+func _draw_guard(t: float) -> void:
+	var fade: float = pow(1.0 - t, 2.0)
+	var ink := Color(profile.block_color, fade * 0.95)
+	var guard := PackedVector2Array([
+		Vector2(-0.42, -0.42), Vector2(0.0, -0.58), Vector2(0.42, -0.42),
+		Vector2(0.34, 0.16), Vector2(0.0, 0.46), Vector2(-0.34, 0.16), Vector2(-0.42, -0.42)])
+	for i in range(guard.size()):
+		guard[i] *= radius * (1.0 + t * 0.45)
+	if penetrated:
+		draw_polyline(guard.slice(0, 4), ink, maxf(1.0, radius * 0.045), true)
+		draw_polyline(guard.slice(4), ink, maxf(1.0, radius * 0.045), true)
+	else:
+		draw_polyline(guard, ink, maxf(1.0, radius * 0.045), true)
 
 
 func _draw_slash(t: float) -> void:

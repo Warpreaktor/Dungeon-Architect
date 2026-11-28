@@ -5,6 +5,9 @@ extends Resource
 @export var slash_color: Color = Color("ffc177")
 @export var hit_color: Color = Color("ffbb72")
 @export var block_color: Color = Color("80d9ff")
+@export var critical_color: Color = Color("ffe0a0")
+@export_range(1.0, 3.0, 0.05) var critical_intensity: float = 1.5
+@export_range(0.0, 0.5, 0.01) var dodge_recoil_fraction: float = 0.16
 @export_range(0.0, 0.5, 0.005) var hit_stop_seconds: float = 0.055
 @export_range(0.01, 1.0, 0.01) var effect_seconds: float = 0.24
 @export_range(0.0, 0.5, 0.01) var radius_fraction: float = 0.23
@@ -21,11 +24,31 @@ static func is_miss(event: Dictionary) -> bool:
 
 
 static func is_block(event: Dictionary) -> bool:
-	return int(event.get("block_absorbed", event.get("shield_blocked", 0))) > 0
+	return block_damage(event) > 0
+
+
+static func hp_damage(event: Dictionary) -> int:
+	return 0 if is_miss(event) else maxi(0, int(event.get("hp_damage", event.get("damage", 0))))
+
+
+static func block_damage(event: Dictionary) -> int:
+	return 0 if is_miss(event) else maxi(0, int(event.get("block_absorbed", event.get("shield_blocked", 0))))
+
+
+static func is_critical(event: Dictionary) -> bool:
+	return hp_damage(event) > 0 and bool(event.get("critical", false))
+
+
+static func is_lethal(event: Dictionary) -> bool:
+	return hp_damage(event) > 0 and event.has("hp_after") and int(event["hp_after"]) == 0
+
+
+func intensity_for(event: Dictionary) -> float:
+	return critical_intensity if is_critical(event) else 1.0
 
 
 func contact_pause(event: Dictionary) -> float:
-	return 0.0 if is_miss(event) else hit_stop_seconds
+	return 0.0 if is_miss(event) else hit_stop_seconds * intensity_for(event)
 
 
 func sound_for(event: Dictionary) -> AudioStream:

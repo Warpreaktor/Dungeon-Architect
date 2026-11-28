@@ -75,6 +75,7 @@ var _impact_animators: Dictionary = {}
 var _impact_idle: Dictionary = {}
 var _impact_origin: Dictionary = {}
 var _impact_shields: Dictionary = {}
+var _attack_numbers: Dictionary = {}
 var _shield_flash_tweens: Dictionary = {}
 var _status_presenter: BattleStatusPresenter
 var _support_enemy_view: BattleSupportEnemyView
@@ -1099,6 +1100,7 @@ func _create_impact_layer() -> void:
 	_impact_origin.clear()
 	_impact_idle.clear()
 	_impact_shields.clear()
+	_attack_numbers.clear()
 	_shield_flash_tweens.clear()
 	_status_presenter.clear_impact()
 	_impact_originals.clear()
@@ -1187,6 +1189,7 @@ func _clear_impact_layer() -> void:
 	_impact_layer = null
 	_impact_portraits.clear()
 	_impact_shields.clear()
+	_attack_numbers.clear()
 	_restore_impact_originals()
 	if _round_mode:
 		_highlight_round_action()
@@ -1279,9 +1282,11 @@ func _queue_single_attack(event: Dictionary) -> void:
 	var is_melee: bool = ability == null or ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE
 	var impact: Callable = _begin_attack_impact.bind(event, config, is_melee or (ability != null and ability.impact_profile != null))
 	var pause: float = config.contact_pause(event) if config != null else 0.0
+	var dodge_recoil: float = config.dodge_recoil_fraction if config != null else 0.0
 	if ability == null or ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE:
 		var choreography: BattleMeleeChoreography = ability.melee_choreography if ability != null and ability.melee_choreography != null else melee_choreography
-		if animator.queue_melee(_playback, target_animator, event, choreography, impact, pause, _advance_attack_impact, _end_attack_impact):
+		if animator.queue_melee(_playback, target_animator, event, choreography, impact, pause, _advance_attack_impact, _end_attack_impact, dodge_recoil):
+			_queue_attack_defeat(event, target_animator)
 			return
 	var origin: Vector2 = _impact_origin[actor_id]
 	var target_origin: Vector2 = _impact_origin[target_id]
@@ -1294,15 +1299,26 @@ func _queue_single_attack(event: Dictionary) -> void:
 		{actor_id: attacker_rect.size, target_id: target_rect.size}, {actor_id: target_id}, clash_contact_overlap_fraction)[actor_id] - attacker_rect.position
 	if attacker.has_meta(&"combat_figure") and target.has_meta(&"combat_figure"):
 		contact.y = origin.y
+	if BattleImpactProfile.is_miss(event) and melee_choreography != null:
+		contact -= Vector2(signf(delta.x), 0.0) * attacker_rect.size.x * melee_choreography.dodge_gap_fraction
 	var approach: float = clampf(BattleClashGeometry.approach_seconds(clash_impact_seconds,
 		{actor_id: windup}, {actor_id: contact}, {actor_id: attacker.size}), clash_impact_seconds, maxf(clash_impact_seconds, 0.48))
 	animator.queue_attack(_playback, target_animator, event, contact, windup, clash_windup_seconds,
-		approach, clash_hold_seconds, clash_recover_seconds, clash_hurt_recoil_fraction, clash_strike_scale, impact, clash_impact_seconds, pause, _advance_attack_impact, _end_attack_impact)
+		approach, clash_hold_seconds, clash_recover_seconds, clash_hurt_recoil_fraction, clash_strike_scale, impact, clash_impact_seconds, pause, _advance_attack_impact, _end_attack_impact, dodge_recoil)
+	_queue_attack_defeat(event, target_animator)
+
+
+func _queue_attack_defeat(event: Dictionary, target: BattleFigureAnimator) -> void:
+	if not BattleImpactProfile.is_lethal(event):
+		return
+	# У связанных участников может быть одна общая фигура.
+	if _impact_animators.values().count(target) == 1:
+		_playback.tween_callback(target.mark_defeated)
 
 
 func _begin_attack_impact(event: Dictionary, config: BattleImpactProfile, allow_slash: bool) -> void:
 	_end_attack_impact()
-	_impact(event)
+	_impact(event, config)
 	if config == null or not is_instance_valid(_impact_layer):
 		return
 	var actor: BattleFigureAnimator = _impact_animators.get(str(event.get("actor_id", "")))
@@ -1523,18 +1539,32 @@ func _emit_combat_event_log(event: Dictionary) -> void:
 		combat_log_line.emit(message)
 
 
-func _impact(event: Dictionary) -> void:
+func _impact(event: Dictionary, config: BattleImpactProfile = null) -> void:
 	_emit_combat_event_log(event)
 	var target_id: String = str(event.get("target_id", ""))
 	var target: TextureRect = _impact_portraits.get(target_id) as TextureRect
-	var hp_damage: int = int(event.get("damage", 0))
-	var shield_damage: int = int(event.get("block_absorbed", event.get("shield_blocked", 0)))
+	var hp_damage: int = BattleImpactProfile.hp_damage(event)
+	var shield_damage: int = BattleImpactProfile.block_damage(event)
+	var numbers: Array[Dictionary] = []
 	if shield_damage > 0:
-		_spawn_number(target_id, "−%d" % shield_damage, Color("#67c8ff"), -12)
+		numbers.append({"text": "−%d" % shield_damage, "ink": Color("#67c8ff")})
 	if hp_damage > 0:
-		_spawn_number(target_id, "−%d" % hp_damage, Color("#ff6969"), 18)
-	if hp_damage == 0 and shield_damage == 0 and not BattleImpactProfile.is_miss(event):
-		_spawn_number(target_id, "0", Color("#c1cad2"))
+		var critical: bool = BattleImpactProfile.is_critical(event)
+		var text: String = ("КРИТ −%d" if critical else "−%d") % hp_damage
+		var ink: Color = config.critical_color if critical and config != null else Color("#ff6969")
+		numbers.append({"text": text, "ink": ink})
+	if numbers.is_empty():
+		if bool(event.get("dodged", false)):
+			numbers.append({"text": "УКЛОНЕНИЕ", "ink": Color("#83e7bb")})
+		elif bool(event.get("missed", false)):
+			numbers.append({"text": "ПРОМАХ", "ink": Color("#c1cad2")})
+		else:
+			numbers.append({"text": "0", "ink": Color("#c1cad2")})
+	var previous: Variant = _attack_numbers.get(target_id)
+	if is_instance_valid(previous):
+		previous.hide()
+		previous.queue_free()
+	_attack_numbers[target_id] = _spawn_numbers(target_id, numbers)
 	if target_id == "hero":
 		_visible_hero_hp = int(event.get("hp_after", _visible_hero_hp - hp_damage))
 		_visible_hero_max = int(event.get("hp_max", _visible_hero_max))
@@ -1557,8 +1587,6 @@ func _impact(event: Dictionary) -> void:
 			target.modulate = Color("#81c9ff")
 		else:
 			target.modulate = Color("#d0d5de")
-	if bool(event.get("dodged", false)):
-		_spawn_number(target_id, "УКЛОНЕНИЕ", Color("#83e7bb"))
 	_set_accuracy_and_dodge_from_event(event)
 	_set_block_display(target_id, int(event.get("active_block_after", 0)))
 
@@ -1600,24 +1628,40 @@ func _set_block_display(actor_id: String, amount: int) -> void:
 
 
 func _spawn_number(actor_id: String, number: String, ink: Color, x_offset: float = 0) -> void:
+	_spawn_numbers(actor_id, [{"text": number, "ink": ink}], x_offset)
+
+
+func _spawn_numbers(actor_id: String, numbers: Array[Dictionary], x_offset: float = 0) -> Control:
 	var portrait: TextureRect = _impact_portraits.get(actor_id) as TextureRect
 	if portrait == null or _impact_layer == null:
-		return
-	var label := Label.new()
-	label.text = number
-	label.add_theme_font_size_override("font_size", 31)
-	label.add_theme_color_override("font_color", ink)
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.92))
-	label.add_theme_constant_override("shadow_offset_x", 2)
-	label.add_theme_constant_override("shadow_offset_y", 2)
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.z_index = 2
-	_impact_layer.add_child(label)
-	label.position = portrait.position + Vector2(portrait.size.x * 0.45 + x_offset, -22.0)
-	var float_tween: Tween = label.create_tween()
-	float_tween.tween_property(label, "position:y", label.position.y - 54.0, 0.98)
-	float_tween.parallel().tween_property(label, "modulate:a", 0.0, 0.98).set_delay(0.32)
-	float_tween.tween_callback(label.queue_free)
+		return null
+	var group := HBoxContainer.new()
+	group.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	group.z_index = 2
+	group.add_theme_constant_override("separation", 12)
+	_impact_layer.add_child(group)
+	for number in numbers:
+		var label := Label.new()
+		label.text = str(number["text"])
+		label.add_theme_font_size_override("font_size", 31)
+		label.add_theme_color_override("font_color", number["ink"])
+		label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.92))
+		label.add_theme_constant_override("shadow_offset_x", 2)
+		label.add_theme_constant_override("shadow_offset_y", 2)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		group.add_child(label)
+	group.size = group.get_combined_minimum_size()
+	var travel: float = 54.0
+	var field: Rect2 = _impact_field_rect
+	var center_x: float = portrait.position.x + portrait.size.x * 0.5 + x_offset
+	group.position = Vector2(
+		clampf(center_x - group.size.x * 0.5, field.position.x, maxf(field.position.x, field.end.x - group.size.x)),
+		maxf(portrait.position.y - group.size.y, field.position.y + travel))
+	var float_tween: Tween = group.create_tween()
+	float_tween.tween_property(group, "position:y", group.position.y - travel, 0.98)
+	float_tween.parallel().tween_property(group, "modulate:a", 0.0, 0.98).set_delay(0.32)
+	float_tween.tween_callback(group.queue_free)
+	return group
 
 
 func _exit_tree() -> void:
@@ -1635,6 +1679,7 @@ func _exit_tree() -> void:
 	_impact_layer = null
 	_impact_portraits.clear()
 	_impact_shields.clear()
+	_attack_numbers.clear()
 	_is_playing_back = false
 
 
@@ -1659,7 +1704,7 @@ func _after_phase_playback() -> void:
 	_hero_health_meter.set_health(_combat.hero.health, _visible_hero_max, true)
 	_enemy_health_meter.set_health(_combat.enemy_health, _visible_enemy_max, true)
 	if _combat.battle_state.get_enemy() != null and not _combat.battle_state.get_enemy().is_alive():
-		_enemy_portrait.modulate = Color("#87909c")
+		_enemy_portrait.modulate = BattleFigureAnimator.DEFEATED_MODULATE
 	# При нескольких ударах за фазу щит мог сломаться не на последнем.
 	# Берём ID из событий, а не из состояния последнего попадания.
 	for event in _combat.battle_state.last_phase_events:
@@ -1709,12 +1754,12 @@ func _after_round_playback() -> void:
 			_visible_hero_hp = actor.health
 			_visible_hero_max = actor.max_health
 			_hero_health_meter.set_health(actor.health, actor.max_health, true)
-			_hero_portrait.modulate = Color.WHITE if actor.is_alive() else Color("#87909c")
+			_hero_portrait.modulate = Color.WHITE if actor.is_alive() else BattleFigureAnimator.DEFEATED_MODULATE
 		elif actor_id == "enemy":
 			_visible_enemy_hp = actor.health
 			_visible_enemy_max = actor.max_health
 			_enemy_health_meter.set_health(actor.health, actor.max_health, true)
-			_enemy_portrait.modulate = Color.WHITE if actor.is_alive() else Color("#87909c")
+			_enemy_portrait.modulate = Color.WHITE if actor.is_alive() else BattleFigureAnimator.DEFEATED_MODULATE
 	_sync_enemy_formation()
 	_refresh_energy_labels()
 	for event_index in range(_round_event_cursor, state.events.size()):

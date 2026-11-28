@@ -77,3 +77,5 @@ test_battle_action_emblem.gd
 test_hero_weapon_strikes.gd
 
 test_battle_figure_animator.gd
+
+test_battle_melee_choreography.gd

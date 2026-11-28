@@ -5,8 +5,13 @@ extends Resource
 @export var ground_anchor: Vector2 = Vector2(0.5, 1.0)
 @export var hit_anchor: Vector2 = Vector2(0.5, 0.4)
 @export var effect_anchor: Vector2 = Vector2(0.5, 0.4)
+@export var contact_anchor: Vector2 = Vector2(-1.0, -1.0)
 @export_range(0.1, 4.0, 0.01) var height_scale: float = 1.0
 @export var embedded_slash: bool = false
+
+
+func has_contact_anchor() -> bool:
+	return contact_anchor.x >= 0.0 and contact_anchor.x <= 1.0 and contact_anchor.y >= 0.0 and contact_anchor.y <= 1.0
 
 
 func rendered_size(reference_height: float) -> Vector2:

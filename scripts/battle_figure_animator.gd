@@ -93,25 +93,64 @@ static func receives_hurt(event: Dictionary) -> bool:
 	return not bool(event.get("dodged", false)) and int(event.get("hp_damage", event.get("damage", 0))) > 0
 
 
+func pose_point_at_home(pose: CombatVisualPose, point: Vector2, scale_multiplier: float = 1.0) -> Vector2:
+	if profile == null or pose == null:
+		return home + figure.pivot_offset + (figure.size * point - figure.pivot_offset) * _idle_scale * scale_multiplier
+	var pose_size: Vector2 = pose.rendered_size(reference_height)
+	var offset: Vector2 = CombatVisualPose.point_offset(point, pose_size, figure.flip_h) - CombatVisualPose.point_offset(pose.ground_anchor, pose_size, figure.flip_h)
+	return home + ground + offset * _idle_scale * scale_multiplier
+
+
+func melee_contact(target: BattleFigureAnimator, event: Dictionary, choreography: BattleMeleeChoreography) -> Vector2:
+	var attack_pose: CombatVisualPose = profile.resolve_pose(STRIKE, str(event.get("ability_id", "")))
+	var hurt_state: StringName = HURT if receives_hurt(event) else IDLE
+	var target_pose: CombatVisualPose = target.profile.resolve_pose(hurt_state) if target.profile != null else null
+	var target_anchor: Vector2 = target_pose.hit_anchor if target_pose != null else Vector2(0.5, 0.5)
+	var target_point: Vector2 = target.pose_point_at_home(target_pose, target_anchor)
+	var weapon_point: Vector2 = pose_point_at_home(attack_pose, attack_pose.contact_anchor, choreography.strike_scale)
+	var destination: Vector2 = home + target_point - weapon_point
+	if bool(event.get("dodged", false)):
+		var direction: float = signf(target.home.x - home.x)
+		destination.x -= direction * reference_height * choreography.dodge_gap_fraction
+	return destination
+
+
+func queue_melee(tween: Tween, target: BattleFigureAnimator, event: Dictionary,
+		choreography: BattleMeleeChoreography, impact: Callable) -> bool:
+	if profile == null or choreography == null:
+		return false
+	var pose: CombatVisualPose = profile.resolve_pose(STRIKE, str(event.get("ability_id", "")))
+	if pose == null or not pose.has_contact_anchor():
+		return false
+	var contact: Vector2 = melee_contact(target, event, choreography)
+	var direction: float = signf(target.home.x - home.x)
+	var windup: Vector2 = home - Vector2(direction * reference_height * choreography.windup_fraction, 0.0)
+	var approach: float = choreography.approach_duration(windup.distance_to(contact), reference_height)
+	queue_attack(tween, target, event, contact, windup, choreography.windup_seconds,
+		approach, choreography.contact_seconds + choreography.hold_seconds, choreography.recover_seconds,
+		choreography.hurt_recoil_fraction, choreography.strike_scale, impact, choreography.contact_seconds)
+	return true
+
+
 func queue_attack(tween: Tween, target: BattleFigureAnimator, event: Dictionary,
 		contact: Vector2, windup: Vector2, windup_seconds: float, approach_seconds: float,
 		hold_seconds: float, recover_seconds: float, recoil_fraction: float, strike_scale: float,
-		impact: Callable) -> void:
+		impact: Callable, contact_seconds: float = 0.09) -> void:
 	tween.tween_callback(prepare_attack.bind(target, str(event.get("ability_id", ""))))
-	tween.tween_property(figure, "position", windup, windup_seconds)
+	tween.tween_property(figure, "position", windup, windup_seconds).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(figure, "position", contact, approach_seconds).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_IN)
 	tween.tween_callback(strike.bind(target, event, strike_scale))
 	tween.tween_callback(impact)
 	if target.profile != null and receives_hurt(event):
 		var direction: Vector2 = (target.home - home).normalized()
 		var recoil: Vector2 = target.home + direction * target.figure.size.x * recoil_fraction
-		var recoil_seconds: float = minf(0.09, hold_seconds)
+		var recoil_seconds: float = minf(contact_seconds, hold_seconds)
 		tween.tween_property(target.figure, "position", recoil, recoil_seconds)
 		tween.tween_interval(hold_seconds - recoil_seconds)
 	else:
 		tween.tween_interval(hold_seconds)
 	tween.tween_callback(set_pose.bind(IDLE, ""))
-	tween.tween_property(figure, "position", home, recover_seconds)
+	tween.tween_property(figure, "position", home, recover_seconds).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.parallel().tween_property(figure, "scale", _idle_scale, recover_seconds)
 	tween.parallel().tween_property(target.figure, "position", target.home, recover_seconds)
 	tween.parallel().tween_property(target.figure, "modulate", target._idle_modulate, recover_seconds)

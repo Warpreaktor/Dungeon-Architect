@@ -31,6 +31,7 @@ texture = ExtResource("5_strike")
 ground_anchor = Vector2(0.48, 0.875)
 hit_anchor = Vector2(0.58, 0.48)
 effect_anchor = Vector2(0.97, 0.43)
+contact_anchor = Vector2(0.97, 0.42)
 height_scale = 0.96823
 embedded_slash = true
 
@@ -38,7 +39,7 @@ embedded_slash = true
 script = ExtResource("2_pose")
 texture = ExtResource("6_hurt")
 ground_anchor = Vector2(0.6, 0.97)
-hit_anchor = Vector2(0.46, 0.4)
+hit_anchor = Vector2(0.48, 0.49)
 effect_anchor = Vector2(0.9, 0.3)
 height_scale = 1.00000
 embedded_slash = false

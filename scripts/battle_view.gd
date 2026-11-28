@@ -127,6 +127,7 @@ const SHIELD_FLASH_START_SCALE: float = 0.25
 const SHIELD_FLASH_PEAK_SCALE: float = 1.08
 const SHIELD_FLASH_COLOR: Color = Color(0.40, 0.78, 1.0, 1.0)
 
+@export var melee_choreography: BattleMeleeChoreography = preload("res://combat_visuals/melee_choreography.tres")
 @export_range(0.0, 2.0, 0.01) var clash_tick_seconds: float = 0.20
 @export_range(0.0, 2.0, 0.01) var clash_action_start_seconds: float = 0.08
 @export_range(0.1, 2.0, 0.01) var action_emblem_seconds: float = 0.65
@@ -1266,6 +1267,13 @@ func _queue_single_attack(event: Dictionary) -> void:
 		_playback.tween_callback(_impact.bind(event))
 		_playback.tween_interval(clash_hold_seconds)
 		return
+	var animator: BattleFigureAnimator = _impact_animators[actor_id]
+	var target_animator: BattleFigureAnimator = _impact_animators[target_id]
+	var ability: AbilityDefinition = AbilityCatalog.get_ability(str(event.get("ability_id", "")))
+	if ability == null or ability.damage_delivery == AbilityDefinition.DamageDelivery.MELEE:
+		var choreography: BattleMeleeChoreography = ability.melee_choreography if ability != null and ability.melee_choreography != null else melee_choreography
+		if animator.queue_melee(_playback, target_animator, event, choreography, _impact.bind(event)):
+			return
 	var origin: Vector2 = _impact_origin[actor_id]
 	var target_origin: Vector2 = _impact_origin[target_id]
 	var delta: Vector2 = target_origin + target.size * 0.5 - origin - attacker.size * 0.5
@@ -1279,8 +1287,6 @@ func _queue_single_attack(event: Dictionary) -> void:
 		contact.y = origin.y
 	var approach: float = clampf(BattleClashGeometry.approach_seconds(clash_impact_seconds,
 		{actor_id: windup}, {actor_id: contact}, {actor_id: attacker.size}), clash_impact_seconds, maxf(clash_impact_seconds, 0.48))
-	var animator: BattleFigureAnimator = _impact_animators[actor_id]
-	var target_animator: BattleFigureAnimator = _impact_animators[target_id]
 	animator.queue_attack(_playback, target_animator, event, contact, windup, clash_windup_seconds,
 		approach, clash_hold_seconds, clash_recover_seconds, clash_hurt_recoil_fraction, clash_strike_scale, _impact.bind(event))
 
